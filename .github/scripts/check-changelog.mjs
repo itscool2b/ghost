@@ -1,8 +1,9 @@
-// CHANGELOG.md lists every pull request merged into main, newest first: `## YYYY-MM-DD` sections
+// CHANGELOG.md lists the pull requests that changed the app (not the website, docs, tests or
+// tooling alone; owner, 21 November 2026), newest first: `## YYYY-MM-DD` sections
 // by the day it merged in US Eastern time (the owner's clock, 18 November 2026: an evening merge
 // was showing under tomorrow's date, because the days were UTC), each line
 // `- What changed. ([#N](https://github.com/itscool2b/o7/pull/N))`.
-// Every pull request adds its own line, in simple English about what changed for the person using
+// Each such pull request adds its own line, in simple English about what changed for the person using
 // o7 and short enough to read at a glance (docs/developing-in-o7.md, "Changelog").
 //
 //   node .github/scripts/check-changelog.mjs [folder]          the format, offline (pnpm lint)

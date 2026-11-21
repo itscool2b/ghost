@@ -1,50 +1,44 @@
 # Changelog
 
-Every pull request merged into `main`, newest first, under the day it merged in US Eastern time.
-Each line is
-written in simple English about what changed for the person using o7: short everyday words,
-short sentences, no internal names, and the headline first (owner, 16 November 2026). Each pull
-request adds its own line in the same pull request; see "Changelog" in
+What changed in the o7 app, newest first, under the day it merged in US Eastern time. Only
+changes to the app are listed: a change to the website, the docs, the tests or the project's
+tooling alone gets no line (owner, 21 November 2026). Each line is written in simple English
+about what changed for the person using o7: short everyday words, short sentences, no internal
+names, and the headline first (owner, 16 November 2026). A pull request that changes the app
+adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
 ## 2026-11-21
 
-- The website now links to o7's source on GitHub. Every page has a GitHub button beside Download at the top, and GitHub is in the phone menu and the footer. ([#160](https://github.com/itscool2b/o7/pull/160))
-- Your own assistant can run your coding agents, and setup looks better. Link Grok Bot, Muse, Hermes or OpenClaw in Settings > Remote access or during setup: pick yours and o7 shows what to paste and where. A linked assistant now needs fewer steps, so it uses far less of its own allowance: one request sends your message and brings back the answer. Setup has a picture that fills in as you go, and the website has a flock of coloured wings. Plan mode no longer asks you to allow every command when the chat is on Full access; it still asks before any file edit. ([#159](https://github.com/itscool2b/o7/pull/159))
+- Your own assistant can run your coding agents, and setup looks better. Link Grok Bot, Muse, Hermes or OpenClaw in Settings > Remote access or during setup: pick yours and o7 shows what to paste and where. A linked assistant now needs fewer steps, so it uses far less of its own allowance: one request sends your message and brings back the answer. Setup has a picture that fills in as you go. Plan mode no longer asks you to allow every command when the chat is on Full access; it still asks before any file edit. ([#159](https://github.com/itscool2b/o7/pull/159))
 - New chat's agent menu shows every agent in full again. It had shrunk to the width of the agent button, cutting off names and the search box and scrolling sideways. ([#158](https://github.com/itscool2b/o7/pull/158))
 
 ## 2026-11-20
 
 - The Dashboard shows how many lines your agents changed over the past year. Each day is a square that gets brighter the more lines were changed, with the year's total, your busiest month and day, and your longest and current streaks. It counts every agent, in chats and in terminal chats, but only work done in o7. Pick All or one agent to see only theirs, and point at a square to see that day's count. ([#157](https://github.com/itscool2b/o7/pull/157))
-- o7 has a new front page on GitHub. It shows the logo, the app in light or dark to match your screen, what o7 does, how to install it and how it keeps your work private. The notes for people building o7 moved to their own page. ([#156](https://github.com/itscool2b/o7/pull/156))
 - Plan and build is now part of each chat, and you can watch the agent think. Open the model menu in a chat and choose, under Plan and build, the model it plans with and the agent and model it builds with; Settings no longer has Models by role. While the agent thinks you see its newest thoughts, and afterwards "Thought for 4 s" opens to all of them. Running steps shimmer, each group of steps shows icons for what it did, and plans show their numbered lists again. ([#155](https://github.com/itscool2b/o7/pull/155))
 
 ## 2026-11-19
 
 - o7 installs as o7. This update replaces the auracode program with o7: the Start menu, desktop and taskbar open o7, and auracode leaves your list of apps. Your chats, projects, settings and sign-ins stay exactly where they were, and the code lives at github.com/itscool2b/o7. ([#154](https://github.com/itscool2b/o7/pull/154))
-- auracode is now called o7. The website, the app's window and everything it says use the new name; your chats, settings and installed app carry on as they are, and the program on disk keeps its old name for now. On your phone, the message box now sits right on the keyboard, with no empty space under it and the header still in view. ([#153](https://github.com/itscool2b/o7/pull/153))
+- auracode is now called o7. The app's window and everything it says use the new name; your chats, settings and installed app carry on as they are, and the program on disk keeps its old name for now. On your phone, the message box now sits right on the keyboard, with no empty space under it and the header still in view. ([#153](https://github.com/itscool2b/o7/pull/153))
 - The Update button looks right. Its word ran to the edge of the button with no space around it; it now sits inside with room on both sides. ([#152](https://github.com/itscool2b/o7/pull/152))
 - auracode has a new address, o7.codes, and using your computer from your phone works properly now. The phone page looks like your app, in your theme, light or dark. It comes back by itself after your phone sleeps, a chat opens on the first tap, a message shows the moment you send it, and long answers no longer stutter. It also tells you when your computer is asleep. After this update, pair your phone and link your bot once more: both now use o7.codes, and the ones made at the old address stop working, so nothing is left tied to it. ([#151](https://github.com/itscool2b/o7/pull/151))
 - Models by role. Settings > General now lets you name an agent and model for each kind of work: plan with one, build with another. Turn Plan on and the chat moves to your Planning model; when a plan is ready, Accept and build with hands it to your Building model, in the same chat or to another agent with the plan carried over. A coordinated project's coordinator and workers take their own. ([#150](https://github.com/itscool2b/o7/pull/150))
 - Coordinated projects, an experiment. Turn it on in Settings > Experiments and each project gets a board button: start a coordinator with a brief, and it plans the work, hands it to worker chats that each start fresh in their own Git worktree, and reports back to you. The project keeps a task board, a decision log every agent is shown, shared Context files that keep each earlier version, and routines that run on a timer. Workers cannot start workers or record decisions, at most 4 work at once, and Pause stops everything. ([#149](https://github.com/itscool2b/o7/pull/149))
 - auracode updates itself. When a newer version is out, an Update button shows at the foot of the sidebar: one press downloads it, checks it and restarts. auracode looks for a new version a few times a day, and you can turn that off in Settings. Every update is checked against a signature before it installs. ([#148](https://github.com/itscool2b/o7/pull/148))
-- The dates on this page are right now. Each change is listed under the day it shipped in US Eastern time. Before, the days were counted in UTC, so anything shipped in the evening showed under the next day; 51 changes moved back to their real day. ([#147](https://github.com/itscool2b/o7/pull/147))
 
 ## 2026-11-18
 
-- You can download auracode. The download page now has installers for Windows, macOS and Linux, each with its size and checksum. They are preview builds: nobody has signed them, so your system warns you before one runs, and the page says what to do. The code is public too, under the MIT license. ([#146](https://github.com/itscool2b/o7/pull/146))
-- auracode has a new logo: a flying wing with two eyes. It is on the app, its icons, the taskbar and the website. The website also moves now: the wing flies into the headline, blinks and looks toward your pointer, and cards rise into place as you scroll. The app window pictured on the site is a softer grey that stands off the black page. ([#145](https://github.com/itscool2b/o7/pull/145))
-- auracode is getting ready to open its code. The code is now under the MIT license, with a guide for people who want to help and a private way to report security problems. The download page can now list installers for Windows, macOS and Linux with their checksums, and it says plainly when a build is unsigned. ([#144](https://github.com/itscool2b/o7/pull/144))
+- auracode has a new logo: a flying wing with two eyes. It is on the app, its icons and the taskbar. ([#145](https://github.com/itscool2b/o7/pull/145))
 
 ## 2026-11-17
 
 - auracode opens on new aircraft pictures. The fifteen text drawings are replaced by ten new pictures, from the Wright Flyer and the P-51 to the 747, the SR-71 and the Space Shuttle. Each one is drawn in your theme's own colours, light or dark, and you still see a different one each start. ([#143](https://github.com/itscool2b/o7/pull/143))
 - New chats no longer break your other chats, and a second project works. Slow work in one folder no longer holds up the rest. When agents are in the way, auracode names the chats and offers to stop them, and at the limit of 16 agents it stops the one idle longest instead of refusing. Terminals open in every project, two projects can set up at once, and a folder you pick stays in the project it belongs to. ([#142](https://github.com/itscool2b/o7/pull/142))
-- The website is redesigned after the Grok Bot page, in light and dark. It opens with the app drawn in its new flat look, then six feature cards, every agent in its own colour, the latest changes as cards, and a full-screen menu on phones. ([#141](https://github.com/itscool2b/o7/pull/141))
 - auracode looks flat, soft and clean, after the Grok Bot app, in every theme. Glass, blur and glow are gone, dark mode uses faint edges instead of shadows, and thin text is a little heavier. New chat starts with the message box, so you type first, every dropdown opens auracode's own menu, and Settings and setup show your agents joining auracode. ([#140](https://github.com/itscool2b/o7/pull/140))
 - Terminals open your own shell, and the keyboard stays where you type. Terminal tabs start your shell with your settings, full colour and your terminal's font, and shortcuts no longer lose your place. The Dashboard drops chats left from earlier days, and any card can be cleared or stopped. On Linux, the browser no longer stops on pages with sound or video, a page that stops can be reloaded, and menus over a page show its picture. ([#139](https://github.com/itscool2b/o7/pull/139))
-- Behind the scenes: the old account service is switched off. With accounts gone from the app, its servers and storage were removed too. The website and remote access are not affected. ([#138](https://github.com/itscool2b/o7/pull/138))
 - auracode no longer has accounts or sync. Claude Code and Codex now sync plugins on their own, so auracode does not need to. There is no sign-in: your chats, projects and settings stay on your computer. Remote access from your phone still works. ([#137](https://github.com/itscool2b/o7/pull/137))
 - Linux is smooth on NVIDIA graphics, and the browser works on Wayland. Scrolling and streaming now hold 60 frames a second where they dropped to about 20. The browser beside the chat opens on Wayland instead of asking for X11, and agents' terminals work when auracode runs as an AppImage. ([#136](https://github.com/itscool2b/o7/pull/136))
 
@@ -65,9 +59,6 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 - Settings pages are shorter and clearer. Project memory is now just your notes and one switch. Account & sync shows the four steps to set up syncing, and turning sync on keeps your theme and defaults. ([#129](https://github.com/itscool2b/o7/pull/129))
 - See and steer your computer's chats from your phone. Scan the code in Settings > Remote access, then open auracode.si/remote to read chats, send messages, stop a turn, answer permission requests and start chats. A bot link lets an assistant such as Grok Bot do the same. Everything sent between your phone and your computer is encrypted, and it all stays off until you turn it on. ([#128](https://github.com/itscool2b/o7/pull/128))
 - Project memory sent with a message is now tucked behind one line. The chat used to show the whole memory as part of your message. Now it shows only your words, with "Project memory" underneath to open what the agent received. ([#127](https://github.com/itscool2b/o7/pull/127))
-- The website's changelog now lists every change as it ships. The page is built from the project's own list of changes instead of a note written by hand. ([#126](https://github.com/itscool2b/o7/pull/126))
-- The website has a new design that follows your light or dark setting. It shows the live app window, cards for what the app does, the agents, download links and common questions. ([#125](https://github.com/itscool2b/o7/pull/125))
-- The website is redesigned with a calmer, lighter look. It has a plain header, the live app window at the top, a row of the agents and a grid of the main features. ([#124](https://github.com/itscool2b/o7/pull/124))
 
 ## 2026-11-09
 
@@ -80,7 +71,6 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 ## 2026-11-08
 
 - OpenCode and Pi now start on Windows. OpenCode installed with npm and Pi installed with its own installer both showed as broken before. They now work in Chat and in Terminal. ([#118](https://github.com/itscool2b/o7/pull/118))
-- The website's home page is redesigned. It has a large headline over the live app window and a new section showing terminal chats and the canvas. The number counters and the fact wheel are gone. ([#117](https://github.com/itscool2b/o7/pull/117))
 - Canvas lets you draw a sketch and add it to your message. Open it beside Attach, then draw with pens, shapes, arrows and text. Press Talk to explain the drawing as you make it. Add to message attaches the drawing and what you said. ([#116](https://github.com/itscool2b/o7/pull/116))
 - Terminal now works for more agents. Grok Build, OpenCode, Hermes, Pi, oh-my-pi, Cursor and Antigravity can open in their own interface inside auracode, as Claude Code and Codex already could. What happens in the terminal comes back into the chat. ([#115](https://github.com/itscool2b/o7/pull/115))
 
@@ -108,11 +98,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-05
 
-- Behind the scenes: the project plan was updated. It records that the release tools are done and what is left before the first release. ([#98](https://github.com/itscool2b/o7/pull/98))
-- Behind the scenes: releases for Mac, Windows and Linux can now be built automatically. The packages are signed, checked and published, and the download page points to the newest one. It waits only for the signing keys. ([#97](https://github.com/itscool2b/o7/pull/97))
-- Releases now include Linux. The download page lists Linux beside Mac and Windows. Once a signed release is out, auracode on Linux updates itself as it does on the other systems. ([#96](https://github.com/itscool2b/o7/pull/96))
-- Behind the scenes: the website builds and deploys again. A list of third-party notices had gone out of date after an earlier change. ([#95](https://github.com/itscool2b/o7/pull/95))
-- Behind the scenes: the automatic tests catch up with recent changes. They now also check dictation, images and the Processes page in two browser engines. ([#94](https://github.com/itscool2b/o7/pull/94))
+- Releases now include Linux. Once a signed release is out, auracode on Linux updates itself as it does on the other systems. ([#96](https://github.com/itscool2b/o7/pull/96))
 - auracode now runs on Linux. It comes as deb, rpm and AppImage packages. The tray icon, notifications, Keep awake, sounds, dictation and terminals all work, and files open in VS Code, Cursor or Zed. ([#93](https://github.com/itscool2b/o7/pull/93))
 - Share one agent's MCP server with every agent. In Plugins & MCP, choose Preview and copy, then Share with every agent. Its keys stay on this device. Agents that cannot use shared servers now start without them and say so, instead of refusing to start. ([#92](https://github.com/itscool2b/o7/pull/92))
 - Terminals come back after a restart. A chat's terminal panel offers the terminals it had open, and starts them again when you choose Resume. Nothing starts by itself, and earlier output is not kept. ([#91](https://github.com/itscool2b/o7/pull/91))
@@ -143,15 +129,12 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 - Settings offers a theme for every supported agent. There is one each for Claude Code, Codex, Grok Build, Pi, Antigravity, Cursor, OpenCode, oh-my-pi and Hermes, beside Aura. Each comes in light and dark and applies at once. ([#72](https://github.com/itscool2b/o7/pull/72))
 - Grok Build and Hermes now show their plugins and marketplaces. Claude Code marketplaces show where they come from again. You can add a marketplace from a GitHub repository, a Git address or a local folder. ([#71](https://github.com/itscool2b/o7/pull/71))
 - See everything your agents are running. A new Processes page lists each chat's subagents, background commands and programs, with a Stop button. Stop in a chat now says it also ends running tasks. ([#70](https://github.com/itscool2b/o7/pull/70))
-- This changelog is added. Every merged change adds a line to it, and an automatic check keeps its format right. ([#69](https://github.com/itscool2b/o7/pull/69))
 - Dictation now records on Windows. Before, small audio glitches ended every recording after a tenth of a second. Turning speech into text is also much faster, under a second for 11 seconds of speech instead of 18. ([#68](https://github.com/itscool2b/o7/pull/68))
-- The website gets design polish. Headings have new italic accents, and the two scrolling rows now loop without a gap. ([#67](https://github.com/itscool2b/o7/pull/67))
 - The working line shows the model maker's logo. While an agent works, you see the logo of the company whose model is doing the work. ([#66](https://github.com/itscool2b/o7/pull/66))
 
 ## 2026-11-02
 
 - Subagents and background commands appear above the message box. Click one to open a panel that follows its progress. ([#65](https://github.com/itscool2b/o7/pull/65))
-- The website loses its coloured glows. The depth they gave is made in other ways. ([#64](https://github.com/itscool2b/o7/pull/64))
 - Switch a Claude Code chat's account from the message box. You can also see how much each account has used, and read a plan before the agent runs it. The app's glow effects are gone. ([#63](https://github.com/itscool2b/o7/pull/63))
 - Behind the scenes: installing a locally built copy of the app on Windows is safer. If the new copy fails to start, the previous app comes back. More of the app is also tested automatically. ([#62](https://github.com/itscool2b/o7/pull/62))
 - Image attachments show small previews. You see them before sending and in the chat's history, and can open one to see it larger. ([#61](https://github.com/itscool2b/o7/pull/61))
@@ -166,13 +149,9 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 ## 2026-11-01
 
 - A Claude chat that hits its usage limit can switch accounts. It carries on with another account you added, and keeps its history. ([#53](https://github.com/itscool2b/o7/pull/53))
-- Behind the scenes: the developer guide records a tested upgrade of the installed app. ([#52](https://github.com/itscool2b/o7/pull/52))
-- Behind the scenes: installing a locally built copy of the app now checks that the new version is really in place. Before, it could report success while the old version was still there. ([#51](https://github.com/itscool2b/o7/pull/51))
-- Behind the scenes: undoing a local test install on Windows now puts back the original files themselves. Windows could refuse to start a copy of them. ([#50](https://github.com/itscool2b/o7/pull/50))
-- Behind the scenes: the list of third-party notices was refreshed, so the app and the website build again. ([#49](https://github.com/itscool2b/o7/pull/49))
 - Behind the scenes: auracode can be developed safely from inside auracode. Test builds keep their own data and run separately, so they never touch your installed app. ([#48](https://github.com/itscool2b/o7/pull/48))
 - New worktree chats get the folder's private instruction files. Instruction files that Git ignores used to be missing there, so agents ran without them. This is on by default and can be turned off. ([#47](https://github.com/itscool2b/o7/pull/47))
-- The website and the desktop app get a new look called Halo. Windows look like glass over your system's own window background. ([#46](https://github.com/itscool2b/o7/pull/46))
+- The desktop app gets a new look called Halo. Windows look like glass over your system's own window background. ([#46](https://github.com/itscool2b/o7/pull/46))
 - Shared MCP servers and project memory arrive, with new chat controls. Access and Plan controls sit beside a searchable picker for agent, model and effort. Customize holds Plugins & MCP, instructions and project memory. ([#45](https://github.com/itscool2b/o7/pull/45))
 
 ## 2026-10-31
@@ -182,7 +161,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-10-30
 
-- The website and the desktop app share one new look, called Aura. The desktop app follows your system's light or dark setting, and you can choose Light or Dark yourself. ([#42](https://github.com/itscool2b/o7/pull/42))
+- The desktop app gets a new look, called Aura. It follows your system's light or dark setting, and you can choose Light or Dark yourself. ([#42](https://github.com/itscool2b/o7/pull/42))
 
 ## 2026-10-29
 
@@ -199,19 +178,17 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 - Fixes for Windows. The terminal panel now works, the title bar matches the app, and choosing a project in New chat no longer changes the agent you picked. Names and setup messages are clearer too. ([#33](https://github.com/itscool2b/o7/pull/33))
 - A queued message now says why it is waiting. It also no longer waits forever when an agent fails to report that it has finished. ([#32](https://github.com/itscool2b/o7/pull/32))
-- The Claude, Grok, Antigravity and Hermes logos are added. Every supported agent now shows its real logo in the app and on the website. ([#31](https://github.com/itscool2b/o7/pull/31))
-- Codex, Cursor, OpenCode, Pi and oh-my-pi show their real logos. You see them in the app and on the website, where they also move. ([#30](https://github.com/itscool2b/o7/pull/30))
+- The Claude, Grok, Antigravity and Hermes logos are added. Every supported agent now shows its real logo in the app. ([#31](https://github.com/itscool2b/o7/pull/31))
+- Codex, Cursor, OpenCode, Pi and oh-my-pi show their real logos. You see them beside each agent in the app. ([#30](https://github.com/itscool2b/o7/pull/30))
 - An agent's opened details on the Agents page line up neatly. This is a small layout fix, with a new automatic check for it. ([#29](https://github.com/itscool2b/o7/pull/29))
-- Follow-ups to the water design. The website shows today's app, the Agents and Plugin library pages sit in the same panel as chat, and the swimming animals use far less of your computer's power. The old dotted background is removed. ([#28](https://github.com/itscool2b/o7/pull/28))
+- Follow-ups to the water design. The Agents and Plugin library pages sit in the same panel as chat, and the swimming animals use far less of your computer's power. The old dotted background is removed. ([#28](https://github.com/itscool2b/o7/pull/28))
 - Each agent now appears once in the list. Before, some had a second entry for another way of connecting. That choice is now a Connection setting on the Agents page, and it is automatic by default. ([#27](https://github.com/itscool2b/o7/pull/27))
 - Uninstalling auracode removes all of its own data. Settings can do the same. Your coding agents are left alone. ([#26](https://github.com/itscool2b/o7/pull/26))
 - The app gets the water design. The chat sits in a rounded panel, the opening screens show lit water with a seal and a turtle, and small spaces have gentle motion. ([#25](https://github.com/itscool2b/o7/pull/25))
 - A new Instructions page manages what your agents are told. Use one shared file for every agent, or a file per agent. You review every change before it is saved. ([#24](https://github.com/itscool2b/o7/pull/24))
 - The Plugin library has a section for each agent. It lists what each agent itself reports, shows whether an update is available, and syncs agent by agent. ([#23](https://github.com/itscool2b/o7/pull/23))
-- The website is rebuilt with a lit water design. Seals and turtles swim in the top panel beside the real app. ([#22](https://github.com/itscool2b/o7/pull/22))
 - Fixes from testing on Windows. Changes made just before quitting are no longer lost. The foot of the sidebar is now only the logo and a Settings button. ([#21](https://github.com/itscool2b/o7/pull/21))
 - Clone a repository from inside auracode. It is offered when you first set up and in New project. Making an account is an optional step, and more agents can be installed and signed in to from the app. ([#20](https://github.com/itscool2b/o7/pull/20))
-- Behind the scenes: account tests no longer trip over each other, and the project notes were updated. ([#19](https://github.com/itscool2b/o7/pull/19))
 
 ## 2026-10-27
 
@@ -223,15 +200,10 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 - Every screen of the app is redesigned. The sidebar, header, chat and account row all have a cleaner look. ([#13](https://github.com/itscool2b/o7/pull/13))
 - OpenCode can be installed with one click on the Agents page. ([#12](https://github.com/itscool2b/o7/pull/12))
 - Behind the scenes: the desktop app's buttons, fields and dialogs now share one style. This prepares for the redesign of each screen. ([#11](https://github.com/itscool2b/o7/pull/11))
-- Behind the scenes: a new tool publishes releases safely. It checks every file again before uploading and never overwrites a published file. ([#10](https://github.com/itscool2b/o7/pull/10))
-- Behind the scenes: new tests for the search behind the command palette. ([#9](https://github.com/itscool2b/o7/pull/9))
-- The website is rebuilt with a simpler home page. It goes from eight sections to five. Nothing in the app changes. ([#8](https://github.com/itscool2b/o7/pull/8))
-- The seal and turtle logo is now used everywhere. It replaces the old pixel letter in the app, on the website and in every icon. ([#7](https://github.com/itscool2b/o7/pull/7))
-- The app and the website get a dark look called Graphite. It is black with one lime accent colour. This change also adds the view that shows a chat's conversation. ([#6](https://github.com/itscool2b/o7/pull/6))
-- Behind the scenes: the project's technical foundation and rules are set. Nothing in the app changes. ([#4](https://github.com/itscool2b/o7/pull/4))
+- The seal and turtle logo is now used everywhere. It replaces the old pixel letter in the app and in every icon. ([#7](https://github.com/itscool2b/o7/pull/7))
+- The app gets a dark look called Graphite. It is black with one lime accent colour. This change also adds the view that shows a chat's conversation. ([#6](https://github.com/itscool2b/o7/pull/6))
 
 ## 2026-10-25
 
-- Behind the scenes: two unreliable tests on Mac and Linux are fixed. The app itself is unchanged. ([#3](https://github.com/itscool2b/o7/pull/3))
 - The first real agent chats work. auracode can now run Hermes, Claude Code and Codex in one chat window. ([#2](https://github.com/itscool2b/o7/pull/2))
 - Behind the scenes: the project is started. It has the basic app window, safe storage on your device and automatic checks. ([#1](https://github.com/itscool2b/o7/pull/1))

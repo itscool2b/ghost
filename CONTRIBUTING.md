@@ -24,8 +24,9 @@ cargo test --workspace --locked
 The hosted CI is started by hand, not by a push, so a pull request shows no test results of its
 own. Say in the description what you ran and what you saw.
 
-- **Add a line to `CHANGELOG.md`.** Every merged pull request has one, newest first under the day
-  it merges in US Eastern time, written for someone who uses the app: what changed, then what
+- **Add a line to `CHANGELOG.md` if you change the app.** The changelog lists changes to the app
+  only, not the website, docs, tests or tooling: newest first under the day it merges in US
+  Eastern time, written for someone who uses the app: what changed, then what
   they will notice.
   [docs/developing-in-o7.md](docs/developing-in-o7.md) has the format, and `pnpm lint` checks
   it.

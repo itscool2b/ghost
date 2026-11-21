@@ -89,8 +89,12 @@ Get-ChildItem $target -Recurse -Depth 2 -Directory -Filter .fingerprint |
 
 ## Changelog
 
-Every pull request merged into `main` adds its line to [CHANGELOG.md](../CHANGELOG.md) in the
-same pull request: under `## YYYY-MM-DD` for the day it merges in US Eastern time (the owner's
+The changelog is for the app only (owner, 21 November 2026: "change log is just for the app").
+A pull request that changes the app, meaning what ships in it (`apps/desktop`, `crates`,
+`packages/ui`, or what it is built with), adds its line to [CHANGELOG.md](../CHANGELOG.md) in
+the same pull request. A pull request that only changes the website, the docs, the tests, the
+release tooling or the repository's own setup adds no line. A change to both describes only the
+app's part. The line goes under `## YYYY-MM-DD` for the day it merges in US Eastern time (the owner's
 clock; 18 November 2026, after evening merges showed under the next day because the days were
 UTC), newest first, and ending with its link,
 `([#N](https://github.com/itscool2b/o7/pull/N))`. Open the pull request first to learn its
@@ -115,15 +119,14 @@ in o7"). The reader uses the app and may not be a programmer:
 - **No internal names.** No crates, files, functions, style names, protocol names, test names or
   build tools. Names the person sees are fine: Claude Code, Codex, Settings, MCP servers, Windows,
   Mac.
-- **Internal work says so plainly.** A change to the build, the tests, the tooling or the docs
+- **Internal work on the app says so plainly.** A change to how the app is built or packaged
   opens with "Behind the scenes:" and says what it was for, such as "Behind the scenes: the Mac app
-  builds again." Never invent an effect the person would not see, and never leave a pull request
-  out.
+  builds again." Never invent an effect the person would not see.
 - **Plain punctuation.** No em dashes, no emoji and no marketing words.
 
 The website's changelog page is built from this file (`apps/web/scripts/changelog.ts`), and every
 push to `main` redeploys the site, so a merged line is public within minutes (owner, 10 November
-2026: every merge adds to the changelog, "which updates on the website as well"). The page shows a
+2026: the changelog "updates on the website as well"). The page shows a
 line's words and its pull request number, not the link (the page was built while the
 repository was private; it has been public since 19 November 2026). The headline
 is set in ink and the rest of the line follows it as the body.
