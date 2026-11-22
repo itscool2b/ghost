@@ -1865,6 +1865,21 @@ export type DbInfo = {
 	schema_version: number,
 	/**  What opening the database had to do (create, migrate, recover). */
 	outcome: OpenOutcome,
+	/**
+	 *  How long opening it took, in milliseconds: the backup and the migration too when it
+	 *  migrated, all before the window exists.
+	 */
+	open_ms: number,
+	/**
+	 *  How long startup recovery took, which every first read waits behind; `null` until it
+	 *  finished. Read live (`AppState::app_info`).
+	 */
+	recovery_ms: number | null,
+	/**
+	 *  How long building the indexes recovery reads through took, after startup; `null` when
+	 *  this launch built none.
+	 */
+	indexes_ms: number | null,
 };
 
 /**  Which scripted turn to play. */
