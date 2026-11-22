@@ -42,6 +42,34 @@ describe("the app store", () => {
     vi.useRealTimers();
   });
 
+  it("shows the list kept from the last launch until the first read answers, and never over a real one", async () => {
+    let answer: (chats: ChatSummary[]) => void = () => {};
+    const fake = new FakeTransport({
+      chatsList: () =>
+        new Promise<ChatSummary[]>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    const store = new AppStore(fake);
+    store.hydrate([chatSummary("old", { updated_at: 1 }), chatSummary("kept", { updated_at: 5 })]);
+    // Newest first, as the real list is, and marked as not the database's word.
+    expect(store.getSnapshot().chats?.map((chat) => chat.id)).toEqual(["kept", "old"]);
+    expect(store.getSnapshot().chatsCached).toBe(true);
+    store.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getSnapshot().chatsCached).toBe(true);
+    expect(store.getSnapshot().chatsError).toBeNull();
+    // The database's list replaces it whole: a chat deleted since is gone, a new one is there.
+    answer([chatSummary("kept", { updated_at: 5 }), chatSummary("new", { updated_at: 9 })]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getSnapshot().chats?.map((chat) => chat.id)).toEqual(["new", "kept"]);
+    expect(store.getSnapshot().chatsCached).toBe(false);
+    store.hydrate([chatSummary("stale")]);
+    expect(store.getSnapshot().chats?.map((chat) => chat.id)).toEqual(["new", "kept"]);
+    expect(store.getSnapshot().chatsCached).toBe(false);
+    store.stop();
+  });
+
   it("reads the chat list again until the database answers, as after an update", async () => {
     let unavailable = 2;
     const fake = new FakeTransport({

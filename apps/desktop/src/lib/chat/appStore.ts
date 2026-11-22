@@ -33,6 +33,12 @@ export interface AppSnapshot {
   readonly envError: string | null;
   /** Newest activity first. */
   readonly chats: readonly ChatSummary[] | null;
+  /**
+   * `chats` is the list this profile last showed (lib/launchCache.ts), there for the window's
+   * first frame until the database answers. It reads as the real list will; nothing may take it
+   * as proof that a chat exists.
+   */
+  readonly chatsCached: boolean;
   readonly chatsError: string | null;
   readonly storage: StorageStatus | null;
 }
@@ -65,6 +71,7 @@ const EMPTY: AppSnapshot = {
   env: null,
   envError: null,
   chats: null,
+  chatsCached: false,
   chatsError: null,
   storage: null,
 };
@@ -137,6 +144,15 @@ export class AppStore {
 
   readonly getSnapshot = (): AppSnapshot => this.#state;
 
+  /**
+   * Shows the list this profile last showed, before anything was read. The first read replaces
+   * it; a list already read is never replaced by it.
+   */
+  hydrate(chats: readonly ChatSummary[]): void {
+    if (this.#state.chats !== null) return;
+    this.#set({ ...this.#state, chats: byActivity(chats), chatsCached: true });
+  }
+
   /** Subscribes to the status channel and loads everything once; then keeps polling. */
   start(): void {
     if (this.#running) return;
@@ -203,7 +219,7 @@ export class AppStore {
       // The list may have been read before an update that arrived meanwhile.
       const next = this.#missed.reduce(withUpdate, byActivity(chats));
       this.#chatFailures = 0;
-      this.#set({ ...this.#state, chats: next, chatsError: null });
+      this.#set({ ...this.#state, chats: next, chatsCached: false, chatsError: null });
     } catch (error) {
       if (reload !== this.#reloads) return;
       this.#set({ ...this.#state, chatsError: errorMessage(error) });

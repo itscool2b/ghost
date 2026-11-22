@@ -33,12 +33,22 @@ export const workspaceApi = {
 export type WorkspaceApi = typeof workspaceApi;
 export interface WorkspaceView {
   readonly data: WorkspaceSnapshot | null;
+  /**
+   * `data` is the workspace this profile last showed (lib/launchCache.ts), there for the window's
+   * first frame until the database answers. Nothing may take it as proof of what exists.
+   */
+  readonly cached: boolean;
   /** Why the last read of the workspace failed. An operation's own error goes to its caller. */
   readonly error: string | null;
   /** Operations running now, from every screen. None waits for another here. */
   readonly pending: number;
 }
-export const EMPTY_WORKSPACE: WorkspaceView = { data: null, error: null, pending: 0 };
+export const EMPTY_WORKSPACE: WorkspaceView = {
+  data: null,
+  cached: false,
+  error: null,
+  pending: 0,
+};
 
 /** How one operation ended, for the caller that started it only. */
 export type WorkspaceOutcome<T> =
@@ -75,6 +85,15 @@ export class WorkspaceStore {
     this.#state = state;
     for (const listener of this.#listeners) listener();
   }
+  /**
+   * Shows the workspace this profile last showed, before anything was read. The first read
+   * replaces it; a workspace already read is never replaced by it.
+   */
+  hydrate(data: WorkspaceSnapshot): void {
+    if (this.#state.data !== null) return;
+    this.#publish({ ...this.#state, data, cached: true });
+  }
+
   /** Reads the workspace. A read started later answers for this one, so it never lands stale. */
   refresh(): Promise<void> {
     const revision = ++this.#revision;
@@ -92,7 +111,7 @@ export class WorkspaceStore {
       const data = await this.api.snapshot();
       if (revision !== this.#revision) return this.#latest;
       this.#failures = 0;
-      this.#publish({ ...this.#state, data, error: null });
+      this.#publish({ ...this.#state, data, cached: false, error: null });
     } catch (error) {
       if (revision !== this.#revision) return this.#latest;
       this.#publish({ ...this.#state, error: errorMessage(error) });

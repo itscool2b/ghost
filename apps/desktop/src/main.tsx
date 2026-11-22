@@ -16,9 +16,10 @@ import { AppStore } from "./lib/chat/appStore";
 import { tauriTransport } from "./lib/chat/transport";
 import { installDraftQuit } from "./lib/draftQuit";
 import { cancelDemoStream, inTauri, startDemoStream } from "./lib/ipc";
+import { readLaunchLists } from "./lib/launchCache";
 import { installProfileEvents } from "./lib/profiles";
 import { StreamStore } from "./lib/session";
-import { setupApi } from "./lib/setup";
+import { setMotionPreference, setupApi } from "./lib/setup";
 import { WorkspaceStore, workspaceApi } from "./lib/workspace";
 
 // The platform before the first paint: type weights are tuned per platform (tokens.css), and a
@@ -39,14 +40,29 @@ installQuitQuestion();
 
 const container = document.getElementById("root");
 // The native window stays hidden until App paints. Resolve the active profile's appearance first,
-// including after a profile switch reload; an unavailable profile uses the system theme.
+// including after a profile switch reload; an unavailable profile uses the system theme. Beside
+// it, read the sidebar this profile last showed (two small files, never the database), so the
+// first frame the window shows already holds the person's projects and chats.
 const appearanceReady =
   inTauri() && !(import.meta.env.DEV && new URLSearchParams(location.search).has("preview"))
     ? installProfileEvents()
-        .then(() => setupApi.snapshot())
-        .catch(() => {})
-    : Promise.resolve();
-void appearanceReady.then(() => {
+        .then(() => Promise.all([setupApi.snapshot().catch(() => null), readLaunchLists()]))
+        .then(([setup, lists]) => {
+          if (lists.chats !== null) chats.hydrate(lists.chats);
+          if (lists.workspace !== null) workspace.hydrate(lists.workspace);
+          // A profile that finished setup opens on its chats, so what setup's page applied on its
+          // way past is applied here.
+          if (setup !== null) setMotionPreference(setup.preferences.motion);
+          return (
+            setup !== null &&
+            setup.preferences.completed &&
+            !setup.cold_start &&
+            setup.notice === null
+          );
+        })
+        .catch(() => false)
+    : Promise.resolve(false);
+void appearanceReady.then((setUp) => {
   if (container) {
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("preview")) {
       const mode = new URLSearchParams(location.search).get("preview");
@@ -184,7 +200,13 @@ void appearanceReady.then(() => {
       createRoot(container).render(
         <StrictMode>
           <ErrorBoundary>
-            <App store={store} chats={chats} transport={tauriTransport} workspace={workspace} />
+            <App
+              store={store}
+              chats={chats}
+              transport={tauriTransport}
+              workspace={workspace}
+              setUp={setUp}
+            />
           </ErrorBoundary>
         </StrictMode>,
       );

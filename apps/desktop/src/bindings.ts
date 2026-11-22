@@ -466,6 +466,11 @@ export const commands = {
 	worktreeRecreateApply: (chatId: string, worktreeId: string, token: string) => typedError<WorktreeActionResult, AppError>(__TAURI_INVOKE("worktree_recreate_apply", { chatId, worktreeId, token })),
 	/**  Every chat, newest activity first. */
 	chatsList: () => typedError<ChatSummary[], AppError>(__TAURI_INVOKE("chats_list")),
+	/**
+	 *  The lists the sidebar last showed in this profile. It reads two small files and never the
+	 *  database, so it answers while the database is still busy with startup.
+	 */
+	launchCache: () => typedError<LaunchCache, AppError>(__TAURI_INVOKE("launch_cache")),
 	workspaceSnapshot: (filter: WorkspaceFilter) => typedError<WorkspaceSnapshot, AppError>(__TAURI_INVOKE("workspace_snapshot", { filter })),
 	workspaceRemoved: () => typedError<RemovedWorkspace[], AppError>(__TAURI_INVOKE("workspace_removed")),
 	workspaceRemovalPreview: (target: WorkspaceRemovalTarget, action: WorkspaceRemovalAction) => typedError<WorkspaceRemovalPreview, AppError>(__TAURI_INVOKE("workspace_removal_preview", { target, action })),
@@ -2565,6 +2570,15 @@ export type LatestRelease = {
 	source: string,
 	checked_at: number | null,
 	stale: boolean,
+};
+
+/**
+ *  What the page starts from: each list as JSON text (`ChatSummary[]`, `WorkspaceSnapshot`), or
+ *  `null` when this build kept none for the open profile.
+ */
+export type LaunchCache = {
+	chats: string | null,
+	workspace: string | null,
 };
 
 /**

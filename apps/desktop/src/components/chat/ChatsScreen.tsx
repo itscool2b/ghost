@@ -326,12 +326,14 @@ export function ChatsScreen({
   }, [openChatRequest]);
   useEffect(() => {
     if (pendingOpen === null) return;
+    // Only the database's own lists confirm it: the lists kept from the last launch are there to
+    // be looked at, and count as not read yet.
+    const read = organization.cached ? null : organization.data;
     const target = navigationTarget(pendingOpen, {
-      chats: snapshot.chats,
+      chats: snapshot.chatsCached ? null : snapshot.chats,
       chatsFailed: snapshot.chatsError !== null,
-      workspace: organization.data,
-      workspacePending:
-        workspace !== undefined && organization.data === null && organization.error === null,
+      workspace: read,
+      workspacePending: workspace !== undefined && read === null && organization.error === null,
     });
     if (target.kind === "wait") return;
     setPendingOpen(null);
@@ -340,7 +342,14 @@ export function ChatsScreen({
       setBoardProject(null);
       setSelected(target.chatId);
     }
-  }, [pendingOpen, snapshot.chats, snapshot.chatsError, organization, workspace]);
+  }, [
+    pendingOpen,
+    snapshot.chats,
+    snapshot.chatsCached,
+    snapshot.chatsError,
+    organization,
+    workspace,
+  ]);
 
   useEffect(() => {
     app.start();
@@ -379,6 +388,16 @@ export function ChatsScreen({
           onSearch={transport.search && active ? () => setPalette(true) : undefined}
           chats={displayed}
           error={organization.error ?? snapshot.chatsError}
+          opening={
+            snapshot.chats === null ||
+            snapshot.chatsCached ||
+            organization.cached ||
+            (workspace !== undefined && organization.data === null)
+          }
+          onRetry={() => {
+            void app.reloadChats();
+            void workspace?.refresh();
+          }}
           organization={organization.data}
           archived={archived}
           onShowArchived={workspace ? () => setArchived((value) => !value) : undefined}

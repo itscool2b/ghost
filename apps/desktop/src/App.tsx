@@ -53,14 +53,20 @@ export function App({
   chats,
   transport,
   workspace,
+  setUp = false,
 }: {
   readonly store: StreamStore;
   readonly chats: AppStore;
   readonly transport: Transport;
   readonly workspace?: WorkspaceStore;
+  /**
+   * This profile finished setup on an earlier launch. It opens on its chats: setup's page would
+   * only show the mark for a beat and hand over to them.
+   */
+  readonly setUp?: boolean;
 }) {
   const [boot, setBoot] = useState<Boot>({ status: "loading" });
-  const [view, setView] = useState<View>("setup");
+  const [view, setView] = useState<View>(setUp ? "chats" : "setup");
   // Keyboard focus never falls to nothing: back from Settings or the Dashboard, the terminal or
   // control that held it takes it again (lib/focusReturn.ts).
   useEffect(() => {
