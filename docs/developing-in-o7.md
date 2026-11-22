@@ -87,6 +87,39 @@ Get-ChildItem $target -Recurse -Depth 2 -Directory -Filter .fingerprint |
   per run. `chat-reopen` covers what an upgrade does to running chats: the second launch finds the
   stored history, the interrupted turn and Resume.
 
+## Opening the app
+
+Every first read of the app waits behind the writer's first op, startup recovery
+(`crates/o7-core/src/chatstore/recover.rs`). Nothing in it may read every event of a profile, or
+of a chat: one turn can hold hundreds of megabytes. Each of its searches reads through an index
+that holds only the rows it wants, and its tests name that index in the query plan.
+
+What takes long runs after startup instead, as ordinary queued work that reads and live chats go
+between (`ChatStore::leftovers`): two of those indexes are built once, outside the migrations
+(a migration copies the whole database first, before any window exists), and turns above 1 MiB
+are compacted. A turn too large to merge is read on a connection of its own, off the writer.
+While the writer recovers or builds an index, a caller waits for its answer instead of failing
+as busy.
+
+The window's first frame shows the sidebar the last launch kept (`o7_core::launch_cache`): two
+files in the profile's own folder, read back only by the build that wrote them, and never taken
+as proof that a chat exists. `node apps/desktop/scripts/check-opening.mjs` checks what the sidebar
+shows while it waits for the database (`?preview=opening`).
+
+To measure a change to any of this:
+
+- `cargo test -p o7-core --lib startup_on_a_large_profile -- --ignored --nocapture` builds a
+  profile of `O7_LARGE_EVENTS` events (300,000 when unset), prints what startup took, and holds
+  the first list to one second on a first start and on the next.
+- Diagnostics shows what the running app's own launch took: opening the database, recovery, and
+  the indexes when that launch built them. A release build keeps no log, so that card is where a
+  slow start says what was slow.
+
+Measured on 22 November 2026 in WSL, 700,000 events of about 1 KiB each with three chats left
+mid-turn: the one search startup used to run over every event took 490 ms on data already in
+memory (far longer from a cold disk); the first list now answers 86 ms after the writer starts
+on a first launch and 8 ms on the next, and the work moved after startup takes about a second.
+
 ## Changelog
 
 The changelog is for the app only (owner, 21 November 2026: "change log is just for the app").
