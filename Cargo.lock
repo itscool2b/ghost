@@ -3318,6 +3318,7 @@ dependencies = [
  "o7-agents",
  "o7-config",
  "o7-core",
+ "o7-devices",
  "o7-drivers",
  "o7-process",
  "o7-protocol",
@@ -3356,6 +3357,27 @@ dependencies = [
  "wry",
  "zbus-secret-service-keyring-store",
  "zeroize",
+]
+
+[[package]]
+name = "o7-devices"
+version = "0.1.0"
+dependencies = [
+ "png",
+ "process-wrap",
+ "quick-xml",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.9",
+ "specta",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "windows",
+ "zip",
 ]
 
 [[package]]
@@ -7424,6 +7446,7 @@ checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
 dependencies = [
  "arbitrary",
  "crc32fast",
+ "flate2",
  "indexmap 2.14.2",
  "memchr",
 ]

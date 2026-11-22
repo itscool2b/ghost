@@ -227,6 +227,7 @@ try {
         editor: null,
         browser: true,
         browser_passwords: true,
+        mobile: true,
         automatic_updates: false,
         coordinated_projects: false,
       });

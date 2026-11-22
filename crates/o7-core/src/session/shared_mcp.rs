@@ -118,7 +118,7 @@ pub(super) async fn prepare_launch(
     })
     .await
     .map_err(|_| "Native MCP inventory could not be inspected.".to_owned())??;
-    // o7's own tools (project memory, the browser) carry reserved names, so they join every
+    // o7's own tools (project memory, the browser, the device) carry reserved names, so they join every
     // agent that takes MCP servers, also one whose own configuration o7 cannot read: an
     // agent added later gets them with no step (owner, 10 November 2026: "if they add a new agent
     // ... those skills should transfer over"). A listed agent whose configuration could not be
@@ -134,7 +134,7 @@ pub(super) async fn prepare_launch(
         && !names.iter().any(|name| {
             matches!(
                 name.replace('-', "_").as_str(),
-                "o7_project_memory" | "o7_browser" | "o7_project"
+                "o7_project_memory" | "o7_browser" | "o7_mobile" | "o7_project"
             )
         });
     match context

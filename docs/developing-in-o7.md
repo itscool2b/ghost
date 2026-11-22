@@ -200,7 +200,7 @@ Arch: `gst-plugins-base gst-plugins-good patchelf`.
 (`/tmp/.mount_auraco…`). o7 strips them before it resolves the agents' environment
 (`strip_launch_context` in `crates/o7-process/src/env/mod.rs`), so an agent's `node`, `git`,
 `python` and `cargo` load the system's libraries, not the image's. o7's own helpers that
-agents start (project memory, browser) run through the image's `AppRun`, which sets the image's
+agents start (project memory, browser, mobile) run through the image's `AppRun`, which sets the image's
 library path again for them alone (`helper_program` in `crates/o7-core/src/paths.rs`). An
 installed build from before that fix leaks the launcher's variables: there, `node` fails with
 "version `LIBFFI_CALL_PLAN_8.4' not found", `python3` with "No module named 'encodings'" and `git`

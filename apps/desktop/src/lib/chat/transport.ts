@@ -63,6 +63,7 @@ import {
   statusSubscribe,
   storageStatus,
 } from "../ipc";
+import { type MobileStore, mobileStore } from "../mobile";
 import { type ProjectToolsApi, projectToolsApi } from "../projectTools";
 import { type SearchTransport, searchApi } from "../search";
 import { type TerminalTransport, updateTerminalTransport } from "../terminal";
@@ -93,6 +94,8 @@ export interface Transport {
   readonly run?: WorktreeRunApi;
   /** The browser beside the chat (the Browser plugin). Absent: no browser is offered. */
   readonly browser?: BrowserStore;
+  /** The device beside the chat (the Mobile plugin). Absent: no device is offered. */
+  readonly mobile?: MobileStore;
   agentMaintenance(agentId: string): Promise<AgentMaintenance>;
   agentAuthStatus(agentId: string): Promise<AgentAuthStatus>;
   agentUpdate(agentId: string): Promise<void>;
@@ -151,6 +154,7 @@ export interface Transport {
 /** The shell, through the typed command wrappers. */
 export const tauriTransport: Transport = {
   browser: browserStore,
+  mobile: mobileStore,
   git: gitWorkspaceApi,
   files: fileLinkApi,
   run: worktreeRunApi,

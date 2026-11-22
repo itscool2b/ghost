@@ -9,6 +9,10 @@ pub fn managed_memory(server: &ResolvedMcpServer) -> bool {
 pub fn managed_browser(server: &ResolvedMcpServer) -> bool {
     server.definition.id == "o7-browser" && server.definition.name.replace('-', "_") == "o7_browser"
 }
+/// o7's mobile server (the Mobile universal plugin's tools, on the chat's device).
+pub fn managed_mobile(server: &ResolvedMcpServer) -> bool {
+    server.definition.id == "o7-mobile" && server.definition.name.replace('-', "_") == "o7_mobile"
+}
 /// o7's project server (a coordinated project's tools, for its coordinator and workers).
 pub fn managed_project(server: &ResolvedMcpServer) -> bool {
     server.definition.id == "aura-project"
@@ -16,7 +20,10 @@ pub fn managed_project(server: &ResolvedMcpServer) -> bool {
 }
 /// One of o7's own optional servers: left out, not failed, where a connection cannot load it.
 pub fn managed(server: &ResolvedMcpServer) -> bool {
-    managed_memory(server) || managed_browser(server) || managed_project(server)
+    managed_memory(server)
+        || managed_browser(server)
+        || managed_mobile(server)
+        || managed_project(server)
 }
 pub fn acp_session(
     servers: &[ResolvedMcpServer],
@@ -240,6 +247,22 @@ pub(crate) mod tests {
         server.definition.id = "o7-browser".into();
         server.definition.name = "o7_browser".into();
         server
+    }
+    /// The mobile server is one of o7's own too: left out where it cannot load, and a user's
+    /// server that only borrows the name is not it.
+    #[test]
+    fn the_mobile_server_is_optional_like_the_browsers() {
+        let mut mobile = memory();
+        mobile.definition.id = "o7-mobile".into();
+        mobile.definition.name = "o7_mobile".into();
+        assert!(managed(&mobile) && managed_mobile(&mobile));
+        assert!(!managed_browser(&mobile) && !managed_memory(&mobile));
+        let mut lookalike = server();
+        lookalike.definition.name = "o7_mobile".into();
+        assert!(!managed(&lookalike), "the id must be o7's too");
+        let (servers, omitted) = acp_session(&[mobile], false, false, false).unwrap();
+        assert!(omitted);
+        assert_eq!(servers, json!([]));
     }
     /// o7's browser server is one of its own optional servers, like project memory: a
     /// connection that cannot load it leaves it out instead of failing the start. A user's

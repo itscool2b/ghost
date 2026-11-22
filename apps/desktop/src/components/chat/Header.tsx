@@ -5,6 +5,7 @@ import {
   Globe,
   MessageSquare,
   Play,
+  Smartphone,
   Square,
   SquareTerminal,
 } from "lucide-react";
@@ -54,6 +55,7 @@ export function Header({
   run,
   view,
   browser,
+  device,
 }: {
   readonly state: ChatState;
   /**
@@ -104,6 +106,8 @@ export function Header({
    * header's opener for it, where the panel button was (owner, 9 November 2026).
    */
   readonly browser?: { readonly open: boolean; readonly onToggle: () => void };
+  /** The device beside the chat (the Mobile plugin), in Chat view while the plugin is on. */
+  readonly device?: { readonly open: boolean; readonly onToggle: () => void };
   /** Run, in a worktree chat whose folder setup saved a Run command: start it, or stop it. */
   readonly run?: {
     /** "pnpm dev". */
@@ -244,6 +248,23 @@ export function Header({
             }}
           >
             <Globe size={16} />
+          </button>
+        ) : null}
+        {device ? (
+          <button
+            type="button"
+            className="g-button g-button-ghost g-button-icon g-button-28 chat-device-toggle"
+            aria-label="Device"
+            title={`Device (${commandKey()} Shift D)`}
+            aria-keyshortcuts="Control+Shift+D Meta+Shift+D"
+            aria-expanded={device.open}
+            data-testid="chat-device"
+            onClick={(event) => {
+              event.currentTarget.focus();
+              device.onToggle();
+            }}
+          >
+            <Smartphone size={16} />
           </button>
         ) : null}
         {run ? (

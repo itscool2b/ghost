@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "scope": "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources and the bundled dictation models are explicitly included. Linker-level and installer SDK qualification is separate.",
+  "scope": "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources, the bundled dictation models and the bundled scrcpy server are explicitly included. Linker-level and installer SDK qualification is separate.",
   "inputs": {
-    "Cargo.lock": "b1f12ec39db87a2726586b447d4c87e07670ee70d7102d8484535d72ffcc777b",
-    "Cargo.toml": "9b229bc2122de074ac4a41f02c0362261d818a65fc59cc9638ee4c5f36739486",
+    "Cargo.lock": "a969184e9877b5716e7ea5940cd651a3d307cf974dbf6699dd42c2a39810da88",
+    "Cargo.toml": "d1154c3d9897e2f4b948e74c4f7d76852e6edf9e9bec663de0a4d5ec873e708c",
     "apps/design-lab/package.json": "de7f4c743231878aa792ffc1d5211d60aff122e3dd43aa0c77c0c506f499835b",
     "apps/desktop/package.json": "1cfac48cf24ce2bff773ba0761546f1d4be779d8d6e5e0327be46dfdafa9a8c6",
     "apps/desktop/scripts/dictation-models.mjs": "3dfa6af4cd4997eee017c9fda9f7a0ca5711e9c99f2e356c2ee3e7e9b3c1d31a",
-    "apps/desktop/src-tauri/Cargo.toml": "57b31a2d35281798d1292f1fefb8910aacf2928982d27c3091f7477809f9ef8d",
+    "apps/desktop/src-tauri/Cargo.toml": "da06c8cb3aa7379e27f160b314174e8c2d489f6323b967a072fab23f7e07015d",
     "apps/relay/package.json": "b1d300dc154b9cd2cb6dce7b0374eec38c88bb8530edca4ca22f44515fe7ceaf",
     "apps/web-worker/Cargo.toml": "eb67bdbb18e338548930f4c39dc7b5ec9e5a06b39b8f9249603ce8512dc451e0",
     "apps/web-worker/package.json": "bd69d164d4a1cfeef2ea458ecb74bd9956a78d9998f58746107b4855a54a730d",
@@ -16,6 +16,7 @@
     "crates/o7-cli/Cargo.toml": "4cd63bebcc6628a18f65530a53a26d8192e14658c5739555a64b2b5198d9630b",
     "crates/o7-config/Cargo.toml": "4d7763297b41d5353b1d272792ef93af4e0be11fb288734238dfca39e76deb51",
     "crates/o7-core/Cargo.toml": "678a940ab4c2441d9df719488448c118556dbb6cd679283458ddf2ad633ac79d",
+    "crates/o7-devices/Cargo.toml": "cd20ee8bbd66b3ce142b9dff264318ffba074fe93d34ae27a3babba5ae5b9a92",
     "crates/o7-drivers/Cargo.toml": "538da181e6ab1b1301f30a66b194f070b14e0991d6661a3134b9d56f9d210a4a",
     "crates/o7-process/Cargo.toml": "a26ac18a85988786b21b8a662466094d65af0b9079e468b92bf4d6e61e002845",
     "crates/o7-protocol/Cargo.toml": "3720ac6f79dd101b8a27fac38958fa4ff9a0449760e7ff61a5674c6f6c20c57e",
@@ -27,6 +28,27 @@
     "third-party/overrides.json": "afbc29886b3d5703468c5c869c5c0b77ce5fef1aee2bac8be889a88fc36387b2"
   },
   "records": [
+    {
+      "ecosystem": "bundled",
+      "name": "scrcpy server (scrcpy-server, run on an Android device)",
+      "version": "5.0.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/Genymobile/scrcpy/releases/tag/v5.0.1",
+      "distributions": ["desktop"],
+      "targets": [
+        "aarch64-apple-darwin",
+        "aarch64-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "files": [
+        {
+          "sha256": "01c12035bf35af37241298dc7ad538eb2a07e5c940437bc6876feeaa9d1951d0",
+          "source": "https://github.com/Genymobile/scrcpy/blob/v5.0.1/LICENSE"
+        }
+      ]
+    },
     {
       "ecosystem": "cargo",
       "name": "adler2",
@@ -10831,7 +10853,13 @@
       "license": "MIT",
       "source": "https://crates.io/api/v1/crates/zip/4.6.1/download",
       "distributions": ["desktop"],
-      "targets": ["aarch64-pc-windows-msvc", "x86_64-pc-windows-msvc"],
+      "targets": [
+        "aarch64-apple-darwin",
+        "aarch64-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu"
+      ],
       "files": [
         {
           "sha256": "04dc52136d82400b11df5f474949863a70a5d05d2278dec45b99c479494450a6",

@@ -31,6 +31,7 @@ tauri-build.workspace = true
 o7-agents.workspace = true
 o7-config.workspace = true
 o7-core.workspace = true
+o7-devices.workspace = true
 o7-drivers.workspace = true
 o7-process.workspace = true
 o7-protocol.workspace = true

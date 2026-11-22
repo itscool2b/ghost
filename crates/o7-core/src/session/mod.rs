@@ -371,6 +371,11 @@ pub(crate) struct Shared {
     pub(crate) browser_tools: Arc<AtomicBool>,
     /// The app's browser, which runs the tools (none in tests and the CLI).
     pub(crate) browser_bridge: Mutex<Option<Arc<dyn crate::browser_service::BrowserBridge>>>,
+    /// The Mobile universal plugin is on: Chat sessions start with its tools, and every running
+    /// session's tools read it on each call. On by default, as the profile preference is.
+    pub(crate) mobile_tools: Arc<AtomicBool>,
+    /// The app's devices, which run the tools (none in tests and the CLI).
+    pub(crate) mobile_bridge: Mutex<Option<Arc<dyn crate::mobile_service::MobileBridge>>>,
     /// Coordinated projects (an experiment): its switch, and what its engine keeps.
     pub(crate) coordination: coordinator::Coordination,
     /// The model catalog each agent connection last reported, kept across restarts, so a chat
@@ -391,6 +396,10 @@ impl Shared {
 
     pub(crate) fn browser_bridge(&self) -> Option<Arc<dyn crate::browser_service::BrowserBridge>> {
         lock(&self.browser_bridge).clone()
+    }
+
+    pub(crate) fn mobile_bridge(&self) -> Option<Arc<dyn crate::mobile_service::MobileBridge>> {
+        lock(&self.mobile_bridge).clone()
     }
 
     pub(crate) fn is_shutting_down(&self) -> bool {
@@ -534,6 +543,8 @@ impl SessionManager {
                     agent_memory_writes: Arc::new(AtomicBool::new(true)),
                     browser_tools: Arc::new(AtomicBool::new(true)),
                     browser_bridge: Mutex::new(None),
+                    mobile_tools: Arc::new(AtomicBool::new(true)),
+                    mobile_bridge: Mutex::new(None),
                     coordination: coordinator::Coordination::default(),
                     catalogs,
                     #[cfg(test)]
@@ -1398,6 +1409,21 @@ impl SessionManager {
         bridge: Option<Arc<dyn crate::browser_service::BrowserBridge>>,
     ) {
         *lock(&self.shared().browser_bridge) = bridge;
+    }
+
+    /// The Mobile plugin's switch. Sessions started while it is on get the device tools; a
+    /// running session's tools answer that it is off once it is.
+    pub fn set_mobile_tools(&self, enabled: bool) {
+        self.shared().mobile_tools.store(enabled, Ordering::Release);
+    }
+
+    pub fn mobile_tools(&self) -> bool {
+        self.shared().mobile_tools.load(Ordering::Acquire)
+    }
+
+    /// The app's devices, which run the tools Chat sessions get.
+    pub fn set_mobile_bridge(&self, bridge: Option<Arc<dyn crate::mobile_service::MobileBridge>>) {
+        *lock(&self.shared().mobile_bridge) = bridge;
     }
 
     /// The model choices `agent_id` reported the last time one of its chats ran, on this device:

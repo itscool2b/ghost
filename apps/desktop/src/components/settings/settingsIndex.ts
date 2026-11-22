@@ -12,6 +12,7 @@ export type Page =
   | "agents"
   | "plugins"
   | "browser"
+  | "mobile"
   | "instructions"
   | "memory"
   | "experiments"
@@ -21,7 +22,7 @@ export type Page =
 
 export const PAGE_GROUPS: readonly (readonly Page[])[] = [
   ["general", "appearance", "chats", "voice", "shortcuts"],
-  ["agents", "plugins", "browser", "instructions", "memory", "experiments"],
+  ["agents", "plugins", "browser", "mobile", "instructions", "memory", "experiments"],
   ["remote", "privacy", "about"],
 ];
 
@@ -34,6 +35,7 @@ export const PAGE_LABELS: Readonly<Record<Page, string>> = {
   agents: "Agents",
   plugins: "Plugins & MCP",
   browser: "Browser",
+  mobile: "Mobile",
   instructions: "Instructions",
   memory: "Project memory",
   experiments: "Experiments",
@@ -132,6 +134,18 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
     title: "Clear browsing data",
     words: "browser cookies cache history passwords sign out",
   },
+  {
+    page: "mobile",
+    title: "Mobile",
+    words:
+      "mobile universal plugin built-in phone app android emulator device agents tools turn off",
+  },
+  {
+    page: "mobile",
+    title: "Device tools for agents",
+    words: "mobile phone tools agents tap swipe screenshot install launch logs",
+  },
+  { page: "mobile", title: "Android", words: "mobile sdk emulator adb set up download google" },
   { page: "instructions", title: "Instructions", words: "agents.md claude.md rules prompt" },
   { page: "instructions", title: "Applies to", words: "scope folder project global chat" },
   {

@@ -59,7 +59,7 @@ export function preselectAgent(
 /**
  * Rust's defaults: full auto, background services on, automatic checkpoints off, Git-ignored
  * instruction files copied into new worktree chats, agents editing project memory directly, and the
- * Browser plugin on with saved sign-ins.
+ * Browser plugin on with saved sign-ins, and the Mobile plugin on.
  */
 export const DEFAULT_GENERAL: GeneralPreferences = {
   default_agent: null,
@@ -77,6 +77,7 @@ export const DEFAULT_GENERAL: GeneralPreferences = {
   editor: null,
   browser: true,
   browser_passwords: true,
+  mobile: true,
   automatic_updates: true,
   coordinated_projects: false,
 };

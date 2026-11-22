@@ -57,6 +57,8 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<o7_protocol::remote::RemoteStatus>()
         // The payload of `auracode-browser` (browser::EVENT).
         .typ::<crate::browser::BrowserEvent>()
+        // The payload of `o7-mobile` (mobile::EVENT).
+        .typ::<o7_devices::manager::MobileStatus>()
         .commands(tauri_specta::collect_commands![
             commands::app_info,
             crate::browser::commands::browser_status,
@@ -80,6 +82,24 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::browser::commands::browser_clear,
             crate::browser::commands::browser_open_outside,
             crate::browser::commands::browser_agent_call,
+            crate::mobile::mobile_status,
+            crate::mobile::mobile_refresh,
+            crate::mobile::mobile_fetch_offer,
+            crate::mobile::mobile_fetch_start,
+            crate::mobile::mobile_fetch_cancel,
+            crate::mobile::mobile_attach,
+            crate::mobile::mobile_detach,
+            crate::mobile::mobile_stop_device,
+            crate::mobile::mobile_allow_agent,
+            crate::mobile::mobile_watch,
+            crate::mobile::mobile_unwatch,
+            crate::mobile::mobile_touch,
+            crate::mobile::mobile_scroll,
+            crate::mobile::mobile_key,
+            crate::mobile::mobile_text,
+            crate::mobile::mobile_rotate,
+            crate::mobile::mobile_screenshot,
+            crate::mobile::mobile_agent_call,
             crate::profile_commands::profiles_list,
             crate::profile_commands::profile_activate,
             crate::updater::app_update_status,

@@ -61,6 +61,47 @@ export const commands = {
 	 *  through it. A release build refuses, so the window never acts as an agent there.
 	 */
 	browserAgentCall: (chatId: string, tool: string, input: string) => typedError<BrowserToolCheck, AppError>(__TAURI_INVOKE("browser_agent_call", { chatId, tool, input })),
+	mobileStatus: () => typedError<MobileStatus, AppError>(__TAURI_INVOKE("mobile_status")),
+	/**  The pane was opened: look again at what is installed, and start watching for phones. */
+	mobileRefresh: () => typedError<MobileStatus, AppError>(__TAURI_INVOKE("mobile_refresh")),
+	/**  Reads Google's index and shows what would be downloaded, with its licence. */
+	mobileFetchOffer: () => typedError<null, AppError>(__TAURI_INVOKE("mobile_fetch_offer")),
+	/**  The person read the offer and accepted Google's licence: download what it listed. */
+	mobileFetchStart: () => typedError<null, AppError>(__TAURI_INVOKE("mobile_fetch_start")),
+	mobileFetchCancel: () => typedError<null, AppError>(__TAURI_INVOKE("mobile_fetch_cancel")),
+	/**  Gives the chat a device and starts it: the one named, or one of o7's emulators. */
+	mobileAttach: (chatId: string, deviceId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("mobile_attach", { chatId, deviceId })),
+	mobileDetach: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("mobile_detach", { chatId })),
+	/**  Stops one of o7's emulators. */
+	mobileStopDevice: (deviceId: string) => typedError<null, AppError>(__TAURI_INVOKE("mobile_stop_device", { deviceId })),
+	/**  The person's answer to "may the agent use this phone?", for the chat's device. */
+	mobileAllowAgent: (chatId: string, allowed: boolean) => typedError<null, AppError>(__TAURI_INVOKE("mobile_allow_agent", { chatId, allowed })),
+	/**
+	 *  Streams the chat's device to `channel` until [`mobile_unwatch`], a new watch for the chat, or
+	 *  the stream's own end. Answers the stream's number, for `mobile_unwatch`.
+	 */
+	mobileWatch: (chatId: string, channel: Channel<VideoPacket>) => typedError<number, AppError>(__TAURI_INVOKE("mobile_watch", { chatId, channel })),
+	/**  Ends the stream `mobile_watch` numbered `watch_id`, if it is still the chat's. */
+	mobileUnwatch: (chatId: string, watchId: number) => typedError<null, AppError>(__TAURI_INVOKE("mobile_unwatch", { chatId, watchId })),
+	/**  The person's finger, at a point of the video they are watching. */
+	mobileTouch: (chatId: string, phase: TouchPhase, x: number, y: number) => typedError<null, AppError>(__TAURI_INVOKE("mobile_touch", { chatId, phase, x, y })),
+	/**  The person's wheel or trackpad, at a point of the video: notches right and down. */
+	mobileScroll: (chatId: string, x: number, y: number, horizontal: number | null, vertical: number | null) => typedError<null, AppError>(__TAURI_INVOKE("mobile_scroll", { chatId, x, y, horizontal, vertical })),
+	mobileKey: (chatId: string, key: DeviceKey) => typedError<null, AppError>(__TAURI_INVOKE("mobile_key", { chatId, key })),
+	/**  Text the person typed or pasted into the pane. */
+	mobileText: (chatId: string, text: string) => typedError<null, AppError>(__TAURI_INVOKE("mobile_text", { chatId, text })),
+	mobileRotate: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("mobile_rotate", { chatId })),
+	/**
+	 *  Saves a picture of the chat's screen to the person's Pictures (or Downloads) folder and
+	 *  answers where it is.
+	 */
+	mobileScreenshot: (chatId: string) => typedError<string, AppError>(__TAURI_INVOKE("mobile_screenshot", { chatId })),
+	/**
+	 *  Runs one of the agents' device tools for a chat, as an agent's call would (`input` is its
+	 *  arguments, as JSON). Development builds only: the checks drive every tool through it. A
+	 *  release build refuses, so the window never acts as an agent there.
+	 */
+	mobileAgentCall: (chatId: string, tool: string, input: string) => typedError<MobileToolCheck, AppError>(__TAURI_INVOKE("mobile_agent_call", { chatId, tool, input })),
 	profilesList: () => typedError<ProfileMeta[], AppError>(__TAURI_INVOKE("profiles_list")),
 	profileActivate: (profileId: string) => typedError<AppInfo, AppError>(__TAURI_INVOKE("profile_activate", { profileId })),
 	appUpdateStatus: () => __TAURI_INVOKE<UpdateStatus>("app_update_status"),
@@ -579,6 +620,14 @@ export const SMOKE_CHAT_CHECKS = ["chats-screen","pick-folder","create-chat","fi
 export const SMOKE_CHAT_REOPEN_CHECKS = ["reopen-list","reopen-no-start","reopen-history","reopen-interrupted","reopen-held","reopen-blob","reopen-resume","reopen-send-queued"] as const;
 
 /* Types */
+export type AccelerationInfo = {
+	usable: boolean,
+	/**  The emulator's own words. */
+	detail: string,
+	/**  The one thing to do about it on this system, when it is not usable. */
+	fix: string | null,
+};
+
 export type AcceptMemoryProposal = {
 	project_id: string,
 	proposal_id: string,
@@ -1172,6 +1221,23 @@ export type ChatCreatePreview = {
 	 *  agent idle there does not count: it edits nothing until it is given a message.
 	 */
 	busy_chats: ChatSummary[],
+};
+
+/**  A chat's device. */
+export type ChatDevice = {
+	chat_id: string,
+	device_id: string,
+	kind: DeviceKind,
+	title: string,
+	/**  The device is being started or connected to. */
+	starting: boolean,
+	/**  Its screen is live: there is video to watch and it takes input. */
+	live: boolean,
+	/**  Whether the chat's agent may use it. Always true for o7's own emulators. */
+	agent_allowed: boolean,
+	/**  What the agent is doing on it right now ("Tapping d3"). */
+	agent: string | null,
+	error: string | null,
 };
 
 /**  Device-local launch context. This is never part of a stored transcript. */
@@ -1826,6 +1892,34 @@ export type DeviceIdentity = {
 	created_at: number,
 };
 
+export type DeviceInfo = {
+	id: string,
+	kind: DeviceKind,
+	title: string,
+	state: DeviceState,
+	/**  Why it stopped or would not start, when it did not. */
+	error: string | null,
+	/**  The chat that holds it. */
+	chat_id: string | null,
+	/**  Its process, for the Processes page. */
+	pid: number | null,
+};
+
+/**  The device's buttons and the keys the pane forwards from the keyboard. */
+export type DeviceKey = "back" | "home" | "recents" | "power" | "volume_up" | "volume_down" | "enter" | "delete" | "forward_delete" | "tab" | "escape" | "up" | "down" | "left" | "right";
+
+export type DeviceKind = 
+/**  An emulator o7 made and runs. */
+"emulator" | 
+/**  A device o7 did not start: a phone on a cable, or an emulator from another program. */
+"phone";
+
+export type DeviceState = "stopped" | "starting" | "ready" | "stopping" | 
+/**  A phone that has not allowed this computer yet. */
+"unauthorized" | 
+/**  A phone adb knows but cannot reach. */
+"offline";
+
 export type DictationEvent = 
 /**  The engine is loading, the first time a recording starts. */
 { state: "preparing" } | 
@@ -1910,6 +2004,20 @@ export type FeatureListing = {
 	/**  How many available entries the agent reported before the cap. */
 	available_total: number,
 };
+
+/**  Fetching the SDK packages. */
+export type Fetch = { state: "idle" } | 
+/**  Reading Google's index. */
+{ state: "planning" } | 
+/**  What would be fetched, and the licence to accept first. */
+{ state: "offer"; items: FetchItem[]; total_mb: number | null; license: string } | { state: "running"; name: string; phase: FetchPhase; received_mb: number | null; total_mb: number | null } | { state: "failed"; message: string };
+
+export type FetchItem = {
+	name: string,
+	size_mb: number | null,
+};
+
+export type FetchPhase = "downloading" | "checking" | "unpacking";
 
 export type FileMention = {
 	path: string,
@@ -2050,6 +2158,12 @@ export type GeneralPreferences = {
 	 *  Windows). On by default.
 	 */
 	browser_passwords: boolean,
+	/**
+	 *  The Mobile universal plugin: the Device pane beside the chat and the device tools agents
+	 *  get. On unless the person turns it off in Settings > Plugins & MCP; off stops every device
+	 *  o7 started (owner, 21 November 2026, docs/superpowers/plans/2026-11-21-mobile.md).
+	 */
+	mobile: boolean,
 	/**
 	 *  Look for a newer o7 shortly after start and a few times a day, and show Update when
 	 *  there is one (owner, 18 November 2026: "an update button pops up for every merge"). It
@@ -2709,6 +2823,25 @@ export type MemoryRevision = {
 	reason: string,
 	source: string,
 	created_at: number,
+};
+
+/**  Everything the pane shows, as one value. It is small, and sent whole on every change. */
+export type MobileStatus = {
+	/**  The Mobile plugin is on. */
+	enabled: boolean,
+	/**  Why Android devices cannot run on this computer at all, when they cannot. */
+	unavailable: string | null,
+	setup: Setup,
+	devices: DeviceInfo[],
+	chats: ChatDevice[],
+};
+
+/**  What one of the agents' tools answered, for the development checks. */
+export type MobileToolCheck = {
+	text: string,
+	/**  The screenshot's size in bytes, when the tool returned one. */
+	image_length: number,
+	error: boolean,
 };
 
 export type MotionPreference = 
@@ -3514,6 +3647,17 @@ export type SessionStatus =
 /**  The agent needs its own sign-in; never a live process. */
 "auth_required";
 
+/**  What is installed and what is not. */
+export type Setup = {
+	/**  adb was found: phones on a cable can be used. */
+	adb: boolean,
+	/**  An emulator and an image for it were found: a device can be started. */
+	emulator: boolean,
+	/**  Whether the emulator can run fast here, once it is installed and was asked. */
+	acceleration: AccelerationInfo | null,
+	fetch: Fetch,
+};
+
 export type SetupAction = { type: "visit"; step: SetupStep } | { type: "motion"; value: MotionPreference } | { type: "appearance"; value: AppearancePreference } | { type: "theme"; value: ThemePreference } | { type: "text_size"; value: TextSizePreference } | { type: "project"; project_id: string } | { type: "finish" } | { type: "restart" } | 
 /**
  *  Changing the agent clears the default model and thinking level, which belong to the
@@ -3532,6 +3676,8 @@ export type SetupAction = { type: "visit"; step: SetupStep } | { type: "motion";
 { type: "browser"; enabled: boolean } | 
 /**  Turns on or off the browser's offer to save sign-ins. */
 { type: "browser_passwords"; enabled: boolean } | 
+/**  Turns the Mobile universal plugin on or off. */
+{ type: "mobile"; enabled: boolean } | 
 /**  Turns on or off looking for a newer o7 by itself. */
 { type: "automatic_updates"; enabled: boolean } | 
 /**  Turns the coordinated projects experiment on or off. */
@@ -3820,6 +3966,9 @@ export type ToolUpdate = {
 	truncated: Truncation | null,
 };
 
+/**  A finger's phase, from the pane's pointer events. */
+export type TouchPhase = "down" | "move" | "up";
+
 /**  Inline content was cut; `blob` is the sha256 of the full content in the profile's attachments. */
 export type Truncation = {
 	total_bytes: number,
@@ -4002,6 +4151,12 @@ export type VersionChange = {
 
 /**  Evidence about this exact installed version, independent of whether its binary can start. */
 export type VersionVerification = { state: "verified"; version: string; scope: string } | { state: "untested"; last_verified: string | null } | { state: "unknown" };
+
+/**
+ *  One packet of a device's video, sent to the page as raw bytes (the page reads an
+ *  `ArrayBuffer`): a byte of kind, then the payload (`o7_devices::manager::Viewer`).
+ */
+export type VideoPacket = number[];
 
 export type WorkspaceChat = {
 	chat: ChatSummary,

@@ -39,6 +39,7 @@ export function createSetupFixture(): SetupApi & { readonly general: () => Gener
       if (action.type === "browser") snapshot.preferences.general.browser = action.enabled;
       if (action.type === "browser_passwords")
         snapshot.preferences.general.browser_passwords = action.enabled;
+      if (action.type === "mobile") snapshot.preferences.general.mobile = action.enabled;
       if (action.type === "automatic_updates")
         snapshot.preferences.general.automatic_updates = action.enabled;
       if (action.type === "coordinated_projects")

@@ -106,6 +106,7 @@ const setup: SetupApi = {
     if (action.type === "agent_memory_writes") general.agent_memory_writes = action.enabled;
     if (action.type === "browser") general.browser = action.enabled;
     if (action.type === "browser_passwords") general.browser_passwords = action.enabled;
+    if (action.type === "mobile") general.mobile = action.enabled;
     if (action.type === "automatic_updates") general.automatic_updates = action.enabled;
     if (action.type === "coordinated_projects") general.coordinated_projects = action.enabled;
     preferences.preferences.revision++;

@@ -38,12 +38,14 @@ import { errorMessage } from "../../lib/errors";
 import { sameFolder } from "../../lib/gitWorkspace";
 import { useMediaQuery } from "../../lib/hooks";
 import { inTauri } from "../../lib/ipc";
+import { devicePanels } from "../../lib/mobile";
 import { editorName } from "../../lib/projectTools";
 import { buildOffer, buildPrompt, planRole, type RoleCatalog, roleChoice } from "../../lib/roles";
 import { generalApi } from "../../lib/setup";
 import type { TerminalPanels } from "../../lib/terminalPanel";
 import { runLabel } from "../../lib/worktreeRun";
 import { type AnnotationTarget, BrowserPanel } from "../browser/BrowserPanel";
+import { DevicePanel } from "../mobile/DevicePanel";
 import { AccountPicker } from "./AccountPicker";
 import { BackgroundTasks } from "./BackgroundTasks";
 import { CanvasBridge, CanvasPane } from "./CanvasPane";
@@ -165,12 +167,33 @@ export function ChatView({
   );
   const placement = browserPanels.of(chatId);
   const wide = useMediaQuery("(min-width: 1200px)");
+  // The device beside the chat (the Mobile plugin): open or not, per chat on this device. It
+  // shares the side with the browser, Changes and the task panel.
+  const mobileStore = transport.mobile ?? null;
+  useSyncExternalStore(devicePanels.subscribe, devicePanels.getVersion, devicePanels.getVersion);
+  useSyncExternalStore(
+    mobileStore?.subscribe ?? noSubscribe,
+    mobileStore?.getVersion ?? noVersion,
+    mobileStore?.getVersion ?? noVersion,
+  );
   const setBrowserOpen = useCallback(
     (open: boolean) => {
       browserPanels.set(chatId, { open });
       if (open) {
         setChangesOpen(false);
         setOpenTaskId(null);
+        if (devicePanels.open(chatId)) devicePanels.set(chatId, false);
+      }
+    },
+    [chatId],
+  );
+  const setDeviceOpen = useCallback(
+    (open: boolean) => {
+      devicePanels.set(chatId, open);
+      if (open) {
+        setChangesOpen(false);
+        setOpenTaskId(null);
+        if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
       }
     },
     [chatId],
@@ -257,6 +280,7 @@ export function ChatView({
 
   // The browser's toggle as it is this render, for the shortcut (null while it is not offered).
   const browserToggle = useRef<(() => void) | null>(null);
+  const deviceToggle = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -283,6 +307,19 @@ export function ChatView({
         if (!browserToggle.current) return;
         event.preventDefault();
         browserToggle.current();
+        return;
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "d" &&
+        !event.defaultPrevented &&
+        !document.querySelector("dialog[open]")
+      ) {
+        if (!deviceToggle.current) return;
+        event.preventDefault();
+        deviceToggle.current();
         return;
       }
       if (
@@ -321,11 +358,13 @@ export function ChatView({
     if (!changesOpen) return;
     setOpenTaskId(null);
     if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
+    if (devicePanels.open(chatId)) devicePanels.set(chatId, false);
   }, [changesOpen, chatId]);
   const openTask = useCallback(
     (taskId: string) => {
       setChangesOpen(false);
       if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
+      if (devicePanels.open(chatId)) devicePanels.set(chatId, false);
       setOpenTaskId(taskId);
     },
     [chatId],
@@ -379,9 +418,21 @@ export function ChatView({
   browserToggle.current = browserUsable
     ? () => setBrowserOpen(!browserPanels.of(chatId).open)
     : null;
-  // An agent that opens a page shows it, unless Changes or a task holds the side.
+  // The Device pane: Chat view only, while the Mobile plugin is on.
+  const deviceUsable =
+    mobileStore?.usable() === true && interfaceView === "chat" && state.chat !== null;
+  const deviceOpen = deviceUsable && devicePanels.open(chatId);
+  deviceToggle.current = deviceUsable ? () => setDeviceOpen(!devicePanels.open(chatId)) : null;
+  // An agent that opens a page shows it, unless Changes, a task or the device holds the side.
   const sideTaken = useRef(false);
-  sideTaken.current = changesOpen || openTaskId !== null;
+  sideTaken.current = changesOpen || openTaskId !== null || deviceOpen;
+  // An agent that starts using the chat's device shows it, unless something else holds the side.
+  const agentOnDevice = mobileStore?.held(chatId)?.agent ?? null;
+  const sideFree = !changesOpen && openTaskId === null && !browserOpen;
+  useEffect(() => {
+    if (agentOnDevice === null || !deviceUsable || !active || !sideFree) return;
+    if (!devicePanels.open(chatId)) setDeviceOpen(true);
+  }, [agentOnDevice, deviceUsable, active, sideFree, chatId, setDeviceOpen]);
   useEffect(() => {
     if (!browserStore || !browserUsable) return;
     return browserStore.onEvent((event) => {
@@ -1135,6 +1186,11 @@ export function ChatView({
                 ? { open: browserOpen, onToggle: () => setBrowserOpen(!browserOpen) }
                 : undefined
             }
+            device={
+              deviceUsable
+                ? { open: deviceOpen, onToggle: () => setDeviceOpen(!deviceOpen) }
+                : undefined
+            }
             view={
               state.chat && terminalSupported(state.chat.agent_id, agents)
                 ? {
@@ -1538,7 +1594,17 @@ export function ChatView({
                 />
               ) : null}
             </div>
-            {browserOpen && browserStore ? (
+            {deviceOpen && mobileStore ? (
+              <DevicePanel
+                key={chatId}
+                chatId={chatId}
+                store={mobileStore}
+                narrow={!wide}
+                onClose={() => setDeviceOpen(false)}
+                agentId={state.chat.agent_id}
+                agentName={agentName}
+              />
+            ) : browserOpen && browserStore ? (
               <BrowserPanel
                 key={chatId}
                 chatId={chatId}

@@ -17,6 +17,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
 } from "lucide-react";
 import {
   type ComponentProps,
@@ -37,6 +38,7 @@ import type { DataCleanupApi } from "../../lib/dataCleanup";
 import { type DictationApi, dictationApi } from "../../lib/dictation";
 import { GLOBAL, type InstructionsApi, instructionsApi } from "../../lib/instructions";
 import { revealDataDir } from "../../lib/ipc";
+import type { MobileStore } from "../../lib/mobile";
 import { type ProfileApi, profileApi } from "../../lib/profiles";
 import { type RemoteApi, remoteApi } from "../../lib/remote";
 import { type GeneralApi, generalApi, type SetupApi, setupApi } from "../../lib/setup";
@@ -44,6 +46,7 @@ import { type UpdatesApi, updatesApi } from "../../lib/updates";
 import { EMPTY_WORKSPACE, type WorkspaceStore } from "../../lib/workspace";
 import { PluginLibraryScreen } from "../library/PluginLibraryScreen";
 import { UniversalPlugins } from "../library/UniversalPlugins";
+import { MobileSettings } from "../mobile/MobileSettings";
 import { AgentsScreen } from "../setup/AgentsScreen";
 import { DeleteDataDialog } from "./DeleteDataDialog";
 import { ExperimentsPage } from "./ExperimentsPage";
@@ -78,6 +81,7 @@ const ICONS: Readonly<Record<Page, LucideIcon>> = {
   agents: Bot,
   plugins: Puzzle,
   browser: Globe,
+  mobile: Smartphone,
   instructions: FileText,
   memory: BookOpen,
   experiments: FlaskConical,
@@ -99,6 +103,8 @@ export interface CustomizeServices {
   readonly memory?: ComponentProps<typeof ProjectMemoryPanel>["api"];
   /** Universal plugins' browser (its status, history and Clear browsing data). */
   readonly browser?: BrowserStore;
+  /** Mobile's devices (what is installed and running). */
+  readonly mobile?: MobileStore;
 }
 
 /** One keycap per key in a chord; a repeated key shows twice. */
@@ -504,6 +510,16 @@ export function SettingsScreen({
                 it. It is on unless you turn it off here.
               </p>
               <UniversalPlugins prefs={prefs} os={info.os} browser={services?.browser} />
+            </>,
+          )}
+          {pane(
+            "mobile",
+            <>
+              <p className="settings-lead">
+                The phone beside your chats is part of o7, and so are the tools agents get to use
+                it. It is on unless you turn it off here.
+              </p>
+              <MobileSettings prefs={prefs} mobile={services?.mobile} />
             </>,
           )}
           {pane(

@@ -135,7 +135,7 @@ pub fn validate(def: &McpDefinition) -> Result<(), StoreError> {
         || !key(&def.name)
         || matches!(
             def.name.replace('-', "_").as_str(),
-            "o7_project_memory" | "o7_browser" | "o7_project"
+            "o7_project_memory" | "o7_browser" | "o7_mobile" | "o7_project"
         )
         || def.project_id.as_ref().is_some_and(|p| !valid_uuid(p))
     {
@@ -876,6 +876,8 @@ pub(crate) mod tests {
             "o7-project-memory",
             "o7_browser",
             "o7-browser",
+            "o7_mobile",
+            "o7-mobile",
             "o7_project",
             "o7-project",
         ] {

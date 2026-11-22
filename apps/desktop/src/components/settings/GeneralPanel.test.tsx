@@ -44,6 +44,7 @@ describe("Settings' General defaults", () => {
       editor: null,
       browser: true,
       browser_passwords: true,
+      mobile: true,
       automatic_updates: true,
       coordinated_projects: false,
     });
