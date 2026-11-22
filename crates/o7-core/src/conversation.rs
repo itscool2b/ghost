@@ -167,8 +167,12 @@ mod tests {
                 revision: Some("r1".into()),
                 markdown: "Notes".into(),
                 updated_at: 0,
+                head: Some("r1".into()),
+                notes: Vec::new(),
             },
             None,
+            &[],
+            0,
         );
         assert!(memory.starts_with(crate::chatstore::memory::CONTEXT_PREFIX));
         original.prompt.push_str(&memory);

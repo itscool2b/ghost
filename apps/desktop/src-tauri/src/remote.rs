@@ -718,8 +718,10 @@ impl Backend for AppBackend {
                         .read_project_memory(&project_id)
                         .await
                         .map_err(|error| failed(error.into()))?;
+                    // Saved as a bot's, not as the person's: the window shows the edit and
+                    // offers to undo it, as it does for an agent's.
                     sessions
-                        .save_project_memory(o7_protocol::memory::SaveProjectMemory {
+                        .bot_save_project_memory(o7_protocol::memory::SaveProjectMemory {
                             project_id,
                             expected_revision: current.revision,
                             markdown,

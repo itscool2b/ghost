@@ -89,7 +89,7 @@ async fn read_only_memory_service_reads_refuses_changes_and_drop_revokes_credent
     let accept = call(&endpoint, &token, serde_json::json!({"operation":"accept"})).await;
     assert_eq!(
         accept["error"],
-        "Unsupported memory operation. Use read or write."
+        "Unsupported memory operation. Use read, write, note_write or note_delete."
     );
     let cross = call(
         &endpoint,
@@ -142,6 +142,8 @@ async fn direct_writes_follow_the_profile_switch_mid_grant_and_still_need_the_to
                 revision: revision.as_str().unwrap().to_owned(),
                 parent_revision: None,
                 chat_id: chat.clone(),
+                note: None,
+                deleted: false,
             }),
         }
     );
@@ -211,4 +213,112 @@ async fn direct_writes_follow_the_profile_switch_mid_grant_and_still_need_the_to
     assert_ne!(again["result"]["revision"], revision);
     drop(grant);
     store.shutdown(std::time::Duration::from_secs(5)).await;
+}
+/// Notes through a chat's grant: an agent adds, reads, replaces and removes one note of its own
+/// chat's project, each from the revision it read; the window hears of each edit; and every write
+/// follows the profile's switch.
+#[tokio::test]
+async fn an_agent_keeps_notes_through_its_grant_and_every_write_follows_the_switch() {
+    let (_dir, store, chat) = fixture();
+    let direct = Arc::new(AtomicBool::new(true));
+    let grant = grant(&store, &chat, &direct);
+    let (endpoint, token) = (grant.endpoint.clone(), grant.token.clone());
+    let mut changes = store.memory_changes();
+    let write = |base: serde_json::Value, markdown: &str| serde_json::json!({"operation":"note_write","note":"windows-build","base_revision":base,"description":"Read before building on Windows","markdown":markdown,"reason":"Learned how the build works"});
+    // A stranger, a name that could leave the list, and a write that names no note are refused.
+    let stranger = call(&endpoint, "wrong", write(serde_json::Value::Null, "Forged")).await;
+    assert_eq!(
+        stranger["error"],
+        "Memory access expired. Restart the o7 session."
+    );
+    let outside = call(&endpoint, &token, serde_json::json!({"operation":"note_write","note":"../other","base_revision":null,"description":"d","markdown":"m","reason":"r"})).await;
+    assert!(
+        outside["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Name a note like windows-build")
+    );
+    let unnamed = call(&endpoint, &token, serde_json::json!({"operation":"note_write","base_revision":null,"markdown":"m","reason":"r"})).await;
+    assert!(
+        unnamed["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("A note write needs the note's name")
+    );
+    // A project named by the caller is not a field the service takes.
+    let elsewhere = call(&endpoint, &token, serde_json::json!({"operation":"read","project_id":"another-project"})).await;
+    assert_eq!(elsewhere["error"], "Invalid memory request.");
+
+    let added = call(&endpoint, &token, write(serde_json::Value::Null, "Use tb2.")).await;
+    assert_eq!(added["result"]["name"], "windows-build");
+    assert_eq!(added["result"]["by"], "agent");
+    let first = added["result"]["revision"].as_str().unwrap().to_owned();
+    let project = added["result"]["project_id"].as_str().unwrap().to_owned();
+    assert_eq!(
+        changes.recv().await.unwrap(),
+        o7_protocol::memory::ProjectMemoryChanged {
+            project_id: Some(project.clone()),
+            agent_edit: Some(o7_protocol::memory::AgentMemoryEdit {
+                revision: first.clone(),
+                parent_revision: None,
+                chat_id: chat.clone(),
+                note: Some("windows-build".into()),
+                deleted: false,
+            }),
+        }
+    );
+    // The brief and the list: the note is listed with its line, not its text.
+    let listed = call(&endpoint, &token, serde_json::json!({"operation":"read"})).await;
+    assert_eq!(listed["result"]["markdown"], "");
+    assert_eq!(listed["result"]["revision"], serde_json::Value::Null);
+    assert_eq!(listed["result"]["head"], first.as_str());
+    assert_eq!(
+        listed["result"]["notes"][0]["description"],
+        "Read before building on Windows"
+    );
+    assert!(listed["result"]["notes"][0].get("markdown").is_none());
+    let read = call(&endpoint, &token, serde_json::json!({"operation":"read","note":"windows-build"})).await;
+    assert_eq!(read["result"]["markdown"], "Use tb2.");
+    // Replacing it needs the revision that was read.
+    let stale = call(&endpoint, &token, write(serde_json::Value::Null, "Other")).await;
+    assert!(
+        stale["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("There is already a note windows-build")
+    );
+    let replaced = call(&endpoint, &token, write(serde_json::json!(first), "Use tb2. Never cargo.")).await;
+    let second = replaced["result"]["revision"].as_str().unwrap().to_owned();
+    assert_ne!(second, first);
+    let _ = changes.recv().await.unwrap();
+
+    // With the switch off, no write of any kind lands, and reads still answer.
+    direct.store(false, Ordering::Release);
+    for refused in [
+        write(serde_json::json!(second), "Changed while off"),
+        serde_json::json!({"operation":"note_delete","note":"windows-build","base_revision":second,"reason":"Out of date"}),
+        serde_json::json!({"operation":"write","base_revision":null,"markdown":"Brief","reason":"r"}),
+    ] {
+        assert_eq!(call(&endpoint, &token, refused).await["error"], READ_ONLY);
+    }
+    let still = call(&endpoint, &token, serde_json::json!({"operation":"read","note":"windows-build"})).await;
+    assert_eq!(still["result"]["markdown"], "Use tb2. Never cargo.");
+    direct.store(true, Ordering::Release);
+
+    // Removing it, from the revision that was read; the window hears that too.
+    let early = call(&endpoint, &token, serde_json::json!({"operation":"note_delete","note":"windows-build","base_revision":first,"reason":"Out of date"})).await;
+    assert!(early["error"].as_str().unwrap().contains("Read it again"));
+    let removed = call(&endpoint, &token, serde_json::json!({"operation":"note_delete","note":"windows-build","base_revision":second,"reason":"Out of date"})).await;
+    assert_eq!(removed["result"]["notes"], serde_json::json!([]));
+    let heard = changes.recv().await.unwrap();
+    let edit = heard.agent_edit.expect("the removal is an agent's edit");
+    assert_eq!(
+        (edit.note.as_deref(), edit.deleted, edit.parent_revision),
+        (Some("windows-build"), true, Some(second))
+    );
+    let gone = call(&endpoint, &token, serde_json::json!({"operation":"read","note":"windows-build"})).await;
+    assert_eq!(
+        gone["error"],
+        "There is no note windows-build. o7_memory_read lists the notes there are."
+    );
 }
