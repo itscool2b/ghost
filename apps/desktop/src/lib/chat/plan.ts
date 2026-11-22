@@ -11,13 +11,24 @@ export function planParts(plan: string): { readonly title: string | null; readon
   const heading = /^#{1,3}\s+(.+?)\s*#*\s*$/.exec(first);
   if (!heading?.[1]) return { title: null, body: plan };
   return {
-    // Emphasis marks and code ticks are for the body's renderer; a title is plain words.
-    title: heading[1].replace(/[*_`]/g, "").trim() || null,
+    title: titleWords(heading[1]),
     body: lines
       .slice(1)
       .join("\n")
       .replace(/^\s*\n/, ""),
   };
+}
+
+/**
+ * A heading as a title: plain words (emphasis marks and code ticks are for the body's renderer),
+ * without a leading "Plan:", which the card already says by being one.
+ */
+function titleWords(heading: string): string | null {
+  const words = heading
+    .replace(/[*_`]/g, "")
+    .trim()
+    .replace(/^(?:implementation\s+)?plan\s*[:\p{Pd}]\s*/iu, "");
+  return words === "" ? null : words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** The lines of a plan outside its code fences, so a fenced `# comment` is not a heading. */

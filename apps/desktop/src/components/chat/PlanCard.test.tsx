@@ -230,6 +230,11 @@ describe("a plan waiting for review", () => {
     expect(planSteps(plan)).toBe(3);
     expect(planMeta("Codex", plan)).toBe("Codex's plan · 3 steps");
     expect(planMeta("Hermes", "Just do it.")).toBe("Hermes' plan");
+    // A title that only says it is a plan says what the plan is for instead.
+    expect(planParts("# Plan: create hello.txt\n\n1. Write it").title).toBe("Create hello.txt");
+    expect(planParts("# Implementation plan - the picker").title).toBe("The picker");
+    expect(planParts("# Planning the migration").title).toBe("Planning the migration");
+    expect(planParts("# Plan:\n\nDo it.").title).toBeNull();
     // A plan that opens with words has no title of its own.
     expect(planParts("Do this.\n\n# Later")).toEqual({ title: null, body: "Do this.\n\n# Later" });
   });

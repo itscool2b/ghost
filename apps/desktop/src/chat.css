@@ -1483,6 +1483,11 @@
   box-shadow: inset 0 0 0 1px var(--g-glass-rim-strong);
 }
 
+/* A plan says what it answers in its own title: the line naming the request's prompt is left out. */
+.chat-permission-dock:has(.chat-plan) .chat-request-scope {
+  display: none;
+}
+
 @keyframes chat-plan-in {
   from {
     opacity: 0;
@@ -1641,7 +1646,7 @@
   z-index: 1;
   /* A pixel short of the sheet's sides, so its rim runs past the foot unbroken. */
   margin: 0 calc(1px - var(--g-space-20));
-  padding: var(--g-space-12) calc(var(--g-space-20) - 1px);
+  padding: var(--g-space-12) calc(var(--g-space-20) - 1px) var(--g-space-16);
   background-color: var(--g-glass-pop);
 }
 
