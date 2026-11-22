@@ -16,6 +16,23 @@
       }
     ]
   },
+  "parakeet-ultra-Q4_K_M.gguf": {
+    "name": "Parakeet Ultra speech model (parakeet-ultra-Q4_K_M.gguf, fetched on request)",
+    "repo": "handy-computer/parakeet-ultra-gguf",
+    "revision": "a1539be1b849ea7463b88343e5277b373d0c4ea9",
+    "license": "CC-BY-4.0",
+    "attribution": "Parakeet Ultra (https://huggingface.co/moondream/parakeet-ultra) is by Moondream. It is a further-trained version of Parakeet TDT 0.6B v3 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), developed by NVIDIA, and both are licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). o7 does not carry this model: when a person asks for it in Settings, o7 fetches handy-computer's GGUF conversion of it, quantized to Q4_K_M, from Hugging Face, and uses it without changes. The conversion's NOTICE records how it differs from the original.",
+    "files": [
+      {
+        "name": "LICENSE",
+        "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411"
+      },
+      {
+        "name": "NOTICE",
+        "sha256": "8999f96f7a130b258418abd74c119b470efd906d25027759cddaea074831f1e1"
+      }
+    ]
+  },
   "silero-vad-v6.2-F32.gguf": {
     "name": "Silero VAD v6.2 voice activity model (silero-vad-v6.2-F32.gguf)",
     "repo": "handy-computer/silero-vad-v6.2-gguf",

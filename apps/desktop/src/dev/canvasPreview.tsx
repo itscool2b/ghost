@@ -33,7 +33,13 @@ function scriptedMicrophone(): DictationApi {
   let emit: ((event: DictationEvent) => void) | null = null;
   let settled = "";
   return {
-    model: async () => ({ installed: true, supported: true, name: "fixture", bytes: 0 }),
+    model: async () => ({
+      installed: true,
+      supported: true,
+      name: "fixture",
+      bytes: 0,
+      larger: { name: "fixture", bytes: 0, state: "absent", available: false },
+    }),
     start: async (_id, onEvent) => {
       emit = onEvent;
       settled = "";

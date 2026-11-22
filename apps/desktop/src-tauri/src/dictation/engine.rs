@@ -26,7 +26,7 @@ pub struct Engine {
     frame: usize,
 }
 
-/// The engine loaded from one folder; loading again from another replaces it.
+/// The engine, by the speech model it loaded; loading another replaces it.
 static LOADED: Mutex<Option<(PathBuf, Arc<Engine>)>> = Mutex::new(None);
 
 fn threads() -> i32 {
@@ -42,17 +42,24 @@ fn threads() -> i32 {
 }
 
 impl Engine {
-    /// The engine for the models in `folder`, loading them the first time.
-    pub fn shared(folder: &Path, asr: &str, vad: &str) -> Result<Arc<Self>, Failure> {
+    /// The engine for the speech model at `asr`, loading it and the voice model at `vad` the
+    /// first time. Another speech model (the larger one arriving, or being removed) replaces it.
+    pub fn shared(asr: &Path, vad: &Path) -> Result<Arc<Self>, Failure> {
         let mut loaded = crate::sync::lock(&LOADED);
         if let Some((path, engine)) = loaded.as_ref()
-            && path == folder
+            && path == asr
         {
             return Ok(engine.clone());
         }
-        let engine = Arc::new(Self::load(&folder.join(asr), &folder.join(vad))?);
-        *loaded = Some((folder.to_path_buf(), engine.clone()));
+        let engine = Arc::new(Self::load(asr, vad)?);
+        *loaded = Some((asr.to_path_buf(), engine.clone()));
         Ok(engine)
+    }
+
+    /// Lets the loaded engine go, so a model file it maps can be removed. A recording in
+    /// progress keeps its own hold until it ends.
+    pub fn forget() {
+        *crate::sync::lock(&LOADED) = None;
     }
 
     fn load(asr: &Path, vad: &Path) -> Result<Self, Failure> {

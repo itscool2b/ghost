@@ -626,8 +626,11 @@ mod tests {
         let asr = std::env::var("O7_DICTATION_ASR")
             .unwrap_or_else(|_| super::super::model::ASR.file.to_owned());
         let began = Instant::now();
-        let engine = Engine::shared(&models, &asr, super::super::model::VAD.file)
-            .expect("the models to load");
+        let engine = Engine::shared(
+            &models.join(&asr),
+            &models.join(super::super::model::VAD.file),
+        )
+        .expect("the models to load");
         println!("load {asr}: {:?}", began.elapsed());
         let mut wavs: Vec<_> = std::fs::read_dir(&fixtures)
             .unwrap()

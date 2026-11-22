@@ -6,7 +6,7 @@
     "Cargo.toml": "d1154c3d9897e2f4b948e74c4f7d76852e6edf9e9bec663de0a4d5ec873e708c",
     "apps/design-lab/package.json": "de7f4c743231878aa792ffc1d5211d60aff122e3dd43aa0c77c0c506f499835b",
     "apps/desktop/package.json": "1cfac48cf24ce2bff773ba0761546f1d4be779d8d6e5e0327be46dfdafa9a8c6",
-    "apps/desktop/scripts/dictation-models.mjs": "10583018ce973beac1d76d2ad3ab103055a217a7193a471624941adc1168d6aa",
+    "apps/desktop/scripts/dictation-models.mjs": "79cf94d8f336cec15dfa0e98191ecb40ca40307e93f7525fe65938bddf53a400",
     "apps/desktop/src-tauri/Cargo.toml": "6791314e0457f95874acbb06d15ac4cb07f029c4ea6e2443e99f17e62937b452",
     "apps/relay/package.json": "b1d300dc154b9cd2cb6dce7b0374eec38c88bb8530edca4ca22f44515fe7ceaf",
     "apps/web-worker/Cargo.toml": "eb67bdbb18e338548930f4c39dc7b5ec9e5a06b39b8f9249603ce8512dc451e0",
@@ -24,7 +24,7 @@
     "crates/o7-remote/Cargo.toml": "e5ab850272da2b409342b809f2278a7f80ccd40fbcaaf3ea8a50d9a8d36596f0",
     "packages/ui/package.json": "64333cf2b2abcd796fcdf3b5630762705fc92117db7cde2270133e8b50a4f71e",
     "pnpm-lock.yaml": "94743a07ce95296d0a9fba8dbbf75a41c089ee7b78bbdbe097076994dd34a2dd",
-    "third-party/models.json": "5eae4ceec5eb5ea796a066a91295f5f35cf2ec30471d1f3c52b484646d4bf80e",
+    "third-party/models.json": "b947dabe6328cbe3787b60da7cbca0b4796fd113989316aaf91a27a5842a7b79",
     "third-party/overrides.json": "2d4bae7744b98a2d1fb5c2d465867d0d4a5c78321fc7c5a048ab116ff168c948"
   },
   "records": [
@@ -12306,6 +12306,35 @@
         {
           "sha256": "c8adba97ba3c25562e26996c50ec5161e86869630ac0beb284897b016c46ecad",
           "source": "https://huggingface.co/handy-computer/parakeet-tdt_ctc-110m-gguf/blob/1c3f0d5378fdd358905cc410a93ed9e64f52d170/NOTICE"
+        }
+      ]
+    },
+    {
+      "ecosystem": "model",
+      "name": "Parakeet Ultra speech model (parakeet-ultra-Q4_K_M.gguf, fetched on request)",
+      "version": "a1539be1b849ea7463b88343e5277b373d0c4ea9",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/handy-computer/parakeet-ultra-gguf/tree/a1539be1b849ea7463b88343e5277b373d0c4ea9",
+      "distributions": ["desktop"],
+      "targets": [
+        "aarch64-apple-darwin",
+        "aarch64-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "files": [
+        {
+          "sha256": "1a9c2706dff2fa2507d1a28116cc91e8d45f306943a4ce00c6e46bc728af30ef",
+          "source": "https://huggingface.co/handy-computer/parakeet-ultra-gguf/tree/a1539be1b849ea7463b88343e5277b373d0c4ea9#attribution"
+        },
+        {
+          "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
+          "source": "https://huggingface.co/handy-computer/parakeet-ultra-gguf/blob/a1539be1b849ea7463b88343e5277b373d0c4ea9/LICENSE"
+        },
+        {
+          "sha256": "8999f96f7a130b258418abd74c119b470efd906d25027759cddaea074831f1e1",
+          "source": "https://huggingface.co/handy-computer/parakeet-ultra-gguf/blob/a1539be1b849ea7463b88343e5277b373d0c4ea9/NOTICE"
         }
       ]
     },

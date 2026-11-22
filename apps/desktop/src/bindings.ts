@@ -368,6 +368,15 @@ export const commands = {
 	dictationStart: (id: string, channel: Channel<DictationEvent>) => typedError<null, AppError>(__TAURI_INVOKE("dictation_start", { id, channel })),
 	dictationStop: (id: string) => __TAURI_INVOKE<void>("dictation_stop", { id }),
 	dictationCancel: (id: string) => __TAURI_INVOKE<void>("dictation_cancel", { id }),
+	/**
+	 *  Fetches the larger speech model, once, from its pinned address (`larger.rs`): the page supplies
+	 *  nothing but the wish. Progress arrives on `channel`; the download goes on if the page leaves.
+	 */
+	dictationLargerDownload: (channel: Channel<LargerEvent>) => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_download", { channel })),
+	/**  Stops the download. What arrived is kept, and the next download continues from it. */
+	dictationLargerCancel: () => __TAURI_INVOKE<void>("dictation_larger_cancel"),
+	/**  Deletes the larger model; dictation returns to the built-in one. */
+	dictationLargerRemove: () => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_remove")),
 	/**  Whether reading aloud can run here, and the voices to choose from. */
 	speechStatus: () => __TAURI_INVOKE<SpeechStatus>("speech_status"),
 	/**
@@ -2020,6 +2029,11 @@ export type DictationModel = {
 	bytes: number,
 	/**  This processor can run the speech engine. */
 	supported: boolean,
+	/**
+	 *  The larger speech model a person can fetch (`larger.rs`). `name` above is the model in
+	 *  use: this one once it is ready.
+	 */
+	larger: LargerModel,
 };
 
 export type DownloadState = "started" | "done" | "failed";
@@ -2636,6 +2650,26 @@ export type IsolationResult = {
 	worktree: ManagedWorktree,
 	warning: string | null,
 };
+
+/**
+ *  What the page hears while the larger model arrives. It ends with `Ready`, `Cancelled` or
+ *  `Failed`.
+ */
+export type LargerEvent = { state: "downloading"; received: number; total: number } | 
+/**  All of it arrived; its SHA-256 is being compared with the pinned one. */
+{ state: "verifying" } | { state: "ready" } | 
+/**  Stopped by the person. What arrived is kept, and the next download continues from it. */
+{ state: "cancelled" } | { state: "failed"; message: string };
+
+export type LargerModel = {
+	name: string,
+	bytes: number,
+	state: LargerState,
+	/**  Whether this copy can keep a downloaded model at all. */
+	available: boolean,
+};
+
+export type LargerState = "absent" | "downloading" | "ready";
 
 /**  Public release metadata. Stale cached data remains visible during offline use. */
 export type LatestRelease = {

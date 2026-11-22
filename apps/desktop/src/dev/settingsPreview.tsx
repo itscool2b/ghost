@@ -5,6 +5,7 @@ import type {
   AgentEntry,
   AppInfo,
   InstructionsTarget,
+  LargerEvent,
   SetupSnapshot,
   UpdateStatus,
 } from "../bindings";
@@ -233,13 +234,60 @@ function agentsFixture() {
 
 // Voice's microphone test: the words of one sentence, then what finishing heard. No audio.
 let heard: (event: Parameters<Parameters<DictationApi["start"]>[1]>[0]) => void = () => {};
+// The larger model: `?larger=ready` starts with it downloaded, `?larger=none` on a copy with
+// nowhere to keep one. Its download arrives a quarter at a time and waits at three quarters for
+// the check to finish it, fail it or cancel it.
+const LARGER_BYTES = 486280096;
+const wantedLarger = new URLSearchParams(location.search).get("larger");
+let largerState: "absent" | "downloading" | "ready" = wantedLarger === "ready" ? "ready" : "absent";
+let largerHears: ((event: LargerEvent) => void) | null = null;
+let largerKept = 0;
+const largerLog: string[] = [];
+const endLarger = (event: LargerEvent) => {
+  const hears = largerHears;
+  largerHears = null;
+  largerState = event.state === "ready" ? "ready" : "absent";
+  hears?.(event);
+};
 const dictation: DictationApi = {
   model: async () => ({
     installed: true,
-    name: "Parakeet TDT-CTC 110M",
+    name: largerState === "ready" ? "Parakeet Ultra" : "Parakeet TDT-CTC 110M",
     bytes: 113552320,
     supported: true,
+    larger: {
+      name: "Parakeet Ultra",
+      bytes: LARGER_BYTES,
+      state: largerState,
+      available: wantedLarger !== "none",
+    },
   }),
+  larger: {
+    download: async (hears) => {
+      if (largerState !== "absent") throw new Error("The larger model is already downloading.");
+      largerLog.push(`download from ${largerKept}`);
+      largerState = "downloading";
+      largerHears = hears;
+      for (const share of [largerKept, 0.25, 0.5, 0.75]) {
+        if (share < largerKept) continue;
+        hears({
+          state: "downloading",
+          received: Math.round(LARGER_BYTES * share),
+          total: LARGER_BYTES,
+        });
+      }
+      largerKept = 0.75;
+    },
+    cancel: async () => {
+      largerLog.push("cancel");
+      if (largerHears) endLarger({ state: "cancelled" });
+    },
+    remove: async () => {
+      largerLog.push("remove");
+      largerState = "absent";
+      largerKept = 0;
+    },
+  },
   start: async (_id, receive) => {
     heard = receive;
     receive({ state: "preparing" });
@@ -260,6 +308,17 @@ const dictation: DictationApi = {
   },
 };
 Object.assign(window, {
+  largerFixture: {
+    log: () => [...largerLog],
+    state: () => largerState,
+    /** All of it arrived and matched. */
+    finish: () => {
+      largerHears?.({ state: "verifying" });
+      largerKept = 0;
+      endLarger({ state: "ready" });
+    },
+    fail: (message: string) => endLarger({ state: "failed", message }),
+  },
   dictationFixture: {
     complete: () => heard({ state: "complete", text: "Testing one, two, three." }),
   },

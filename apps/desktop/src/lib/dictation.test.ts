@@ -6,6 +6,7 @@ import {
   dictationBusy,
   dictationFrame,
   joinLive,
+  largerDetail,
   liveWords,
   MISSING_MESSAGE,
   offersRetry,
@@ -22,6 +23,12 @@ function fixture(installed = true, supported = true) {
       installed,
       name: "Parakeet TDT-CTC 110M",
       bytes: 113552320,
+      larger: {
+        name: "Parakeet Ultra",
+        bytes: 486280096,
+        state: "absent" as const,
+        available: true,
+      },
       supported,
     })),
     start: vi.fn(async (_id, event) => {
@@ -230,7 +237,13 @@ describe("local dictation", () => {
       });
     const opening = f.controller.open();
     await f.controller.cancel();
-    ready({ installed: true, name: "Parakeet", bytes: 1, supported: true });
+    ready({
+      installed: true,
+      name: "Parakeet",
+      bytes: 1,
+      supported: true,
+      larger: { name: "Larger", bytes: 2, state: "absent", available: true },
+    });
     await opening;
     expect(f.api.start).not.toHaveBeenCalled();
     expect(f.controller.getSnapshot().state).toBe("idle");
@@ -288,5 +301,52 @@ describe("dictation draft insertion", () => {
       before: "Old ",
       after: "draft",
     });
+  });
+});
+
+describe("the larger model's row", () => {
+  const model = (state: "absent" | "downloading" | "ready") => ({
+    installed: true,
+    name: state === "ready" ? "Parakeet Ultra" : "Parakeet TDT-CTC 110M",
+    bytes: 113552320,
+    supported: true,
+    larger: { name: "Parakeet Ultra", bytes: 486280096, state, available: true },
+  });
+
+  it("says what it is, what it costs and where it comes from before anything is fetched", () => {
+    const offer = largerDetail(model("absent"), { state: "idle" });
+    expect(offer).toMatch(/^Parakeet Ultra makes about 40% fewer mistakes/);
+    expect(offer).toContain("A one-time 486 MB download from Hugging Face");
+    expect(offer).not.toContain("kept");
+    expect(largerDetail(model("absent"), { state: "idle", kept: true })).toMatch(
+      /What arrived so far is kept\.$/,
+    );
+  });
+
+  it("says how far the download has come, then that it is being checked", () => {
+    expect(
+      largerDetail(model("absent"), { state: "downloading", received: 0, total: 486280096 }),
+    ).toBe("Downloading Parakeet Ultra: 0 of 486 MB.");
+    expect(
+      largerDetail(model("downloading"), {
+        state: "downloading",
+        received: 153_613_261,
+        total: 486280096,
+      }),
+    ).toBe("Downloading Parakeet Ultra: 154 of 486 MB.");
+    expect(largerDetail(model("downloading"), { state: "verifying" })).toBe(
+      "Checking the download.",
+    );
+    // A download another page started: no numbers to show, only that it runs.
+    expect(largerDetail(model("downloading"), { state: "idle" })).toBe(
+      "Downloading Parakeet Ultra.",
+    );
+  });
+
+  it("says it is in use once it is here, and what removing it does", () => {
+    const text = largerDetail(model("ready"), { state: "idle" });
+    expect(text).toMatch(/^Parakeet Ultra is downloaded and in use\./);
+    expect(text).toContain("frees 486 MB");
+    expect(largerDetail(model("ready"), { state: "removing" })).toBe("Removing Parakeet Ultra.");
   });
 });

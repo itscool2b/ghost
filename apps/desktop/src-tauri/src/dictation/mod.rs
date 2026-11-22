@@ -3,6 +3,7 @@
 mod audio;
 pub mod commands;
 mod engine;
+mod larger;
 mod live;
 mod model;
 
@@ -107,6 +108,26 @@ pub struct DictationModel {
     pub bytes: u32,
     /// This processor can run the speech engine.
     pub supported: bool,
+    /// The larger speech model a person can fetch (`larger.rs`). `name` above is the model in
+    /// use: this one once it is ready.
+    pub larger: LargerModel,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+pub struct LargerModel {
+    pub name: String,
+    pub bytes: u32,
+    pub state: LargerState,
+    /// Whether this copy can keep a downloaded model at all.
+    pub available: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum LargerState {
+    Absent,
+    Downloading,
+    Ready,
 }
 
 #[derive(Default)]
