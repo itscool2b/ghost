@@ -817,6 +817,8 @@ pub(crate) struct ChatActor {
     memory_grant: Option<crate::memory_service::MemoryGrant>,
     /// The Browser plugin's tools for this generation's agent, revoked with the generation.
     browser_grant: Option<crate::browser_service::BrowserGrant>,
+    /// The Mobile plugin's tools for this session's agent, on the chat's own device.
+    mobile_grant: Option<crate::mobile_service::MobileGrant>,
     /// A coordinated project's tools for this generation's agent, revoked with the generation.
     coordinator_grant: Option<crate::coordinator_service::CoordinatorGrant>,
     generation: u64,
@@ -1025,6 +1027,7 @@ impl ChatActor {
             memory_revision: None,
             memory_grant: None,
             browser_grant: None,
+            mobile_grant: None,
             coordinator_grant: None,
             generation: 0,
             retiring: Vec::new(),
@@ -2902,6 +2905,7 @@ impl ChatActor {
     fn force_stop(&mut self) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.cancel_checkpoint();
         if !matches!(
@@ -2966,6 +2970,7 @@ impl ChatActor {
     fn force_kill(&mut self) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.force_wait = None;
         self.stop_deadline = None;
@@ -3055,6 +3060,7 @@ impl ChatActor {
     fn stop(&mut self) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.cancel_checkpoint();
         // Every Stop holds what is queued until now, one that repeats a stop in progress included: a
@@ -3108,6 +3114,7 @@ impl ChatActor {
     fn graceful_stop(&mut self, plan: StopPlan, auth: bool) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         let Some(driver) = &mut self.driver else {
             return;
@@ -3566,6 +3573,7 @@ impl ChatActor {
                     why: String| {
             this.memory_grant = None;
             this.browser_grant = None;
+            this.mobile_grant = None;
             this.coordinator_grant = None;
             this.release_if_idle();
             this.set_status(SessionStatus::Stopped, None);
@@ -3834,6 +3842,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.terminal_extension = None;
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.release_if_idle();
         self.set_status(SessionStatus::Stopped, None);
@@ -4258,6 +4267,25 @@ The person continues this conversation here, in your terminal. Reply only that y
             }
             _ => None,
         };
+        // The Mobile plugin's tools (docs/superpowers/plans/2026-11-21-mobile.md), under the same
+        // conditions as the browser's.
+        self.mobile_grant = match self.shared.mobile_bridge() {
+            Some(bridge)
+                if self.chat.agent_host == o7_protocol::agents::AgentHost::Native
+                    && prepared.memory_mcp_available
+                    && spec.kind != o7_protocol::DriverKind::Headless
+                    && self.shared.mobile_tools.load(Ordering::Acquire) =>
+            {
+                crate::mobile_service::MobileGrant::start(
+                    bridge,
+                    self.chat_id.clone(),
+                    Arc::clone(&self.shared.mobile_tools),
+                    &self.shared.deps.rt,
+                )
+                .ok()
+            }
+            _ => None,
+        };
         // A coordinated project's tools (an experiment): for its coordinator and its workers,
         // under the same conditions as the browser's.
         self.coordinator_grant = match self.shared.coordination.bridge() {
@@ -4290,6 +4318,9 @@ The person continues this conversation here, in your terminal. Reply only that y
                     servers.push(helper);
                 }
                 if let Some(helper) = self.browser_grant.as_ref().and_then(|grant| grant.mcp()) {
+                    servers.push(helper);
+                }
+                if let Some(helper) = self.mobile_grant.as_ref().and_then(|grant| grant.mcp()) {
                     servers.push(helper);
                 }
                 if let Some(helper) = self
@@ -4693,6 +4724,7 @@ The person continues this conversation here, in your terminal. Reply only that y
     fn shutdown(&mut self, plan: StopPlan, reply: oneshot::Sender<()>) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.cancel_checkpoint();
         self.quitting = true;
@@ -6051,6 +6083,7 @@ The person continues this conversation here, in your terminal. Reply only that y
     fn on_events_closed(&mut self) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         let Some(driver) = &mut self.driver else {
             return;
@@ -6075,6 +6108,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         }
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         let Some(driver) = self.driver.take() else {
             return;
@@ -6188,6 +6222,7 @@ The person continues this conversation here, in your terminal. Reply only that y
     fn closed(&mut self, generation: u64, auth: bool) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.book.clear(generation);
         self.release_if_idle();
@@ -6261,6 +6296,7 @@ The person continues this conversation here, in your terminal. Reply only that y
     fn crashed(&mut self, generation: u64, message: String, stderr_tail: Option<String>) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.kill_generation(generation);
         self.release_if_idle();
@@ -6328,6 +6364,7 @@ The person continues this conversation here, in your terminal. Reply only that y
     fn start_failed_exit(&mut self, generation: u64, error: DriverError) {
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.kill_generation(generation);
         if let Some(turn) = self.turn.take() {
@@ -6416,6 +6453,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         }
         self.memory_grant = None;
         self.browser_grant = None;
+        self.mobile_grant = None;
         self.coordinator_grant = None;
         self.release_if_idle();
         let message = self.error_text(&message, false);

@@ -274,10 +274,33 @@ export function collect() {
       ],
     });
   }
+  // The scrcpy server bundled in the desktop app (crates/o7-devices): Genymobile's prebuilt
+  // program that runs on a person's Android device to show its screen and take input.
+  const scrcpy = json(join(root, "third-party/scrcpy.json"));
+  if (digest(readFileSync(join(root, scrcpy.file))) !== scrcpy.sha256)
+    throw new Error("The bundled scrcpy server changed: review third-party/scrcpy.json");
+  const scrcpyLicense = readFileSync(
+    join(root, "third-party/upstream", `${scrcpy.license_sha256}.txt`),
+    "utf8",
+  );
+  if (digest(scrcpyLicense) !== scrcpy.license_sha256)
+    throw new Error("Upstream license changed for the scrcpy server");
+  add({
+    ecosystem: "bundled",
+    name: scrcpy.name,
+    version: scrcpy.version,
+    license: scrcpy.license,
+    source: `https://github.com/Genymobile/scrcpy/releases/tag/v${scrcpy.version}`,
+    distributions: ["desktop"],
+    targets: [...targets],
+    files: [
+      file(scrcpyLicense, `https://github.com/Genymobile/scrcpy/blob/v${scrcpy.version}/LICENSE`),
+    ],
+  });
   return {
     version: 1,
     scope:
-      "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources and the bundled dictation models are explicitly included. Linker-level and installer SDK qualification is separate.",
+      "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources, the bundled dictation models and the bundled scrcpy server are explicitly included. Linker-level and installer SDK qualification is separate.",
     inputs: inputFiles(),
     records: [...records.values()].sort((a, b) =>
       `${a.ecosystem}/${a.name}/${a.version}`.localeCompare(

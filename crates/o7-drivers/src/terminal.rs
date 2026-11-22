@@ -441,6 +441,8 @@ fn server_label(server: &ResolvedMcpServer) -> String {
         "Project memory tools".to_owned()
     } else if crate::mcp::managed_browser(server) {
         "Browser tools".to_owned()
+    } else if crate::mcp::managed_mobile(server) {
+        "Device tools".to_owned()
     } else if crate::mcp::managed_project(server) {
         "Project tools".to_owned()
     } else {

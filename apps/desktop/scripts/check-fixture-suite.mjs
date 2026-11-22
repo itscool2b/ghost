@@ -52,6 +52,7 @@ try {
     "check-terminal-chat.mjs",
     "check-canvas.mjs",
     "check-browser.mjs",
+    "check-device.mjs",
   ]) {
     await new Promise((complete, reject) => {
       const check = spawn(process.execPath, [resolve(app, "scripts", script)], {

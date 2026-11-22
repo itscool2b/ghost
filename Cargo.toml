@@ -26,6 +26,7 @@ o7-core = { path = "crates/o7-core" }
 o7-drivers = { path = "crates/o7-drivers" }
 o7-config = { path = "crates/o7-config" }
 o7-remote = { path = "crates/o7-remote" }
+o7-devices = { path = "crates/o7-devices" }
 
 # async + errors + logging
 # `signal`: the desktop's quit flow listens for SIGTERM, SIGINT and SIGHUP.

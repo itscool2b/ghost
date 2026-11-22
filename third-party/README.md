@@ -22,6 +22,14 @@ the desktop bundles as resources are listed in `models.json`, and
 record keeps the model's license, its converter's NOTICE and an attribution, from texts preserved
 in `upstream/`. The generator fails when the pinned models and that list disagree.
 
+The desktop also bundles one prebuilt program that is not built from this repository: the scrcpy
+server (Genymobile, Apache-2.0), which o7 puts on a person's Android device to show its screen
+and take input in the Device pane. `scrcpy.json` pins its release and the SHA-256 the release
+publishes, `crates/o7-devices` refuses any other bytes, and its LICENSE is preserved in
+`upstream/`. The generator fails when the bundled file and that pin disagree. Android's own tools
+(adb, the emulator, a system image) are not bundled: o7 fetches them from Google on the person's
+own computer, after the person has read and accepted Google's SDK licence in the pane.
+
 An npm package whose package.json names no license gets the license its own license file states,
 reviewed into `NPM_LICENSES` (khroma, MIT); any other stops the refresh. `NPM_EXCLUDED` lists packages
 a dependency names that o7 does not ship, with why and what keeps them out: elkjs (EPL-2.0 or

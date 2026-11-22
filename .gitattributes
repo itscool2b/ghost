@@ -3,3 +3,5 @@
 # Keep mirrored instructions byte-identical across Windows and Unix checkouts.
 /AGENTS.md text eol=lf
 /CLAUDE.md text eol=lf
+# The pinned scrcpy server is a jar: never touch its bytes.
+/crates/o7-devices/resources/scrcpy-server-* binary

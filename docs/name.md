@@ -17,9 +17,9 @@ Write "o7", lowercase, wherever a person reads the name.
   are `o7_<version>_...`.
 - **The code**: crates `o7-*` (`o7_core` in Rust), packages `@o7/*`, the desktop crate `o7-desktop`,
   settings `O7_*` (`O7_DATA_DIR` and the rest), the helper modes `--o7-memory-helper`,
-  `--o7-browser-helper` and `--o7-project-helper`, the tool servers agents see (`o7_browser`,
-  `o7_project_memory`, `o7_project`) and their tools (`o7_memory_read` and the rest), the
-  protocol's `O7Event`.
+  `--o7-browser-helper`, `--o7-mobile-helper` and `--o7-project-helper`, the tool servers agents
+  see (`o7_browser`, `o7_mobile`, `o7_project_memory`, `o7_project`) and their tools
+  (`o7_memory_read` and the rest), the protocol's `O7Event`.
 - **The services**: the Workers `o7-web`, `o7-web-preview`, `o7-relay` and `o7-relay-preview`.
 
 ## A copy from before the rename

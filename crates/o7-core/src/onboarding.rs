@@ -157,6 +157,10 @@ pub struct GeneralPreferences {
     /// The browser offers to save sign-ins and fills them in (WebView2's own password manager, on
     /// Windows). On by default.
     pub browser_passwords: bool,
+    /// The Mobile universal plugin: the Device pane beside the chat and the device tools agents
+    /// get. On unless the person turns it off in Settings > Plugins & MCP; off stops every device
+    /// o7 started (owner, 21 November 2026, docs/superpowers/plans/2026-11-21-mobile.md).
+    pub mobile: bool,
     /// Look for a newer o7 shortly after start and a few times a day, and show Update when
     /// there is one (owner, 18 November 2026: "an update button pops up for every merge"). It
     /// reads one public file from the project's GitHub releases; downloading and installing still
@@ -187,6 +191,7 @@ impl Default for GeneralPreferences {
             editor: None,
             browser: true,
             browser_passwords: true,
+            mobile: true,
             automatic_updates: true,
             coordinated_projects: false,
         }
@@ -275,6 +280,10 @@ pub enum SetupAction {
     },
     /// Turns on or off the browser's offer to save sign-ins.
     BrowserPasswords {
+        enabled: bool,
+    },
+    /// Turns the Mobile universal plugin on or off.
+    Mobile {
         enabled: bool,
     },
     /// Turns on or off looking for a newer o7 by itself.
@@ -499,6 +508,7 @@ impl OnboardingStore {
             SetupAction::BrowserPasswords { enabled } => {
                 next.preferences.general.browser_passwords = enabled;
             }
+            SetupAction::Mobile { enabled } => next.preferences.general.mobile = enabled,
             SetupAction::AutomaticUpdates { enabled } => {
                 next.preferences.general.automatic_updates = enabled;
             }
@@ -749,6 +759,29 @@ mod tests {
                 browser_passwords: false,
                 ..GeneralPreferences::default()
             }
+        );
+    }
+
+    /// Mobile is on by default, including for profiles saved before it existed, and stays off
+    /// once turned off.
+    #[test]
+    fn mobile_is_on_for_legacy_profiles_and_can_be_turned_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut legacy = serde_json::to_value(Record::default()).unwrap();
+        legacy["preferences"]["general"].as_object_mut().unwrap().remove("mobile");
+        std::fs::write(
+            dir.path().join("onboarding.json"),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+        let store = OnboardingStore::open(dir.path()).unwrap();
+        assert!(store.snapshot().unwrap().notice.is_none());
+        assert!(store.preferences().general.mobile);
+        store.apply(0, SetupAction::Mobile { enabled: false }).unwrap();
+        let reopened = OnboardingStore::open(dir.path()).unwrap();
+        assert_eq!(
+            reopened.preferences().general,
+            GeneralPreferences { mobile: false, ..GeneralPreferences::default() }
         );
     }
 
@@ -1170,6 +1203,7 @@ mod tests {
                 editor: Some(ProjectEditor::Zed),
                 browser: true,
                 browser_passwords: true,
+                mobile: true,
                 automatic_updates: true,
                 coordinated_projects: false,
             }

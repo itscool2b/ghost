@@ -117,6 +117,10 @@ void appearanceReady.then(() => {
         void import("./dev/browserPreview").then(({ mountBrowserPreview }) =>
           mountBrowserPreview(container),
         );
+      else if (mode === "device")
+        void import("./dev/devicePreview").then(({ mountDevicePreview }) =>
+          mountDevicePreview(container),
+        );
       else if (mode === "canvas")
         void import("./dev/canvasPreview").then(({ mountCanvasPreview }) =>
           mountCanvasPreview(container),

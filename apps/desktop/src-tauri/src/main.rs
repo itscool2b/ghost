@@ -22,6 +22,11 @@ fn main() {
         o7_core::browser_service::run_helper();
         return;
     }
+    // The devices' MCP helper (the Mobile plugin's tools), started by an agent the same way.
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == "--o7-mobile-helper") {
+        o7_core::mobile_service::run_helper();
+        return;
+    }
     // A coordinated project's MCP helper, started by its coordinator's or a worker's agent.
     if std::env::args_os()
         .nth(1)

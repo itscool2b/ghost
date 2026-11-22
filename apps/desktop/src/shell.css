@@ -217,6 +217,65 @@
     box-shadow: var(--ui-pane-shadow);
     outline: var(--ui-pane-outline);
   }
+
+  /*
+   * The device beside the chat (docs/superpowers/plans/2026-11-21-mobile.md) takes the same two
+   * panes, as wide as a phone needs; on a narrow window it covers the chat's work area instead
+   * (components/mobile/mobile.css).
+   */
+  .chat-main:has(.device-panel:not([data-full])) {
+    overflow: visible;
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  .chat-main:has(.device-panel:not([data-full]))::before {
+    content: none;
+  }
+
+  .chat-main:has(.device-panel:not([data-full])) > .chat-view {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(320px, 440px);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: var(--ui-pane-inset);
+  }
+
+  .chat-main:has(.device-panel:not([data-full])) .chat-header {
+    grid-column: 1;
+    grid-row: 1;
+    border-radius: var(--ui-pane-radius) var(--ui-pane-radius) 0 0;
+    background-color: var(--ui-pane-fill);
+    box-shadow:
+      inset 1px 0 var(--ui-pane-rim),
+      inset -1px 0 var(--ui-pane-rim),
+      inset 0 1px var(--ui-pane-rim-top);
+  }
+
+  .chat-main:has(.device-panel:not([data-full])) .chat-work-area {
+    display: contents;
+  }
+
+  .chat-main:has(.device-panel:not([data-full])) .chat-conversation {
+    grid-column: 1;
+    grid-row: 2;
+    overflow: hidden;
+    border-radius: 0 0 var(--ui-pane-radius) var(--ui-pane-radius);
+    background-color: var(--ui-pane-fill);
+    box-shadow:
+      inset 1px 0 var(--ui-pane-rim),
+      inset -1px 0 var(--ui-pane-rim),
+      inset 0 -1px var(--ui-pane-rim),
+      var(--g-shadow-layer);
+  }
+
+  .chat-main:has(.device-panel:not([data-full])) .device-panel {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    border-radius: var(--ui-pane-radius);
+    background-color: var(--ui-pane-fill);
+    box-shadow: var(--ui-pane-shadow);
+    outline: var(--ui-pane-outline);
+  }
 }
 
 /*

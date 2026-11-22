@@ -31,6 +31,15 @@ Agents never see a password: the page outline never shows a password field's val
 `browser_evaluate` answers have the page's password values replaced (best effort: a value a
 script changed past recognising, or sent off the page itself, is beyond what o7 can check).
 
+The second is Mobile, the device beside the chat ([how it works](mobile.md),
+[plan](superpowers/plans/2026-11-21-mobile.md)): the Device pane, with an Android emulator of the
+chat's own or a phone on a cable, and the `o7_mobile` MCP tools a native Chat session's agent
+gets, served the same way (`--o7-mobile-helper --mcp`). It is Settings > Mobile, and its switch is
+the profile preference `mobile`. Turned off, chats show no device, every device o7 started is
+stopped, sessions that start get no device tools, and a running session's tools answer that it is
+off. Setting Android up, accepting Google's SDK licence and letting an agent use a phone are the
+person's alone, in the pane: no tool does any of them.
+
 ## Shared MCP
 
 o7 owns stable server IDs and immutable definition revisions. New definitions default to the selected

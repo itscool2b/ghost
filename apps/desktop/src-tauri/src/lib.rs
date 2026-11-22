@@ -46,6 +46,7 @@ pub mod instructions_commands;
 pub mod integrity;
 pub mod launch;
 pub mod memory_commands;
+pub mod mobile;
 pub mod native_shell;
 pub mod onboarding;
 pub mod os;
@@ -246,6 +247,7 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     app.manage(Arc::new(config_vendor::VendorService::default()));
     app.manage(Arc::new(clones));
     browser::setup(app.handle());
+    mobile::setup(app.handle());
     native_shell::setup(app.handle());
     remote::setup(app.handle(), &rt);
     general_preferences::refresh(app.handle());
@@ -413,6 +415,8 @@ fn on_event(app: &tauri::AppHandle, event: RunEvent) {
         RunEvent::Exit => {
             // The browser's pages close before the window they live in.
             browser::shutdown(app);
+            // Its emulators save their state and stop; none outlives the app.
+            mobile::shutdown(app);
             remote::shutdown(app);
             if let Some(clones) = app.try_state::<Arc<o7_core::cloning::Clones>>() {
                 clones.cancel_all();
