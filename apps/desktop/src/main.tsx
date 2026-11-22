@@ -125,6 +125,10 @@ void appearanceReady.then((setUp) => {
         void import("./dev/dashboardPreview").then(({ mountDashboardPreview }) =>
           mountDashboardPreview(container),
         );
+      else if (mode === "opening")
+        void import("./dev/openingPreview").then(({ mountOpeningPreview }) =>
+          mountOpeningPreview(container),
+        );
       else if (mode === "agent-updates")
         void import("./dev/agentUpdatesPreview").then(({ mountAgentUpdatesPreview }) =>
           mountAgentUpdatesPreview(container),

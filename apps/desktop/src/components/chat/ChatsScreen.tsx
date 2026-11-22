@@ -20,7 +20,7 @@ import {
   updateNotices,
   workingChats,
 } from "../../lib/agentUpdates";
-import { type AppStore, NewChatDraft } from "../../lib/chat/appStore";
+import { type AppSnapshot, type AppStore, NewChatDraft } from "../../lib/chat/appStore";
 import {
   type ChatsView,
   createdChatOpens,
@@ -42,7 +42,7 @@ import {
 import { type SetupApi, setupApi } from "../../lib/setup";
 import { TerminalPanels } from "../../lib/terminalPanel";
 import type { UpdatesApi } from "../../lib/updates";
-import { EMPTY_WORKSPACE, type WorkspaceStore } from "../../lib/workspace";
+import { EMPTY_WORKSPACE, type WorkspaceStore, type WorkspaceView } from "../../lib/workspace";
 import { ProjectPage } from "../project/ProjectPage";
 import { type AgentUpdateActions, AgentUpdateBanner } from "./AgentUpdateBanner";
 import { AppUpdate } from "./AppUpdate";
@@ -69,6 +69,24 @@ function toggled(set: ReadonlySet<string>, key: string, present: boolean): Reado
   return next;
 }
 const emptyWorkspace = () => EMPTY_WORKSPACE;
+
+/**
+ * Whether the sidebar still waits for the database's own lists: nothing was read yet, or what
+ * shows is what the last launch kept. `workspace` says whether this screen reads the workspace
+ * at all.
+ */
+export function sidebarOpening(
+  snapshot: Pick<AppSnapshot, "chats" | "chatsCached">,
+  organization: Pick<WorkspaceView, "data" | "cached">,
+  workspace: boolean,
+): boolean {
+  return (
+    snapshot.chats === null ||
+    snapshot.chatsCached ||
+    organization.cached ||
+    (workspace && organization.data === null)
+  );
+}
 
 /**
  * The sidebar's top band: the collapse toggle at the right (Grok's). The band drags the window and
@@ -388,12 +406,7 @@ export function ChatsScreen({
           onSearch={transport.search && active ? () => setPalette(true) : undefined}
           chats={displayed}
           error={organization.error ?? snapshot.chatsError}
-          opening={
-            snapshot.chats === null ||
-            snapshot.chatsCached ||
-            organization.cached ||
-            (workspace !== undefined && organization.data === null)
-          }
+          opening={sidebarOpening(snapshot, organization, workspace !== undefined)}
           onRetry={() => {
             void app.reloadChats();
             void workspace?.refresh();
