@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-22
 
+- An agent that updates project memory is no longer sent the whole memory back with your next message. It wrote that text itself a moment before, so sending it again only used up your allowance. Other chats in the project still get the update, marked as an agent's. Agents are also told, as soon as they connect, what project memory is for and what does not belong in it. ([#164](https://github.com/itscool2b/o7/pull/164))
 - o7 opens with your projects and chats already there. A long-used o7 used to show an empty sidebar for about ten seconds, with a red "database is busy" line, before your chats appeared. Now the window opens with them in place, and o7 goes straight to your chats instead of showing its logo first. Clearing up after chats that were still working when you quit happens once the window is open, not before it. If your chats really cannot be read, the message has a Retry button. Diagnostics shows how long opening took. ([#163](https://github.com/itscool2b/o7/pull/163))
 
 ## 2026-11-21
