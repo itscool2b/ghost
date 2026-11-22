@@ -75,9 +75,7 @@ export function startupTimings(db: {
 }): string {
   const ms = (value: number) => `${value.toLocaleString("en-US")} ms`;
   const parts = [`opened in ${ms(db.open_ms)}`];
-  parts.push(
-    db.recovery_ms === null ? "still starting" : `ready ${ms(db.recovery_ms)} after that`,
-  );
+  parts.push(db.recovery_ms === null ? "still starting" : `ready ${ms(db.recovery_ms)} after that`);
   if (db.indexes_ms !== null) parts.push(`indexes built in ${ms(db.indexes_ms)}`);
   return parts.join(", ");
 }

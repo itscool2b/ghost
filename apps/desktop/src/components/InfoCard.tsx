@@ -1,13 +1,7 @@
 import { Fragment, type ReactNode, useState } from "react";
 import type { AppInfo } from "../bindings";
 import { errorMessage } from "../lib/errors";
-import {
-  fileManagerName,
-  glassLabel,
-  osName,
-  outcomeLabel,
-  startupTimings,
-} from "../lib/format";
+import { fileManagerName, glassLabel, osName, outcomeLabel, startupTimings } from "../lib/format";
 import { revealDataDir } from "../lib/ipc";
 import { RecoveryNotice } from "./RecoveryNotice";
 
