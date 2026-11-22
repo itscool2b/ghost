@@ -191,11 +191,13 @@ export function offerWords(offer: TourOffer): {
     };
   const count = offer.stops.length;
   return {
-    title: count === 1 ? "One more thing to see" : `${count} more things to see`,
+    // Several stops are not counted out: a chat may lack some of them (a browser, Run), and
+    // those are passed.
+    title: count === 1 ? "One more thing to see" : "More to see",
     body:
       count === 1
         ? `${offer.stops[0]?.title ?? "A new stop"} joined the tour since you last took it.`
-        : "They joined the tour, or came within reach, since you last took it.",
+        : "A few stops joined the tour, or came within reach, since you last took it.",
     take: "Show me",
   };
 }

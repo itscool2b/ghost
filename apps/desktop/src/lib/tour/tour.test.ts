@@ -62,9 +62,7 @@ describe("what the tour offers", () => {
     const later = tourOffer(outside, true);
     expect(later?.kind).toBe("more");
     expect(later?.stops.map((stop) => stop.id)).toEqual(inside);
-    expect(offerWords(later ?? { kind: "more", stops: [] }).title).toBe(
-      `${inside.length} more things to see`,
-    );
+    expect(offerWords(later ?? { kind: "more", stops: [] }).title).toBe("More to see");
   });
   it("offers only a stop added since, by name, and nothing once all are seen", () => {
     const allButOne = ids.filter((id) => id !== "dashboard");

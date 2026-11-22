@@ -203,6 +203,12 @@ async function inspect(engine, launcher) {
           assert.equal(again.stop, expected[2], what("ArrowRight goes on"));
         }
         if (at === expected.length - 1) {
+          // The count leaves out the stop this chat had no control for.
+          assert.equal(
+            state.count?.replace(/s+/g, " "),
+            `${expected.length} of ${expected.length}`,
+            what("the count ends on the stops it could show"),
+          );
           assert.equal(await page.getByTestId("tour-next").textContent(), "Done");
           await page.getByTestId("tour-next").click();
         } else if (at % 3 === 0) await page.keyboard.press("Enter");

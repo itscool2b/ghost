@@ -130,6 +130,9 @@ export function Tour({
   const [leaving, setLeaving] = useState(false);
   const direction = useRef<1 | -1>(1);
   const visited = useRef<string[]>([]);
+  // Stops whose control never showed (a chat without a browser, a worktree without Run): the
+  // count at the card's foot leaves them out.
+  const [passed, setPassed] = useState<readonly string[]>([]);
   // The latest callbacks, so a parent's re-render never restarts a flight.
   const calls = useRef({ onPrepare, onEnd });
   calls.current = { onPrepare, onEnd };
@@ -249,6 +252,7 @@ export function Tour({
         return;
       }
       if (!visited.current.includes(stop.id)) visited.current.push(stop.id);
+      setPassed((ids) => (ids.includes(stop.id) ? ids : [...ids, stop.id]));
       const last = (stops?.length ?? 0) - 1;
       if (direction.current === -1 && index > 0) setIndex(index - 1);
       else if (index < last) {
@@ -407,7 +411,8 @@ export function Tour({
           </p>
           <div className="tour-actions">
             <span className="tour-count">
-              {index + 1} of {stops.length}
+              {index + 1 - stops.slice(0, index).filter((item) => passed.includes(item.id)).length}{" "}
+              of {stops.length - passed.length}
             </span>
             <button
               type="button"
