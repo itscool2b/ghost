@@ -20,6 +20,7 @@ const running = {
   limits: false,
   slash_commands: false,
   add_dirs: false,
+  plan_edits: false,
   autonomy_levels: [],
 } satisfies SessionLists["capabilities"];
 
@@ -123,6 +124,7 @@ describe("native access and planning", () => {
         limits: false,
         slash_commands: false,
         add_dirs: false,
+        plan_edits: false,
         autonomy_levels: ["ask", "full_auto"],
       },
     });

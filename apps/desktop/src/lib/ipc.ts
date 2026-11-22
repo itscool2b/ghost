@@ -397,6 +397,16 @@ export async function chatRespondPermission(
   await settle(commands.chatRespondPermission(chatId, requestId, optionId));
 }
 
+/** Accepts a plan waiting for approval as the person edited it. */
+export async function chatAcceptPlan(
+  chatId: string,
+  requestId: string,
+  optionId: string,
+  plan: string,
+): Promise<void> {
+  await settle(commands.chatAcceptPlan(chatId, requestId, optionId, plan));
+}
+
 /** Answers a question card; `null` dismisses it. */
 export async function chatRespondUi(
   chatId: string,

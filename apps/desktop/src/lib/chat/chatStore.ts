@@ -1180,6 +1180,16 @@ export class ChatStore {
     );
   }
 
+  /**
+   * Accepts a plan waiting for approval as the person edited it. Rejects where this agent
+   * takes no edited plan, so the card can say so and keep the edits.
+   */
+  async acceptPlan(requestId: string, optionId: string, plan: string): Promise<void> {
+    const accept = this.#transport.acceptPlan;
+    if (!accept) throw new Error("This agent cannot take an edited plan.");
+    await accept.call(this.#transport, this.chatId, requestId, optionId, plan);
+  }
+
   /** Answers a question (`null` dismisses it). */
   respondUi(requestId: string, answer: UiAnswer | null): Promise<void> {
     return this.#answer(requestId, () => this.#transport.respondUi(this.chatId, requestId, answer));

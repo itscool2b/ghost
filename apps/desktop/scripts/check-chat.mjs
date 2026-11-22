@@ -2132,18 +2132,19 @@ async function inspect(engine, launcher) {
       "hidden document still animates",
     );
 
-    // A plan waiting for review: the plan as prose, Accept plan, and Add to the plan, which sends
-    // the note and declines the plan so the agent keeps planning with it.
+    // A plan waiting for review: the plan as prose, Accept plan, and Request changes, which
+    // sends the note and declines the plan so the agent keeps planning with it. The rest of the
+    // card (edits, the keyboard, the look) is check-plan.mjs's.
     await page.goto(`${url}/?preview=plan`);
     const plan = page.locator('[data-kind="plan-approval"]').first();
     await plan.waitFor();
     await plan.getByRole("heading", { name: "Keep the active chat visible" }).waitFor();
     assert.equal(await plan.getByRole("button", { name: "Allow once" }).count(), 0);
-    await plan.getByRole("button", { name: "Add to the plan…" }).click();
-    const note = plan.getByLabel("What should the plan add or change?");
+    await plan.getByRole("button", { name: "Request changes" }).click();
+    const note = plan.getByLabel("What should change?");
     assert.equal(await page.evaluate(() => document.activeElement?.tagName), "TEXTAREA");
     await note.fill("Also keep the scroll position when switching projects.");
-    await plan.getByRole("button", { name: "Send to plan" }).click();
+    await plan.getByRole("button", { name: "Send back" }).click();
     await page
       .locator('[data-kind="plan-approval"][data-resolved="true"]')
       .first()

@@ -854,7 +854,9 @@ pub struct Capabilities {
     pub slash_commands: bool,
     pub add_dirs: bool,
     /// A plan waiting for approval can be accepted as the person edited it: the agent is told
-    /// the edited text is the approved plan.
+    /// the edited text is the approved plan. Written only when true, so what an agent without
+    /// it reports, and every record made before it existed, reads the same as before.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub plan_edits: bool,
     pub autonomy_levels: Vec<Autonomy>,
 }

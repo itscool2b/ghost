@@ -310,10 +310,17 @@ export const ev = {
     requestId: string,
     optionId: string | null,
     by: Extract<O7Event, { type: "permission_resolved" }>["by"] = "user",
+    /** The plan as the person edited it, on a plan accepted with edits. */
+    plan?: string,
   ): O7Event => ({
     type: "permission_resolved",
     request_id: requestId,
-    decision: optionId === null ? { type: "cancelled" } : { type: "selected", option_id: optionId },
+    decision:
+      optionId === null
+        ? { type: "cancelled" }
+        : plan === undefined
+          ? { type: "selected", option_id: optionId }
+          : { type: "selected", option_id: optionId, plan },
     by,
   }),
   question: (requestId: string): O7Event => ({
@@ -837,6 +844,11 @@ export class FakeTransport implements Transport {
   respondPermission(chatId: string, requestId: string, optionId: string | null): Promise<void> {
     this.#record("respondPermission", [chatId, requestId, optionId]);
     return this.handlers.respondPermission?.(chatId, requestId, optionId) ?? Promise.resolve();
+  }
+
+  acceptPlan(chatId: string, requestId: string, optionId: string, plan: string): Promise<void> {
+    this.#record("acceptPlan", [chatId, requestId, optionId, plan]);
+    return this.handlers.acceptPlan?.(chatId, requestId, optionId, plan) ?? Promise.resolve();
   }
 
   respondUi(chatId: string, requestId: string, answer: UiAnswer | null): Promise<void> {

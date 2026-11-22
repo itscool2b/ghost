@@ -28,7 +28,7 @@ const THEMES = [
 
 /** Where each chat preview has drawn its busiest surface. */
 const VIEWS = {
-  plan: (page) => page.getByText("Plan ready for review").waitFor(),
+  plan: (page) => page.getByRole("button", { name: "Accept plan" }).waitFor(),
   permission: (page) => page.getByRole("button", { name: /Allow/ }).first().waitFor(),
   // New chat's stage: the message box first, the agent, folder and Chat or Terminal chips under it.
   new: (page) => page.getByRole("textbox", { name: "First message" }).waitFor(),

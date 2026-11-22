@@ -134,6 +134,7 @@ const NATIVE_REWIND_CAPABILITIES: Capabilities = {
   limits: true,
   slash_commands: true,
   add_dirs: true,
+  plan_edits: true,
   autonomy_levels: ["full_auto", "auto_edit", "ask"],
 };
 
@@ -1118,7 +1119,13 @@ function Preview() {
     let receive: ((batch: EventBatch) => void) | null = null;
     let currentStatus: SessionStatus = status;
     let choices = lists(1, {
-      capabilities: nativeRewind ? NATIVE_REWIND_CAPABILITIES : null,
+      // A plan comes from Claude Code, which takes a plan back as the person edited it;
+      // `&edits=none` is an agent that does not.
+      capabilities:
+        nativeRewind ||
+        (mode === "plan" && new URLSearchParams(location.search).get("edits") !== "none")
+          ? NATIVE_REWIND_CAPABILITIES
+          : null,
       // What Claude Code reports loading: the Session tab lists it.
       loaded: {
         mcp_servers: [
@@ -1353,6 +1360,8 @@ function Preview() {
         },
         respondPermission: async (_chatId, requestId, optionId) =>
           publish([ev.permissionResolved(requestId, optionId)]),
+        acceptPlan: async (_chatId, requestId, optionId, plan) =>
+          publish([ev.permissionResolved(requestId, optionId, "user", plan)]),
         send: async (_chatId, text) => {
           sends += 1;
           const turn = sends === 1 ? "preview-send" : `preview-send-${sends}`;

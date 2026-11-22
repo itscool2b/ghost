@@ -155,6 +155,7 @@ function Preview() {
               limits: false,
               slash_commands: false,
               add_dirs: false,
+              plan_edits: false,
               autonomy_levels: ["full_auto"],
             },
           }),
