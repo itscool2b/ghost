@@ -34,15 +34,15 @@ export const MODEL_DIR = resolve(
 /** Kept in step with `dictation::model::BUNDLED` in the Rust crate (a test compares them). */
 export const MODELS = [
   {
-    // Speech to text with punctuation and capitals, CC-BY-4.0: Moondream's Parakeet Ultra, a
-    // further-trained NVIDIA parakeet-tdt-0.6b-v3 (GGUF conversion by handy-computer for
-    // transcribe.cpp). Q4_K_M: 1.82% WER on LibriSpeech test-clean, F32 1.80%. Why this model
-    // and this size: docs/local-dictation.md.
-    file: "parakeet-ultra-Q4_K_M.gguf",
-    repo: "handy-computer/parakeet-ultra-gguf",
-    revision: "a1539be1b849ea7463b88343e5277b373d0c4ea9",
-    size: 486280096,
-    sha256: "c69b7a5f9071a7afd8a1818ef7ae542c386c4b01ed0cac380c19a99947646bf9",
+    // English speech to text with punctuation and capitals, CC-BY-4.0 (NVIDIA; GGUF conversion by
+    // handy-computer for transcribe.cpp). Q6_K: 2.44% WER on LibriSpeech test-clean, F32 2.43%.
+    // Small on purpose: an update package must stay under the 512 MiB every installed copy
+    // accepts (docs/local-dictation.md, "Why the built-in model is small").
+    file: "parakeet-tdt_ctc-110m-Q6_K.gguf",
+    repo: "handy-computer/parakeet-tdt_ctc-110m-gguf",
+    revision: "1c3f0d5378fdd358905cc410a93ed9e64f52d170",
+    size: 112311264,
+    sha256: "c20520c245adf82e5166005f599cb3b95e7cf5192117e845be4bbcd39226d483",
   },
   {
     // Voice activity detection, MIT (Silero; GGUF conversion by handy-computer).

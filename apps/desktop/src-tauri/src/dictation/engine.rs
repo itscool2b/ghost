@@ -1,4 +1,4 @@
-//! The speech engine: transcribe.cpp running the bundled Parakeet Ultra (speech to text with
+//! The speech engine: transcribe.cpp running the bundled Parakeet TDT-CTC 110M (English, with
 //! punctuation and capitals) and Silero VAD v6.2. Both load once, memory-mapped, and stay loaded
 //! for the app's life, so a recording starts at once; each recording gets its own sessions.
 use super::Failure;
@@ -8,10 +8,10 @@ use std::sync::{Arc, Mutex};
 use transcribe_cpp::{CancelToken, Model, RunOptions, Session, SessionOptions, VadSession};
 
 /// Passes run on a few threads, never all of them: fewer keep the processor cool while a person
-/// talks (owner, 4 November 2026: it "burned up" the machine before). The large model needs four
-/// to feel live on a big machine (measured on a 16-thread desktop: a pass over 18 s of audio takes
-/// 2.1 s on two threads and 1.3 s on four), and `live.rs` paces the passes to what they cost, so
-/// more threads shorten the wait for words without raising the load much.
+/// talks (owner, 4 November 2026: it "burned up" the machine before). A large model needs four
+/// to feel live on a big machine (Parakeet Ultra, measured on a 16-thread desktop: a pass over 18 s
+/// of audio takes 2.1 s on two threads and 1.3 s on four), and `live.rs` paces the passes to what
+/// they cost, so more threads shorten the wait for words without raising the load much.
 fn threads_for(logical: usize) -> usize {
     match logical {
         0..=2 => 1,

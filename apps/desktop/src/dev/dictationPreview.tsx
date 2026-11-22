@@ -85,8 +85,8 @@ function fixture() {
   const api: DictationApi = {
     model: async () => ({
       installed: scenario !== "missing",
-      name: "Parakeet Ultra",
-      bytes: 487521152,
+      name: "Parakeet TDT-CTC 110M",
+      bytes: 113552320,
       supported: scenario !== "unsupported",
     }),
     start: async (_id, event) => {

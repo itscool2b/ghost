@@ -11,8 +11,8 @@
 //! text they settled with and their audio is wiped. Memory and the cost of every pass therefore
 //! stay bounded however long a recording runs.
 //!
-//! The model is a large one (docs/local-dictation.md), and how fast it runs depends on the
-//! machine, so the passes pace themselves. Every pass is timed. The phrase in progress is read
+//! How fast a model runs depends on the machine, and a larger model than the built-in one costs
+//! several times as much (docs/local-dictation.md), so the passes pace themselves. Every pass is timed. The phrase in progress is read
 //! again only once enough new audio has arrived to keep the passes to a share of real time, a
 //! phrase settles early when one pass over it would take too long, and finishing reads the window
 //! again only when that is quick. On a fast machine none of this is felt; on a slow one the words
