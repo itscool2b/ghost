@@ -48,10 +48,11 @@ pub(crate) mod workspace_removal;
 pub(crate) mod worktree_setup;
 mod writer;
 
+use std::collections::HashSet;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use o7_protocol::session::{BlobText, HistoryPage, PauseReason, StorageStatus};
@@ -68,10 +69,14 @@ use crate::store::Store;
 use writer::{Permits, Request, Shared, Work, Writer};
 #[cfg(test)]
 pub(crate) use writer::{SavedRead, TestWork};
-pub(crate) use writer::{WaitError, WriterConfig, await_reply, op_bytes};
+pub(crate) use writer::{WaitError, WriterConfig, await_reply, await_reply_while, op_bytes};
 
 /// A call that gets no answer within this fails.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The longest a call waits for an answer while the writer is at work it knows to be long
+/// (startup recovery, building an index): it is not busy then, only not ready yet.
+const SETTLING_LIMIT: Duration = Duration::from_secs(120);
 
 /// How long one call for line edits goes on counting turns that have not been counted yet before it
 /// answers with what it has.
@@ -566,13 +571,102 @@ impl ChatStore {
                 }
             })
             .map_err(CoreError::io(profile.db_path()))?;
-        Ok(Arc::new(ChatStore {
+        let store = Arc::new(ChatStore {
             shared,
             rt,
             db_path: profile.db_path(),
             attachment_dir: profile.attachments_dir(),
             recovered: recovered_rx,
-        }))
+        });
+        store.rt.spawn(ChatStore::leftovers(Arc::downgrade(&store)));
+        Ok(store)
+    }
+
+    /// What startup leaves for afterwards, as ordinary queued work that reads and live chats go
+    /// between: the indexes recovery reads through are built when missing, then every ended turn
+    /// that is not compacted yet is compacted, now and each time the writer says one may wait. A
+    /// turn too large to merge is read on a connection of its own, off the writer, and only its
+    /// text is saved through the FIFO. Ends when the store closes.
+    async fn leftovers(store: Weak<ChatStore>) {
+        let Some(this) = store.upgrade() else {
+            return;
+        };
+        this.recovered().await;
+        let (reply, answer) = oneshot::channel();
+        match this
+            .request(Request::EnsureIndexes { reply }, answer)
+            .await
+            .and_then(|built| built)
+        {
+            Ok(_) => {}
+            Err(StoreError::Closed) => return,
+            Err(error) => {
+                tracing::warn!(%error, "could not build the indexes recovery reads through; the next start tries again");
+            }
+        }
+        let shared = Arc::clone(&this.shared);
+        drop(this);
+        // Each turn is tried once: one that cannot be compacted must not be read again and again.
+        let mut tried: HashSet<String> = HashSet::new();
+        loop {
+            let Some(this) = store.upgrade() else {
+                return;
+            };
+            match this.compact_leftovers(&mut tried).await {
+                Ok(()) => {}
+                Err(StoreError::Closed) => return,
+                Err(error) => {
+                    tracing::warn!(%error, "could not compact the turns left from earlier; a later pass tries again");
+                }
+            }
+            drop(this);
+            shared.leftovers.notified().await;
+        }
+    }
+
+    /// One pass of [`leftovers`](Self::leftovers) over the turns not in `tried`.
+    async fn compact_leftovers(&self, tried: &mut HashSet<String>) -> Result<(), StoreError> {
+        if self.is_paused() {
+            return Ok(());
+        }
+        let (reply, answer) = oneshot::channel();
+        let waiting = self.request(Request::Leftovers { reply }, answer).await??;
+        let limits = self.shared.config.compact;
+        for turn in waiting {
+            if !tried.insert(turn.turn_id.clone()) {
+                continue;
+            }
+            if turn.bytes <= limits.merge_limit {
+                let permit = self.reserve(256).await.map_err(|_| StoreError::Closed)?;
+                permit.send(Op::CompactTurn {
+                    chat_id: turn.chat_id,
+                    turn_id: turn.turn_id,
+                });
+                continue;
+            }
+            let db = self.db_path.clone();
+            let turn_id = turn.turn_id.clone();
+            let rows = self
+                .rt
+                .spawn_blocking(move || compact::collect_text_at(&db, &turn_id, &limits))
+                .await
+                .map_err(|_| StoreError::Other("Reading a turn's text stopped.".into()))?
+                .map_err(|error| {
+                    StoreError::Other(format!("Couldn't read a turn's text: {error}"))
+                })?;
+            let (reply, answer) = oneshot::channel();
+            self.request(
+                Request::SaveTurnText {
+                    chat_id: turn.chat_id,
+                    turn_id: turn.turn_id,
+                    rows,
+                    reply,
+                },
+                answer,
+            )
+            .await??;
+        }
+        Ok(())
     }
 
     /// Whether saving runs, is paused (with how much is unsaved), or failed.
@@ -802,7 +896,10 @@ impl ChatStore {
         answer: oneshot::Receiver<T>,
         limit: Duration,
     ) -> Result<T, StoreError> {
-        match await_reply(&self.rt, answer, limit).await {
+        // While the writer recovers or builds an index, the answer is late, not lost.
+        let settling = || self.shared.is_settling();
+        match await_reply_while(&self.rt, answer, limit, SETTLING_LIMIT.max(limit), settling).await
+        {
             Ok(value) => Ok(value),
             Err(WaitError::Gone) => Err(StoreError::Closed),
             Err(WaitError::TimedOut) => Err(self.timed_out()),

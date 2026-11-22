@@ -98,6 +98,11 @@ pub(crate) struct Shared {
     pub(crate) bytes: Arc<Semaphore>,
     pub(crate) status: watch::Sender<StorageStatus>,
     paused: AtomicBool,
+    /// The writer is at work it knows to be long (startup recovery, building an index). A caller
+    /// waiting for an answer keeps waiting meanwhile, instead of reading the database as busy.
+    settling: AtomicBool,
+    /// Wakes the store's pass over ended turns that are not compacted yet.
+    pub(crate) leftovers: tokio::sync::Notify,
     pub(crate) config: WriterConfig,
     /// Tests: transactions committed for batches.
     #[cfg(test)]
@@ -208,6 +213,23 @@ pub(crate) enum Request {
     ReadLineEdits {
         since: o7_protocol::Millis,
         reply: oneshot::Sender<Result<Vec<o7_protocol::activity::LineEditBucket>, StoreError>>,
+    },
+    /// Every ended turn not compacted yet ([`compact::leftovers`]).
+    Leftovers {
+        reply: oneshot::Sender<Result<Vec<compact::Leftover>, StoreError>>,
+    },
+    /// Builds the indexes recovery reads through ([`recover::ensure_indexes`]); answers how many
+    /// it built.
+    EnsureIndexes {
+        reply: oneshot::Sender<Result<u32, StoreError>>,
+    },
+    /// Stores the full-text rows read off the writer for a turn too large to merge
+    /// ([`compact::save_text`]); answers whether it compacted the turn.
+    SaveTurnText {
+        chat_id: String,
+        turn_id: String,
+        rows: Vec<compact::FtsRow>,
+        reply: oneshot::Sender<Result<bool, StoreError>>,
     },
     Conversation {
         command: super::conversation::ConversationCommand,
@@ -538,6 +560,10 @@ fn work_bytes(work: &Work) -> usize {
         Work::Request(Request::Memory { command, .. }) => command.bytes(),
         Work::Request(Request::Coordinator { command, .. }) => command.bytes(),
         Work::Request(Request::Search { query, .. }) => 256 + query.len(),
+        Work::Request(Request::SaveTurnText { rows, .. }) => rows
+            .iter()
+            .map(|row| row.text.len().saturating_add(row.message_id.len()))
+            .fold(256, usize::saturating_add),
         Work::Request(_) => 256,
         #[cfg(test)]
         Work::Test(_) => 256,
@@ -574,6 +600,9 @@ impl Shared {
             bytes: Arc::new(Semaphore::new(config.fifo_bytes)),
             status: watch::Sender::new(StorageStatus::default()),
             paused: AtomicBool::new(false),
+            // From the start: startup recovery is the writer's first op.
+            settling: AtomicBool::new(true),
+            leftovers: tokio::sync::Notify::new(),
             config,
             #[cfg(test)]
             commits: std::sync::atomic::AtomicU64::new(0),
@@ -598,6 +627,8 @@ impl Shared {
             let _ = waiter.send(false);
         }
         self.paused.store(false, Ordering::Release);
+        self.set_settling(false);
+        self.leftovers.notify_one();
         self.status.send_replace(StorageStatus {
             state: StorageState::Failed {
                 message: "o7 stopped saving because of an internal error. Restart o7.".into(),
@@ -614,6 +645,15 @@ impl Shared {
 
     pub(crate) fn is_paused(&self) -> bool {
         self.paused.load(Ordering::Acquire)
+    }
+
+    /// Whether the writer is at work it knows to be long.
+    pub(crate) fn is_settling(&self) -> bool {
+        self.settling.load(Ordering::Acquire)
+    }
+
+    fn set_settling(&self, settling: bool) {
+        self.settling.store(settling, Ordering::Release);
     }
 
     /// Tests: how many items wait in the FIFO.
@@ -735,6 +775,9 @@ fn work_name(work: &Work) -> &'static str {
         Work::Request(Request::Search { .. }) => "search",
         Work::Request(Request::SaveLineEdits { .. }) => "save_line_edits",
         Work::Request(Request::ReadLineEdits { .. }) => "read_line_edits",
+        Work::Request(Request::Leftovers { .. }) => "leftover_turns",
+        Work::Request(Request::EnsureIndexes { .. }) => "ensure_indexes",
+        Work::Request(Request::SaveTurnText { .. }) => "save_turn_text",
         Work::Request(Request::LoadChat { .. }) => "load_chat",
         Work::Request(Request::ExportMarkdown { .. }) => "export_markdown",
         Work::Request(Request::ReadBlob { .. }) => "read_blob",
@@ -923,8 +966,16 @@ impl Writer {
 
     /// Recovery first, then work until shutdown.
     pub(crate) fn run(mut self) {
+        let started = Instant::now();
         let report = self.recover_all();
+        tracing::info!(
+            elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "startup recovery finished"
+        );
+        self.shared.set_settling(false);
         self.recovered.send_replace(Some(report));
+        // The turns recovery left for after startup.
+        self.shared.leftovers.notify_one();
         loop {
             match self.next() {
                 Next::Saved(reads) => {
@@ -936,6 +987,8 @@ impl Writer {
                 Next::Retry => self.retry(),
                 Next::Shutdown(deadline) => {
                     self.finish(deadline);
+                    // Lets the store's leftovers pass see that the store closed.
+                    self.shared.leftovers.notify_one();
                     return;
                 }
             }
@@ -1226,6 +1279,13 @@ impl Writer {
     fn committed(&self, items: &[Item]) {
         let tickets: Vec<Ticket> = items.iter().map(|item| item.ticket.clone()).collect();
         self.shared.committed(&tickets);
+        // A turn too large to merge was left where it is (`apply`): the store's pass takes it.
+        if items
+            .iter()
+            .any(|item| matches!(item.work, Work::Op(Op::CompactTurn { .. })))
+        {
+            self.shared.leftovers.notify_one();
+        }
     }
 
     /// Runs a read on the connection, outside any transaction.
@@ -1440,6 +1500,44 @@ impl Writer {
             Request::ReadLineEdits { since, reply } => {
                 let _ = reply.send(self.read(|conn| super::line_edits::read(conn, since)));
             }
+            Request::Leftovers { reply } => {
+                let _ = reply.send(self.read(compact::leftovers));
+            }
+            Request::EnsureIndexes { reply } => {
+                let result = if matches!(self.mode, Mode::Damaged) {
+                    Err(StoreError::Damaged(DAMAGED.into()))
+                } else {
+                    // One pass over every event for each missing index: callers wait it out.
+                    self.shared.set_settling(true);
+                    let started = Instant::now();
+                    let result = self.read(recover::ensure_indexes);
+                    self.shared.set_settling(false);
+                    if let Ok(built @ 1..) = result {
+                        tracing::info!(
+                            built,
+                            elapsed_ms =
+                                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                            "built the indexes recovery reads through"
+                        );
+                    }
+                    result
+                };
+                let _ = reply.send(result);
+            }
+            Request::SaveTurnText {
+                chat_id,
+                turn_id,
+                rows,
+                reply,
+            } => {
+                let now = now_millis();
+                let result = if matches!(self.mode, Mode::Damaged) {
+                    Err(StoreError::Damaged(DAMAGED.into()))
+                } else {
+                    self.write_tx(|conn| compact::save_text(conn, &chat_id, &turn_id, &rows, now))
+                };
+                let _ = reply.send(result);
+            }
             Request::Memory { command, reply } => {
                 let now = now_millis();
                 let result = if command.read_only() {
@@ -1598,7 +1696,13 @@ impl Writer {
             }));
             settle(store.conn_mut());
             match outcome {
-                Ok(Ok(report)) => recovered = report.interrupted_turns,
+                Ok(Ok(report)) => {
+                    recovered = report.interrupted_turns;
+                    if recovered > 0 {
+                        // A turn this ended may be too large to compact here.
+                        self.shared.leftovers.notify_one();
+                    }
+                }
                 Ok(Err(error)) => return Err(self.read_error(error)),
                 Err(_) => {
                     return Err(StoreError::Other(
@@ -1990,6 +2094,11 @@ fn apply(
         } => sql(rows::append_events(conn, device_id, chat_id, events)),
         Op::EndTurn(end) => sql(rows::end_turn(conn, end)),
         Op::CompactTurn { chat_id, turn_id } => {
+            // A turn too large to merge is only read for its text, all of it: the store does that
+            // on a connection of its own (its leftovers pass), so nothing waits behind it here.
+            if compact::turn_bytes(conn, turn_id).map_err(classify)? > limits.merge_limit {
+                return Ok(());
+            }
             compact::apply(conn, chat_id, turn_id, device_id, limits, now)
                 .map(|_| ())
                 .map_err(classify)
@@ -2167,11 +2276,31 @@ pub(crate) async fn await_reply<T: Send + 'static>(
     reply: oneshot::Receiver<T>,
     limit: Duration,
 ) -> Result<T, WaitError> {
-    let task = rt.spawn_blocking(move || reply.blocking_recv());
-    match tokio::time::timeout(limit, task).await {
-        Ok(Ok(Ok(value))) => Ok(value),
-        Ok(Ok(Err(_)) | Err(_)) => Err(WaitError::Gone),
-        Err(_) => Err(WaitError::TimedOut),
+    await_reply_while(rt, reply, limit, limit, || false).await
+}
+
+/// How often a wait that outlasted its bound asks again whether to go on.
+const WAIT_STEP: Duration = Duration::from_millis(250);
+
+/// [`await_reply`], going on past `limit` while `go_on` says so (asked when `limit` passes and
+/// every [`WAIT_STEP`] after), for at most `longest` in all.
+pub(crate) async fn await_reply_while<T: Send + 'static>(
+    rt: &Handle,
+    reply: oneshot::Receiver<T>,
+    limit: Duration,
+    longest: Duration,
+    go_on: impl Fn() -> bool,
+) -> Result<T, WaitError> {
+    let mut task = rt.spawn_blocking(move || reply.blocking_recv());
+    let started = tokio::time::Instant::now();
+    let mut bound = limit;
+    loop {
+        match tokio::time::timeout(bound, &mut task).await {
+            Ok(Ok(Ok(value))) => return Ok(value),
+            Ok(Ok(Err(_)) | Err(_)) => return Err(WaitError::Gone),
+            Err(_) if go_on() && started.elapsed() < longest => bound = WAIT_STEP,
+            Err(_) => return Err(WaitError::TimedOut),
+        }
     }
 }
 

@@ -7,12 +7,22 @@
 //! 2. Every running turn gets `TurnEnded { Interrupted, recovered: true }` and is marked interrupted,
 //!    ending when its last row was written; a running turn whose own `TurnEnded` row was saved (only
 //!    its `EndTurn` was lost) ends as that row says instead, and gets nothing appended.
-//! 3. Every ended turn not compacted yet is compacted.
+//! 3. Every ended turn not compacted yet is compacted, when it is small
+//!    ([`CompactLimits::inline_limit`]). A larger one is left for the store's pass after startup
+//!    ([`super::ChatStore`]'s leftovers): compacting it reads all it holds, and nothing that opens
+//!    the app or a chat may wait on that.
 //! 4. Every queued prompt is held: o7 never sends a message on its own after a restart.
 //!
 //! The partial answer survives; no tool update is invented. Each chat recovers in one transaction.
 //! Requests are found with SQLite's JSON functions, so no payload is deserialized, and startup
 //! recovery reads only the request rows stored outside turns.
+//!
+//! Nothing here may visit every event of the profile, or of a chat: one turn can hold hundreds of
+//! megabytes, and every read of the app waits behind the writer's first op. Each query reads
+//! through an index that holds only the rows it wants. Two of those indexes ([`ensure_indexes`])
+//! are built after startup instead of by a migration, which would copy the whole database first;
+//! until they exist, startup skips the one search that needs them and a chat's own recovery reads
+//! as it did before.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -66,6 +76,66 @@ pub(crate) fn recover(
     Ok(report)
 }
 
+/// Steering rows by chat, for [`recover_steering`] and startup's search for pending ones.
+const STEERING_INDEX: &str = "events_steering";
+/// Each turn's `TurnEnded` rows, for [`saved_end`].
+const TURN_ENDED_INDEX: &str = "events_turn_ended";
+/// Request and resolution rows by chat (migration 0002), for [`request_rows`].
+const REQUESTS_INDEX: &str = "events_requests";
+
+/// A profile with at most this many events is searched for pending steering without the index:
+/// reading them all takes no time worth saving.
+const SMALL_PROFILE_EVENTS: i64 = 50_000;
+
+/// Whether the profile holds at most `count` events, judged by the newest row's number: that
+/// never reads the table, and it can only overstate (compaction rewrites rows under new numbers).
+fn events_at_most(conn: &Connection, count: i64) -> rusqlite::Result<bool> {
+    let newest: i64 = conn.query_row("SELECT COALESCE(MAX(rowid), 0) FROM events", [], |row| {
+        row.get(0)
+    })?;
+    Ok(newest <= count)
+}
+
+/// Whether the database has the index `name`.
+fn has_index(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
+    conn.prepare_cached("SELECT 1 FROM sqlite_schema WHERE type = 'index' AND name = ?1")?
+        .exists(params![name])
+}
+
+/// `INDEXED BY name` when the database has that index, so a query never falls back to visiting
+/// every event; nothing when it does not, so the query still runs.
+fn indexed_by(conn: &Connection, name: &str) -> rusqlite::Result<String> {
+    Ok(if has_index(conn, name)? {
+        format!("INDEXED BY {name}")
+    } else {
+        String::new()
+    })
+}
+
+/// Builds the indexes recovery reads through, when they are missing. Each build visits every event
+/// once, so the writer runs this after startup, not before it. Returns how many it built.
+pub(crate) fn ensure_indexes(conn: &Connection) -> rusqlite::Result<u32> {
+    let mut built = 0;
+    for (name, sql) in [
+        (
+            STEERING_INDEX,
+            "CREATE INDEX IF NOT EXISTS events_steering ON events (chat_id, seq) \
+             WHERE kind = 'steering_status'",
+        ),
+        (
+            TURN_ENDED_INDEX,
+            "CREATE INDEX IF NOT EXISTS events_turn_ended ON events (turn_id, seq) \
+             WHERE kind = 'turn_ended'",
+        ),
+    ] {
+        if !has_index(conn, name)? {
+            conn.execute(sql, [])?;
+            built += 1;
+        }
+    }
+    Ok(built)
+}
+
 /// Errors the writer handles itself: damage, a full disk, a busy database.
 fn is_fatal(error: &rusqlite::Error) -> bool {
     use rusqlite::ErrorCode;
@@ -89,8 +159,14 @@ fn is_fatal(error: &rusqlite::Error) -> bool {
 /// through `turns`. Per-chat recovery reads all of a chat's request rows.
 fn chats_needing_recovery(conn: &Connection) -> rusqlite::Result<Vec<String>> {
     let mut chats = BTreeSet::new();
-    for chat in conn.prepare("SELECT DISTINCT e.chat_id FROM events e WHERE e.kind='steering_status' AND json_extract(e.payload,'$.state')='pending' AND NOT EXISTS(SELECT 1 FROM events newer WHERE newer.chat_id=e.chat_id AND newer.kind='steering_status' AND newer.seq>e.seq AND json_extract(newer.payload,'$.message_id')=json_extract(e.payload,'$.message_id'))")?.query_map([], |row| row.get::<_,String>(0))? {
-        chats.insert(chat?);
+    // Without its index this search visits every event of the profile, so a large profile waits
+    // for the index (built once, after the first start with this version): until then a chat's
+    // pending steering is settled when the chat is opened, as `load_chat` recovers it.
+    let index = indexed_by(conn, STEERING_INDEX)?;
+    if !index.is_empty() || events_at_most(conn, SMALL_PROFILE_EVENTS)? {
+        for chat in conn.prepare(&format!("SELECT DISTINCT e.chat_id FROM events e {index} WHERE e.kind='steering_status' AND json_extract(e.payload,'$.state')='pending' AND NOT EXISTS(SELECT 1 FROM events newer {index} WHERE newer.chat_id=e.chat_id AND newer.kind='steering_status' AND newer.seq>e.seq AND json_extract(newer.payload,'$.message_id')=json_extract(e.payload,'$.message_id'))"))?.query_map([], |row| row.get::<_,String>(0))? {
+            chats.insert(chat?);
+        }
     }
     let mut running =
         conn.prepare("SELECT DISTINCT chat_id FROM turns WHERE status = 'running'")?;
@@ -137,6 +213,9 @@ fn request_rows(conn: &Connection, chat_id: Option<&str>) -> rusqlite::Result<Ve
     } else {
         "turn_id IS NULL"
     };
+    // The planner would otherwise read the untagged rows through the turn index: every event
+    // stored outside a turn, to find a handful of requests.
+    let index = indexed_by(conn, REQUESTS_INDEX)?;
     // `doc` is NULL for any other row and for one that is not JSON, whatever order SQLite checks
     // the terms in (a CASE decides in order), so the JSON functions parse request payloads only.
     let sql = format!(
@@ -144,7 +223,7 @@ fn request_rows(conn: &Connection, chat_id: Option<&str>) -> rusqlite::Result<Ve
              SELECT chat_id, seq, kind, turn_id, \
                  CASE WHEN kind IN ({REQUEST_KINDS}) \
                      THEN CASE WHEN json_valid(payload) THEN payload END END AS doc \
-             FROM events WHERE kind IN ({REQUEST_KINDS}) AND {scope}) \
+             FROM events {index} WHERE kind IN ({REQUEST_KINDS}) AND {scope}) \
          WHERE json_type(doc, '$.request_id') = 'text' \
            AND (kind <> 'ui_request' OR json_extract(doc, '$.prompt.type') <> 'notify') \
          ORDER BY chat_id, seq"
@@ -244,11 +323,14 @@ pub(crate) fn recover_chat(
             continue;
         }
         interrupted.insert(turn_id.as_str());
+        // Read back from the chat's newest row: a running turn's rows are the chat's last, while
+        // the turn index would hand over every row of the turn to be sorted.
         let last_at: Option<Millis> = conn
             .prepare_cached(
-                "SELECT created_at FROM events WHERE turn_id = ?1 ORDER BY seq DESC LIMIT 1",
+                "SELECT created_at FROM events WHERE chat_id = ?1 AND +turn_id = ?2 \
+                 ORDER BY seq DESC LIMIT 1",
             )?
-            .query_row(params![turn_id], |row| row.get(0))
+            .query_row(params![chat_id, turn_id], |row| row.get(0))
             .ok();
         let ended_at = last_at.unwrap_or(*started_at);
         for request in open
@@ -296,6 +378,10 @@ pub(crate) fn recover_chat(
         .query_map(params![chat_id], |row| row.get(0))?
         .collect::<rusqlite::Result<_>>()?;
     for turn_id in uncompacted {
+        if compact::turn_bytes(conn, &turn_id)? > limits.inline_limit {
+            // The store compacts it after startup, off this path.
+            continue;
+        }
         if compact::apply(conn, chat_id, &turn_id, device_id, limits, now)? {
             report.compacted_turns += 1;
         }
@@ -313,7 +399,8 @@ fn recover_steering(
     now: Millis,
 ) -> rusqlite::Result<()> {
     use o7_protocol::composer::SteeringState;
-    let values = conn.prepare("SELECT json_extract(e.payload,'$.message_id'),e.turn_id,s.state,s.detail FROM events e LEFT JOIN steering_inputs s ON s.message_id=json_extract(e.payload,'$.message_id') AND s.chat_id=e.chat_id WHERE e.chat_id=?1 AND e.kind='steering_status' AND json_extract(e.payload,'$.state')='pending' AND NOT EXISTS(SELECT 1 FROM events newer WHERE newer.chat_id=e.chat_id AND newer.kind='steering_status' AND newer.seq>e.seq AND json_extract(newer.payload,'$.message_id')=json_extract(e.payload,'$.message_id'))")?
+    let index = indexed_by(conn, STEERING_INDEX)?;
+    let values = conn.prepare_cached(&format!("SELECT json_extract(e.payload,'$.message_id'),e.turn_id,s.state,s.detail FROM events e {index} LEFT JOIN steering_inputs s ON s.message_id=json_extract(e.payload,'$.message_id') AND s.chat_id=e.chat_id WHERE e.chat_id=?1 AND e.kind='steering_status' AND json_extract(e.payload,'$.state')='pending' AND NOT EXISTS(SELECT 1 FROM events newer {index} WHERE newer.chat_id=e.chat_id AND newer.kind='steering_status' AND newer.seq>e.seq AND json_extract(newer.payload,'$.message_id')=json_extract(e.payload,'$.message_id'))"))?
         .query_map([chat_id], |row| Ok((row.get::<_,String>(0)?,row.get::<_,Option<String>>(1)?,row.get::<_,Option<String>>(2)?,row.get::<_,Option<String>>(3)?)))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     for (message_id, turn_id, state, detail) in values {
@@ -346,11 +433,19 @@ fn recover_steering(
 /// How a running turn ended, from its saved `TurnEnded` row (read leniently, as history pages read
 /// it: a row that does not parse ends the turn with `Other`), when it has one.
 fn saved_end(conn: &Connection, chat_id: &str, turn_id: &str) -> rusqlite::Result<Option<TurnEnd>> {
+    // Through the index of ended turns when there is one. Without it, through the turn's own rows:
+    // never back through the whole chat, which is where the planner would look for a row that the
+    // interrupted turn, the usual case, does not have.
+    let index = if has_index(conn, TURN_ENDED_INDEX)? {
+        TURN_ENDED_INDEX
+    } else {
+        "events_turn_id"
+    };
     let row: Option<(u32, String, Millis)> = conn
-        .prepare_cached(
-            "SELECT seq, payload, created_at FROM events \
-             WHERE chat_id = ?1 AND turn_id = ?2 AND kind = 'turn_ended' ORDER BY seq DESC LIMIT 1",
-        )?
+        .prepare_cached(&format!(
+            "SELECT seq, payload, created_at FROM events INDEXED BY {index} \
+             WHERE chat_id = ?1 AND turn_id = ?2 AND kind = 'turn_ended' ORDER BY seq DESC LIMIT 1"
+        ))?
         .query_row(params![chat_id, turn_id], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })
@@ -930,5 +1025,211 @@ mod tests {
         };
         assert_eq!(status("ta"), "interrupted");
         assert_eq!(status("tb"), "running");
+    }
+
+    fn plan(db: &TestDb, sql: &str) -> String {
+        db.conn()
+            .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+            .expect("plan")
+            .query_map([], |row| row.get::<_, String>(3))
+            .expect("rows")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("details")
+            .join("; ")
+    }
+
+    /// The indexes are built once, and a store that carries them recovers as one without them.
+    #[test]
+    fn recovery_reads_through_its_indexes_once_they_are_built() {
+        let mut db = TestDb::new();
+        let chat = db.chat("/work");
+        db.turn(&chat, "t1", 1, 0);
+        db.append(
+            &chat,
+            &[
+                event_row(
+                    0,
+                    Some("t1"),
+                    &O7Event::TurnStarted {
+                        turn_id: "t1".into(),
+                        prompt_id: Some("p".into()),
+                    },
+                ),
+                event_row(1, Some("t1"), &delta("t1.m1", "Half an answer")),
+                event_row(2, Some("t1"), &permission("t1.p1")),
+            ],
+        );
+        assert!(!has_index(db.conn(), STEERING_INDEX).expect("steering"));
+        assert_eq!(ensure_indexes(db.conn()).expect("build"), 2);
+        assert_eq!(ensure_indexes(db.conn()).expect("again"), 0);
+        assert!(has_index(db.conn(), STEERING_INDEX).expect("steering"));
+        assert!(has_index(db.conn(), TURN_ENDED_INDEX).expect("turn ended"));
+
+        // Each search names the index that holds only its rows: none walks the events.
+        let requests = indexed_by(db.conn(), REQUESTS_INDEX).expect("requests");
+        assert_eq!(requests, "INDEXED BY events_requests");
+        let untagged = plan(
+            &db,
+            &format!(
+                "SELECT chat_id FROM events {requests} WHERE kind IN ({REQUEST_KINDS}) AND turn_id IS NULL"
+            ),
+        );
+        assert!(untagged.contains("events_requests"), "{untagged}");
+        let steering = plan(
+            &db,
+            "SELECT chat_id FROM events INDEXED BY events_steering WHERE kind='steering_status'",
+        );
+        assert!(steering.contains("events_steering"), "{steering}");
+        let ended = plan(
+            &db,
+            "SELECT seq FROM events INDEXED BY events_turn_ended \
+             WHERE chat_id = 'c' AND turn_id = 't' AND kind = 'turn_ended' ORDER BY seq DESC LIMIT 1",
+        );
+        assert!(ended.contains("events_turn_ended"), "{ended}");
+        assert!(!ended.contains("TEMP B-TREE"), "{ended}");
+
+        let report = recover(
+            db.store.conn_mut(),
+            Scope::All,
+            "dev",
+            &CompactLimits::STANDARD,
+            50,
+        )
+        .expect("recover");
+        assert_eq!(
+            report,
+            RecoveryReport {
+                interrupted_turns: 1,
+                resolved_requests: 1,
+                compacted_turns: 1
+            }
+        );
+        let kinds: Vec<_> = db
+            .events(&chat)
+            .iter()
+            .map(|(_, _, event)| event.kind())
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                "turn_started",
+                "message_delta",
+                "permission_requested",
+                "permission_resolved",
+                "turn_ended"
+            ]
+        );
+    }
+
+    /// A turn ends as its saved `TurnEnded` row says, found through either index.
+    #[test]
+    fn a_saved_end_is_found_with_and_without_its_index() {
+        for indexed in [false, true] {
+            let mut db = TestDb::new();
+            let chat = db.chat("/work");
+            db.turn(&chat, "t1", 1, 0);
+            db.append(
+                &chat,
+                &[
+                    event_row(
+                        0,
+                        Some("t1"),
+                        &O7Event::TurnStarted {
+                            turn_id: "t1".into(),
+                            prompt_id: Some("p".into()),
+                        },
+                    ),
+                    event_row(1, Some("t1"), &delta("t1.m1", "Done")),
+                    event_row(
+                        2,
+                        Some("t1"),
+                        &O7Event::TurnEnded {
+                            turn_id: "t1".into(),
+                            stop_reason: StopReason::EndTurn,
+                            usage: None,
+                            duration_ms: None,
+                            recovered: false,
+                        },
+                    ),
+                ],
+            );
+            if indexed {
+                ensure_indexes(db.conn()).expect("build");
+            }
+            let report = recover(
+                db.store.conn_mut(),
+                Scope::All,
+                "dev",
+                &CompactLimits::STANDARD,
+                50,
+            )
+            .expect("recover");
+            assert_eq!(report.interrupted_turns, 0, "indexed: {indexed}");
+            let status: String = db
+                .conn()
+                .query_row("SELECT status FROM turns WHERE id = 't1'", [], |row| {
+                    row.get(0)
+                })
+                .expect("status");
+            assert_eq!(status, "completed", "indexed: {indexed}");
+        }
+    }
+
+    /// Recovery leaves a turn above the inline limit as it is, for the store's pass after startup:
+    /// the turn still ends, its queue is still held, and saving its text compacts it once.
+    #[test]
+    fn recovery_leaves_a_large_turn_for_after_startup() {
+        let mut db = TestDb::new();
+        let chat = db.chat("/work");
+        db.turn(&chat, "t1", 1, 0);
+        let mut rows = vec![event_row(
+            0,
+            Some("t1"),
+            &O7Event::TurnStarted {
+                turn_id: "t1".into(),
+                prompt_id: Some("p".into()),
+            },
+        )];
+        rows.extend((1..40).map(|seq| event_row(seq, Some("t1"), &delta("t1.m1", "word "))));
+        db.append(&chat, &rows);
+        let limits = CompactLimits {
+            inline_limit: 200,
+            ..CompactLimits::STANDARD
+        };
+        let report = recover(db.store.conn_mut(), Scope::All, "dev", &limits, 50).expect("recover");
+        assert_eq!(
+            report,
+            RecoveryReport {
+                interrupted_turns: 1,
+                resolved_requests: 0,
+                compacted_turns: 0
+            }
+        );
+        assert_eq!(db.events(&chat).len(), 41, "nothing merged yet");
+        let waiting = compact::leftovers(db.conn()).expect("leftovers");
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].turn_id, "t1");
+        assert!(waiting[0].bytes > limits.inline_limit);
+
+        // Recovering again does not take it up either, and changes nothing.
+        let again = recover(db.store.conn_mut(), Scope::All, "dev", &limits, 60).expect("again");
+        assert_eq!(again, RecoveryReport::default());
+
+        let text = compact::collect_text(db.conn(), "t1", &limits).expect("text");
+        assert!(compact::save_text(db.conn(), &chat, "t1", &text, 70).expect("save"));
+        assert!(compact::leftovers(db.conn()).expect("none").is_empty());
+        assert!(
+            !compact::save_text(db.conn(), &chat, "t1", &text, 80).expect("again"),
+            "a compacted turn is left alone"
+        );
+        let found: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM message_fts WHERE message_fts MATCH 'word'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("search");
+        assert_eq!(found, 1, "its text is searchable once");
     }
 }

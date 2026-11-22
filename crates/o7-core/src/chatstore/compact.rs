@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 
 use o7_protocol::tasks::{BackgroundTask, TaskStep};
 use o7_protocol::{Millis, O7Event, ToolCall, ToolKind, ToolStatus, ToolUpdate, Truncation};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 
 use crate::ids::new_id;
 
@@ -37,15 +37,21 @@ pub(crate) struct CompactLimits {
     pub(crate) piece_bytes: usize,
     /// A turn with more payload than this is not merged.
     pub(crate) merge_limit: u64,
+    /// Recovery compacts a turn with at most this much payload itself; a larger one waits for the
+    /// store's pass after startup ([`super::ChatStore`]'s leftovers), so that opening the app or a
+    /// chat never waits on it.
+    pub(crate) inline_limit: u64,
     /// The most text one full-text row carries.
     pub(crate) fts_bytes: usize,
 }
 
 impl CompactLimits {
-    /// 1 MiB pieces, no merge above 32 MiB, 1 MiB per full-text row.
+    /// 1 MiB pieces, no merge above 32 MiB, 1 MiB per full-text row; recovery compacts up to 1 MiB
+    /// itself.
     pub(crate) const STANDARD: CompactLimits = CompactLimits {
         piece_bytes: 1024 * 1024,
         merge_limit: 32 * 1024 * 1024,
+        inline_limit: 1024 * 1024,
         fts_bytes: 1024 * 1024,
     };
 }
@@ -511,34 +517,12 @@ pub(crate) fn apply(
     limits: &CompactLimits,
     now: Millis,
 ) -> rusqlite::Result<bool> {
-    let state: Option<(String, Option<i64>)> = conn
-        .prepare_cached("SELECT status, compacted_at FROM turns WHERE id = ?1 AND chat_id = ?2")?
-        .query_row(params![turn_id, chat_id], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
-        .optional()?;
-    match state {
-        Some((status, None)) if status != "running" => {}
-        _ => return Ok(false),
+    if !waits(conn, chat_id, turn_id)? {
+        return Ok(false);
     }
-    let size: i64 = conn
-        .prepare_cached(
-            "SELECT COALESCE(SUM(octet_length(payload)), 0) FROM events WHERE turn_id = ?1",
-        )?
-        .query_row(params![turn_id], |row| row.get(0))?;
-    let fts = if u64::try_from(size).unwrap_or(0) > limits.merge_limit {
+    let fts = if turn_bytes(conn, turn_id)? > limits.merge_limit {
         // Too big to merge in memory: only the full-text rows, read row by row.
-        let mut collector = FtsCollector::new(limits.fts_bytes);
-        let mut stmt =
-            conn.prepare_cached("SELECT payload FROM events WHERE turn_id = ?1 ORDER BY seq")?;
-        let mut rows = stmt.query(params![turn_id])?;
-        while let Some(row) = rows.next()? {
-            let payload: String = row.get(0)?;
-            if let Ok(event) = serde_json::from_str::<O7Event>(&payload) {
-                collector.push(&event);
-            }
-        }
-        collector.finish()
+        collect_text(conn, turn_id, limits)?
     } else {
         let mut stmt = conn.prepare_cached(
             "SELECT seq, kind, payload, created_at FROM events WHERE turn_id = ?1 ORDER BY seq",
@@ -574,6 +558,29 @@ pub(crate) fn apply(
         }
         compacted.fts
     };
+    finish(conn, chat_id, turn_id, &fts, now)?;
+    Ok(true)
+}
+
+/// Whether `turn_id` ended and is not compacted yet.
+fn waits(conn: &Connection, chat_id: &str, turn_id: &str) -> rusqlite::Result<bool> {
+    let state: Option<(String, Option<i64>)> = conn
+        .prepare_cached("SELECT status, compacted_at FROM turns WHERE id = ?1 AND chat_id = ?2")?
+        .query_row(params![turn_id, chat_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .optional()?;
+    Ok(matches!(state, Some((status, None)) if status != "running"))
+}
+
+/// Writes a turn's full-text rows and marks it compacted.
+fn finish(
+    conn: &Connection,
+    chat_id: &str,
+    turn_id: &str,
+    fts: &[FtsRow],
+    now: Millis,
+) -> rusqlite::Result<()> {
     let mut insert_fts = conn.prepare_cached(
         "INSERT INTO message_fts (chat_id, message_id, text) VALUES (?1, ?2, ?3)",
     )?;
@@ -582,7 +589,100 @@ pub(crate) fn apply(
     }
     conn.prepare_cached("UPDATE turns SET compacted_at = ?2, last_event_seq = MAX(COALESCE(last_event_seq,0),COALESCE((SELECT MAX(seq) FROM events WHERE turn_id=?1),0)) WHERE id = ?1")?
         .execute(params![turn_id, now])?;
+    Ok(())
+}
+
+/// How much payload a turn's events hold. SQLite answers `octet_length` from each row's header,
+/// so no payload is read.
+pub(crate) fn turn_bytes(conn: &Connection, turn_id: &str) -> rusqlite::Result<u64> {
+    let size: i64 = conn
+        .prepare_cached(
+            "SELECT COALESCE(SUM(octet_length(payload)), 0) FROM events WHERE turn_id = ?1",
+        )?
+        .query_row(params![turn_id], |row| row.get(0))?;
+    Ok(u64::try_from(size).unwrap_or(0))
+}
+
+/// The full-text rows of a turn too large to merge, read row by row. It only reads, so it also
+/// runs on a connection of its own, off the writer ([`save_text`] then stores what it found).
+pub(crate) fn collect_text(
+    conn: &Connection,
+    turn_id: &str,
+    limits: &CompactLimits,
+) -> rusqlite::Result<Vec<FtsRow>> {
+    let mut collector = FtsCollector::new(limits.fts_bytes);
+    let mut stmt =
+        conn.prepare_cached("SELECT payload FROM events WHERE turn_id = ?1 ORDER BY seq")?;
+    let mut rows = stmt.query(params![turn_id])?;
+    while let Some(row) = rows.next()? {
+        let payload: String = row.get(0)?;
+        if let Ok(event) = serde_json::from_str::<O7Event>(&payload) {
+            collector.push(&event);
+        }
+    }
+    Ok(collector.finish())
+}
+
+/// [`collect_text`] on a read-only connection of its own to the profile's database, off the
+/// writer, as line edits are counted.
+pub(crate) fn collect_text_at(
+    db: &std::path::Path,
+    turn_id: &str,
+    limits: &CompactLimits,
+) -> rusqlite::Result<Vec<FtsRow>> {
+    let conn = Connection::open_with_flags(
+        db,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
+    collect_text(&conn, turn_id, limits)
+}
+
+/// Stores the full-text rows [`collect_text`] read off the writer and marks the turn compacted,
+/// in the caller's transaction. The turn is checked again here: one that was compacted meanwhile,
+/// or is gone, is left alone. Returns whether it compacted the turn.
+pub(crate) fn save_text(
+    conn: &Connection,
+    chat_id: &str,
+    turn_id: &str,
+    fts: &[FtsRow],
+    now: Millis,
+) -> rusqlite::Result<bool> {
+    if !waits(conn, chat_id, turn_id)? {
+        return Ok(false);
+    }
+    finish(conn, chat_id, turn_id, fts, now)?;
     Ok(true)
+}
+
+/// An ended turn that is not compacted yet, and how much payload it holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Leftover {
+    pub(crate) chat_id: String,
+    pub(crate) turn_id: String,
+    pub(crate) bytes: u64,
+}
+
+/// Every ended turn not compacted yet, oldest first.
+pub(crate) fn leftovers(conn: &Connection) -> rusqlite::Result<Vec<Leftover>> {
+    let turns: Vec<(String, String)> = conn
+        .prepare_cached(
+            "SELECT chat_id, id FROM turns WHERE status <> 'running' AND compacted_at IS NULL \
+             ORDER BY started_at, id",
+        )?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    turns
+        .into_iter()
+        .map(|(chat_id, turn_id)| {
+            let bytes = turn_bytes(conn, &turn_id)?;
+            Ok(Leftover {
+                chat_id,
+                turn_id,
+                bytes,
+            })
+        })
+        .collect()
 }
 
 /// A test-only reducer over seq-ordered events: what the transcript shows. Messages and thoughts by
@@ -1168,6 +1268,7 @@ mod tests {
         let limits = CompactLimits {
             piece_bytes: 1024,
             merge_limit: 2_000,
+            inline_limit: 2_000,
             fts_bytes: 250,
         };
         assert!(apply(db.conn(), &chat, "t1", "dev", &limits, 5).expect("compact"));
