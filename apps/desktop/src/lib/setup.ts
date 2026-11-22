@@ -80,4 +80,5 @@ export const DEFAULT_GENERAL: GeneralPreferences = {
   mobile: true,
   automatic_updates: true,
   coordinated_projects: false,
+  speech_voice: null,
 };

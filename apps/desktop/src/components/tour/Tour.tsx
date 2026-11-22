@@ -61,15 +61,21 @@ function homePose(): Pose {
 
 /**
  * The stop's control: the first element carrying its name that is actually on screen. A name set
- * on the glyph inside a menu's button (the bell, More) stands for the whole button.
+ * on the glyph inside a menu's button (the bell, More) stands for the whole button. Where several
+ * carry the name (the speaker under every answer), the first one inside the window is the stop:
+ * one scrolled out of view is only taken when none is in view.
  */
 function findTarget(id: string): HTMLElement | null {
+  let drawn: HTMLElement | null = null;
   for (const node of document.querySelectorAll<HTMLElement>(`[data-tour="${id}"]`)) {
     const control = node.closest<HTMLElement>("summary") ?? node;
     const box = control.getBoundingClientRect();
-    if (box.width > 0 && box.height > 0) return control;
+    if (box.width <= 0 || box.height <= 0) continue;
+    if (box.top >= 0 && box.left >= 0 && box.bottom <= innerHeight && box.right <= innerWidth)
+      return control;
+    drawn ??= control;
   }
-  return null;
+  return drawn;
 }
 
 interface Shown {

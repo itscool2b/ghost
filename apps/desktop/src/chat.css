@@ -2490,6 +2490,27 @@
     color var(--g-dur-micro) var(--g-ease);
 }
 
+/* Read aloud (ReadAloud.tsx): the speaker turns to ink and a stop square while it speaks, and
+   breathes while the voice is made ready. */
+.chat-read-aloud:where([data-state="speaking"], [data-state="preparing"]) {
+  background-color: var(--g-glass-control);
+  color: var(--g-fg-1);
+}
+
+@keyframes chat-read-ready {
+  to {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduced"], [data-motion="off"])
+    .chat-read-aloud[data-state="preparing"]
+    > svg {
+    animation: chat-read-ready var(--g-dur-tick) var(--g-ease-in-out) infinite alternate;
+  }
+}
+
 @media (hover: hover) {
   .chat-action:hover {
     background-color: var(--g-glass-control-hover);

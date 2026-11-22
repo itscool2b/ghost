@@ -40,6 +40,7 @@ import {
   useAgentMemoryEdits,
 } from "../../lib/projectMemory";
 import { type SetupApi, setupApi } from "../../lib/setup";
+import { speechPlayer } from "../../lib/speech";
 import { TerminalPanels } from "../../lib/terminalPanel";
 import { markTourSeen } from "../../lib/tour/seen";
 import { reachable, seenAfter, TOUR_STOPS, type TourStop, tourOffer } from "../../lib/tour/stops";
@@ -232,6 +233,10 @@ export function ChatsScreen({
   // The project whose page is open in the chat pane's place.
   const [boardProject, setBoardProject] = useState<string | null>(null);
   const members = useCoordinationMembers(coordinator, coordination);
+  // Leaving the chats for Settings ends what was being read aloud, as closing its chat does
+  // (ChatView): no voice is left talking with its stop button out of reach.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: leaving the view is what ends it.
+  useEffect(() => () => speechPlayer.stop(), [active]);
   useEffect(() => {
     if (!active) return;
     let live = true;
@@ -239,6 +244,8 @@ export function ChatsScreen({
       (saved) => {
         if (!live) return;
         setDefaultAgent(saved.preferences.general.default_agent);
+        // The voice answers are read in, chosen in Settings > Voice.
+        speechPlayer.setVoice(saved.preferences.general.speech_voice ?? null);
         // A profile still in setup is not offered the tour; setup's end offers it.
         setTourSeen(saved.preferences.completed ? (saved.preferences.tour_seen ?? []) : null);
         setCoordination(saved.preferences.general.coordinated_projects);

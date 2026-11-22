@@ -11,8 +11,11 @@ import {
   recordingTime,
   UNSUPPORTED_MESSAGE,
 } from "../../lib/dictation";
+import type { SpeechApi } from "../../lib/speech";
 import { Wave } from "../chat/Dictation";
 import "../chat/dictation.css";
+import type { Preferences } from "./preferences";
+import { ReadAloudSettings } from "./ReadAloudSettings";
 import { Row } from "./SettingsRow";
 
 /** What dictation's bundled models say about this device. */
@@ -26,9 +29,19 @@ function modelDetail(model: DictationModel | null | "failed"): string {
 
 /**
  * Settings' Voice page: dictation's built-in model, the microphone it hears, and a test that shows
- * the level and the words without a chat (docs/local-dictation.md).
+ * the level and the words without a chat (docs/local-dictation.md); then reading aloud, with the
+ * voice answers are read in (docs/read-aloud.md).
  */
-export function VoicePage({ api }: { readonly api: DictationApi }) {
+export function VoicePage({
+  api,
+  speech,
+  prefs,
+}: {
+  readonly api: DictationApi;
+  /** Reading aloud, with the saved preferences its voice is one of. A view without them shows dictation alone. */
+  readonly speech?: SpeechApi;
+  readonly prefs?: Preferences;
+}) {
   const [model, setModel] = useState<DictationModel | null | "failed">(null);
   useEffect(() => {
     let live = true;
@@ -64,6 +77,16 @@ export function VoicePage({ api }: { readonly api: DictationApi }) {
         finishes and adds them to your draft, Esc cancels. Speech stays on this device: audio is
         never saved or uploaded, and nothing is sent until you send the message.
       </p>
+      {speech && prefs ? (
+        <>
+          <ReadAloudSettings api={speech} prefs={prefs} />
+          <p className="settings-footnote">
+            Under an answer, the speaker reads it aloud and the same button stops it. Code is
+            skipped, since code is hard to follow by ear. The voice runs on this device: what is
+            read is not saved or uploaded.
+          </p>
+        </>
+      ) : null}
     </>
   );
 }

@@ -11,6 +11,7 @@ import { CopyAction } from "./CopyAction";
 import { ErrorCard } from "./ErrorCard";
 import { PermissionCard, type PlanBuild } from "./PermissionCard";
 import { QuestionCard } from "./QuestionCard";
+import { ReadAloud } from "./ReadAloud";
 import { ThoughtRow } from "./ThoughtRow";
 import { type BlobProps, ToolBlock } from "./ToolBlock";
 import { UserMessage } from "./UserMessage";
@@ -333,6 +334,7 @@ function Footer({
       data-arrived={arrived ? "" : undefined}
     >
       {response ? <CopyAction text={response} label="Copy response as Markdown" /> : null}
+      {response ? <ReadAloud id={segment.key} text={response} /> : null}
       {segment.turnId && onContinue ? (
         <>
           <button
