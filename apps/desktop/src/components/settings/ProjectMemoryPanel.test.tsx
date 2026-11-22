@@ -8,7 +8,10 @@ const never = () => new Promise<never>(() => {});
 const api: ProjectMemoryApi = {
   read: never,
   save: never,
-  history: never,
+  readNote: never,
+  saveNote: never,
+  deleteNote: never,
+  undo: never,
   subscribe: () => () => {},
 };
 const setup: SetupApi = { snapshot: never, apply: never };
