@@ -60,6 +60,7 @@ const preferences: SetupSnapshot = {
     text_size: getTextSizePreference(),
     completed: true,
     first_project_id: null,
+    tour_seen: [],
     general: { ...DEFAULT_GENERAL },
   },
 };

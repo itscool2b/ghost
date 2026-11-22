@@ -123,6 +123,9 @@ export function App({
   }, [view, settingsReturn]);
   const [openChatRequest, setOpenChatRequest] = useState<{ id: string }>();
   const [newChatRequest, setNewChatRequest] = useState<{ id: string; agent: string }>();
+  // The tour: asked for from Settings, and offered by a wing that flies in when setup ends.
+  const [tourRequest, setTourRequest] = useState<{ id: string }>();
+  const [fromSetup, setFromSetup] = useState(false);
   useEffect(
     () =>
       subscribeNativeNavigation((id) => {
@@ -319,6 +322,7 @@ export function App({
         restart={restartSetup}
         onDone={() => {
           setRestartSetup(false);
+          setFromSetup(true);
           setView("chats");
         }}
         onDemo={() => setNewChatRequest({ id: String(Date.now()), agent: "mock" })}
@@ -336,6 +340,9 @@ export function App({
             workspace={workspace}
             openChatRequest={openChatRequest}
             newChatRequest={newChatRequest}
+            offersTour={info.launch.type === "normal"}
+            tourRequest={tourRequest}
+            tourArrive={fromSetup}
             app={chats}
             transport={transport}
             info={info}
@@ -385,6 +392,10 @@ export function App({
             onSetup={() => {
               setRestartSetup(true);
               setView("setup");
+            }}
+            onTour={() => {
+              setTourRequest({ id: String(Date.now()) });
+              setView("chats");
             }}
           />
         ) : null}

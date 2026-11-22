@@ -160,6 +160,7 @@ describe("Settings' General defaults", () => {
         text_size: "compact",
         completed: true,
         first_project_id: null,
+        tour_seen: [] as string[],
         general: { ...DEFAULT_GENERAL, keep_steps_open: true },
       },
     } as const;
@@ -192,6 +193,7 @@ describe("Settings' General defaults", () => {
         text_size: "compact",
         completed: true,
         first_project_id: null,
+        tour_seen: [] as string[],
         general: { ...DEFAULT_GENERAL, sounds: true },
       },
     } as const;

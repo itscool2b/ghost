@@ -306,6 +306,7 @@ export function ChatList({
           type="button"
           className="chat-nav-action"
           data-field=""
+          data-tour="search"
           aria-label="Search"
           aria-keyshortcuts="Control+K Meta+K"
           onClick={() => (onSearch ? onSearch() : setSearching((value) => !value))}
@@ -319,6 +320,7 @@ export function ChatList({
           type="button"
           className="chat-nav-action"
           data-testid="new-chat-button"
+          data-tour="new-chat"
           aria-label="New chat"
           aria-keyshortcuts="Control+N Meta+N"
           onClick={onNewChat}
@@ -333,6 +335,7 @@ export function ChatList({
             className="chat-nav-action"
             onClick={onCustomize}
             data-testid="customize-button"
+            data-tour="customize"
             aria-label="Customize"
           >
             <SlidersHorizontal size={16} />
@@ -345,6 +348,7 @@ export function ChatList({
             className="chat-nav-action"
             onClick={onDashboard}
             data-testid="dashboard-button"
+            data-tour="dashboard"
             aria-label={[
               "Dashboard",
               needing > 0 ? `${needing} ${needing === 1 ? "needs" : "need"} you` : null,
@@ -431,7 +435,7 @@ export function ChatList({
           aria-label={section}
           aria-busy={unanswered && chats === null ? true : undefined}
         >
-          <h2 className="chat-section-label">
+          <h2 className="chat-section-label" data-tour={archived ? undefined : "projects"}>
             <button
               type="button"
               className="chat-section-toggle"

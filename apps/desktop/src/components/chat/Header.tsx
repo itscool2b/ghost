@@ -199,7 +199,11 @@ export function Header({
       </div>
       <div className="chat-header-controls">
         {view ? (
-          <fieldset className="g-segmented chat-view-switch" aria-label="Show this chat as">
+          <fieldset
+            className="g-segmented chat-view-switch"
+            aria-label="Show this chat as"
+            data-tour="chat-view"
+          >
             {(["chat", "terminal"] as const).map((choice) => {
               const blocked = choice === "terminal" && view.unavailable !== null;
               return (
@@ -242,6 +246,7 @@ export function Header({
             aria-keyshortcuts="Control+Shift+B Meta+Shift+B"
             aria-expanded={browser.open}
             data-testid="chat-browser"
+            data-tour="browser"
             onClick={(event) => {
               event.currentTarget.focus();
               browser.onToggle();
@@ -259,6 +264,7 @@ export function Header({
             aria-keyshortcuts="Control+Shift+D Meta+Shift+D"
             aria-expanded={device.open}
             data-testid="chat-device"
+            data-tour="device"
             onClick={(event) => {
               event.currentTarget.focus();
               device.onToggle();
@@ -272,6 +278,7 @@ export function Header({
             type="button"
             className="g-button g-button-ghost g-button-28 chat-run"
             data-testid="chat-run"
+            data-tour="run"
             data-running={run.running ? "" : undefined}
             title={
               run.running
@@ -293,6 +300,7 @@ export function Header({
             type="button"
             className="g-button g-button-ghost g-button-icon g-button-28"
             aria-label="Changes"
+            data-tour="changes"
             title={`Changes (${commandKey()} J)`}
             aria-keyshortcuts="Control+J Meta+J"
             aria-expanded={changesOpen}
@@ -308,7 +316,7 @@ export function Header({
           label="Chat details and controls"
           tip="More"
           className="chat-header-menu"
-          trigger={<Ellipsis size={16} />}
+          trigger={<Ellipsis size={16} data-tour="chat-more" />}
         >
           <div className="chat-session-info">
             <strong>{name}</strong>

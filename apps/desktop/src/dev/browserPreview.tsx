@@ -133,7 +133,7 @@ function describe(element: Element): PickedElement {
 }
 
 /** The in-memory browser: tabs, history, and a frame per placed page. */
-class FixtureBrowser implements BrowserApi {
+export class FixtureBrowser implements BrowserApi {
   readonly #listeners = new Set<(event: BrowserEvent) => void>();
   readonly #chats = new Map<string, ChatBrowser>();
   readonly #frames = new Map<string, HTMLIFrameElement>();

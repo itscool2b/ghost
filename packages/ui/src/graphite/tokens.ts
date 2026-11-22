@@ -178,6 +178,11 @@ export const GRAPHITE_DURATIONS = {
   ink: 560,
   dissolve: 320,
   found: 1600,
+  flight: 640,
+  arrive: 1100,
+  land: 360,
+  hover: 4800,
+  blink: 5600,
 } as const;
 
 /** Staggers in ms, mirroring `--g-stagger*`. */

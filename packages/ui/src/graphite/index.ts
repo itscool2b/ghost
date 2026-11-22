@@ -17,6 +17,7 @@ export {
   LOGO_EYE_PATHS,
   LOGO_OUTLINE_PATH,
   LOGO_PATH,
+  LOGO_SMALL_EYE_PATHS,
   LOGO_SMALL_MAX,
   LOGO_SMALL_PATH,
   LOGO_VIEWBOX,
@@ -60,3 +61,4 @@ export {
   type GraphiteColor,
   relativeLuminance,
 } from "./tokens";
+export { Wing, type WingProps } from "./Wing";

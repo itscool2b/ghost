@@ -12,15 +12,21 @@ export function SidebarFooter({
   onSettings,
   notifications,
   update,
+  wingAway = false,
 }: {
   readonly onSettings?: () => void;
   /** The Update pill (`AppUpdate`), which draws nothing while the app is current. */
   readonly update?: ReactNode;
   /** The notifications bell (`Notifications`), beside Settings. */
   readonly notifications?: ReactNode;
+  /**
+   * The tour's wing is out: it lifted off from this logo and draws itself until it lands here
+   * again, so the logo keeps its place and is not drawn twice.
+   */
+  readonly wingAway?: boolean;
 }) {
   return (
-    <div className="chat-sidebar-footer">
+    <div className="chat-sidebar-footer" data-wing-away={wingAway ? "" : undefined}>
       <Logo size={30} className="chat-sidebar-footer-logo" />
       <div className="chat-sidebar-footer-actions">
         {update}
@@ -33,6 +39,7 @@ export function SidebarFooter({
             aria-keyshortcuts="Control+, Meta+,"
             data-tip={`Settings (${commandKey()} ,)`}
             data-testid="sidebar-settings"
+            data-tour="settings"
             onClick={onSettings}
           >
             <Settings size={16} aria-hidden="true" />

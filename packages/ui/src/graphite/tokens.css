@@ -268,6 +268,13 @@
   --g-dur-dissolve: 320ms;
   /* Settings' search: how long the found row keeps its tint. */
   --g-dur-found: 1600ms;
+  /* The wing, in setup and the tour only: one flight between two stops, its first arrival, the
+     landing of a row or a card it brings, and its idle hover and blink. */
+  --g-dur-flight: 640ms;
+  --g-dur-arrive: 1100ms;
+  --g-dur-land: 360ms;
+  --g-dur-hover: 4800ms;
+  --g-dur-blink: 5600ms;
   --g-stagger: 0ms;
   --g-stagger-letter: 0ms;
   --g-stagger-row: 0ms;
@@ -536,6 +543,11 @@
     --g-dur-ink: 0ms;
     --g-dur-dissolve: 0ms;
     --g-dur-found: 0ms;
+    --g-dur-flight: 0ms;
+    --g-dur-arrive: 0ms;
+    --g-dur-land: 0ms;
+    --g-dur-hover: 0ms;
+    --g-dur-blink: 0ms;
     --g-stagger: 0ms;
     --g-stagger-letter: 0ms;
     --g-stagger-row: 0ms;
@@ -565,6 +577,11 @@
   --g-dur-ink: 0ms;
   --g-dur-dissolve: 0ms;
   --g-dur-found: 0ms;
+  --g-dur-flight: 0ms;
+  --g-dur-arrive: 0ms;
+  --g-dur-land: 0ms;
+  --g-dur-hover: 0ms;
+  --g-dur-blink: 0ms;
   --g-stagger: 0ms;
   --g-stagger-letter: 0ms;
   --g-stagger-row: 0ms;

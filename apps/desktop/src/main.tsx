@@ -101,6 +101,10 @@ void appearanceReady.then((setUp) => {
         void import("./dev/pluginLibraryPreview").then(({ mountPluginLibraryPreview }) =>
           mountPluginLibraryPreview(container, mode),
         );
+      else if (mode === "tour")
+        void import("./dev/tourPreview").then(({ mountTourPreview }) =>
+          mountTourPreview(container),
+        );
       else if (mode === "agent-marks")
         void import("./dev/agentMarksPreview").then(({ mountAgentMarksPreview }) =>
           mountAgentMarksPreview(container),

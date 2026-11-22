@@ -207,6 +207,7 @@ ${value}`
   return (
     <div
       className="chat-composer"
+      data-tour="composer"
       data-working={working ? "" : undefined}
       data-received={received ? "" : undefined}
     >

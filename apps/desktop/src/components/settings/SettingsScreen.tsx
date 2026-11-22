@@ -143,6 +143,7 @@ export function SettingsScreen({
   info,
   onBack,
   onSetup,
+  onTour,
   onDiagnostics,
   setup = setupApi,
   general = generalApi,
@@ -170,6 +171,8 @@ export function SettingsScreen({
   readonly info: AppInfo;
   readonly onBack: () => void;
   readonly onSetup: () => void;
+  /** Takes the tour: back to the chats, where the wing flies it. */
+  readonly onTour?: () => void;
   readonly onDiagnostics: () => void;
   readonly setup?: SetupApi;
   readonly general?: GeneralApi;
@@ -459,7 +462,13 @@ export function SettingsScreen({
           )}
           {pane(
             "general",
-            <GeneralPage info={info} prefs={prefs} lists={general} onSetup={onSetup} />,
+            <GeneralPage
+              info={info}
+              prefs={prefs}
+              lists={general}
+              onSetup={onSetup}
+              onTour={onTour}
+            />,
           )}
           {pane("appearance", <AppearancePage prefs={prefs} />)}
           {pane("chats", <ChatsPage prefs={prefs} editors={general.editors} />)}

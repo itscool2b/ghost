@@ -87,11 +87,14 @@ export function GeneralPage({
   prefs,
   lists,
   onSetup,
+  onTour,
 }: {
   readonly info: AppInfo;
   readonly prefs: Preferences;
   readonly lists: GeneralApi;
   readonly onSetup: () => void;
+  /** Takes the tour. Without it (a view with no chats behind it) the row is not offered. */
+  readonly onTour?: () => void;
 }) {
   const [agents, setAgents] = useState<readonly AgentEntry[]>([]);
   const [models, setModels] = useState<readonly ConfigChoice[]>([]);
@@ -368,6 +371,18 @@ export function GeneralPage({
               Run setup
             </button>
           </Row>
+          {onTour ? (
+            <Row title="Tour" detail="The wing shows you around o7. About a minute.">
+              <button
+                className="g-button g-button-outline g-button-28"
+                type="button"
+                data-testid="settings-tour"
+                onClick={onTour}
+              >
+                Take the tour
+              </button>
+            </Row>
+          ) : null}
         </div>
       </section>
       {prefs.saved?.notice ? <p className="settings-footnote">{prefs.saved.notice}</p> : null}

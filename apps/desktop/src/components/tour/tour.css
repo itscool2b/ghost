@@ -1,0 +1,218 @@
+/*
+ * The tour (Tour.tsx): o7's wing flies from the logo at the sidebar's foot to one control after
+ * another, a ring of ink marks the control and a solid card says what it is. Nothing dims the
+ * window and nothing blurs or glows: the layer itself is empty and takes no clicks, so the app
+ * stays live under it. The wing flies here and in setup, nowhere else
+ * (docs/design/visual-language.md).
+ */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* While the wing is out, the sidebar's own logo is not drawn twice. */
+.chat-sidebar-footer[data-wing-away] .chat-sidebar-footer-logo {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------------------------- the wing */
+
+/* Placed and turned by the flight itself (lib/tour/flight.ts), a frame at a time. */
+.tour-wing {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  color: var(--g-fg-1);
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.tour-wing-float {
+  display: block;
+}
+
+/* Settled, it nudges toward what it points at, and looks at it. */
+.tour-wing[data-settled] {
+  --look-y: -0.9;
+}
+
+.tour-wing[data-settled] .tour-wing-float {
+  animation: tour-wing-hover var(--g-dur-hover) ease-in-out infinite;
+}
+
+@keyframes tour-wing-hover {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* The logo, alive (the shared Wing): one shape in the current colour whose eyes look and blink. */
+:is(.tour, .setup-shell) .wing {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+:is(.tour, .setup-shell) .wing-body {
+  fill: currentColor;
+}
+
+:is(.tour, .setup-shell) .wing-look {
+  transform: translate(calc(var(--look-x, 0) * 22px), calc(var(--look-y, 0) * 14px));
+  transition: transform var(--g-dur-row) var(--g-ease-out);
+}
+
+:is(.tour, .setup-shell) .wing-eye {
+  transform-box: fill-box;
+  transform-origin: 50% 70%;
+  animation: wing-blink var(--g-dur-blink) ease-in-out var(--g-dur-tick) infinite;
+}
+
+/* Two quick blinks, then a long look. */
+@keyframes wing-blink {
+  0%,
+  3%,
+  6%,
+  9%,
+  100% {
+    transform: none;
+  }
+
+  1.5%,
+  7.5% {
+    transform: scaleY(0.08);
+  }
+}
+
+/* ------------------------------------------------------------------------- the ring */
+
+/* A firmer hairline of ink around the control the stop is about. No fill: the control shows. */
+.tour-ring {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: var(--tour-radius, var(--g-radius-10));
+  box-shadow: 0 0 0 1px var(--g-fg-1);
+  animation: tour-ring-in var(--g-dur-row) var(--g-ease-out) calc(var(--g-dur-flight) * 0.6) both;
+}
+
+@keyframes tour-ring-in {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------------- the card */
+
+/* The raised layer, solid, like the menus: what it says reads over any content. */
+.tour-card {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-8);
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: var(--g-space-16);
+  border-radius: var(--g-radius-16);
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    inset 0 0 0 1px var(--g-glass-rim),
+    var(--g-shadow-pop);
+  color: var(--g-fg-1);
+  pointer-events: auto;
+}
+
+/* Measured before it is placed, and shown only once the wing is most of the way there. */
+.tour-card:not([data-placed]) {
+  visibility: hidden;
+}
+
+.tour-card[data-placed] {
+  animation: tour-card-in var(--g-dur-base) var(--g-ease-out) calc(var(--g-dur-flight) * 0.55) both;
+}
+
+.tour-offer[data-placed] {
+  animation-delay: 0ms;
+}
+
+@keyframes tour-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tour-title {
+  margin: 0;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-heading);
+  line-height: var(--g-leading-heading);
+  font-weight: var(--g-weight-medium);
+  letter-spacing: var(--g-tracking-title);
+  text-wrap: balance;
+}
+
+.tour-title:focus {
+  outline: none;
+}
+
+.tour-body {
+  margin: 0;
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+  text-wrap: pretty;
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-4);
+  margin-top: var(--g-space-8);
+}
+
+.tour-offer .tour-actions {
+  gap: var(--g-space-8);
+}
+
+/* Where the flight is, said quietly at the card's foot. */
+.tour-count {
+  margin-right: auto;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-wing-float,
+  .tour-ring,
+  .tour-card,
+  :is(.tour, .setup-shell) .wing-eye {
+    animation: none;
+  }
+
+  :is(.tour, .setup-shell) .wing-look {
+    transition: none;
+  }
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"])
+  :is(.tour-wing-float, .tour-ring, .tour-card),
+:root:is([data-motion="reduced"], [data-motion="off"]) :is(.tour, .setup-shell) .wing-eye {
+  animation: none;
+}
