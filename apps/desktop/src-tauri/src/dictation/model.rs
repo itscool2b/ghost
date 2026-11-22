@@ -1,5 +1,5 @@
-//! The dictation models o7 bundles (docs/local-dictation.md): Parakeet TDT-CTC 110M for
-//! English speech, with punctuation and capitals, and Silero VAD v6.2 for voice activity. They ship
+//! The dictation models o7 bundles (docs/local-dictation.md): Parakeet Ultra for speech, with
+//! punctuation and capitals, and Silero VAD v6.2 for voice activity. They ship
 //! in the app's resources, so dictation needs no download. A release bundle refuses to build
 //! without the pinned files (apps/desktop/scripts/dictation-models.mjs verifies their SHA-256);
 //! the installer and updater signatures cover them from there, so the app checks only their sizes.
@@ -15,8 +15,8 @@ pub struct Bundled {
 }
 
 pub const ASR: Bundled = Bundled {
-    file: "parakeet-tdt_ctc-110m-Q6_K.gguf",
-    bytes: 112_311_264,
+    file: "parakeet-ultra-Q4_K_M.gguf",
+    bytes: 486_280_096,
 };
 pub const VAD: Bundled = Bundled {
     file: "silero-vad-v6.2-F32.gguf",
@@ -36,7 +36,7 @@ pub fn present(folder: &Path) -> bool {
 pub fn status(folder: Option<&Path>) -> DictationModel {
     DictationModel {
         installed: folder.is_some_and(present),
-        name: "Parakeet TDT-CTC 110M".into(),
+        name: "Parakeet Ultra".into(),
         bytes: BUNDLED.iter().map(|model| model.bytes).sum::<u64>() as u32,
         supported: super::audio::cpu_supported(),
     }

@@ -24,7 +24,7 @@ function modelDetail(model: DictationModel | null | "failed"): string {
   if (model === "failed") return "o7 could not read the speech model's status.";
   if (!model.supported) return UNSUPPORTED_MESSAGE;
   if (!model.installed) return MISSING_MESSAGE;
-  return `${model.name}, built in and ready: English, with punctuation and capitals.`;
+  return `${model.name}, built in and ready: English and 24 other European languages, with punctuation and capitals.`;
 }
 
 /**

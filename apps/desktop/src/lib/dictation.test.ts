@@ -20,8 +20,8 @@ function fixture(installed = true, supported = true) {
   const api: DictationApi = {
     model: vi.fn(async () => ({
       installed,
-      name: "Parakeet TDT-CTC 110M",
-      bytes: 113552320,
+      name: "Parakeet Ultra",
+      bytes: 487521152,
       supported,
     })),
     start: vi.fn(async (_id, event) => {

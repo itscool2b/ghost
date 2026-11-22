@@ -1,4 +1,4 @@
-//! The speech engine: transcribe.cpp running the bundled Parakeet TDT-CTC 110M (English, with
+//! The speech engine: transcribe.cpp running the bundled Parakeet Ultra (speech to text with
 //! punctuation and capitals) and Silero VAD v6.2. Both load once, memory-mapped, and stay loaded
 //! for the app's life, so a recording starts at once; each recording gets its own sessions.
 use super::Failure;
@@ -7,10 +7,18 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use transcribe_cpp::{CancelToken, Model, RunOptions, Session, SessionOptions, VadSession};
 
-/// Passes run on at most this many threads: each is a fraction of a second, and fewer threads
-/// keep the processor cool while a person talks (owner, 4 November 2026: it "burned up" the
-/// machine before).
-const MAX_THREADS: usize = 2;
+/// Passes run on a few threads, never all of them: fewer keep the processor cool while a person
+/// talks (owner, 4 November 2026: it "burned up" the machine before). The large model needs four
+/// to feel live on a big machine (measured on a 16-thread desktop: a pass over 18 s of audio takes
+/// 2.1 s on two threads and 1.3 s on four), and `live.rs` paces the passes to what they cost, so
+/// more threads shorten the wait for words without raising the load much.
+fn threads_for(logical: usize) -> usize {
+    match logical {
+        0..=2 => 1,
+        3..=11 => 2,
+        _ => 4,
+    }
+}
 
 pub struct Engine {
     asr: Model,
@@ -22,8 +30,15 @@ pub struct Engine {
 static LOADED: Mutex<Option<(PathBuf, Arc<Engine>)>> = Mutex::new(None);
 
 fn threads() -> i32 {
-    std::thread::available_parallelism().map_or(2, |count| (count.get() / 2).clamp(1, MAX_THREADS))
-        as i32
+    // The opt-in bench (`bundled_models_transcribe_fixture_audio_live`) tries other counts.
+    #[cfg(test)]
+    if let Some(count) = std::env::var("O7_DICTATION_THREADS")
+        .ok()
+        .and_then(|count| count.parse().ok())
+    {
+        return count;
+    }
+    threads_for(std::thread::available_parallelism().map_or(4, usize::from)) as i32
 }
 
 impl Engine {

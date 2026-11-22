@@ -1,0 +1,30 @@
+Add a retry with exponential backoff to the fetch call in the API client.
+Rename the function get user by ID to fetch user, and update every caller.
+The build fails on Windows because the path uses forward slashes.
+Write a unit test for the parser that covers empty input and nested brackets.
+Refactor the settings screen into smaller components and keep the props typed.
+Why does the use effect hook run twice in strict mode?
+Open a pull request against main and add a changelog line.
+The database migration should add an index on the events table, by chat ID and sequence.
+Run cargo clippy with warnings as errors and fix what it finds.
+Move the WebSocket reconnect logic into its own module, with a timeout of thirty seconds.
+Cache the response for five minutes and invalidate it when the user logs out.
+The JSON payload is missing the access token field, so the request returns a four oh one.
+Use async await instead of chained promises in the upload handler.
+Bump the TypeScript version, regenerate the lock file, and make sure the linter still passes.
+Add a dark mode toggle to the header and store the choice in local storage.
+Profile the render loop. It drops frames when the sidebar has more than two hundred chats.
+Create a Docker file that builds the Rust binary in release mode.
+Explain what this regular expression matches, and rewrite it so it does not backtrack.
+Deploy the worker to the preview environment first, then to production.
+Don't touch the public API. Only change the internals of the tokenizer.
+There is a race condition between the writer thread and the read replica. Add a mutex.
+Squash the last three commits, rebase onto main, and force push with lease.
+The memory leak comes from an event listener that is never removed on unmount.
+Paginate the results with a cursor instead of an offset, twenty items per page.
+Set the environment variable in the GitHub Actions workflow, not in the repository.
+What is the time complexity of this function, and can we make it linear?
+Mock the HTTP client in the integration tests so they do not hit the network.
+Log the stack trace at debug level and return a generic error to the caller.
+Split this monolith into a core crate and a command line crate.
+Convert the callback to a generator, and stream the tokens as they arrive.

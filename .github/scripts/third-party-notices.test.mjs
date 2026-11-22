@@ -75,26 +75,35 @@ test("locked catalogue includes complete font notices and explicit native source
     assert.ok(!catalogue.records.some((r) => r.name === name), name);
 });
 
-test("the bundled dictation models keep their licenses, conversion notices and attribution", () => {
+test("the bundled speech models keep their licenses, conversion notices and attribution", () => {
   const catalogue = verifiedCatalogue();
   const models = catalogue.records.filter((r) => r.ecosystem === "model");
   assert.deepEqual(
     models.map((r) => [r.name, r.license, r.distributions]),
     [
+      ["Parakeet Ultra speech model (parakeet-ultra-Q4_K_M.gguf)", "CC-BY-4.0", ["desktop"]],
       [
-        "Parakeet TDT-CTC 110M speech model (parakeet-tdt_ctc-110m-Q6_K.gguf)",
-        "CC-BY-4.0",
+        "Phonon 31M English voice model (model.q8.gguf, with its config.json, tokenizer.json and default-voice.safetensors)",
+        "Apache-2.0",
         ["desktop"],
       ],
+      ["Phonon English voices (37 voices, voices/*.safetensors)", "Apache-2.0", ["desktop"]],
       ["Silero VAD v6.2 voice activity model (silero-vad-v6.2-F32.gguf)", "MIT", ["desktop"]],
     ],
   );
-  const texts = (record) => record.files.map((entry) => catalogue.texts[entry.sha256]).join("\n");
-  assert.match(texts(models[0]), /NVIDIA NeMo and Suno\.ai/);
-  assert.match(texts(models[0]), /Attribution 4\.0 International/);
-  assert.match(texts(models[0]), /Modifications: handy-computer converted/);
-  assert.match(texts(models[1]), /Copyright \(c\) 2020-present Silero Team/);
-  assert.match(texts(models[1]), /Modifications: handy-computer converted/);
+  // The licence texts and attribution each record carries, as the notices print them.
+  const texts = (record) =>
+    [record.attribution ?? "", ...record.files.map((entry) => catalogue.texts[entry.sha256])].join(
+      "\n",
+    );
+  const [parakeet, phonon, voices, silero] = models;
+  assert.match(texts(parakeet), /Attribution 4\.0 International/);
+  assert.match(texts(parakeet), /Modifications: handy-computer converted/);
+  assert.match(texts(parakeet), /moondream\/parakeet-ultra at commit 73175eb/);
+  assert.match(texts(silero), /Copyright \(c\) 2020-present Silero Team/);
+  assert.match(texts(silero), /Modifications: handy-computer converted/);
+  // Read aloud's voice model and its voices: under Apache 2.0.
+  for (const voice of [phonon, voices]) assert.match(texts(voice), /Apache License/);
 });
 
 test("every desktop npm record names its license, and elkjs stays out of what ships", () => {

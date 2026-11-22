@@ -10,9 +10,17 @@
 //! one pass, so a pause in the middle of a sentence cannot split its words; older phrases keep the
 //! text they settled with and their audio is wiped. Memory and the cost of every pass therefore
 //! stay bounded however long a recording runs.
+//!
+//! The model is a large one (docs/local-dictation.md), and how fast it runs depends on the
+//! machine, so the passes pace themselves. Every pass is timed. The phrase in progress is read
+//! again only once enough new audio has arrived to keep the passes to a share of real time, a
+//! phrase settles early when one pass over it would take too long, and finishing reads the window
+//! again only when that is quick. On a fast machine none of this is felt; on a slow one the words
+//! appear in larger steps instead of the microphone falling behind.
 use super::Failure;
 use serde::Serialize;
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 use zeroize::Zeroize;
 
 /// Samples per second of the audio this module receives: what the models expect.
@@ -30,6 +38,14 @@ pub struct LiveText {
 /// Transcribes one clip of 16 kHz mono audio.
 pub trait Decoder {
     fn decode(&mut self, pcm: &[f32]) -> Result<String, Failure>;
+
+    /// [`decode`](Self::decode), with how long it took: what the pacing learns the machine's
+    /// speed from. A test's decoder answers with a time of its own.
+    fn decode_timed(&mut self, pcm: &[f32]) -> Result<(String, Duration), Failure> {
+        let started = Instant::now();
+        let text = self.decode(pcm)?;
+        Ok((text, started.elapsed()))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,6 +64,16 @@ pub struct LiveConfig {
     pub max_phrase: usize,
     /// The settled audio, in samples, that finishing transcribes again in one pass.
     pub window: usize,
+    /// New audio before the phrase in progress is read again, as a multiple of what the pass is
+    /// expected to take: 2.5 keeps the live passes to two fifths of real time.
+    pub live_share: f32,
+    /// A phrase settles early once one pass over it would take longer than this.
+    pub settle_budget: Duration,
+    /// The shortest phrase, in samples, that settles early for that reason.
+    pub min_phrase: usize,
+    /// Finishing reads the window again in one pass only when that takes no longer than this;
+    /// otherwise the phrases keep the text they settled with.
+    pub finish_budget: Duration,
 }
 
 impl Default for LiveConfig {
@@ -60,6 +86,10 @@ impl Default for LiveConfig {
             interval: SAMPLE_RATE * 8 / 10,
             max_phrase: SAMPLE_RATE * 20,
             window: SAMPLE_RATE * 30,
+            live_share: 2.5,
+            settle_budget: Duration::from_millis(2500),
+            min_phrase: SAMPLE_RATE * 6,
+            finish_budget: Duration::from_secs(4),
         }
     }
 }
@@ -84,6 +114,9 @@ pub struct Live<D> {
     stable: Vec<String>,
     /// Whether any phrase held speech: a recording without one has nothing to add.
     heard: bool,
+    /// Samples of audio the model reads per second of work on this machine, learned from the
+    /// passes so far. `None` until one has been timed: the first passes are over short clips.
+    speed: Option<f32>,
 }
 
 impl<D> Drop for Live<D> {
@@ -133,7 +166,39 @@ impl<D: Decoder> Live<D> {
             previous: Vec::new(),
             stable: Vec::new(),
             heard: false,
+            speed: None,
         }
+    }
+
+    /// One pass over `clip`, timed, so the next ones know what this machine manages.
+    fn pass(decoder: &mut D, speed: &mut Option<f32>, clip: &[f32]) -> Result<String, Failure> {
+        let (text, took) = decoder.decode_timed(clip)?;
+        // A clip under half a second says little about speed: its cost is mostly overhead.
+        if clip.len() >= SAMPLE_RATE / 2 {
+            let measured = clip.len() as f32 / took.as_secs_f32().max(1e-6);
+            *speed = Some(speed.map_or(measured, |known| known * 0.5 + measured * 0.5));
+        }
+        Ok(text)
+    }
+
+    /// How long a pass over `samples` of audio is expected to take.
+    fn cost(&self, samples: usize) -> Duration {
+        self.speed.map_or(Duration::ZERO, |speed| {
+            Duration::from_secs_f32(samples as f32 / speed.max(1.0))
+        })
+    }
+
+    /// The phrase length that settles without a pause: the longest one, or less on a machine
+    /// where a pass over that much would take too long.
+    fn phrase_cap(&self) -> usize {
+        let Some(speed) = self.speed else {
+            return self.config.max_phrase;
+        };
+        let affordable = (speed * self.config.settle_budget.as_secs_f32()) as usize;
+        affordable.clamp(
+            self.config.min_phrase.min(self.config.max_phrase),
+            self.config.max_phrase,
+        )
     }
 
     /// Whether a phrase is in progress.
@@ -164,15 +229,26 @@ impl<D: Decoder> Live<D> {
         } else if speech >= self.config.speech_on {
             self.silence = 0;
         }
-        if self.silence >= self.config.pause || self.phrase.len() >= self.config.max_phrase {
+        if self.silence >= self.config.pause || self.phrase.len() >= self.phrase_cap() {
             self.settle()?;
             return Ok(Some(self.text()));
         }
-        if self.fresh < self.config.interval {
+        // The next pass waits for the interval, and for longer where a pass over this phrase is
+        // slow: the microphone keeps filling while a pass runs.
+        let paced = self.cost(self.phrase.len()).as_secs_f32() * self.config.live_share;
+        let due = self
+            .config
+            .interval
+            .max((paced * SAMPLE_RATE as f32) as usize);
+        if self.fresh < due {
             return Ok(None);
         }
         self.fresh = 0;
-        let current = words(&self.decoder.decode(&self.phrase)?);
+        let current = words(&Self::pass(
+            &mut self.decoder,
+            &mut self.speed,
+            &self.phrase,
+        )?);
         // Local agreement: a word joins the stable prefix once two passes in a row put it there.
         // Stable words stay; a pass that rewrites them only changes what follows.
         let agreed = self
@@ -198,7 +274,7 @@ impl<D: Decoder> Live<D> {
             .max(1);
         let mut audio = std::mem::take(&mut self.phrase);
         audio.truncate(keep);
-        let text = self.decoder.decode(&audio)?;
+        let text = Self::pass(&mut self.decoder, &mut self.speed, &audio)?;
         self.window_len += audio.len();
         self.window.push_back((audio, text));
         while self.window_len > self.config.window
@@ -235,17 +311,26 @@ impl<D: Decoder> Live<D> {
             self.settle()?;
         }
         if !self.window.is_empty() {
-            let audio: Vec<f32> = self
-                .window
-                .iter()
-                .flat_map(|(audio, _)| audio.iter().copied())
-                .collect();
-            let mut audio = audio;
-            let again = self.decoder.decode(&audio);
-            audio.zeroize();
+            // One phrase was read whole when it settled; several are read again as one clip, where
+            // this machine does that quickly.
+            let again = if self.window.len() > 1
+                && self.cost(self.window_len) <= self.config.finish_budget
+            {
+                let mut audio: Vec<f32> = self
+                    .window
+                    .iter()
+                    .flat_map(|(audio, _)| audio.iter().copied())
+                    .collect();
+                let again = self.decoder.decode(&audio).ok();
+                audio.zeroize();
+                again
+            } else {
+                None
+            };
             let recent = match again {
-                Ok(text) if !text.trim().is_empty() => text,
-                // A failed or empty last pass keeps the phrases' own text.
+                Some(text) if !text.trim().is_empty() => text,
+                // A slow machine, a single phrase, or a failed or empty last pass: the phrases
+                // keep their own text.
                 _ => joined(self.window.iter().map(|(_, text)| text.as_str())),
             };
             self.settled = joined([self.settled.as_str(), recent.as_str()]);
@@ -428,6 +513,119 @@ mod tests {
                 "stable text shrank: {stable:?}"
             );
         }
+    }
+
+    /// A model that reads audio `speed` times faster than it plays, by its own account.
+    struct Slow {
+        speed: f32,
+        clips: Vec<usize>,
+        spent: Duration,
+    }
+
+    impl Decoder for Slow {
+        fn decode(&mut self, pcm: &[f32]) -> Result<String, Failure> {
+            self.clips.push(pcm.len());
+            Ok(format!("clip{}", pcm.len()))
+        }
+        fn decode_timed(&mut self, pcm: &[f32]) -> Result<(String, Duration), Failure> {
+            let took = Duration::from_secs_f32(pcm.len() as f32 / SAMPLE_RATE as f32 / self.speed);
+            self.spent += took;
+            Ok((self.decode(pcm)?, took))
+        }
+    }
+
+    fn slow(speed: f32) -> Live<Slow> {
+        Live::new(
+            LiveConfig::default(),
+            Slow {
+                speed,
+                clips: Vec::new(),
+                spent: Duration::ZERO,
+            },
+        )
+    }
+
+    fn talk(live: &mut Live<Slow>, seconds: f32, speech: f32) {
+        let frame = [0.1_f32; FRAME];
+        for _ in 0..(seconds * SAMPLE_RATE as f32 / FRAME as f32).round() as usize {
+            live.feed(&frame, speech).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_slow_machine_reads_less_often_and_in_shorter_phrases_so_it_keeps_up() {
+        // Five times real time: a laptop on two threads with the large model.
+        let mut live = slow(5.0);
+        let config = LiveConfig::default();
+        talk(&mut live, 60.0, 0.9);
+        let spent = live.decoder.spent.as_secs_f32();
+        assert!(
+            spent < 60.0 * 0.55,
+            "the passes took {spent:.1} s of a minute: the microphone is never outrun"
+        );
+        let cap = (5.0 * config.settle_budget.as_secs_f32() * SAMPLE_RATE as f32) as usize;
+        let longest = *live.decoder.clips.iter().max().unwrap();
+        assert!(
+            longest <= cap + FRAME,
+            "no pass over more than {cap} samples, but one read {longest}"
+        );
+        assert!(
+            longest >= config.min_phrase,
+            "phrases are not cut to nothing"
+        );
+        assert!(
+            live.window.len() >= 2 && !live.settled.is_empty(),
+            "the minute settled as several phrases, the oldest already out of the window"
+        );
+        // The same minute on a fast machine: a pass every interval, phrases at their full length.
+        let mut quick = slow(200.0);
+        talk(&mut quick, 60.0, 0.9);
+        assert!(quick.decoder.clips.len() > live.decoder.clips.len() * 2);
+        assert!(*quick.decoder.clips.iter().max().unwrap() + FRAME >= config.max_phrase);
+    }
+
+    #[test]
+    fn finishing_reads_the_window_again_only_where_that_is_quick() {
+        for (speed, joins) in [(200.0, true), (2.0, false)] {
+            let mut live = slow(speed);
+            talk(&mut live, 5.0, 0.9);
+            talk(&mut live, 0.9, 0.1);
+            talk(&mut live, 5.0, 0.9);
+            talk(&mut live, 0.9, 0.1);
+            let phrases: Vec<String> = live.window.iter().map(|(_, text)| text.clone()).collect();
+            assert_eq!(phrases.len(), 2, "{speed}: two phrases settled");
+            let whole: usize = live.window.iter().map(|(audio, _)| audio.len()).sum();
+            let text = live.finish().unwrap();
+            if joins {
+                assert_eq!(text, format!("clip{whole}"), "one pass over both phrases");
+            } else {
+                assert_eq!(text, phrases.join(" "), "the phrases keep their own text");
+            }
+        }
+    }
+
+    #[test]
+    fn one_settled_phrase_is_not_read_twice() {
+        struct Counted(std::rc::Rc<std::cell::Cell<usize>>);
+        impl Decoder for Counted {
+            fn decode(&mut self, pcm: &[f32]) -> Result<String, Failure> {
+                self.0.set(self.0.get() + 1);
+                Ok(format!("clip{}", pcm.len()))
+            }
+        }
+        let passes = std::rc::Rc::new(std::cell::Cell::new(0));
+        let mut live = Live::new(LiveConfig::default(), Counted(passes.clone()));
+        let frame = [0.1_f32; FRAME];
+        for speech in [0.9, 0.1] {
+            for _ in 0..(1.5 * SAMPLE_RATE as f32 / FRAME as f32) as usize {
+                live.feed(&frame, speech).unwrap();
+            }
+        }
+        let settled = live.text().settled;
+        let before = passes.get();
+        // It was read whole when it settled: finishing has nothing to add.
+        assert_eq!(live.finish().unwrap(), settled);
+        assert_eq!(passes.get(), before);
     }
 
     #[test]
