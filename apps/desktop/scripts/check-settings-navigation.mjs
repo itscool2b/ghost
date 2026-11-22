@@ -126,7 +126,7 @@ export async function checkSettingsNavigation(page, url) {
   // Voice's microphone test: the bar, the words as they come, then what finishing heard. Esc
   // cancels the test rather than leaving Settings.
   await sections.getByRole("button", { name: "Voice", exact: true }).click();
-  await page.getByText("Parakeet TDT-CTC 110M, built in and ready", { exact: false }).waitFor();
+  await page.getByText("Parakeet Ultra, built in and ready", { exact: false }).waitFor();
   await page.getByRole("button", { name: "Test", exact: true }).click();
   await page.getByRole("meter", { name: "Microphone level" }).waitFor();
   await page.getByText("Testing one two", { exact: false }).waitFor();

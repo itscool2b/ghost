@@ -363,7 +363,7 @@ export const commands = {
 	dictationModel: () => __TAURI_INVOKE<DictationModel>("dictation_model"),
 	/**
 	 *  Opens the microphone at once and streams the live text until `dictation_stop` (finish) or
-	 *  `dictation_cancel`. The bundled models are English; there is no time limit.
+	 *  `dictation_cancel`. There is no time limit.
 	 */
 	dictationStart: (id: string, channel: Channel<DictationEvent>) => typedError<null, AppError>(__TAURI_INVOKE("dictation_start", { id, channel })),
 	dictationStop: (id: string) => __TAURI_INVOKE<void>("dictation_stop", { id }),

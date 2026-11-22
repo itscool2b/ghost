@@ -318,12 +318,13 @@ mod tests {
     /// then says what it heard
     /// (`O7_DICTATION_FIXTURE_DIR=<the same folder> cargo test -p o7-desktop --lib
     /// bundled_models_transcribe -- --ignored --nocapture`): the nearest thing to a listener a
-    /// test has.
+    /// test has. `O7_SPEECH_WAV_TEXTS` names a file of other sentences, one a line: each is
+    /// spoken by each voice and saved with its words beside it, which is how dictation's bench
+    /// gets developers' vocabulary (docs/local-dictation.md).
     #[test]
     #[ignore = "needs the bundled voice model and O7_SPEECH_WAV_DIR"]
     fn the_voices_speak_into_fixture_audio_for_dictation_to_hear() {
         use std::path::{Path, PathBuf};
-        const HEARD_AT: usize = 16_000;
         let out = PathBuf::from(std::env::var_os("O7_SPEECH_WAV_DIR").expect("a folder for WAVs"));
         let folder = std::env::var_os("O7_SPEECH_MODELS").map_or_else(
             || Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/speech"),
@@ -337,41 +338,77 @@ mod tests {
                 .find(|voice| voice.locale == locale && voice.id != "default")
                 .expect("a voice of each kind")
         };
-        let said = "I fixed the login flow, and all 42 tests pass. Nothing else changed.";
-        for voice in [
+        let texts = std::env::var_os("O7_SPEECH_WAV_TEXTS").map(|path| {
+            std::fs::read_to_string(path)
+                .unwrap()
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        });
+        let listed = texts.is_some();
+        let texts = texts.unwrap_or_else(|| {
+            vec!["I fixed the login flow, and all 42 tests pass. Nothing else changed.".to_owned()]
+        });
+        let voices = [
             &offered[0],
             pick("en-us"),
             pick("en-gb"),
             pick("characters"),
-        ] {
-            let mut convert = Converter::new(engine.sample_rate(), HEARD_AT).unwrap();
-            let mut pcm = Vec::new();
-            for chunk in engine.stream(said, engine.voice(Some(&voice.id))).unwrap() {
-                pcm.extend(convert.push(&chunk.unwrap()).unwrap());
+        ];
+        for (at, said) in texts.iter().enumerate() {
+            // With a list, each sentence is heard in one voice, taken in turn.
+            let speakers = if listed {
+                &voices[at % voices.len()..=at % voices.len()]
+            } else {
+                &voices[..]
+            };
+            for voice in speakers {
+                let name = if listed {
+                    format!("{:03}-{}", at + 1, voice.name.replace(' ', "-"))
+                } else {
+                    format!("{}-{}", voice.locale, voice.name.replace(' ', "-"))
+                };
+                let seconds =
+                    speak_to_wav(&engine, said, &voice.id, &out.join(format!("{name}.wav")));
+                if listed {
+                    std::fs::write(out.join(format!("{name}.txt")), format!("{said}\n")).unwrap();
+                }
+                println!("{name}.wav: {seconds:.2} s");
+                assert!(seconds > 1.0, "a sentence of speech");
             }
-            pcm.extend(convert.finish().unwrap());
-            let data: Vec<u8> = pcm
-                .iter()
-                .flat_map(|sample| ((sample.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes())
-                .collect();
-            let mut wav = Vec::with_capacity(44 + data.len());
-            wav.extend_from_slice(b"RIFF");
-            wav.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
-            wav.extend_from_slice(b"WAVEfmt ");
-            wav.extend_from_slice(&16u32.to_le_bytes());
-            wav.extend_from_slice(&1u16.to_le_bytes());
-            wav.extend_from_slice(&1u16.to_le_bytes());
-            wav.extend_from_slice(&(HEARD_AT as u32).to_le_bytes());
-            wav.extend_from_slice(&(HEARD_AT as u32 * 2).to_le_bytes());
-            wav.extend_from_slice(&2u16.to_le_bytes());
-            wav.extend_from_slice(&16u16.to_le_bytes());
-            wav.extend_from_slice(b"data");
-            wav.extend_from_slice(&(data.len() as u32).to_le_bytes());
-            wav.extend_from_slice(&data);
-            let name = format!("{}-{}.wav", voice.locale, voice.name.replace(' ', "-"));
-            std::fs::write(out.join(&name), wav).unwrap();
-            println!("{name}: {:.2} s", pcm.len() as f32 / HEARD_AT as f32);
-            assert!(pcm.len() > HEARD_AT * 2, "a sentence of speech");
         }
+    }
+
+    /// `said` in `voice`, as a 16 kHz mono WAV at `path`; returns its length in seconds.
+    fn speak_to_wav(engine: &Engine, said: &str, voice: &str, path: &std::path::Path) -> f32 {
+        const HEARD_AT: usize = 16_000;
+        let mut convert = Converter::new(engine.sample_rate(), HEARD_AT).unwrap();
+        let mut pcm = Vec::new();
+        for chunk in engine.stream(said, engine.voice(Some(voice))).unwrap() {
+            pcm.extend(convert.push(&chunk.unwrap()).unwrap());
+        }
+        pcm.extend(convert.finish().unwrap());
+        let data: Vec<u8> = pcm
+            .iter()
+            .flat_map(|sample| ((sample.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes())
+            .collect();
+        let mut wav = Vec::with_capacity(44 + data.len());
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&(HEARD_AT as u32).to_le_bytes());
+        wav.extend_from_slice(&(HEARD_AT as u32 * 2).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        wav.extend_from_slice(&data);
+        std::fs::write(path, wav).unwrap();
+        pcm.len() as f32 / HEARD_AT as f32
     }
 }

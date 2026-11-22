@@ -1,10 +1,10 @@
 {
-  "parakeet-tdt_ctc-110m-Q6_K.gguf": {
-    "name": "Parakeet TDT-CTC 110M speech model (parakeet-tdt_ctc-110m-Q6_K.gguf)",
-    "repo": "handy-computer/parakeet-tdt_ctc-110m-gguf",
-    "revision": "1c3f0d5378fdd358905cc410a93ed9e64f52d170",
+  "parakeet-ultra-Q4_K_M.gguf": {
+    "name": "Parakeet Ultra speech model (parakeet-ultra-Q4_K_M.gguf)",
+    "repo": "handy-computer/parakeet-ultra-gguf",
+    "revision": "a1539be1b849ea7463b88343e5277b373d0c4ea9",
     "license": "CC-BY-4.0",
-    "attribution": "Parakeet TDT-CTC 110M (https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) was developed by the NVIDIA NeMo and Suno.ai teams and is licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). o7 bundles handy-computer's GGUF conversion of it, quantized to Q6_K, without further changes. The conversion's NOTICE records how it differs from the original.",
+    "attribution": "Parakeet Ultra (https://huggingface.co/moondream/parakeet-ultra) is by Moondream. It is a further-trained version of Parakeet TDT 0.6B v3 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), developed by NVIDIA, and both are licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). o7 bundles handy-computer's GGUF conversion of it, quantized to Q4_K_M, without further changes. The conversion's NOTICE records how it differs from the original.",
     "files": [
       {
         "name": "LICENSE",
@@ -12,7 +12,7 @@
       },
       {
         "name": "NOTICE",
-        "sha256": "c8adba97ba3c25562e26996c50ec5161e86869630ac0beb284897b016c46ecad"
+        "sha256": "8999f96f7a130b258418abd74c119b470efd906d25027759cddaea074831f1e1"
       }
     ]
   },

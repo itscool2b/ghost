@@ -17,7 +17,7 @@ use zeroize::Zeroize;
 const TICK: Duration = Duration::from_millis(80);
 /// Audio the capture callback holds before the loop takes it; past this it is dropped, so a
 /// stalled loop cannot grow memory.
-const BACKLOG_SECONDS: usize = 4;
+const BACKLOG_SECONDS: usize = 12;
 /// A stream that delivered audio and then nothing for this long has stopped.
 const STALL: Duration = Duration::from_secs(3);
 /// A stream that delivers no audio at all within this long cannot be used.
@@ -584,22 +584,51 @@ mod tests {
             .collect()
     }
 
+    /// A decoder that notes how long each pass took and over how much audio.
+    struct Timed<D> {
+        inner: D,
+        passes: std::rc::Rc<std::cell::RefCell<Vec<(usize, Duration)>>>,
+    }
+
+    impl<D: super::super::live::Decoder> super::super::live::Decoder for Timed<D> {
+        fn decode(&mut self, pcm: &[f32]) -> Result<String, Failure> {
+            let started = Instant::now();
+            let text = self.inner.decode(pcm);
+            self.passes
+                .borrow_mut()
+                .push((pcm.len(), started.elapsed()));
+            text
+        }
+    }
+
     /// Opt-in engine acceptance with the real bundled models, separate from microphone hardware
     /// verification: streams every 16 kHz mono `*.wav` in `O7_DICTATION_FIXTURE_DIR`
     /// through voice detection and live text in 80 ms ticks, as a recording does, and prints the
     /// text, the passes' time and the share of real time they took. `jfk.wav` must come out as
     /// its famous line. The models come from `resources/dictation` (run
     /// `node apps/desktop/scripts/dictation-models.mjs` once).
+    ///
+    /// It is also the bench a model is chosen with: `O7_DICTATION_MODELS` names another folder,
+    /// `O7_DICTATION_ASR` another speech model in it, and `O7_DICTATION_THREADS` another thread
+    /// count. Each file prints one tab-separated `RESULT` line (name, seconds of audio, seconds
+    /// of passes, live updates, the slowest pass and the audio it covered, text) for a script to
+    /// score against the reference beside the WAV.
     #[test]
     #[ignore = "requires the bundled models and O7_DICTATION_FIXTURE_DIR with WAVs"]
     fn bundled_models_transcribe_fixture_audio_live() {
         let fixtures = std::path::PathBuf::from(
             std::env::var_os("O7_DICTATION_FIXTURE_DIR").expect("fixture directory"),
         );
-        let models = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/dictation");
+        let models = std::env::var_os("O7_DICTATION_MODELS").map_or_else(
+            || std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/dictation"),
+            std::path::PathBuf::from,
+        );
+        let asr = std::env::var("O7_DICTATION_ASR")
+            .unwrap_or_else(|_| super::super::model::ASR.file.to_owned());
         let began = Instant::now();
-        let engine = super::super::model::engine(&models).expect("bundled models");
-        println!("load: {:?}", began.elapsed());
+        let engine = Engine::shared(&models, &asr, super::super::model::VAD.file)
+            .expect("the models to load");
+        println!("load {asr}: {:?}", began.elapsed());
         let mut wavs: Vec<_> = std::fs::read_dir(&fixtures)
             .unwrap()
             .filter_map(Result::ok)
@@ -607,16 +636,22 @@ mod tests {
             .filter(|path| path.extension().is_some_and(|ext| ext == "wav"))
             .collect();
         wavs.sort();
+        let mut heard = 0.0;
+        let mut worked = 0.0;
         for wav in wavs {
             let audio = fixture_pcm(&wav);
             let seconds = audio.len() as f32 / SAMPLE_RATE as f32;
             let cancel = CancelToken::new();
-            let mut live = Live::new(LiveConfig::default(), engine.decoder(&cancel).unwrap());
+            let passes = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+            let decoder = Timed {
+                inner: engine.decoder(&cancel).unwrap(),
+                passes: passes.clone(),
+            };
+            let mut live = Live::new(LiveConfig::default(), decoder);
             let mut vad = engine.vad().unwrap();
             let mut pending = Vec::new();
             let mut text = LiveText::default();
             let mut updates = 0;
-            let started = Instant::now();
             for tick in audio.chunks(SAMPLE_RATE * 80 / 1000) {
                 let before = text.clone();
                 score(
@@ -632,12 +667,21 @@ mod tests {
                     updates += 1;
                 }
             }
-            let result = live.finish().unwrap();
-            let spent = started.elapsed().as_secs_f32();
+            let result = live.finish().unwrap_or_default();
+            let passes = passes.borrow();
+            let spent: f32 = passes.iter().map(|(_, took)| took.as_secs_f32()).sum();
+            let slowest = passes
+                .iter()
+                .max_by_key(|(_, took)| *took)
+                .copied()
+                .unwrap_or_default();
+            heard += seconds;
+            worked += spent;
             println!(
-                "{} ({seconds:.1}s): {spent:.2}s of passes ({:.1}% of real time), {updates} live updates: {result}",
+                "RESULT\t{}\t{seconds:.2}\t{spent:.3}\t{updates}\t{:.3}\t{:.2}\t{result}",
                 wav.file_name().unwrap().to_string_lossy(),
-                spent / seconds * 100.0,
+                slowest.1.as_secs_f32(),
+                slowest.0 as f32 / SAMPLE_RATE as f32,
             );
             if wav.file_name().is_some_and(|name| name == "jfk.wav") {
                 assert!(
@@ -648,5 +692,9 @@ mod tests {
                 );
             }
         }
+        println!(
+            "TOTAL\t{heard:.1}\t{worked:.2}\t{:.1}% of real time",
+            worked / heard.max(0.001) * 100.0
+        );
     }
 }

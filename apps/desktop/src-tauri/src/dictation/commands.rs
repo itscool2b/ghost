@@ -50,7 +50,7 @@ pub fn dictation_model(webview: Webview) -> DictationModel {
 }
 
 /// Opens the microphone at once and streams the live text until `dictation_stop` (finish) or
-/// `dictation_cancel`. The bundled models are English; there is no time limit.
+/// `dictation_cancel`. There is no time limit.
 #[tauri::command]
 #[specta::specta]
 pub fn dictation_start(
