@@ -244,8 +244,19 @@ export function collect() {
   const models = json(join(root, "third-party/models.json"));
   const pins = readFileSync(join(root, "apps/desktop/scripts/dictation-models.mjs"), "utf8");
   const pinned = [...pins.matchAll(/file: "([^"]+)"/g)].map((match) => match[1]);
-  if (JSON.stringify(sort([...pinned])) !== JSON.stringify(sort(Object.keys(models))))
-    throw new Error("The bundled dictation models changed: review third-party/models.json");
+  // A record answers for the file it is named for and for the files it says it covers: a model's
+  // own settings beside its weights (`covers`), or every file under a folder (`covers_prefix`,
+  // the voices, which share one license and one source).
+  const answered = Object.entries(models).flatMap(([name, model]) => [
+    ...(model.covers_prefix ? [] : [name]),
+    ...(model.covers ?? []),
+    ...(model.covers_prefix ? pinned.filter((entry) => entry.startsWith(model.covers_prefix)) : []),
+  ]);
+  if (
+    new Set(answered).size !== answered.length ||
+    JSON.stringify(sort([...pinned])) !== JSON.stringify(sort([...answered]))
+  )
+    throw new Error("The bundled models changed: review third-party/models.json");
   for (const [name, model] of Object.entries(models)) {
     if (!pins.includes(`revision: "${model.revision}"`))
       throw new Error(`The pinned revision changed for ${name}: review third-party/models.json`);
@@ -268,7 +279,8 @@ export function collect() {
           if (digest(text) !== entry.sha256) throw new Error(`Upstream notice changed for ${name}`);
           return file(
             text,
-            `https://huggingface.co/${model.repo}/blob/${model.revision}/${entry.name}`,
+            entry.url ??
+              `https://huggingface.co/${model.repo}/blob/${model.revision}/${entry.name}`,
           );
         }),
       ],

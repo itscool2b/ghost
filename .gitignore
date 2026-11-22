@@ -59,3 +59,9 @@ test-results/
 # Dictation models, fetched and verified by apps/desktop/scripts/dictation-models.mjs.
 apps/desktop/src-tauri/resources/dictation/*.gguf
 apps/desktop/src-tauri/resources/dictation/*.partial
+apps/desktop/src-tauri/resources/speech/*.gguf
+apps/desktop/src-tauri/resources/speech/*.safetensors
+apps/desktop/src-tauri/resources/speech/config.json
+apps/desktop/src-tauri/resources/speech/tokenizer.json
+apps/desktop/src-tauri/resources/speech/voices/
+apps/desktop/src-tauri/resources/speech/**/*.partial

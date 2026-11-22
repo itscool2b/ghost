@@ -7,6 +7,7 @@ mod live;
 mod model;
 
 use crate::sync::lock;
+pub(crate) use audio::cpu_supported;
 pub use live::LiveText;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};

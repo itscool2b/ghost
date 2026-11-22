@@ -69,7 +69,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "resources/dictation/": "dictation/"
+      "resources/dictation/": "dictation/",
+      "resources/speech/": "speech/"
     },
     "linux": {
       "deb": {

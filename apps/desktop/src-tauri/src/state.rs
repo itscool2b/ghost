@@ -82,6 +82,8 @@ pub struct AppState {
     pub pages: Arc<Pages>,
     pub catalog_refresh: Arc<crate::catalog_refresh::RefreshGate>,
     pub dictation: Arc<crate::dictation::Dictation>,
+    /// Reading aloud: the one voice that may be speaking.
+    pub speech: Arc<crate::speech::Speech>,
     /// Unlogged terminal sessions, owned by the window that explicitly opened them.
     pub terminals: o7_core::terminal::Terminals,
     /// Which chat each terminal chat's terminal holds, so a page that goes ends its own.
@@ -216,6 +218,7 @@ impl AppState {
             pages: Arc::default(),
             catalog_refresh: Arc::default(),
             dictation: Arc::default(),
+            speech: Arc::default(),
             terminals: Default::default(),
             terminal_chats: Default::default(),
             integrity: IntegrityCheck::new(booted.integrity_check),
@@ -377,6 +380,7 @@ impl AppState {
         let mut runtime = lock(&self.runtime);
         self.access.generation.fetch_add(1, Ordering::AcqRel);
         self.dictation.cancel_all();
+        self.speech.stop_all();
         runtime.info.profile = booted.profile;
         runtime.info.db = booted.db;
         runtime.info.fatal = None;
@@ -437,6 +441,7 @@ impl AppState {
     /// next launch this one did not end cleanly.
     pub fn at_exit(&self) {
         self.dictation.cancel_all();
+        self.speech.stop_all();
         self.terminals.stop_all();
         if self.integrity.close() {
             tracing::info!("the integrity check is still running; it ends with the process");

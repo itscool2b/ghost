@@ -22,6 +22,12 @@ the desktop bundles as resources are listed in `models.json`, and
 record keeps the model's license, its converter's NOTICE and an attribution, from texts preserved
 in `upstream/`. The generator fails when the pinned models and that list disagree.
 
+Reading aloud bundles Gradium's Phonon 31M voice model and the English voices of Gradium's
+catalogue (Apache-2.0), pinned in the same script and listed in the same `models.json`. One record
+answers for the model's weights, configuration, tokenizer and own voice, and one for every voice
+file, since they share a license and a source. Its runtime, the `ptts` crate and its `xn` tensor
+library (MIT OR Apache-2.0), is in the Rust dependency closure like any other crate.
+
 The desktop also bundles one prebuilt program that is not built from this repository: the scrcpy
 server (Genymobile, Apache-2.0), which o7 puts on a person's Android device to show its screen
 and take input in the Device pane. `scrcpy.json` pins its release and the SHA-256 the release

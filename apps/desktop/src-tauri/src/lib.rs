@@ -37,6 +37,7 @@ pub mod coordinator_commands;
 pub mod data_cleanup_commands;
 pub mod demo;
 pub mod dictation;
+pub mod speech;
 pub mod error;
 pub mod folder_resolution_commands;
 pub mod general_preferences;
@@ -90,7 +91,7 @@ use crate::sessions::{AppQuitHost, ExitRequest};
 use crate::state::AppState;
 
 /// Log filter when `RUST_LOG` is unset.
-const DEFAULT_LOG_FILTER: &str = "info";
+const DEFAULT_LOG_FILTER: &str = "info,ptts=warn,xn=warn";
 
 /// The exit code when o7 cannot start: Tauri failed to initialize, or no window could be
 /// created.
@@ -342,6 +343,7 @@ fn on_page_load(webview: &Webview, payload: &PageLoadPayload<'_>) {
     let chats = state.chats();
     sessions::page_load(&state.pages, webview.label(), payload.event(), |owner| {
         state.dictation.drop_owner(owner);
+        state.speech.drop_owner(owner);
         state.terminals.drop_owner(owner);
         // Its terminal chats end with its terminals: the chats get their sessions back.
         let ended = state.terminal_chats.drain_owner(owner);
@@ -400,6 +402,7 @@ fn on_event(app: &tauri::AppHandle, event: RunEvent) {
         } if label == window::MAIN_WINDOW => {
             if let Some(state) = app.try_state::<AppState>() {
                 state.dictation.cancel_all();
+                state.speech.stop_all();
             }
             if native_shell::close_to_tray(app) {
                 api.prevent_close();
@@ -449,6 +452,7 @@ fn on_exit_requested(app: &tauri::AppHandle, code: Option<i32>, api: &tauri::Exi
         ExitRequest::StartQuit => {
             api.prevent_exit();
             state.dictation.cancel_all();
+            state.speech.stop_all();
             state.terminals.close_non_project();
             if let Some(clones) = app.try_state::<Arc<o7_core::cloning::Clones>>() {
                 clones.cancel_all();
