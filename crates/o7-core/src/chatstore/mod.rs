@@ -596,8 +596,24 @@ impl ChatStore {
         this.recovered().await;
         let shared = Arc::clone(&this.shared);
         drop(this);
-        // The indexes wait a while: the window is asking for its first lists right now.
-        let index_at = tokio::time::Instant::now() + shared.config.index_delay;
+        // The indexes wait a while: the window is asking for its first lists right now. A thread of
+        // its own keeps the time, not the runtime's clock: a timer here would be one more thing a
+        // test on paused time has to account for.
+        let delay = shared.config.index_delay;
+        if delay.is_zero() {
+            shared.set_index_due();
+        } else {
+            let due = Arc::clone(&shared);
+            let spawned = std::thread::Builder::new()
+                .name("aura-chat-indexes".into())
+                .spawn(move || {
+                    std::thread::sleep(delay);
+                    due.set_index_due();
+                });
+            if spawned.is_err() {
+                shared.set_index_due();
+            }
+        }
         let mut indexed = false;
         // Each turn is tried once: one that cannot be compacted must not be read again and again.
         let mut tried: HashSet<String> = HashSet::new();
@@ -612,7 +628,7 @@ impl ChatStore {
                     tracing::warn!(%error, "could not compact the turns left from earlier; a later pass tries again");
                 }
             }
-            if !indexed && tokio::time::Instant::now() >= index_at {
+            if !indexed && shared.index_due() {
                 indexed = true;
                 let (reply, answer) = oneshot::channel();
                 match this
@@ -628,12 +644,8 @@ impl ChatStore {
                 }
             }
             drop(this);
-            if indexed {
-                shared.leftovers.notified().await;
-            } else {
-                // Woken for a turn, or by the time the indexes are due: either way, another pass.
-                let _ = tokio::time::timeout_at(index_at, shared.leftovers.notified()).await;
-            }
+            // Woken for a turn, when the indexes are due, or because the store closed.
+            shared.leftovers.notified().await;
         }
     }
 

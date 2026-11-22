@@ -123,6 +123,8 @@ pub(crate) struct Shared {
     settling: AtomicBool,
     /// Wakes the store's pass over ended turns that are not compacted yet.
     pub(crate) leftovers: tokio::sync::Notify,
+    /// The indexes recovery reads through may be built now ([`WriterConfig::index_delay`] passed).
+    index_due: AtomicBool,
     /// How long startup recovery took, and building recovery's indexes when this start built any,
     /// in milliseconds; [`NOT_TIMED`] until then.
     recovery_ms: AtomicU64,
@@ -627,6 +629,7 @@ impl Shared {
             // From the start: startup recovery is the writer's first op.
             settling: AtomicBool::new(true),
             leftovers: tokio::sync::Notify::new(),
+            index_due: AtomicBool::new(false),
             recovery_ms: AtomicU64::new(NOT_TIMED),
             indexes_ms: AtomicU64::new(NOT_TIMED),
             config,
@@ -680,6 +683,17 @@ impl Shared {
 
     fn set_settling(&self, settling: bool) {
         self.settling.store(settling, Ordering::Release);
+    }
+
+    /// Whether the indexes recovery reads through may be built now.
+    pub(crate) fn index_due(&self) -> bool {
+        self.index_due.load(Ordering::Acquire)
+    }
+
+    /// Says the indexes may be built, and wakes the pass that builds them.
+    pub(crate) fn set_index_due(&self) {
+        self.index_due.store(true, Ordering::Release);
+        self.leftovers.notify_one();
     }
 
     /// How long startup recovery took and, when this start built recovery's indexes, how long
