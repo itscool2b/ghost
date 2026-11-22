@@ -761,6 +761,7 @@ async fn the_plan_approval_card_is_a_mode_switch_with_its_plan() {
 /// changes nothing.
 #[tokio::test(start_paused = true)]
 async fn an_edited_plan_is_what_claude_is_told_was_approved() {
+    use crate::driver::PermissionOutcome;
     let mut h = Harness::start().await;
     h.ready().await;
     h.prompt();

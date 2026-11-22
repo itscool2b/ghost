@@ -594,6 +594,12 @@ export const commands = {
 	chatStop: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("chat_stop", { chatId })),
 	/**  Answers a permission card with one of its options; `null` cancels it. */
 	chatRespondPermission: (chatId: string, requestId: string, optionId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("chat_respond_permission", { chatId, requestId, optionId })),
+	/**
+	 *  Accepts a plan waiting for approval as the person edited it. The core refuses it unless the
+	 *  request is a plan approval, the option is its allow-once answer and the agent takes edited
+	 *  plans.
+	 */
+	chatAcceptPlan: (chatId: string, requestId: string, optionId: string, plan: string) => typedError<null, AppError>(__TAURI_INVOKE("chat_accept_plan", { chatId, requestId, optionId, plan })),
 	/**  Answers a question card; `null` dismisses it. */
 	chatRespondUi: (chatId: string, requestId: string, answer: UiAnswer | null) => typedError<null, AppError>(__TAURI_INVOKE("chat_respond_ui", { chatId, requestId, answer })),
 	/**  Changes one of the agent's options and returns the lists after the change (35 s at most). */
@@ -1186,6 +1192,11 @@ export type Capabilities = {
 	limits: boolean,
 	slash_commands: boolean,
 	add_dirs: boolean,
+	/**
+	 *  A plan waiting for approval can be accepted as the person edited it: the agent is told
+	 *  the edited text is the approved plan.
+	 */
+	plan_edits: boolean,
 	autonomy_levels: Autonomy[],
 };
 
@@ -3019,7 +3030,13 @@ export type PendingHandoff = {
 	uses_native_fork: boolean,
 };
 
-export type PermissionDecision = { type: "selected"; option_id: string } | { type: "cancelled" };
+export type PermissionDecision = { type: "selected"; option_id: string; 
+/**
+ *  The plan as the person edited it before accepting it: only on a plan approval that
+ *  was accepted with edits ([`Capabilities::plan_edits`]). `None` for every other answer,
+ *  and absent from what is stored and sent then, so older records read as they did.
+ */
+plan?: string | null } | { type: "cancelled" };
 
 export type PermissionOption = {
 	option_id: string,
