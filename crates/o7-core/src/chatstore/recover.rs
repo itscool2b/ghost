@@ -1027,6 +1027,14 @@ mod tests {
         assert_eq!(status("tb"), "running");
     }
 
+    /// Takes the database back to before the indexes recovery builds after startup: a database
+    /// created now starts with them (migration 22), one from before does not.
+    fn from_before_the_indexes(db: &TestDb) {
+        db.conn()
+            .execute_batch("DROP INDEX events_steering; DROP INDEX events_turn_ended;")
+            .expect("drop");
+    }
+
     fn plan(db: &TestDb, sql: &str) -> String {
         db.conn()
             .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
@@ -1059,7 +1067,11 @@ mod tests {
                 event_row(2, Some("t1"), &permission("t1.p1")),
             ],
         );
+        // A new database has them already; one from before gets them built, once.
+        assert_eq!(ensure_indexes(db.conn()).expect("new"), 0);
+        from_before_the_indexes(&db);
         assert!(!has_index(db.conn(), STEERING_INDEX).expect("steering"));
+        assert!(!has_index(db.conn(), TURN_ENDED_INDEX).expect("turn ended"));
         assert_eq!(ensure_indexes(db.conn()).expect("build"), 2);
         assert_eq!(ensure_indexes(db.conn()).expect("again"), 0);
         assert!(has_index(db.conn(), STEERING_INDEX).expect("steering"));
@@ -1153,9 +1165,13 @@ mod tests {
                     ),
                 ],
             );
-            if indexed {
-                ensure_indexes(db.conn()).expect("build");
+            if !indexed {
+                from_before_the_indexes(&db);
             }
+            assert_eq!(
+                has_index(db.conn(), TURN_ENDED_INDEX).expect("index"),
+                indexed
+            );
             let report = recover(
                 db.store.conn_mut(),
                 Scope::All,

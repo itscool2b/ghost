@@ -11,6 +11,7 @@ import {
   projectMemoryApi,
 } from "../../lib/projectMemory";
 import { type SetupApi, setupApi } from "../../lib/setup";
+import { MemoryNotes } from "./MemoryNotes";
 import { Row, Switch } from "./SettingsRow";
 import "./settings.css";
 import "./project-memory.css";
@@ -22,8 +23,9 @@ type Project = { readonly id: string; readonly name: string };
 const EDITED_HERE = "Edited in Settings";
 
 /**
- * Project memory: the notes every chat in a project starts with. One switch says whether agents
- * may keep them up to date, and the rest of the page is the notes themselves: type, then Save.
+ * Project memory: a short brief every chat in a project starts with, and notes that every chat
+ * sees listed and reads when one fits its task (MemoryNotes). One switch says whether agents may
+ * keep them up to date. The brief is typed and saved here; a note is opened from the list.
  *
  * There is no history or review queue here (owner, 10 November 2026). An agent's edit shows a
  * notice with Undo where it happens; a version saved elsewhere while this page holds a draft is
@@ -217,8 +219,8 @@ export function ProjectMemoryPanel({
       <div className="settings-section-heading">
         {heading}
         <p>
-          Notes every chat in a project starts with: decisions, conventions, where things are.
-          Agents read them with their first message, after your instruction files.
+          What every chat in a project starts with. The brief goes to every chat, so it is short:
+          your standing rules. Notes hold the rest, and an agent reads one when it fits the task.
         </p>
       </div>
       <div className="settings-group">
@@ -291,7 +293,7 @@ export function ProjectMemoryPanel({
           ) : null}
           <div className="settings-sheet">
             <div className="settings-sheet-head">
-              <strong>Notes</strong>
+              <strong>Brief</strong>
               <span
                 id={size}
                 className="settings-meter"
@@ -303,7 +305,7 @@ export function ProjectMemoryPanel({
                 }
               >
                 {bytes > MAX_MEMORY_BYTES
-                  ? `${(bytes - MAX_MEMORY_BYTES).toLocaleString()} bytes over the 16 KB limit`
+                  ? `${(bytes - MAX_MEMORY_BYTES).toLocaleString()} bytes over the 4 KB limit. Move part of it into a note.`
                   : `${bytes.toLocaleString()} of ${MAX_MEMORY_BYTES.toLocaleString()} bytes`}
                 <i aria-hidden="true" />
               </span>
@@ -316,7 +318,7 @@ export function ProjectMemoryPanel({
               value={markdown}
               disabled={busy}
               rows={16}
-              placeholder="What should every chat in this project know?"
+              placeholder="What must every chat in this project know? Keep it short: the rest belongs in notes."
               onChange={(event) => {
                 setMarkdown(event.currentTarget.value);
                 setNotice(null);
@@ -354,6 +356,14 @@ export function ProjectMemoryPanel({
         <p role="alert" className="project-memory-error">
           {error}
         </p>
+      ) : null}
+      {memory ? (
+        <MemoryNotes
+          projectId={projectId}
+          notes={(saved ?? memory).notes ?? []}
+          api={api}
+          onChanged={() => void refresh()}
+        />
       ) : null}
     </section>
   );

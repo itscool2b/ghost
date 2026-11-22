@@ -2162,9 +2162,9 @@ access: full_auto (current)
         &mut relay,
         &full,
         "memory",
-        json!({ "project": "p1", "markdown": "x".repeat(16 * 1024 + 1) }),
+        json!({ "project": "p1", "markdown": "x".repeat(4 * 1024 + 1) }),
     )
     .await;
     assert_eq!(long["error"], true);
-    assert!(text(&long).contains("16 KiB"));
+    assert!(text(&long).contains("4 KiB"));
 }

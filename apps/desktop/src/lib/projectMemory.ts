@@ -3,19 +3,37 @@ import { useEffect, useState } from "react";
 import {
   type ChatSummary,
   commands,
-  type MemoryRevision,
+  type DeleteMemoryNote,
+  type MemoryNote,
   type ProjectMemory,
   type ProjectMemoryChanged,
+  type SaveMemoryNote,
   type SaveProjectMemory,
 } from "../bindings";
 import { errorMessage } from "./errors";
 import { inTauri, settle } from "./ipc";
 
+/**
+ * A project's memory is a short brief, which every chat of the project receives, and notes, which
+ * every chat sees listed and its agent reads when one fits the task. Rust owns every rule: who may
+ * write, the limits, and that a save names the revision it read.
+ */
 export interface ProjectMemoryApi {
+  /** The brief, with the list of notes. */
   read(projectId: string): Promise<ProjectMemory>;
+  /** Saves the brief. */
   save(input: SaveProjectMemory): Promise<ProjectMemory>;
-  /** Every saved version, newest first. Nothing shows it; Undo reads what an edit replaced. */
-  history(projectId: string): Promise<MemoryRevision[]>;
+  /** One note with its text. */
+  readNote(projectId: string, name: string): Promise<MemoryNote>;
+  /** Saves one note whole: a new one when it names no revision, otherwise over the one it read. */
+  saveNote(input: SaveMemoryNote): Promise<MemoryNote>;
+  /** Removes a note; answers the memory as it then stands. */
+  deleteNote(input: DeleteMemoryNote): Promise<ProjectMemory>;
+  /**
+   * Takes back a run of edits to the brief or to one note, `first` to `last`, as your own save.
+   * Refused once the brief or the note has moved on from `last`.
+   */
+  undo(projectId: string, first: string, last: string): Promise<ProjectMemory>;
   /**
    * Calls `changed` after every committed memory change, the editor's or an agent's, until the
    * returned function is called. An agent's direct edit is named in `agent_edit`.
@@ -54,10 +72,22 @@ export function subscribeProjectMemory(
 export const projectMemoryApi: ProjectMemoryApi = {
   read: (id) => settle(commands.readProjectMemory(id)),
   save: (input) => settle(commands.saveProjectMemory(input)),
-  history: (id) => settle(commands.projectMemoryHistory(id)),
+  readNote: (id, name) => settle(commands.readMemoryNote(id, name)),
+  saveNote: (input) => settle(commands.saveMemoryNote(input)),
+  deleteNote: (input) => settle(commands.deleteMemoryNote(input)),
+  undo: (id, first, last) => settle(commands.undoMemoryEdit(id, first, last)),
   subscribe: subscribeProjectMemory,
 };
-export const MAX_MEMORY_BYTES = 16 * 1024;
+/** The most the brief holds: every chat of the project receives all of it. */
+export const MAX_MEMORY_BYTES = 4 * 1024;
+/** The most one note holds. */
+export const MAX_NOTE_BYTES = 16 * 1024;
+/** The most notes a project has. */
+export const MAX_NOTES = 32;
+/** The longest description of a note, in characters. */
+export const MAX_NOTE_DESCRIPTION = 120;
+/** What a note may be named: lowercase letters, digits and dashes, at most 40 characters. */
+export const NOTE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export function memoryBytes(markdown: string): number {
   return new TextEncoder().encode(markdown).length;
 }
@@ -87,6 +117,8 @@ export function agentChat(source: string): string | null {
  * chat, or "An agent" (`an agent` inside a sentence) when the chat is not known here.
  */
 export function agentLabel(chatId: string, chats: MemoryChats, sentenceStart = true): string {
+  // A linked bot's save names no chat.
+  if (chatId === "") return sentenceStart ? "A linked assistant" : "a linked assistant";
   const chat = chats.get(chatId);
   if (!chat) return sentenceStart ? "An agent" : "an agent";
   const title = chat.title?.trim();
@@ -124,13 +156,24 @@ export type AgentEditState =
   | { readonly status: "undone" }
   | { readonly status: "failed"; readonly message: string };
 
-/** The window's notice of agents' direct edits to one project, with what Undo restores. */
+/** A run of edits to the brief (`note` is `null`) or to one note: what Undo takes back as one. */
+export interface EditedSubject {
+  readonly note: string | null;
+  /** The earliest edit of the run and the latest. */
+  readonly first: string;
+  readonly last: string;
+  /** The latest edit removed the note. */
+  readonly deleted: boolean;
+}
+
+/** The window's notice of agents' direct edits to one project, with what Undo takes back. */
 export interface AgentEditNotice {
   readonly projectId: string;
-  /** The latest agent revision: Undo applies only while memory is still at it. */
+  /** The latest of these edits: another one folds in only when it follows this. */
   readonly revision: string;
-  /** The revision before these edits, which Undo restores; `null` when memory was empty. */
-  readonly restores: string | null;
+  /** What these edits changed, in the order each was first touched. */
+  readonly subjects: readonly EditedSubject[];
+  /** The chats whose agents made them; an empty id is a linked bot. */
   readonly chats: readonly string[];
   readonly edits: number;
   readonly state: AgentEditState;
@@ -150,24 +193,32 @@ export function noticeAgentEdit(
   if (!edit || !projectId) return notices;
   const current = notices.find((notice) => notice.projectId === projectId);
   if (current?.revision === edit.revision) return notices;
-  const next: AgentEditNotice =
-    current?.state.status === "shown" && current.revision === edit.parent_revision
-      ? {
-          ...current,
-          revision: edit.revision,
-          edits: current.edits + 1,
-          chats: current.chats.includes(edit.chat_id)
-            ? current.chats
-            : [...current.chats, edit.chat_id],
-        }
-      : {
-          projectId,
-          revision: edit.revision,
-          restores: edit.parent_revision,
-          chats: [edit.chat_id],
-          edits: 1,
-          state: { status: "shown" },
-        };
+  const note = edit.note ?? null;
+  const deleted = edit.deleted ?? false;
+  const folds = current?.state.status === "shown" && current.revision === edit.parent_revision;
+  const next: AgentEditNotice = folds
+    ? {
+        ...current,
+        revision: edit.revision,
+        edits: current.edits + 1,
+        chats: current.chats.includes(edit.chat_id)
+          ? current.chats
+          : [...current.chats, edit.chat_id],
+        // A second edit to the same thing lengthens its run; anything else starts one.
+        subjects: current.subjects.some((subject) => subject.note === note)
+          ? current.subjects.map((subject) =>
+              subject.note === note ? { ...subject, last: edit.revision, deleted } : subject,
+            )
+          : [...current.subjects, { note, first: edit.revision, last: edit.revision, deleted }],
+      }
+    : {
+        projectId,
+        revision: edit.revision,
+        subjects: [{ note, first: edit.revision, last: edit.revision, deleted }],
+        chats: [edit.chat_id],
+        edits: 1,
+        state: { status: "shown" },
+      };
   return [...notices.filter((notice) => notice.projectId !== projectId), next].slice(-MAX_NOTICES);
 }
 
@@ -209,10 +260,28 @@ export function agentEditToast(
       : chat
         ? [chat.agent, chat.title?.trim() ?? ""]
         : ["An agent"];
+  const [subject] = notice.subjects;
+  const one = notice.edits === 1 && subject !== undefined ? subject : null;
   return {
-    title: notice.edits > 1 ? `${notice.edits} edits to project memory` : "Project memory updated",
-    detail: [...who, project ?? ""].filter((part) => part !== "").join(" · "),
+    title:
+      one === null
+        ? `${notice.edits} edits to project memory`
+        : one.note === null
+          ? "Project memory updated"
+          : one.deleted
+            ? "Memory note deleted"
+            : "Memory note saved",
+    // Which notes, between who and where.
+    detail: [...who, editedNotes(notice), project ?? ""].filter((part) => part !== "").join(" · "),
   };
+}
+
+/** The notes a notice's edits touched, by name: "windows-build, release". */
+export function editedNotes(notice: AgentEditNotice): string {
+  return notice.subjects
+    .map((subject) => subject.note)
+    .filter((note): note is string => note !== null)
+    .join(", ");
 }
 
 /** "Claude Code in Fix the login flow updated project memory for o7." */
@@ -228,41 +297,37 @@ export function agentEditText(
     }.`;
   }
   const who = agentEditAuthor(notice, chats);
-  return notice.edits > 1
-    ? `${who} made ${notice.edits} edits to ${target}.`
-    : `${who} updated ${target}.`;
+  if (notice.edits > 1) return `${who} made ${notice.edits} edits to ${target}.`;
+  const [subject] = notice.subjects;
+  if (subject === undefined || subject.note === null) return `${who} updated ${target}.`;
+  return subject.deleted
+    ? `${who} deleted the note ${subject.note} from ${target}.`
+    : `${who} saved the note ${subject.note} in ${target}.`;
 }
 
 /**
- * Restores what a notice's edits replaced as a new revision of yours. It applies only while memory
- * is still at their result, so a later edit by anyone is never overwritten.
+ * Takes back what a notice's edits changed, as saves of your own: each run of edits to the brief
+ * or to a note goes back to what was there before it, newest first. Rust refuses a run whose
+ * brief or note has since moved on, so a later edit by anyone is never overwritten; what was
+ * already taken back stays taken back, and the error says the rest was not.
  */
 export async function undoAgentEdit(
-  api: Pick<ProjectMemoryApi, "history" | "save">,
+  api: Pick<ProjectMemoryApi, "undo">,
   notice: AgentEditNotice,
-  chats: MemoryChats,
 ): Promise<ProjectMemory> {
-  let markdown = "";
-  if (notice.restores !== null) {
-    const previous = (await api.history(notice.projectId)).find(
-      (revision) => revision.revision === notice.restores,
-    );
-    if (!previous)
-      throw new Error(
-        "What this edit replaced is not on this device. Open Project memory to change it by hand.",
-      );
-    markdown = previous.markdown;
+  let memory: ProjectMemory | null = null;
+  let done = 0;
+  for (const subject of [...notice.subjects].reverse()) {
+    try {
+      memory = await api.undo(notice.projectId, subject.first, subject.last);
+      done += 1;
+    } catch (failure) {
+      if (done === 0) throw failure;
+      throw new Error(`${done} of ${notice.subjects.length} was undone. ${errorMessage(failure)}`);
+    }
   }
-  return api.save({
-    project_id: notice.projectId,
-    expected_revision: notice.revision,
-    markdown,
-    reason: `Undid ${notice.edits > 1 ? `${notice.edits} edits` : "an edit"} by ${agentEditAuthor(
-      notice,
-      chats,
-      false,
-    )}`,
-  });
+  if (memory === null) throw new Error("There was nothing to undo.");
+  return memory;
 }
 
 /** The notices of agents' direct edits, from the memory events, with Undo and Dismiss. */
@@ -288,10 +353,10 @@ export function useAgentMemoryEdits(api: ProjectMemoryApi) {
           (entry) => entry.projectId !== notice.projectId || entry.revision !== notice.revision,
         ),
       ),
-    undo: async (notice: AgentEditNotice, chats: MemoryChats) => {
+    undo: async (notice: AgentEditNotice) => {
       update(notice, { status: "undoing" });
       try {
-        await undoAgentEdit(api, notice, chats);
+        await undoAgentEdit(api, notice);
         update(notice, { status: "undone" });
       } catch (failure) {
         update(notice, {

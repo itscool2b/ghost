@@ -122,6 +122,52 @@ pub async fn import_project_memory(
 ) -> Result<ProjectMemory, AppError> {
     Ok(state.sessions()?.import_project_memory(input).await?)
 }
+/// One note of a project's memory, with its text. The page lists notes from
+/// `read_project_memory` and reads one when it is opened.
+#[tauri::command]
+#[specta::specta]
+pub async fn read_memory_note(
+    state: State<'_, AppState>,
+    project_id: String,
+    name: String,
+) -> Result<MemoryNote, AppError> {
+    Ok(state
+        .sessions()?
+        .read_memory_note(&project_id, &name)
+        .await?)
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn save_memory_note(
+    state: State<'_, AppState>,
+    input: SaveMemoryNote,
+) -> Result<MemoryNote, AppError> {
+    Ok(state.sessions()?.save_memory_note(input).await?)
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_memory_note(
+    state: State<'_, AppState>,
+    input: DeleteMemoryNote,
+) -> Result<ProjectMemory, AppError> {
+    Ok(state.sessions()?.delete_memory_note(input).await?)
+}
+/// Takes back a run of edits an agent or a linked bot made to the brief or to one note: the
+/// notice's Undo. `first` is the earliest edit of the run and `last` the latest. Rust decides
+/// whether they can still be undone, so a later edit is never taken with them.
+#[tauri::command]
+#[specta::specta]
+pub async fn undo_memory_edit(
+    state: State<'_, AppState>,
+    project_id: String,
+    first: String,
+    last: String,
+) -> Result<ProjectMemory, AppError> {
+    Ok(state
+        .sessions()?
+        .undo_memory_edit(&project_id, &first, &last)
+        .await?)
+}
 
 #[cfg(test)]
 mod tests {
@@ -136,6 +182,8 @@ mod tests {
                 revision: revision.into(),
                 parent_revision: None,
                 chat_id: "chat".into(),
+                note: None,
+                deleted: false,
             }),
         };
         for revision in ["one", "two", "three"] {
