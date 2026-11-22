@@ -2773,6 +2773,179 @@ mod tests {
         assert_eq!(searchable(store).await, 1, "and it is not stored twice");
     }
 
+    /// A profile the size of a long-used one: `events` rows of about 1 KiB each over 40 chats whose
+    /// turns ended and were compacted, and three chats that were mid-turn when the app quit, one of
+    /// them with a turn far above the inline limit.
+    fn large_profile(store: &Store, events: u32) {
+        let conn = store.conn();
+        let filler = super::test_support::payload(&O7Event::Notice {
+            level: NoticeLevel::Info,
+            message: "x".repeat(1000),
+        });
+        let chat = |folder: &str| {
+            rows::create_chat(
+                conn,
+                &NewChat {
+                    agent_host: Default::default(),
+                    agent_id: "mock".into(),
+                    folder: PathBuf::from(folder),
+                    device_id: "dev".into(),
+                    now: 1,
+                },
+            )
+            .expect("chat")
+            .id
+        };
+        let fill = |chat_id: &str, turn: &str, status: &str, compacted: bool, count: u32| {
+            conn.execute(
+                "INSERT INTO turns (id, chat_id, seq, status, started_at, device_id, first_event_seq, compacted_at) \
+                 VALUES (?1, ?2, 1, ?3, 1, 'dev', 0, ?4)",
+                params![turn, chat_id, status, compacted.then_some(1)],
+            )
+            .expect("turn");
+            conn.execute(
+                "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?4 - 1) \
+                 INSERT INTO events (id, chat_id, turn_id, seq, kind, payload, created_at, device_id) \
+                 SELECT ?2 || '-' || i, ?1, ?2, i, 'notice', ?3, 1, 'dev' FROM n",
+                params![chat_id, turn, filler, count],
+            )
+            .expect("events");
+        };
+        conn.execute_batch("BEGIN").expect("begin");
+        for index in 0..40 {
+            let id = chat(&format!("/w/{index}"));
+            fill(
+                &id,
+                &format!("done-{index}"),
+                "completed",
+                true,
+                events / 40,
+            );
+        }
+        for (index, count) in [(0, 40_000), (1, 400), (2, 40)] {
+            let id = chat(&format!("/w/live-{index}"));
+            fill(&id, &format!("live-{index}"), "running", false, count);
+        }
+        conn.execute_batch("COMMIT").expect("commit");
+    }
+
+    /// Measures startup on a large profile (`cargo test -p o7-core --lib large_profile -- --ignored
+    /// --nocapture`; `O7_LARGE_EVENTS` sets its size, 300,000 events when unset). It prints what
+    /// the search this version dropped costs on the same data, then holds startup recovery and the
+    /// first list to a second on a first start (no indexes yet) and on the next (indexes built).
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "builds a database of hundreds of megabytes"]
+    async fn startup_on_a_large_profile_does_not_read_its_events() {
+        let events = std::env::var("O7_LARGE_EVENTS")
+            .ok()
+            .and_then(|count| count.parse().ok())
+            .unwrap_or(300_000);
+        let config = WriterConfig {
+            leftovers: true,
+            ..WriterConfig::STANDARD
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let built = std::time::Instant::now();
+        // When the writer was started: recovery is its first op.
+        let begun = Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
+        let mark = Arc::clone(&begun);
+        let fixture = start_in(dir, config, move |store| {
+            large_profile(store, events);
+            eprintln!("built {events} events in {:?}", built.elapsed());
+            let scan = std::time::Instant::now();
+            let pending: i64 = store
+                .conn()
+                .query_row(
+                    "SELECT count(*) FROM (SELECT DISTINCT e.chat_id FROM events e \
+                     WHERE e.kind='steering_status' AND json_extract(e.payload,'$.state')='pending')",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("the search startup used to run");
+            eprintln!(
+                "the search startup used to run over every event: {:?} (found {pending})",
+                scan.elapsed()
+            );
+            *mark.lock().expect("mark") = std::time::Instant::now();
+        });
+        let store = &fixture.store;
+        let started = *begun.lock().expect("begun");
+        let report = store.recovered().await;
+        let recovered = started.elapsed();
+        let chats = store.chats().await.expect("chats").len();
+        let listed = started.elapsed();
+        eprintln!("first start: recovered in {recovered:?}, {chats} chats listed after {listed:?}");
+        assert_eq!(report.interrupted_turns, 3);
+        assert_eq!(chats, 43);
+        assert!(
+            listed < Duration::from_secs(1),
+            "the first list waited {listed:?}"
+        );
+        // The pass after startup builds the indexes and compacts the large turn it was left.
+        let pass = std::time::Instant::now();
+        for _ in 0..2_400 {
+            let left = on_store(store, |conn| {
+                let turns: i64 = conn
+                    .query_row(
+                        "SELECT count(*) FROM turns WHERE status <> 'running' AND compacted_at IS NULL",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("turns");
+                let indexes: i64 = conn
+                    .query_row(
+                        "SELECT count(*) FROM sqlite_schema WHERE type = 'index' \
+                         AND name IN ('events_steering', 'events_turn_ended')",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("indexes");
+                (turns, indexes)
+            })
+            .await;
+            if left == (0, 2) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        eprintln!("the pass after startup finished in {:?}", pass.elapsed());
+        assert!(store.shutdown(Duration::from_secs(30)).await);
+
+        // The next start, with a turn left running again.
+        let profile = fixture.profile.clone();
+        let owner = ProfileOwner::acquire(&profile).expect("owner");
+        let (reopened, _) = Store::open(&profile).expect("reopen");
+        reopened
+            .conn()
+            .execute_batch(
+                "DELETE FROM events WHERE turn_id = 'live-1' AND kind = 'turn_ended'; \
+                 UPDATE turns SET status = 'running', stop_reason = NULL, ended_at = NULL, \
+                 compacted_at = NULL WHERE id = 'live-1';",
+            )
+            .expect("leave a turn running");
+        let again = ChatStore::start_with(
+            reopened,
+            owner,
+            &profile,
+            "dev".into(),
+            Handle::current(),
+            config,
+        )
+        .expect("start");
+        let started = std::time::Instant::now();
+        let report = again.recovered().await;
+        let recovered = started.elapsed();
+        let chats = again.chats().await.expect("chats").len();
+        let listed = started.elapsed();
+        eprintln!("next start: recovered in {recovered:?}, {chats} chats listed after {listed:?}");
+        assert_eq!(report.interrupted_turns, 1);
+        assert!(
+            listed < Duration::from_secs(1),
+            "the next list waited {listed:?}"
+        );
+        assert!(again.shutdown(Duration::from_secs(30)).await);
+    }
+
     /// Marks the child copy of the crash tests; holds the data root it works on.
     const CRASH_CHILD: &str = "O7_CORE_TEST_CRASH_CHILD_ROOT";
 
