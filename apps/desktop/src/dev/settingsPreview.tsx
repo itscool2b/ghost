@@ -19,10 +19,12 @@ import { AppStore } from "../lib/chat/appStore";
 import { FakeTransport } from "../lib/chat/testing";
 import type { DictationApi } from "../lib/dictation";
 import { DEFAULT_GENERAL, type GeneralApi, type SetupApi } from "../lib/setup";
+import { speechPlayer } from "../lib/speech";
 import type { UpdatesApi } from "../lib/updates";
 import { createCustomizeFixture } from "./customizePreview";
 import { oneProfile } from "./profilesFixture";
 import { remoteFixture } from "./remoteFixture";
+import { speechFixture } from "./speechFixture";
 
 // `?media=off`: Linux without GStreamer's plugins, where the window makes no sound.
 const mediaOff = new URLSearchParams(location.search).get("media") === "off";
@@ -110,6 +112,7 @@ const setup: SetupApi = {
     if (action.type === "mobile") general.mobile = action.enabled;
     if (action.type === "automatic_updates") general.automatic_updates = action.enabled;
     if (action.type === "coordinated_projects") general.coordinated_projects = action.enabled;
+    if (action.type === "speech_voice") general.speech_voice = action.voice;
     preferences.preferences.revision++;
     return structuredClone(preferences);
   },
@@ -263,6 +266,9 @@ Object.assign(window, {
 });
 
 const remote = remoteFixture();
+// Voice's read aloud: a built-in model that makes no sound (speechFixture.ts).
+window.speechFixture = speechFixture();
+speechPlayer.use(window.speechFixture.api);
 
 function Preview() {
   const params = new URLSearchParams(location.search);
@@ -293,6 +299,7 @@ function Preview() {
       general={general}
       updates={updates}
       dictation={dictation}
+      speech={window.speechFixture?.api}
       remote={remote}
       workspace={customize.workspace}
       projectId={target.type === "global" ? null : "fixture-project"}

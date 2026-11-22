@@ -339,5 +339,45 @@
         "source": "https://raw.githubusercontent.com/OpenByteDev/dlopen2/cc80e4a0a90d499b677fdf7743699b4b3a43a989/LICENSE"
       }
     ]
+  },
+  "cargo/xn/0.2.15": {
+    "revision": "5e2ff0ac6da66d209858f5ab526d7d4e0317b0be",
+    "files": [
+      {
+        "file": "upstream/c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4.txt",
+        "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "source": "https://raw.githubusercontent.com/LaurentMazare/xn/5e2ff0ac6da66d209858f5ab526d7d4e0317b0be/LICENSE-APACHE"
+      },
+      {
+        "file": "upstream/23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3.txt",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "source": "https://raw.githubusercontent.com/LaurentMazare/xn/5e2ff0ac6da66d209858f5ab526d7d4e0317b0be/LICENSE-MIT"
+      }
+    ]
+  },
+  "cargo/pulp-wasm-simd-flag/0.1.1": {
+    "revision": "5eb07fd7b68edf0a5e19f71737d315f72a510295",
+    "files": [
+      {
+        "file": "upstream/d64f878c89bd5f1e5ada7e4aad57690b122727cf5229b7b87ea1980c188da1d9.txt",
+        "sha256": "d64f878c89bd5f1e5ada7e4aad57690b122727cf5229b7b87ea1980c188da1d9",
+        "source": "https://raw.githubusercontent.com/sarah-quinones/pulp/5eb07fd7b68edf0a5e19f71737d315f72a510295/LICENSE"
+      }
+    ]
+  },
+  "cargo/dasp_frame/0.11.0": {
+    "revision": "221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc",
+    "files": [
+      {
+        "file": "upstream/756c8d2ab2dc24f256e1455b5f03937f4933d83d7bc9f2d55009fc962377d512.txt",
+        "sha256": "756c8d2ab2dc24f256e1455b5f03937f4933d83d7bc9f2d55009fc962377d512",
+        "source": "https://raw.githubusercontent.com/rustaudio/dasp/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-APACHE"
+      },
+      {
+        "file": "upstream/b1d6df41ed3aa96806e74c729444d7c121d90e6660a6aed01d298e03fde475a0.txt",
+        "sha256": "b1d6df41ed3aa96806e74c729444d7c121d90e6660a6aed01d298e03fde475a0",
+        "source": "https://raw.githubusercontent.com/rustaudio/dasp/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-MIT"
+      }
+    ]
   }
 }

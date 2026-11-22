@@ -5,9 +5,9 @@
 // Mac has no identity yet the bundle is signed ad hoc, as CI does, with a warning: a machine
 // without the certificate can still build. APPLE_SIGNING_IDENTITY, when set, always wins (it is
 // Tauri's own setting). Elsewhere this is plain `tauri build`. Arguments are passed on to it. See
-// ../README.md. Every bundle first fetches dictation's speech models, or verifies the ones already
-// fetched, against their pinned SHA-256 (scripts/dictation-models.mjs), since the installer carries
-// them. A Linux AppImage carries GStreamer's base and good plugins, staged from this machine and
+// ../README.md. Every bundle first fetches dictation's models and read aloud's voice model, or
+// verifies the ones already fetched, against their pinned SHA-256 (scripts/dictation-models.mjs),
+// since the installer carries them. A Linux AppImage carries GStreamer's base and good plugins, staged from this machine and
 // checked in the image afterwards, unless `--without-media` says otherwise
 // (scripts/appimage-media.mjs).
 //
@@ -102,7 +102,7 @@ try {
 } catch (error) {
   media.cleanup();
   console.error(
-    `o7: the dictation models are not ready, so the bundle would lack them: ${error.message}`,
+    `o7: the dictation and voice models are not ready, so the bundle would lack them: ${error.message}`,
   );
   process.exit(1);
 }

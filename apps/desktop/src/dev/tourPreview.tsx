@@ -21,12 +21,16 @@ import { AppStore } from "../lib/chat/appStore";
 import {
   attachResult,
   chatSummary,
+  ev,
   FakeTransport,
   historyPage,
+  items,
+  numbered,
   sessionInfo,
 } from "../lib/chat/testing";
 import { MobileStore } from "../lib/mobile";
 import { DEFAULT_GENERAL, type SetupApi } from "../lib/setup";
+import { speechPlayer } from "../lib/speech";
 import { NOT_TOURED, TOUR_STOPS } from "../lib/tour/stops";
 import { type WorkspaceApi, WorkspaceStore } from "../lib/workspace";
 import { worktreeRecoveryApi } from "../lib/worktreeRecovery";
@@ -34,6 +38,7 @@ import { FixtureBrowser } from "./browserPreview";
 import { fixtureFolderMatches } from "./folderMatches";
 import { FakeMobile } from "./mobileFixture";
 import { withPreviewContext } from "./previewContext";
+import { speechFixture } from "./speechFixture";
 
 declare global {
   interface Window {
@@ -123,6 +128,16 @@ const info: AppInfo = {
   media: true,
   media_notice: null,
 };
+// One finished turn in every chat, so an answer's own controls (the speaker) are there to visit.
+const answered = [
+  ev.turnStarted("tour-turn"),
+  ev.user("tour-turn.u", "Why is the checkout total a cent off?"),
+  ev.message(
+    "tour-answer",
+    "The total was rounded per line before tax. It now rounds once, at the end, and the three totals that were a cent off match the receipts.",
+  ),
+  ev.turnEnded("tour-turn"),
+];
 const unavailable = async (): Promise<never> => {
   throw new Error("This fixture only shows the tour.");
 };
@@ -171,10 +186,15 @@ function Preview() {
         attach: async (id) => {
           const chat = chats.find((entry) => entry.id === id);
           if (!chat) throw new Error("Unknown fixture chat.");
-          return attachResult(id, 1, historyPage(id, []), {
-            chat,
-            session: sessionInfo({ status: chat.status === "ready" ? "ready" : "stopped" }),
-          });
+          return attachResult(
+            id,
+            answered.length,
+            historyPage(id, items(numbered(answered.map((event) => [null, event])))),
+            {
+              chat,
+              session: sessionInfo({ status: chat.status === "ready" ? "ready" : "stopped" }),
+            },
+          );
         },
         send: unavailable,
         chatCreate: unavailable,
@@ -225,6 +245,8 @@ function Preview() {
 }
 
 export function mountTourPreview(container: HTMLElement): void {
+  window.speechFixture = speechFixture();
+  speechPlayer.use(window.speechFixture.api);
   window.tourFixture = {
     seen: () => [...seen],
     stops: TOUR_STOPS.map((stop) => stop.id),

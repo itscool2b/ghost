@@ -179,6 +179,10 @@ pub struct GeneralPreferences {
     /// routines. Off until the person turns it on in Settings > Experiments; off again stops the
     /// project tools at once and keeps what the projects hold.
     pub coordinated_projects: bool,
+    /// The voice answers are read aloud in (owner, 22 November 2026): one of the voices bundled
+    /// with the app, by the id the desktop's speech module gives it. `None`, or a voice a build
+    /// no longer has: the voice model's own.
+    pub speech_voice: Option<String>,
 }
 
 impl Default for GeneralPreferences {
@@ -202,6 +206,7 @@ impl Default for GeneralPreferences {
             mobile: true,
             automatic_updates: true,
             coordinated_projects: false,
+            speech_voice: None,
         }
     }
 }
@@ -305,6 +310,10 @@ pub enum SetupAction {
     /// Turns the coordinated projects experiment on or off.
     CoordinatedProjects {
         enabled: bool,
+    },
+    /// Chooses the voice answers are read aloud in; `None` returns to the model's own.
+    SpeechVoice {
+        voice: Option<String>,
     },
 }
 
@@ -541,6 +550,12 @@ impl OnboardingStore {
             }
             SetupAction::CoordinatedProjects { enabled } => {
                 next.preferences.general.coordinated_projects = enabled;
+            }
+            SetupAction::SpeechVoice { voice } => {
+                if let Some(voice) = &voice {
+                    identifier(voice, 64, "The voice is invalid.")?;
+                }
+                next.preferences.general.speech_voice = voice;
             }
         }
         next.preferences.revision = revision
@@ -1288,6 +1303,53 @@ mod tests {
         assert!(general.coordinated_projects);
     }
 
+    /// The voice for reading aloud is the model's own until one is chosen, also for a profile
+    /// from before the setting, and a choice is a bounded single line.
+    #[test]
+    fn the_read_aloud_voice_is_saved_and_refuses_anything_but_a_name() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("onboarding.json"),
+            br#"{"version":1,"boot_seen":true,"preferences":{"revision":2,"step":"project","motion":"full","completed":true,"first_project_id":null,"general":{"notifications":false}}}"#,
+        )
+        .unwrap();
+        let store = OnboardingStore::open(dir.path()).unwrap();
+        assert!(store.snapshot().unwrap().notice.is_none());
+        assert_eq!(store.preferences().general.speech_voice, None);
+        let chosen = store
+            .apply(
+                2,
+                SetupAction::SpeechVoice {
+                    voice: Some("NbpkqMVS3CJeq2j8".into()),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            chosen.preferences.general.speech_voice.as_deref(),
+            Some("NbpkqMVS3CJeq2j8")
+        );
+        assert!(!chosen.preferences.general.notifications, "kept");
+        for bad in [String::new(), "x".repeat(65), "line\nbreak".into()] {
+            assert!(matches!(
+                store.apply(3, SetupAction::SpeechVoice { voice: Some(bad) }),
+                Err(SetupError::Invalid(_))
+            ));
+        }
+        assert_eq!(
+            OnboardingStore::open(dir.path())
+                .unwrap()
+                .preferences()
+                .general
+                .speech_voice
+                .as_deref(),
+            Some("NbpkqMVS3CJeq2j8")
+        );
+        let cleared = store
+            .apply(3, SetupAction::SpeechVoice { voice: None })
+            .unwrap();
+        assert_eq!(cleared.preferences.general.speech_voice, None);
+    }
+
     #[test]
     fn general_preferences_are_saved_and_reopen() {
         let dir = tempfile::tempdir().unwrap();
@@ -1339,6 +1401,7 @@ mod tests {
                 mobile: true,
                 automatic_updates: true,
                 coordinated_projects: false,
+                speech_voice: None,
             }
         );
     }

@@ -73,6 +73,12 @@ wry = { version = "=0.57.1", default-features = false, features = ["os-webview",
 cpal = "=0.18.2"
 rubato = "=0.16.2"
 transcribe-cpp = "=0.4.1"
+# Reading aloud (src/speech): Gradium's Phonon text-to-speech through its own Rust runtime, on
+# the CPU, from the model bundled in resources/speech. `hf` reads the model's tokenizer; the
+# download, server and GPU features stay off, so the crate makes no network request. `xn` is its
+# tensor library, named here only to set how many threads it may use.
+ptts = { version = "=0.7.1", default-features = false, features = ["hf"] }
+xn = { version = "=0.2.15", default-features = false }
 
 [target.'cfg(any(windows, target_os = "macos", target_os = "linux"))'.dependencies]
 keepawake = "=0.6.1"

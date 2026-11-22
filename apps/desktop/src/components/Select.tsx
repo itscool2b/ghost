@@ -415,7 +415,13 @@ export function Select({
           if (open && !list.current?.contains(event.relatedTarget as Node | null)) setOpen(false);
           onBlur?.(event);
         }}
-        onClick={() => (open ? setOpen(false) : show(selected))}
+        onClick={(event) => {
+          // WebKit does not focus a button it is clicked on: without this the list a click opened
+          // gets no keys, and Escape reaches whatever is behind it.
+          event.currentTarget.focus();
+          if (open) setOpen(false);
+          else show(selected);
+        }}
         onKeyDown={onKeyDown}
       >
         {/*

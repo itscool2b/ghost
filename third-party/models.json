@@ -32,5 +32,34 @@
         "sha256": "f1ea43096a23b40d4b14fcf131586710035444e69e35051c5d83c60725b50555"
       }
     ]
+  },
+  "model.q8.gguf": {
+    "name": "Phonon 31M English voice model (model.q8.gguf, with its config.json, tokenizer.json and default-voice.safetensors)",
+    "repo": "gradium/phonon-31m-en",
+    "revision": "8f7a37c94a4c58b04c8287300c53f11d2e208eae",
+    "license": "Apache-2.0",
+    "attribution": "Phonon 31M (https://huggingface.co/gradium/phonon-31m-en) is by Gradium. Its weights, tokenizer and voice are released under the Apache License 2.0. It builds on Pocket TTS and the Mimi codec, developed by Kyutai. o7 bundles the 8-bit weights, the configuration, the tokenizer and the model's own voice as Gradium publishes them, without changes, and runs them with Gradium's ptts runtime.",
+    "covers": ["config.json", "tokenizer.json", "default-voice.safetensors"],
+    "files": [
+      {
+        "name": "LICENSE",
+        "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      }
+    ]
+  },
+  "voices/": {
+    "name": "Phonon English voices (37 voices, voices/*.safetensors)",
+    "repo": "gradium/phonon-voices",
+    "revision": "0ee17205f254b5abc43b266c8a0f215565c352f7",
+    "license": "Apache-2.0",
+    "attribution": "The voices are from Gradium's catalogue for Phonon (https://huggingface.co/gradium/phonon-voices), whose model card releases them under the Apache License 2.0. o7 bundles the catalogue's English voices as Gradium publishes them, without changes, and takes each voice's name and description from the catalogue. The catalogue ships no license file of its own; the Apache 2.0 text here is the one Gradium ships with the model.",
+    "covers_prefix": "voices/",
+    "files": [
+      {
+        "name": "LICENSE",
+        "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "url": "https://huggingface.co/gradium/phonon-31m-en/blob/8f7a37c94a4c58b04c8287300c53f11d2e208eae/LICENSE"
+      }
+    ]
   }
 }

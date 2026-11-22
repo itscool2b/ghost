@@ -368,6 +368,21 @@ export const commands = {
 	dictationStart: (id: string, channel: Channel<DictationEvent>) => typedError<null, AppError>(__TAURI_INVOKE("dictation_start", { id, channel })),
 	dictationStop: (id: string) => __TAURI_INVOKE<void>("dictation_stop", { id }),
 	dictationCancel: (id: string) => __TAURI_INVOKE<void>("dictation_cancel", { id }),
+	/**  Whether reading aloud can run here, and the voices to choose from. */
+	speechStatus: () => __TAURI_INVOKE<SpeechStatus>("speech_status"),
+	/**
+	 *  Reads `text` aloud in `voice` (the model's own when none is named) until it is all said or
+	 *  `speech_stop`. Whatever was being read stops first. The text is spoken on this device and is
+	 *  neither stored nor logged.
+	 */
+	speechSpeak: (id: string, text: string, voice: string | null, channel: Channel<SpeechEvent>) => typedError<null, AppError>(__TAURI_INVOKE("speech_speak", { id, text, voice, channel })),
+	speechStop: (id: string) => __TAURI_INVOKE<void>("speech_stop", { id }),
+	/**
+	 *  Loads the model and makes `voice` ready ahead of time, so that the first request starts at
+	 *  once. Asked for when the pointer reaches a read-aloud button; it says nothing and reports
+	 *  nothing, and one preparation runs at a time.
+	 */
+	speechPrepare: (voice: string | null) => typedError<null, AppError>(__TAURI_INVOKE("speech_prepare", { voice })),
 	/**  Every chat's agent processes and what each started. */
 	processesSnapshot: () => typedError<ProcessesSnapshot, AppError>(__TAURI_INVOKE("processes_snapshot")),
 	/**  Stops `pid` and everything under it, if it runs under one of `chat_id`'s agents. */
@@ -2235,6 +2250,12 @@ export type GeneralPreferences = {
 	 *  project tools at once and keeps what the projects hold.
 	 */
 	coordinated_projects: boolean,
+	/**
+	 *  The voice answers are read aloud in (owner, 22 November 2026): one of the voices bundled
+	 *  with the app, by the id the desktop's speech module gives it. `None`, or a voice a build
+	 *  no longer has: the voice model's own.
+	 */
+	speech_voice: string | null,
 };
 
 export type GitFileState = {
@@ -3816,7 +3837,9 @@ export type SetupAction = { type: "visit"; step: SetupStep } | { type: "motion";
 /**  Turns on or off looking for a newer o7 by itself. */
 { type: "automatic_updates"; enabled: boolean } | 
 /**  Turns the coordinated projects experiment on or off. */
-{ type: "coordinated_projects"; enabled: boolean };
+{ type: "coordinated_projects"; enabled: boolean } | 
+/**  Chooses the voice answers are read aloud in; `None` returns to the model's own. */
+{ type: "speech_voice"; voice: string | null };
 
 export type SetupCommand = {
 	program: string,
@@ -3917,6 +3940,54 @@ export type SmokeScenario =
  *  For local runs only: a real agent spends the user's quota.
  */
 "agent";
+
+/**
+ *  What one request to read aloud is doing. A request ends with exactly one of `Done`,
+ *  `Stopped` or `Failed`.
+ */
+export type SpeechEvent = 
+/**
+ *  The voice model is loading, or the voice is being made ready: the first time, and the
+ *  first time for each voice.
+ */
+{ state: "preparing" } | 
+/**  Sound is coming out. */
+{ state: "speaking" } | 
+/**  All of it was said. */
+{ state: "done" } | 
+/**  It was stopped: by the person, by another request, or because its page went away. */
+{ state: "stopped" } | { state: "failed"; message: string; reason: SpeechFailure };
+
+/**  Why reading aloud failed, so the interface offers what can help. */
+export type SpeechFailure = 
+/**  The bundled voice model is missing or failed to load: reinstalling restores it. */
+"model" | 
+/**  There is no output device, or it stopped. */
+"output" | 
+/**  This processor lacks the instructions the speech engine needs. */
+"unsupported" | "other";
+
+export type SpeechStatus = {
+	/**  The bundled model is here. */
+	installed: boolean,
+	/**  This processor can run the speech engine. */
+	supported: boolean,
+	name: string,
+	/**  The voices that can be chosen, the model's own first. */
+	voices: SpeechVoice[],
+};
+
+/**  A voice the person can choose. */
+export type SpeechVoice = {
+	/**  What a request names: `default`, or the catalogue's id for the voice. */
+	id: string,
+	name: string,
+	/**  `en-us`, `en-gb`, or `characters` for the storybook voices. */
+	locale: string,
+	gender: string | null,
+	/**  One line on how it sounds, from the catalogue. */
+	description: string,
+};
 
 export type SteeringAck = {
 	message_id: string,

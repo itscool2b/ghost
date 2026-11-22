@@ -47,6 +47,7 @@ describe("Settings' General defaults", () => {
       mobile: true,
       automatic_updates: true,
       coordinated_projects: false,
+      speech_voice: null,
     });
   });
 

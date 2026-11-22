@@ -35,12 +35,14 @@ import {
 } from "../lib/chat/testing";
 import type { RoleCatalog } from "../lib/roles";
 import { NO_ROLES } from "../lib/roles";
+import { speechPlayer } from "../lib/speech";
 import { TerminalPanels } from "../lib/terminalPanel";
 import { createAccountsFixture } from "./accountsFixture";
 import { MISSING_FOLDER, missingWorktreeGit } from "./missingWorktreeFixture";
 import { NewChatPreview } from "./newChatPreview";
 import type { NewChatScenario } from "./newChatWorktreeFixture";
 import { withPreviewContext } from "./previewContext";
+import { speechFixture } from "./speechFixture";
 import { taskPreviewEvents, taskPreviewRecords } from "./tasksPreview";
 import { runFixture, terminalPanelFixture } from "./terminalPanelFixture";
 
@@ -1514,6 +1516,9 @@ function Preview() {
 }
 
 export function mountPreview(container: HTMLElement): void {
+  // Read aloud's stand-in: a voice that is built in and makes no sound.
+  window.speechFixture = speechFixture();
+  speechPlayer.use(window.speechFixture.api);
   const preview = <Preview />;
   createRoot(container).render(
     new URLSearchParams(location.search).has("strict") ? (

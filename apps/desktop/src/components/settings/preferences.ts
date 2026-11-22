@@ -100,6 +100,8 @@ export function withAction(preferences: SetupPreferences, action: SetupAction): 
       return { ...preferences, general: { ...general, automatic_updates: action.enabled } };
     case "coordinated_projects":
       return { ...preferences, general: { ...general, coordinated_projects: action.enabled } };
+    case "speech_voice":
+      return { ...preferences, general: { ...general, speech_voice: action.voice } };
     default:
       return preferences;
   }

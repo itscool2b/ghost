@@ -42,6 +42,7 @@ import { devicePanels } from "../../lib/mobile";
 import { editorName } from "../../lib/projectTools";
 import { buildOffer, buildPrompt, planRole, type RoleCatalog, roleChoice } from "../../lib/roles";
 import { generalApi } from "../../lib/setup";
+import { speechPlayer } from "../../lib/speech";
 import type { TerminalPanels } from "../../lib/terminalPanel";
 import { runLabel } from "../../lib/worktreeRun";
 import { type AnnotationTarget, BrowserPanel } from "../browser/BrowserPanel";
@@ -141,6 +142,9 @@ export function ChatView({
   readonly roleCatalog?: RoleCatalog;
 }) {
   const [store] = useState(() => new ChatStore(chatId, transport, now ? { now } : {}));
+  // Reading aloud belongs to the chat it was started in: closing the chat, or opening another,
+  // ends it, so no voice is left talking with its stop button out of reach.
+  useEffect(() => () => speechPlayer.stop(), []);
   // New chat's first message (type first): sent once as the chat opens, as its message box would
   // send it. Words that cannot go wait in the message box instead of being lost.
   useEffect(() => {

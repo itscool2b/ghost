@@ -295,6 +295,19 @@ h1 + .settings-group {
   justify-self: end;
 }
 
+/* Read aloud's voice: the list, and a button that plays a sample of the one chosen. */
+.settings-voice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--g-space-8);
+}
+
+.settings-voice > .g-button {
+  gap: var(--g-space-6);
+}
+
 /* A choice from a list (the default agent and model): an input's 36px, 12px in like the track. */
 .settings-select {
   width: 220px;

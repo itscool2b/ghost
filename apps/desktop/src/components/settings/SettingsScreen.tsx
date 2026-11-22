@@ -42,6 +42,7 @@ import type { MobileStore } from "../../lib/mobile";
 import { type ProfileApi, profileApi } from "../../lib/profiles";
 import { type RemoteApi, remoteApi } from "../../lib/remote";
 import { type GeneralApi, generalApi, type SetupApi, setupApi } from "../../lib/setup";
+import { type SpeechApi, speechApi } from "../../lib/speech";
 import { type UpdatesApi, updatesApi } from "../../lib/updates";
 import { EMPTY_WORKSPACE, type WorkspaceStore } from "../../lib/workspace";
 import { PluginLibraryScreen } from "../library/PluginLibraryScreen";
@@ -149,6 +150,7 @@ export function SettingsScreen({
   general = generalApi,
   updates = updatesApi,
   dictation = dictationApi,
+  speech = speechApi,
   remote = remoteApi,
   profiles = profileApi,
   reveal = revealDataDir,
@@ -178,6 +180,8 @@ export function SettingsScreen({
   readonly general?: GeneralApi;
   readonly updates?: UpdatesApi;
   readonly dictation?: DictationApi;
+  /** Reading aloud, for the Voice page; previews pass a synthetic one. */
+  readonly speech?: SpeechApi;
   readonly remote?: RemoteApi;
   /** The data folder's profiles, for Data & privacy's list; previews pass a synthetic one. */
   readonly profiles?: ProfileApi;
@@ -472,7 +476,7 @@ export function SettingsScreen({
           )}
           {pane("appearance", <AppearancePage prefs={prefs} />)}
           {pane("chats", <ChatsPage prefs={prefs} editors={general.editors} />)}
-          {pane("voice", <VoicePage api={dictation} />)}
+          {pane("voice", <VoicePage api={dictation} speech={speech} prefs={prefs} />)}
           {pane(
             "shortcuts",
             <dl className="settings-group settings-shortcuts" data-setting="Shortcuts">
