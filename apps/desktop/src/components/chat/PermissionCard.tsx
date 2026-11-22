@@ -59,6 +59,7 @@ export function PermissionCard({
   onLoadBlob,
   agentName = "The agent",
   onAddToPlan,
+  onAcceptPlanEdited,
   planBuild,
 }: {
   readonly item: PermissionItem;
@@ -67,11 +68,17 @@ export function PermissionCard({
   readonly onRespond: (optionId: string | null) => void;
   /** Names the agent on a plan card. */
   readonly agentName?: string;
-  /** A plan card's Add to the plan: decline it with a note the agent keeps planning with. */
+  /** A plan card's ways back: decline it with words the agent keeps planning with. */
   readonly onAddToPlan?: (
     requestId: string,
     declineOptionId: string,
-    note: string,
+    text: string,
+  ) => Promise<void>;
+  /** A plan card's Accept edited plan, where the agent takes an edited plan. */
+  readonly onAcceptPlanEdited?: (
+    requestId: string,
+    acceptOptionId: string,
+    plan: string,
   ) => Promise<void>;
   /** A plan card's Accept and build with: the chat's Build with takes the accepted plan. */
   readonly planBuild?: PlanBuild;
@@ -88,7 +95,12 @@ export function PermissionCard({
         onRespond={onRespond}
         onAddToPlan={
           onAddToPlan
-            ? (declineOptionId, note) => onAddToPlan(ask.request_id, declineOptionId, note)
+            ? (declineOptionId, text) => onAddToPlan(ask.request_id, declineOptionId, text)
+            : undefined
+        }
+        onAcceptEdited={
+          onAcceptPlanEdited
+            ? (acceptOptionId, edited) => onAcceptPlanEdited(ask.request_id, acceptOptionId, edited)
             : undefined
         }
         build={

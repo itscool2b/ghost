@@ -33,6 +33,7 @@ import {
   agentsRefresh,
   agentUpdate,
   agentUpdateOutput,
+  chatAcceptPlan,
   chatAttach,
   chatBlob,
   chatCancelQueued,
@@ -143,6 +144,11 @@ export interface Transport {
   start(chatId: string, fresh: boolean): Promise<void>;
   stop(chatId: string): Promise<void>;
   respondPermission(chatId: string, requestId: string, optionId: string | null): Promise<void>;
+  /**
+   * Accepts a plan waiting for approval as the person edited it. Offered only where the agent
+   * takes one (`capabilities.plan_edits`); the core refuses it otherwise.
+   */
+  acceptPlan?(chatId: string, requestId: string, optionId: string, plan: string): Promise<void>;
   respondUi(chatId: string, requestId: string, answer: UiAnswer | null): Promise<void>;
   setOption(chatId: string, optionId: string, value: ConfigValue): Promise<SessionLists>;
   setControl?(chatId: string, change: SessionControlChange): Promise<SessionLists>;
@@ -197,6 +203,7 @@ export const tauriTransport: Transport = {
   start: chatStart,
   stop: chatStop,
   respondPermission: chatRespondPermission,
+  acceptPlan: chatAcceptPlan,
   respondUi: chatRespondUi,
   setOption: chatSetOption,
   setAutonomy: chatSetAutonomy,

@@ -1,9 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PermissionRequest } from "../../bindings";
+import {
+  planEdited,
+  planFeedback,
+  planMeta,
+  planParts,
+  planRevision,
+  planSections,
+  planSteps,
+} from "../../lib/chat/plan";
 import type { PermissionItem } from "../../lib/chat/transcript";
 import { PermissionCard } from "./PermissionCard";
-import { planApproval, planFeedback } from "./PlanCard";
+import { planApproval } from "./PlanCard";
 
 const request = (overrides: Partial<PermissionRequest> = {}): PermissionRequest => ({
   request_id: "exit-plan",
@@ -43,7 +52,7 @@ describe("a plan waiting for review", () => {
     ).toBeNull();
   });
 
-  it("sets the plan as prose with Accept plan and Add to the plan", () => {
+  it("presents the plan as a document: its title, whose it is, its prose and its answers", () => {
     const html = renderToStaticMarkup(
       <PermissionCard
         item={item(request())}
@@ -56,11 +65,18 @@ describe("a plan waiting for review", () => {
       />,
     );
     expect(html).toContain('data-kind="plan-approval"');
-    expect(html).toContain("Plan ready for review");
-    expect(html).toMatch(/<h3[^>]*>Ship it<\/h3>/);
+    // Its own title leads, in the card's heading and not repeated in the prose under it.
+    expect(html).toMatch(/<h3[^>]*class="chat-plan-title"[^>]*>Ship it<\/h3>/);
+    expect(html.match(/Ship it/g)).toHaveLength(1);
+    expect(html).toContain("Claude Code&#x27;s plan · 1 step");
+    expect(html).toContain("Build the picker");
+    // Nothing about it reads as a tool's request.
+    for (const gone of ["Plan ready for review", "ExitPlanMode", "chat-block", "Allow once"])
+      expect(html).not.toContain(gone);
     expect(html).toContain("Accept plan");
-    expect(html).toContain("Add to the plan");
-    expect(html).not.toContain("Allow once");
+    expect(html).toContain("Request changes");
+    expect(html).toMatch(/data-testid="plan-edit"[^>]*>.*Edit<\/button>/);
+    expect(html).toMatch(/data-test-option-kind="reject_once"[^>]*>Decline<\/button>/);
     expect(html).toContain("Accepting lets Claude Code start implementing.");
   });
 
@@ -120,6 +136,116 @@ describe("a plan waiting for review", () => {
       />,
     );
     expect(declined).toContain("Sent back to keep planning.");
+  });
+
+  it("shows an accepted plan as the person edited it, and says so", () => {
+    const edited = {
+      kind: "permission",
+      key: "exit-plan",
+      request: request(),
+      resolution: {
+        by: "user",
+        decision: {
+          type: "selected",
+          option_id: "allow",
+          plan: "# Ship it today\n\n1. Build\n2. Test",
+        },
+      },
+    } as unknown as PermissionItem;
+    const html = renderToStaticMarkup(
+      <PermissionCard
+        item={edited}
+        request={undefined}
+        onRespond={() => {}}
+        agentName="Claude Code"
+        blobs={new Map()}
+        onLoadBlob={() => {}}
+      />,
+    );
+    expect(html).toContain("Plan accepted with your edits.");
+    expect(html).toMatch(/class="chat-plan-title"[^>]*>Ship it today</);
+    expect(html).toContain("Claude Code&#x27;s plan · 2 steps");
+    expect(html).not.toContain("Build the picker");
+    // A declined plan is the agent's own, whatever a record holds.
+    const declined = renderToStaticMarkup(
+      <PermissionCard
+        item={
+          {
+            ...edited,
+            resolution: {
+              by: "user",
+              decision: { type: "selected", option_id: "deny", plan: "# Not this" },
+            },
+          } as unknown as PermissionItem
+        }
+        request={undefined}
+        onRespond={() => {}}
+        blobs={new Map()}
+        onLoadBlob={() => {}}
+      />,
+    );
+    expect(declined).toContain("Build the picker");
+    expect(declined).not.toContain("Not this");
+  });
+
+  it("offers no edits where the plan can neither be sent back nor accepted edited", () => {
+    const html = renderToStaticMarkup(
+      <PermissionCard
+        item={item(request())}
+        request={undefined}
+        onRespond={() => {}}
+        blobs={new Map()}
+        onLoadBlob={() => {}}
+      />,
+    );
+    expect(html).not.toContain("plan-edit");
+    expect(html).not.toContain("Request changes");
+    expect(html).toContain("Accept plan");
+    expect(html).toContain("Decline");
+  });
+
+  it("reads a plan's title, sections and steps without being fooled by its code", () => {
+    const plan = [
+      "",
+      "## **Ship** `it`",
+      "",
+      "Why.",
+      "",
+      "### Changes",
+      "1. One",
+      "2) Two",
+      "   1. A nested step is not counted",
+      "- [ ] Three",
+      "- a plain bullet is not a step",
+      "```sh",
+      "# not a section",
+      "1. not a step",
+      "```",
+      "### Verification",
+    ].join("\n");
+    const parts = planParts(plan);
+    expect(parts.title).toBe("Ship it");
+    expect(parts.body.startsWith("Why.")).toBe(true);
+    expect(planSections(parts.body)).toEqual(["Changes", "Verification"]);
+    expect(planSteps(plan)).toBe(3);
+    expect(planMeta("Codex", plan)).toBe("Codex's plan · 3 steps");
+    expect(planMeta("Hermes", "Just do it.")).toBe("Hermes' plan");
+    // A title that only says it is a plan says what the plan is for instead.
+    expect(planParts("# Plan: create hello.txt\n\n1. Write it").title).toBe("Create hello.txt");
+    expect(planParts("# Implementation plan - the picker").title).toBe("The picker");
+    expect(planParts("# Planning the migration").title).toBe("Planning the migration");
+    expect(planParts("# Plan:\n\nDo it.").title).toBeNull();
+    // A plan that opens with words has no title of its own.
+    expect(planParts("Do this.\n\n# Later")).toEqual({ title: null, body: "Do this.\n\n# Later" });
+  });
+
+  it("tells an edit from the same plan, and words each way back", () => {
+    expect(planEdited("# A\n1. B", "  # A\n1. B\n")).toBe(false);
+    expect(planEdited("# A\n1. B", "# A\n1. B\n2. C")).toBe(true);
+    expect(planEdited("# A", "   ")).toBe(false);
+    expect(planRevision("  # A\n1. B  ")).toBe(
+      "I edited the plan. Use this version in place of yours, and show me the plan again before implementing:\n\n# A\n1. B",
+    );
   });
 
   it("asks the agent to fold the note into the plan", () => {

@@ -937,7 +937,7 @@ impl Session {
                     self.send(ui::response(&dialog.frame, answer));
                 }
             }
-            DriverCommand::RespondPermission { .. } => {}
+            DriverCommand::EditPlan { .. } | DriverCommand::RespondPermission { .. } => {}
             DriverCommand::Steer {
                 turn_id,
                 parts,

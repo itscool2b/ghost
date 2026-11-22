@@ -1453,49 +1453,229 @@
 }
 
 /*
- * A plan waiting for review (Claude Code's ExitPlanMode, owner 2 November 2026): the plan set as
- * prose on the card, scrolling on its own when long, then Accept plan and Add to the plan. The
- * note form opens in place of the actions.
+ * A plan (PlanCard.tsx; owner, 22 November 2026: "more sexy, don't make it look like a tool
+ * call"). It reads as the document it is: its own title in title type over one quiet line saying
+ * whose it is, its sections as chips that jump to them, the plan as prose, and its answers at
+ * the foot. Waiting, it takes the composer's place as the raised sheet and its foot stays in
+ * view while the plan scrolls; answered, it rests in the transcript as a flat card.
  */
+.chat-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-12);
+  padding: var(--g-space-20);
+  border-radius: var(--g-radius-16);
+  background-color: var(--ui-card-flat);
+}
+
+.chat-permission-dock .chat-plan {
+  padding: var(--g-space-20) var(--g-space-20) 0;
+  border-radius: 0;
+  background-color: transparent;
+  animation: chat-plan-in var(--g-dur-row) var(--g-ease-out) both;
+}
+
+/* A plan is worth more room than a question: it has the window's height to be read in. */
+.chat-permission-dock:has(.chat-plan) {
+  max-height: min(72vh, 760px);
+  /* At this size its edge alone lifts it: a soft shadow under so much of the window is repainted
+     with every change inside it where the page paints on the CPU (check-layout's paint rule). */
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim-strong);
+}
+
+/* A plan says what it answers in its own title: the line naming the request's prompt is left out. */
+.chat-permission-dock:has(.chat-plan) .chat-request-scope {
+  display: none;
+}
+
+@keyframes chat-plan-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.chat-plan-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--g-space-12);
+}
+
+.chat-plan-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-plan-title {
+  margin: 0;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-title);
+  line-height: var(--g-leading-title);
+  font-weight: var(--g-weight-medium);
+  letter-spacing: var(--g-tracking-title);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.chat-plan[data-resolved="true"] .chat-plan-title {
+  font-size: var(--g-text-heading);
+  line-height: var(--g-leading-heading);
+}
+
+.chat-plan-meta {
+  margin: var(--g-space-2) 0 0;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}
+
+.chat-plan-edit {
+  flex: none;
+  gap: var(--g-space-6);
+  color: var(--g-fg-2);
+}
+
+/* The plan's sections, to jump to in a long one. Quiet pills, after the title, never above it. */
+.chat-plan-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--g-space-6);
+}
+
+.chat-plan-section {
+  height: 24px;
+  padding: 0 var(--g-space-12);
+  border: 0;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-glass-control);
+  color: var(--g-fg-2);
+  font: inherit;
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  cursor: pointer;
+  transition: background-color var(--g-dur-fast) var(--g-ease);
+}
+
+@media (hover: hover) {
+  .chat-plan-section:hover {
+    background-color: var(--g-glass-control-hover);
+    color: var(--g-fg-1);
+  }
+}
+
 .chat-plan-body {
-  max-height: min(56vh, 520px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: var(--g-space-4) var(--g-space-12) var(--g-space-4) 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--g-line-strong) transparent;
+  padding-top: var(--g-space-12);
+  box-shadow: inset 0 1px var(--g-line);
 }
 
 .chat-plan-body > :first-child {
   margin-top: 0;
 }
 
-/*
- * The plan is the card's content, under its title: it starts on the title's edge, and its own
- * headings stay a step under the title's weight, so the card reads title first.
- */
+/* The plan starts on the title's edge, and its own headings stay a step under the title. */
 .chat-app .chat-plan-body > .answer {
   padding-left: 0;
 }
 
-.chat-app .chat-plan-body .answer :is(h1, h2, h3, h4) {
-  margin-top: var(--g-space-16);
+.chat-app .chat-plan-body .answer :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: var(--g-space-20);
   margin-bottom: calc(var(--g-space-4) * -1);
-  font-size: var(--g-text-chat);
-  line-height: var(--g-leading-chat);
+  scroll-margin-top: var(--g-space-12);
+  color: var(--g-fg-1);
+  font-size: var(--g-text-prose);
+  line-height: var(--g-leading-prose);
   font-weight: var(--g-weight-semibold);
 }
 
-.chat-app .chat-plan-body .answer .md-block:first-child > :is(h1, h2, h3, h4):first-child {
+.chat-app .chat-plan-body .answer .md-block:first-child > :is(h1, h2, h3, h4, h5, h6):first-child {
   margin-top: 0;
 }
 
-.chat-plan-actions {
+/* Steps read as steps: their numbers and bullets are quieter than their words. */
+.chat-app .chat-plan-body .answer li::marker {
+  color: var(--g-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-app .chat-plan-body .answer li + li {
+  margin-top: var(--g-space-4);
+}
+
+/* The plan's own text, to edit: the Markdown as the agent wrote it. */
+.chat-plan-editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 240px;
+  height: min(48vh, 480px);
+  margin: 0;
+  padding: var(--g-space-12);
+  border: 0;
+  border-radius: var(--g-radius-10);
+  background-color: var(--g-glass-card);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim-strong);
+  color: var(--g-fg-1);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-code);
+  line-height: var(--g-leading-code);
+  resize: vertical;
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-line-strong) transparent;
+}
+
+.chat-plan-editor:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--g-fg-3);
+}
+
+/* The answers. Waiting in the dock they stay in view while the plan scrolls behind them. */
+.chat-plan-foot {
   display: flex;
   flex-direction: column;
   gap: var(--g-space-8);
   padding-top: var(--g-space-12);
   box-shadow: inset 0 1px var(--g-line);
+}
+
+.chat-permission-dock .chat-plan-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  /* A pixel short of the sheet's sides, so its rim runs past the foot unbroken. */
+  margin: 0 calc(1px - var(--g-space-20));
+  padding: var(--g-space-12) calc(var(--g-space-20) - 1px) var(--g-space-16);
+  background-color: var(--g-glass-pop);
+}
+
+.chat-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-space-8);
+}
+
+.chat-plan-actions .g-button {
+  gap: var(--g-space-8);
+}
+
+/*
+ * A shortcut spelled in letters (Ctrl) on the filled answer takes the answer's own ink inside a
+ * hairline, so it holds the label's contrast in every theme; the shared keycap's darker tile
+ * is for glyphs.
+ */
+.chat-plan-actions .g-button-primary .g-keycap {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 45%, transparent);
+  color: inherit;
+}
+
+/* Decline sits apart from the ways forward. */
+.chat-plan-decline {
+  margin-left: auto;
+  color: var(--g-fg-2);
 }
 
 .chat-plan-hint {
@@ -1509,8 +1689,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--g-space-8);
-  padding-top: var(--g-space-12);
-  box-shadow: inset 0 1px var(--g-line);
 }
 
 .chat-plan-note > label {
@@ -1518,7 +1696,34 @@
 }
 
 .chat-plan-note > textarea {
+  height: auto;
+  padding: var(--g-space-8) var(--g-space-12);
   resize: vertical;
+}
+
+/* What was decided, once it is: one quiet line under the plan. */
+.chat-plan-outcome {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-6);
+  margin: 0;
+  padding-top: var(--g-space-12);
+  box-shadow: inset 0 1px var(--g-line);
+  color: var(--g-fg-2);
+}
+
+.chat-plan-outcome[data-accepted] > svg {
+  color: var(--g-green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-permission-dock .chat-plan {
+    animation: none;
+  }
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"]) .chat-permission-dock .chat-plan {
+  animation: none;
 }
 
 /* The usage-limit card's line under the agent's own words: what waits, and the way on. */

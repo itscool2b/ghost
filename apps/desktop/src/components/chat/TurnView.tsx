@@ -21,11 +21,17 @@ export interface TurnActions extends BlobProps {
   readonly onContinue?: (intent: ConversationIntent) => void;
   readonly requests: ReadonlyMap<string, RequestState>;
   readonly onRespondPermission: (requestId: string, optionId: string | null) => void;
-  /** A plan card's Add to the plan (PlanCard.tsx). */
+  /** A plan card's Request changes and Send back edited (PlanCard.tsx). */
   readonly onAddToPlan?: (
     requestId: string,
     declineOptionId: string,
-    note: string,
+    text: string,
+  ) => Promise<void>;
+  /** A plan card's Accept edited plan, where the agent takes an edited plan. */
+  readonly onAcceptPlanEdited?: (
+    requestId: string,
+    acceptOptionId: string,
+    plan: string,
   ) => Promise<void>;
   /** A plan card's Accept and build with, when the chat's Build with can take the plan. */
   readonly planBuild?: PlanBuild;
@@ -181,6 +187,7 @@ export const TurnView = memo(function TurnView({
                   }
                   agentName={actions.agentName}
                   onAddToPlan={actions.onAddToPlan}
+                  onAcceptPlanEdited={actions.onAcceptPlanEdited}
                   planBuild={actions.planBuild}
                   blobs={actions.blobs}
                   onLoadBlob={actions.onLoadBlob}

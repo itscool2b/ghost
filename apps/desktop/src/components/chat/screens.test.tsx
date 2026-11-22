@@ -520,6 +520,7 @@ describe("the pickers", () => {
         limits: false,
         slash_commands: false,
         add_dirs: false,
+        plan_edits: false,
         autonomy_levels: ["ask", "auto_edit", "full_auto"],
       },
       ...overrides,

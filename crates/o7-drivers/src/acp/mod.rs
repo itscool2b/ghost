@@ -1010,6 +1010,8 @@ impl Session {
                 }
                 self.cancel_ui(None);
             }
+            // No ACP agent takes an edited plan (`plan_edits` is off), so none is ever sent.
+            DriverCommand::EditPlan { .. } => {}
             DriverCommand::RespondPermission {
                 request_id,
                 outcome,
@@ -1643,6 +1645,7 @@ impl Session {
             slash_commands: true,
             // An advertised extension is insufficient without an implemented request contract.
             add_dirs: false,
+            plan_edits: false,
             autonomy_levels: self.dialect.autonomy_levels(),
         }
     }

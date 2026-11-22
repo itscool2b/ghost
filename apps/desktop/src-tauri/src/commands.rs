@@ -576,6 +576,24 @@ pub async fn chat_respond_permission(
         .await?)
 }
 
+/// Accepts a plan waiting for approval as the person edited it. The core refuses it unless the
+/// request is a plan approval, the option is its allow-once answer and the agent takes edited
+/// plans.
+#[tauri::command]
+#[specta::specta]
+pub async fn chat_accept_plan(
+    state: State<'_, AppState>,
+    chat_id: String,
+    request_id: String,
+    option_id: String,
+    plan: String,
+) -> Result<(), AppError> {
+    Ok(state
+        .sessions()?
+        .accept_plan(&chat_id, &request_id, &option_id, &plan)
+        .await?)
+}
+
 /// Answers a question card; `null` dismisses it.
 #[tauri::command]
 #[specta::specta]

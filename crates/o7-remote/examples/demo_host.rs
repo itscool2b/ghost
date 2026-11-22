@@ -568,7 +568,10 @@ impl Backend for Shared {
                 vec![O7Event::PermissionResolved {
                     request_id: request_id.to_owned(),
                     decision: match option_id {
-                        Some(option_id) => PermissionDecision::Selected { option_id },
+                        Some(option_id) => PermissionDecision::Selected {
+                            option_id,
+                            plan: None,
+                        },
                         None => PermissionDecision::Cancelled,
                     },
                     by: ResolvedBy::User,

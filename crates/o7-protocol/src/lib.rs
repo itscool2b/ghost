@@ -407,7 +407,14 @@ lenient_enum! {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PermissionDecision {
-    Selected { option_id: String },
+    Selected {
+        option_id: String,
+        /// The plan as the person edited it before accepting it: only on a plan approval that
+        /// was accepted with edits ([`Capabilities::plan_edits`]). `None` for every other answer,
+        /// and absent from what is stored and sent then, so older records read as they did.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<String>,
+    },
     Cancelled,
 }
 
@@ -846,6 +853,11 @@ pub struct Capabilities {
     pub limits: bool,
     pub slash_commands: bool,
     pub add_dirs: bool,
+    /// A plan waiting for approval can be accepted as the person edited it: the agent is told
+    /// the edited text is the approved plan. Written only when true, so what an agent without
+    /// it reports, and every record made before it existed, reads the same as before.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub plan_edits: bool,
     pub autonomy_levels: Vec<Autonomy>,
 }
 
@@ -872,6 +884,35 @@ impl EventBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An answer is stored and sent as it always was; only a plan accepted with edits adds the
+    /// plan, and an answer written before plans could be edited still reads.
+    #[test]
+    fn a_decision_keeps_an_edited_plan_and_older_answers_still_read() {
+        let plain = PermissionDecision::Selected {
+            option_id: "allow".into(),
+            plan: None,
+        };
+        let stored = serde_json::to_value(&plain).unwrap();
+        assert_eq!(
+            stored,
+            serde_json::json!({"type": "selected", "option_id": "allow"})
+        );
+        assert_eq!(
+            serde_json::from_value::<PermissionDecision>(stored).unwrap(),
+            plain
+        );
+        let edited = PermissionDecision::Selected {
+            option_id: "allow".into(),
+            plan: Some("1. Build\n2. Test".into()),
+        };
+        let stored = serde_json::to_value(&edited).unwrap();
+        assert_eq!(stored["plan"], "1. Build\n2. Test");
+        assert_eq!(
+            serde_json::from_value::<PermissionDecision>(stored).unwrap(),
+            edited
+        );
+    }
     use serde_json::json;
 
     #[test]
@@ -1089,6 +1130,7 @@ mod tests {
                 request_id: "p".into(),
                 decision: PermissionDecision::Selected {
                     option_id: "allow".into(),
+                    plan: None,
                 },
                 by: ResolvedBy::Auto,
             },

@@ -747,6 +747,7 @@ impl Session {
                 limits: true,
                 slash_commands: true,
                 add_dirs: true,
+                plan_edits: true,
                 autonomy_levels: vec![Autonomy::FullAuto, Autonomy::AutoEdit, Autonomy::Ask],
                 ..Default::default()
             },
@@ -947,6 +948,17 @@ impl Session {
                     json!({"subtype":"rewind_files","user_message_id":user_message_id,"dry_run":dry_run}),
                     Purpose::Rewind { dry_run, reply },
                 );
+            }
+            DriverCommand::EditPlan { request_id, plan } => {
+                // Claude Code takes the plan it reports as approved from the approval's own
+                // input: a `plan` there is the plan as the person left it, and it says so to
+                // the model ("Approved Plan (edited by user)"). Only a request that came with a
+                // plan can have it replaced.
+                if let Some(approval) = self.approvals.get_mut(&request_id)
+                    && approval.request["input"]["plan"].is_string()
+                {
+                    approval.request["input"]["plan"] = Value::String(plan);
+                }
             }
             DriverCommand::RespondPermission {
                 request_id,

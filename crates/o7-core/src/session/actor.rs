@@ -264,6 +264,8 @@ pub(crate) enum ChatMsg {
     RespondPermission {
         request_id: String,
         option_id: Option<String>,
+        /// The plan as the person edited it, on a plan approval accepted with edits.
+        plan: Option<String>,
         reply: oneshot::Sender<Result<(), SessionError>>,
     },
     RespondUi {
@@ -1548,9 +1550,10 @@ impl ChatActor {
             ChatMsg::RespondPermission {
                 request_id,
                 option_id,
+                plan,
                 reply,
             } => {
-                let result = self.respond_permission(&request_id, option_id);
+                let result = self.respond_permission(&request_id, option_id, plan);
                 drop(reply.send(result));
             }
             ChatMsg::RespondUi {
@@ -4406,10 +4409,14 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.set_detail(Some(detail));
     }
 
+    /// Answers a permission request. `plan` is the plan as the person edited it: taken only
+    /// with an allow-once answer to a plan approval, from an agent that says it takes one
+    /// ([`plan_edit_refusal`]); anything else is refused and nothing reaches the agent.
     fn respond_permission(
         &mut self,
         request_id: &str,
         option_id: Option<String>,
+        plan: Option<String>,
     ) -> Result<(), SessionError> {
         let Some(card) = self.normalizer.card(request_id) else {
             return Err(SessionError::RequestNotPending);
@@ -4428,22 +4435,47 @@ The person continues this conversation here, in your terminal. Reply only that y
                         "\"{option_id}\" isn't one of this request's options."
                     )));
                 }
-                PermissionDecision::Selected { option_id }
+                if let Some(plan) = &plan
+                    && let Some(refusal) = plan_edit_refusal(
+                        &card.request,
+                        &option_id,
+                        plan,
+                        self.capabilities.as_ref(),
+                    )
+                {
+                    return Err(SessionError::OptionInvalid(refusal.to_owned()));
+                }
+                PermissionDecision::Selected { option_id, plan }
+            }
+            None if plan.is_some() => {
+                return Err(SessionError::OptionInvalid(
+                    "A plan that is dismissed takes no edits.".to_owned(),
+                ));
             }
             None => PermissionDecision::Cancelled,
         };
         if self.control_lists().workflow.effective.as_deref() == Some("plan")
             && card.request.kind == Some(o7_protocol::ToolKind::SwitchMode)
-            && matches!(&decision, PermissionDecision::Selected { option_id } if card.request.options.iter().any(|o| &o.option_id == option_id && matches!(o.kind, o7_protocol::PermissionOptionKind::AllowOnce | o7_protocol::PermissionOptionKind::AllowAlways)))
+            && matches!(&decision, PermissionDecision::Selected { option_id, .. } if card.request.options.iter().any(|o| &o.option_id == option_id && matches!(o.kind, o7_protocol::PermissionOptionKind::AllowOnce | o7_protocol::PermissionOptionKind::AllowAlways)))
         {
             self.implementation_approved = true;
         }
         let outcome = match &decision {
-            PermissionDecision::Selected { option_id } => {
+            PermissionDecision::Selected { option_id, .. } => {
                 PermissionOutcome::Selected(option_id.clone())
             }
             PermissionDecision::Cancelled => PermissionOutcome::Cancelled,
         };
+        // The edited plan goes first, so the answer that follows carries it.
+        if let PermissionDecision::Selected {
+            plan: Some(plan), ..
+        } = &decision
+        {
+            self.send_command(DriverCommand::EditPlan {
+                request_id: request_id.to_owned(),
+                plan: plan.clone(),
+            });
+        }
         self.send_command(DriverCommand::RespondPermission {
             request_id: request_id.to_owned(),
             outcome,
@@ -4717,7 +4749,10 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.push(
             O7Event::PermissionResolved {
                 request_id: request.request_id.clone(),
-                decision: PermissionDecision::Selected { option_id },
+                decision: PermissionDecision::Selected {
+                    option_id,
+                    plan: None,
+                },
                 by: ResolvedBy::Auto,
             },
             tag.as_deref(),
@@ -7890,6 +7925,51 @@ fn native_start(
         options.file_checkpointing = true;
     }
     options
+}
+
+/// The longest plan a person may hand back edited, in bytes. Plans are a few kilobytes; this is
+/// far above any, and well under a frame.
+pub(crate) const MAX_EDITED_PLAN: usize = 64 * 1024;
+
+/// Why `plan` cannot be the answer to `request` with `option_id`, or `None` when it can. An
+/// edited plan is taken only for a request to leave plan mode that came with a plan, only with
+/// its allow-once answer, only by an agent that says it takes one, and only as real text of a
+/// sane length.
+pub(crate) fn plan_edit_refusal(
+    request: &PermissionRequest,
+    option_id: &str,
+    plan: &str,
+    capabilities: Option<&o7_protocol::Capabilities>,
+) -> Option<&'static str> {
+    if !capabilities.is_some_and(|capabilities| capabilities.plan_edits) {
+        return Some("This agent cannot take an edited plan. Send your edits back to it instead.");
+    }
+    let carries_plan = request.kind == Some(o7_protocol::ToolKind::SwitchMode)
+        && request
+            .raw_input
+            .as_ref()
+            .and_then(|input| input.get("plan"))
+            .is_some_and(serde_json::Value::is_string);
+    if !carries_plan {
+        return Some("Only a plan waiting for approval takes edits.");
+    }
+    let accepts = request.options.iter().any(|option| {
+        option.option_id == option_id
+            && option.kind == o7_protocol::PermissionOptionKind::AllowOnce
+    });
+    if !accepts {
+        return Some("An edited plan can only be accepted, not declined.");
+    }
+    if plan.trim().is_empty() {
+        return Some("The edited plan is empty.");
+    }
+    if plan.len() > MAX_EDITED_PLAN {
+        return Some("The edited plan is too long.");
+    }
+    if plan.contains('\0') {
+        return Some("The edited plan holds a character that cannot be sent.");
+    }
+    None
 }
 
 #[cfg(test)]

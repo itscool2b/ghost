@@ -62,7 +62,7 @@ import { GitDialog } from "./GitDialog";
 import { Header } from "./Header";
 import { PermissionCard } from "./PermissionCard";
 import { Pickers } from "./Pickers";
-import { type PlanApproval, planFeedback } from "./PlanCard";
+import type { PlanApproval } from "./PlanCard";
 import { ProjectToolsDialog } from "./ProjectToolsDialog";
 import { QuestionCard } from "./QuestionCard";
 import { QueueList } from "./QueueList";
@@ -752,13 +752,12 @@ export function ChatView({
   useEffect(() => () => onCommands?.([]), [onCommands]);
 
   /**
-   * Add to the plan: the note goes into the running turn first, then the plan is declined, so the
-   * agent reads the decline and the note together and keeps planning with it. Without steering the
-   * note waits in the queue for the next turn.
+   * A plan sent back with a note or with the person's edits: the words go into the running turn
+   * first, then the plan is declined, so the agent reads the decline and the words together and
+   * keeps planning with them. Without steering the words wait in the queue for the next turn.
    */
   const addToPlan = useCallback(
-    async (requestId: string, declineOptionId: string, note: string) => {
-      const text = planFeedback(note);
+    async (requestId: string, declineOptionId: string, text: string) => {
       const turn = store.getSnapshot().openTurnId;
       const steerable =
         store.getSnapshot().session?.status === "running" &&
@@ -770,6 +769,14 @@ export function ChatView({
       if (!steered) await store.send(text);
     },
     [store, transport.composer],
+  );
+  /** A plan accepted as the person edited it, where this chat's agent takes an edited plan. */
+  const planEdits =
+    state.lists?.capabilities?.plan_edits === true && transport.acceptPlan !== undefined;
+  const acceptPlanEdited = useCallback(
+    (requestId: string, acceptOptionId: string, plan: string) =>
+      store.acceptPlan(requestId, acceptOptionId, plan),
+    [store],
   );
 
   /** Sets a role's model and thinking level in this chat, where its agent offers them. */
@@ -898,6 +905,7 @@ export function ChatView({
       onRespondPermission: (requestId, optionId) =>
         void store.respondPermission(requestId, optionId),
       onAddToPlan: addToPlan,
+      onAcceptPlanEdited: planEdits ? acceptPlanEdited : undefined,
       planBuild,
       agentName:
         agents?.find((entry) => entry.id === state.chat?.agent_id)?.name ?? state.chat?.agent_name,
@@ -935,6 +943,8 @@ export function ChatView({
       missingTree,
       reviewRecreate,
       addToPlan,
+      planEdits,
+      acceptPlanEdited,
       planBuild,
       agents,
       state.chat?.agent_id,
@@ -1502,6 +1512,7 @@ export function ChatView({
                                   }
                                   agentName={agent?.name ?? state.chat?.agent_name}
                                   onAddToPlan={addToPlan}
+                                  onAcceptPlanEdited={planEdits ? acceptPlanEdited : undefined}
                                   planBuild={planBuild}
                                   blobs={state.blobs}
                                   onLoadBlob={(sha256) => void store.loadBlob(sha256)}
