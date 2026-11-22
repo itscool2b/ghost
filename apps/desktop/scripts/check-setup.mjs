@@ -178,7 +178,7 @@ try {
       await linking.getByRole("button", { name: "Create link" }).click();
       await linking.getByRole("textbox", { name: "Lines for Hermes' config" }).waitFor();
       await linking.getByRole("button", { name: "Done" }).click();
-      await page.getByRole("button", { name: /^Hermess*Linked/ }).waitFor();
+      await page.getByRole("button", { name: /^Hermes\s*Linked/ }).waitFor();
       assert.deepEqual(await page.evaluate(() => window.remoteFixture.calls()), [
         "enabled:true",
         "create-bot:Hermes",

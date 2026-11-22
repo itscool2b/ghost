@@ -50,45 +50,6 @@
   }
 }
 
-/* The logo, alive (the shared Wing): one shape in the current colour whose eyes look and blink. */
-:is(.tour, .setup-shell) .wing {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-
-:is(.tour, .setup-shell) .wing-body {
-  fill: currentColor;
-}
-
-:is(.tour, .setup-shell) .wing-look {
-  transform: translate(calc(var(--look-x, 0) * 22px), calc(var(--look-y, 0) * 14px));
-  transition: transform var(--g-dur-row) var(--g-ease-out);
-}
-
-:is(.tour, .setup-shell) .wing-eye {
-  transform-box: fill-box;
-  transform-origin: 50% 70%;
-  animation: wing-blink var(--g-dur-blink) ease-in-out var(--g-dur-tick) infinite;
-}
-
-/* Two quick blinks, then a long look. */
-@keyframes wing-blink {
-  0%,
-  3%,
-  6%,
-  9%,
-  100% {
-    transform: none;
-  }
-
-  1.5%,
-  7.5% {
-    transform: scaleY(0.08);
-  }
-}
-
 /* ------------------------------------------------------------------------- the ring */
 
 /* A firmer hairline of ink around the control the stop is about. No fill: the control shows. */
@@ -199,20 +160,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tour-wing-float,
+  .tour-wing[data-settled] .tour-wing-float,
   .tour-ring,
-  .tour-card,
-  :is(.tour, .setup-shell) .wing-eye {
+  .tour-card[data-placed] {
     animation: none;
-  }
-
-  :is(.tour, .setup-shell) .wing-look {
-    transition: none;
   }
 }
 
 :root:is([data-motion="reduced"], [data-motion="off"])
-  :is(.tour-wing-float, .tour-ring, .tour-card),
-:root:is([data-motion="reduced"], [data-motion="off"]) :is(.tour, .setup-shell) .wing-eye {
+  :is(.tour-wing[data-settled] .tour-wing-float, .tour-ring, .tour-card[data-placed]) {
   animation: none;
 }

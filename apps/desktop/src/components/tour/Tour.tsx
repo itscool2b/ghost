@@ -23,6 +23,7 @@ import {
   WING_RATIO,
 } from "../../lib/tour/flight";
 import { offerWords, type TourOffer, type TourStop } from "../../lib/tour/stops";
+import "./wing.css";
 import "./tour.css";
 
 /** What the tour is doing: offering a flight from the sidebar's foot, or flying one. */
@@ -38,7 +39,7 @@ export type TourState =
 /** How long a stop's control may take to show (a pane opening, a chat loading) before it is passed. */
 const SEEK_MS = 900;
 /** How often a settled stop checks that its control is still where the ring is. */
-const WATCH_MS = 400;
+const WATCH_MS = 150;
 /** The wing's width at rest, when the sidebar's own logo cannot be measured (the rail). */
 const HOME_SIZE = 30;
 
