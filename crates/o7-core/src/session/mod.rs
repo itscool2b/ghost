@@ -1219,6 +1219,26 @@ impl SessionManager {
         self.ask(chat_id, |reply| ChatMsg::RespondPermission {
             request_id: request_id.to_owned(),
             option_id: option_id.clone(),
+            plan: None,
+            reply,
+        })
+        .await
+    }
+
+    /// Accepts a plan waiting for approval as the person edited it: the agent is told `plan`
+    /// is the approved plan. Refused unless the request is a plan approval, `option_id` is its
+    /// allow-once answer and the agent takes edited plans.
+    pub async fn accept_plan(
+        &self,
+        chat_id: &str,
+        request_id: &str,
+        option_id: &str,
+        plan: &str,
+    ) -> Result<(), SessionError> {
+        self.ask(chat_id, |reply| ChatMsg::RespondPermission {
+            request_id: request_id.to_owned(),
+            option_id: Some(option_id.to_owned()),
+            plan: Some(plan.to_owned()),
             reply,
         })
         .await

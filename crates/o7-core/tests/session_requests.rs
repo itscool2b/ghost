@@ -314,7 +314,8 @@ async fn answer_crossing_withdrawal() {
         resolution(&events, "p1"),
         [(
             PermissionDecision::Selected {
-                option_id: "once".into()
+                option_id: "once".into(),
+                plan: None,
             },
             ResolvedBy::User
         )]
@@ -404,7 +405,8 @@ async fn concurrent_permissions() {
         resolution(&events, "p2"),
         [(
             PermissionDecision::Selected {
-                option_id: "no".into()
+                option_id: "no".into(),
+                plan: None,
             },
             ResolvedBy::User
         )]
@@ -485,7 +487,8 @@ async fn two_subscribers() {
         resolution(&second.events(), "p1"),
         [(
             PermissionDecision::Selected {
-                option_id: "once".into()
+                option_id: "once".into(),
+                plan: None,
             },
             ResolvedBy::User
         )]
@@ -699,7 +702,8 @@ async fn native_autonomy_report_answers_open_cards() {
         resolution(&events, "edit"),
         [(
             PermissionDecision::Selected {
-                option_id: "once".into()
+                option_id: "once".into(),
+                plan: None,
             },
             ResolvedBy::Auto
         )]
@@ -767,7 +771,8 @@ async fn native_autonomy_report_recomputes_pending_decisions() {
         resolution(&events, "auto"),
         [(
             PermissionDecision::Selected {
-                option_id: "once".into()
+                option_id: "once".into(),
+                plan: None,
             },
             ResolvedBy::Auto
         )]
@@ -776,7 +781,8 @@ async fn native_autonomy_report_recomputes_pending_decisions() {
         resolution(&events, "asked"),
         [(
             PermissionDecision::Selected {
-                option_id: "once".into()
+                option_id: "once".into(),
+                plan: None,
             },
             ResolvedBy::Auto
         )],
@@ -1379,9 +1385,198 @@ async fn full_auto_records_auto_answers() {
         O7Event::PermissionResolved {
             request_id: "run".into(),
             decision: PermissionDecision::Selected {
-                option_id: "once".into()
+                option_id: "once".into(),
+                plan: None,
             },
             by: ResolvedBy::Auto,
         }
+    );
+}
+
+/// A plan waiting for approval, as Claude Code's ExitPlanMode asks for it.
+fn plan_card(id: &str, plan: &str) -> Step {
+    let mut request = permission(id, Some(ToolKind::SwitchMode));
+    request.raw_input = Some(serde_json::json!({ "plan": plan }));
+    Step::EmitInTurn(DriverEvent::Permission {
+        turn: None,
+        request,
+    })
+}
+
+fn edits(commands: &[LoggedCommand]) -> usize {
+    commands
+        .iter()
+        .filter(|command| matches!(command, LoggedCommand::EditPlan { .. }))
+        .count()
+}
+
+/// A plan accepted with edits: the edited plan reaches the agent before the answer does, and the
+/// record of the answer keeps it. Every other use of an edited plan is refused, and a refusal
+/// sends the agent nothing.
+#[tokio::test(start_paused = true)]
+async fn a_plan_accepted_with_edits_reaches_the_agent_before_the_answer() {
+    let mut ready = ready_info("n1");
+    ready.capabilities.plan_edits = true;
+    let (driver, handle) = ScriptedDriver::new(vec![
+        Step::Emit(DriverEvent::Ready(ready)),
+        Step::Expect(CommandMatch::Prompt),
+        card("edit", Some(ToolKind::Edit)),
+        Step::Expect(CommandMatch::RespondPermission {
+            request_id: Some("edit".into()),
+        }),
+        plan_card("plan", "1. Build"),
+        Step::Expect(CommandMatch::Any),
+        Step::Expect(CommandMatch::RespondPermission {
+            request_id: Some("plan".into()),
+        }),
+        end_turn(StopReason::EndTurn),
+    ]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    let sink = Sink::new("main");
+    h.manager
+        .attach(&chat.id, sink.clone())
+        .await
+        .expect("attach");
+    h.status(&chat.id, SessionStatus::Ready).await;
+    h.manager
+        .send(&chat.id, "plan it".into())
+        .await
+        .expect("send");
+    sink.wait_for("the first card", |event| {
+        matches!(event, O7Event::PermissionRequested(request) if request.request_id == "edit")
+    })
+    .await;
+    let edited = "1. Build\n2. Test";
+    // An ordinary request is not a plan: it takes no edits.
+    let refused = h
+        .manager
+        .accept_plan(&chat.id, "edit", "once", edited)
+        .await;
+    assert!(
+        matches!(&refused, Err(SessionError::OptionInvalid(why)) if why.contains("Only a plan")),
+        "{refused:?}"
+    );
+    h.manager
+        .respond_permission(&chat.id, "edit", Some("once".into()))
+        .await
+        .expect("answer");
+    sink.wait_for("the plan", |event| {
+        matches!(event, O7Event::PermissionRequested(request) if request.request_id == "plan")
+    })
+    .await;
+    let long = "x".repeat(64 * 1024 + 1);
+    for (option, plan, why) in [
+        ("no", edited, "only be accepted"),
+        ("always", edited, "only be accepted"),
+        ("missing", edited, "isn't one of this request's options"),
+        ("once", "  \n ", "empty"),
+        ("once", long.as_str(), "too long"),
+        ("once", "1. Build\0", "cannot be sent"),
+    ] {
+        let refused = h.manager.accept_plan(&chat.id, "plan", option, plan).await;
+        assert!(
+            matches!(&refused, Err(SessionError::OptionInvalid(text)) if text.contains(why)),
+            "{option}: {refused:?}"
+        );
+    }
+    assert_eq!(edits(&handle.commands()), 0, "a refusal sends nothing");
+    assert!(resolution(&sink.events(), "plan").is_empty());
+    h.manager
+        .accept_plan(&chat.id, "plan", "once", edited)
+        .await
+        .expect("accept with edits");
+    sink.wait_for("the turn ends", |event| {
+        matches!(event, O7Event::TurnEnded { .. })
+    })
+    .await;
+    let commands = handle.commands();
+    let edit = commands
+        .iter()
+        .position(|command| {
+            matches!(command, LoggedCommand::EditPlan { request_id, plan }
+                if request_id == "plan" && plan == edited)
+        })
+        .expect("the edited plan was sent");
+    let answer = commands
+        .iter()
+        .position(|command| {
+            matches!(command, LoggedCommand::RespondPermission { request_id, option_id }
+                if request_id == "plan" && option_id.as_deref() == Some("once"))
+        })
+        .expect("the answer was sent");
+    assert!(edit < answer, "the plan goes first");
+    assert_eq!(edits(&commands), 1);
+    assert_eq!(
+        resolution(&sink.events(), "plan"),
+        [(
+            PermissionDecision::Selected {
+                option_id: "once".into(),
+                plan: Some(edited.into()),
+            },
+            ResolvedBy::User
+        )]
+    );
+}
+
+/// An agent that does not say it takes edited plans is never sent one: the edit is refused, the
+/// plan stays waiting, and a plain answer still goes through.
+#[tokio::test(start_paused = true)]
+async fn an_agent_that_takes_no_edited_plans_is_never_sent_one() {
+    let (driver, handle) = ScriptedDriver::new(vec![
+        ready_step("n1"),
+        Step::Expect(CommandMatch::Prompt),
+        plan_card("plan", "1. Build"),
+        Step::Expect(CommandMatch::RespondPermission {
+            request_id: Some("plan".into()),
+        }),
+        end_turn(StopReason::EndTurn),
+    ]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    let sink = Sink::new("main");
+    h.manager
+        .attach(&chat.id, sink.clone())
+        .await
+        .expect("attach");
+    h.status(&chat.id, SessionStatus::Ready).await;
+    h.manager
+        .send(&chat.id, "plan it".into())
+        .await
+        .expect("send");
+    sink.wait_for("the plan", |event| {
+        matches!(event, O7Event::PermissionRequested(_))
+    })
+    .await;
+    let refused = h
+        .manager
+        .accept_plan(&chat.id, "plan", "once", "1. Build\n2. Test")
+        .await;
+    assert!(
+        matches!(&refused, Err(SessionError::OptionInvalid(why)) if why.contains("cannot take an edited plan")),
+        "{refused:?}"
+    );
+    assert!(
+        resolution(&sink.events(), "plan").is_empty(),
+        "still waiting"
+    );
+    h.manager
+        .respond_permission(&chat.id, "plan", Some("once".into()))
+        .await
+        .expect("a plain answer");
+    sink.wait_for("the turn ends", |event| {
+        matches!(event, O7Event::TurnEnded { .. })
+    })
+    .await;
+    assert_eq!(edits(&handle.commands()), 0);
+    assert_eq!(
+        resolution(&sink.events(), "plan"),
+        [(
+            PermissionDecision::Selected {
+                option_id: "once".into(),
+                plan: None,
+            },
+            ResolvedBy::User
+        )]
     );
 }

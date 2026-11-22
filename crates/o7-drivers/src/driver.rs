@@ -261,6 +261,10 @@ pub enum DriverCommand {
     },
     /// Soft interrupt; idempotent; the turn still ends with `TurnEnded`.
     Interrupt,
+    /// The plan of a pending plan approval, as the person edited it. The driver answers the
+    /// approval that follows with this text as the approved plan. Sent only to a driver whose
+    /// capabilities say `plan_edits`, and only for a request that carries a plan.
+    EditPlan { request_id: String, plan: String },
     RespondPermission {
         request_id: String,
         outcome: PermissionOutcome,
@@ -567,6 +571,10 @@ pub enum LoggedCommand {
         parts: Vec<PromptPart>,
     },
     Interrupt,
+    EditPlan {
+        request_id: String,
+        plan: String,
+    },
     RespondPermission {
         request_id: String,
         /// `None` = cancelled.
@@ -616,6 +624,10 @@ impl From<&DriverCommand> for LoggedCommand {
                 parts: parts.clone(),
             },
             DriverCommand::Interrupt => LoggedCommand::Interrupt,
+            DriverCommand::EditPlan { request_id, plan } => LoggedCommand::EditPlan {
+                request_id: request_id.clone(),
+                plan: plan.clone(),
+            },
             DriverCommand::RespondPermission {
                 request_id,
                 outcome,

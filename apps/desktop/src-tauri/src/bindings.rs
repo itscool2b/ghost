@@ -335,6 +335,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::chat_start,
             commands::chat_stop,
             commands::chat_respond_permission,
+            commands::chat_accept_plan,
             commands::chat_respond_ui,
             commands::chat_set_option,
             commands::chat_set_autonomy,
@@ -508,6 +509,7 @@ mod tests {
             "chatStart",
             "chatStop",
             "chatRespondPermission",
+            "chatAcceptPlan",
             "chatRespondUi",
             "chatSetOption",
             "chatSetAutonomy",
@@ -805,7 +807,7 @@ mod tests {
     }
 
     /// The chat commands of M1a (spec 7.1) exactly as the generated bindings declare them.
-    const CHAT_COMMANDS: [(&str, &str); 27] = [
+    const CHAT_COMMANDS: [(&str, &str); 28] = [
         (
             "agentsList",
             "() => __TAURI_INVOKE<AgentEntry[]>(\"agents_list\")",
@@ -885,6 +887,10 @@ mod tests {
         (
             "chatRespondPermission",
             "(chatId: string, requestId: string, optionId: string | null) => typedError<null, AppError>(__TAURI_INVOKE(\"chat_respond_permission\", { chatId, requestId, optionId }))",
+        ),
+        (
+            "chatAcceptPlan",
+            "(chatId: string, requestId: string, optionId: string, plan: string) => typedError<null, AppError>(__TAURI_INVOKE(\"chat_accept_plan\", { chatId, requestId, optionId, plan }))",
         ),
         (
             "chatRespondUi",

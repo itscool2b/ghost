@@ -1514,6 +1514,7 @@ mod tests {
                             request_id: id,
                             decision: PermissionDecision::Selected {
                                 option_id: "allow".into(),
+                                plan: None,
                             },
                             by: ResolvedBy::User,
                         }

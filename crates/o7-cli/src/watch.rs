@@ -519,6 +519,7 @@ mod tests {
                     request_id: "T.p1".into(),
                     decision: PermissionDecision::Selected {
                         option_id: "allow".into(),
+                        plan: None,
                     },
                     by: ResolvedBy::User,
                 },

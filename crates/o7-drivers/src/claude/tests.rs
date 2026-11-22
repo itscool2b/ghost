@@ -756,6 +756,56 @@ async fn the_plan_approval_card_is_a_mode_switch_with_its_plan() {
     h.stop().await;
 }
 
+/// A plan accepted with edits: Claude is answered with the edited text as the plan it approved,
+/// which is how it learns the person changed it. An edit for a request that carried no plan
+/// changes nothing.
+#[tokio::test(start_paused = true)]
+async fn an_edited_plan_is_what_claude_is_told_was_approved() {
+    let mut h = Harness::start().await;
+    h.ready().await;
+    h.prompt();
+    h.wire().await;
+    let edited = "# Ship it\n\n1. Build\n2. Test";
+    for (id, tool, input, expected) in [
+        (
+            "exit-plan",
+            "ExitPlanMode",
+            json!({"plan":"# Ship it\n\n1. Build","extra":1}),
+            json!({"plan":edited,"extra":1}),
+        ),
+        (
+            "no-plan",
+            "Bash",
+            json!({"command":"git push"}),
+            json!({"command":"git push"}),
+        ),
+    ] {
+        h.send(json!({"type":"control_request","request_id":id,"request":{"subtype":"can_use_tool","tool_name":tool,"display_name":tool,"input":input}})).await;
+        loop {
+            if let DriverEvent::Permission { .. } = h.event().await {
+                break;
+            }
+        }
+        h.tx.send(DriverCommand::EditPlan {
+            request_id: id.into(),
+            plan: edited.into(),
+        })
+        .expect("edit");
+        h.tx.send(DriverCommand::RespondPermission {
+            request_id: id.into(),
+            outcome: PermissionOutcome::Selected("allow".into()),
+        })
+        .expect("allow");
+        let reply = h.wire().await;
+        assert_eq!(reply["response"]["response"]["behavior"], "allow", "{id}");
+        assert_eq!(
+            reply["response"]["response"]["updatedInput"], expected,
+            "{id}"
+        );
+    }
+    h.stop().await;
+}
+
 /// A chat whose Claude keeps the person's settings in `config`.
 fn with_settings(mut setup: SessionSetup, config: &std::path::Path) -> SessionSetup {
     setup

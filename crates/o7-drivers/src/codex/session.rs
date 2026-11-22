@@ -1276,6 +1276,7 @@ impl Session {
                 }
                 self.interrupt();
             }
+            DriverCommand::EditPlan { .. } => {}
             DriverCommand::RespondPermission {
                 request_id,
                 outcome,

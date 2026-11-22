@@ -522,6 +522,7 @@ impl Mock {
                 limits: false,
                 slash_commands: true,
                 add_dirs: false,
+                plan_edits: false,
                 autonomy_levels: vec![Autonomy::FullAuto, Autonomy::AutoEdit, Autonomy::Ask],
             },
             // A resume quietly starts new: the demo agent remembers nothing.
@@ -564,6 +565,7 @@ impl Mock {
                     turn.cancel.cancel();
                 }
             }
+            DriverCommand::EditPlan { .. } => {}
             DriverCommand::RespondPermission {
                 request_id,
                 outcome,

@@ -537,6 +537,7 @@ impl Runner {
                 let _ = reply.send(lock(&self.shared.rewind_reply).clone());
             }
             DriverCommand::Interrupt
+            | DriverCommand::EditPlan { .. }
             | DriverCommand::RespondPermission { .. }
             | DriverCommand::RespondUi { .. }
             | DriverCommand::Shutdown { .. } => {}
