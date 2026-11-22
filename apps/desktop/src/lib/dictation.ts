@@ -4,6 +4,7 @@ import {
   type DictationEvent,
   type DictationFailure,
   type DictationModel,
+  type LargerEvent,
   type LiveText,
 } from "../bindings";
 import { errorMessage } from "./errors";
@@ -19,6 +20,20 @@ export interface DictationApi {
   start(id: string, event: (event: DictationEvent) => void): Promise<void>;
   stop(id: string): Promise<void>;
   cancel(id: string): Promise<void>;
+  /** The larger speech model's download; a view without it offers the built-in model alone. */
+  readonly larger?: LargerApi;
+}
+
+/**
+ * The larger speech model (docs/local-dictation.md, "The larger model"): fetched once from its
+ * pinned address when the person asks. The page supplies nothing but the wish.
+ */
+export interface LargerApi {
+  /** Starts the download; `event` hears it arrive and how it ended. */
+  download(event: (event: LargerEvent) => void): Promise<void>;
+  /** Stops it. What arrived is kept, and the next download continues from it. */
+  cancel(): Promise<void>;
+  remove(): Promise<void>;
 }
 
 export const dictationApi: DictationApi = {
@@ -28,7 +43,42 @@ export const dictationApi: DictationApi = {
   },
   stop: (id) => commands.dictationStop(id),
   cancel: (id) => commands.dictationCancel(id),
+  larger: {
+    download: async (onmessage) => {
+      await settle(commands.dictationLargerDownload(new Channel(onmessage)));
+    },
+    cancel: () => commands.dictationLargerCancel(),
+    remove: async () => {
+      await settle(commands.dictationLargerRemove());
+    },
+  },
 };
+
+/** Where the larger model's row is, between what the core reports. */
+export type LargerPhase =
+  /** `kept`: a download was stopped and what arrived waits for the next one. */
+  | { readonly state: "idle"; readonly kept?: boolean }
+  | { readonly state: "downloading"; readonly received: number; readonly total: number }
+  | { readonly state: "verifying" }
+  | { readonly state: "removing" }
+  | { readonly state: "failed"; readonly message: string };
+
+const megabytes = (bytes: number): number => Math.round(bytes / 1_000_000);
+
+/** What the larger model's row says: what it is and costs, how far it has come, or that it is in use. */
+export function largerDetail(model: DictationModel, phase: LargerPhase): string {
+  const { name, bytes, state } = model.larger;
+  const size = `${megabytes(bytes)} MB`;
+  if (phase.state === "downloading")
+    return `Downloading ${name}: ${megabytes(phase.received)} of ${megabytes(phase.total)} MB.`;
+  if (phase.state === "verifying") return "Checking the download.";
+  if (phase.state === "removing") return `Removing ${name}.`;
+  if (state === "ready")
+    return `${name} is downloaded and in use. Removing it returns dictation to the built-in model and frees ${size}.`;
+  if (state === "downloading") return `Downloading ${name}.`;
+  const offer = `${name} makes about 40% fewer mistakes, gets programming words right and hears 24 more European languages. A one-time ${size} download from Hugging Face; it runs on this device.`;
+  return phase.state === "idle" && phase.kept ? `${offer} What arrived so far is kept.` : offer;
+}
 
 /** What Rust reports for a processor without AVX2; the bar says it before any command runs. */
 export const UNSUPPORTED_MESSAGE =

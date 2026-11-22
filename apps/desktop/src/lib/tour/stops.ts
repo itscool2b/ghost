@@ -145,7 +145,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "window",
     side: "right",
     title: "Settings",
-    body: "Themes, agents, phone access and updates. General has this tour, to take again whenever you like.",
+    body: "Themes, agents, voices, a more accurate dictation model, phone access and updates. General has this tour, to take again whenever you like.",
   },
 ];
 

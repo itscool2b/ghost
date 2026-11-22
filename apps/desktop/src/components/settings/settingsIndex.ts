@@ -111,6 +111,11 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
     words: "editor cursor vs code visual studio zed jetbrains intellij line links",
   },
   { page: "voice", title: "Dictation", words: "speech voice talk parakeet transcribe" },
+  {
+    page: "voice",
+    title: "Larger model",
+    words: "dictation accuracy better download parakeet ultra languages spanish french german",
+  },
   { page: "voice", title: "Microphone", words: "input audio device mic" },
   { page: "voice", title: "Test your microphone", words: "mic level check speech" },
   { page: "shortcuts", title: "Shortcuts", words: "keyboard keys hotkeys" },

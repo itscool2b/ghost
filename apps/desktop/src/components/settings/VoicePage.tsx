@@ -1,5 +1,5 @@
 import { Check, X } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DictationModel } from "../../bindings";
 import {
   type DictationApi,
@@ -14,6 +14,7 @@ import {
 import type { SpeechApi } from "../../lib/speech";
 import { Wave } from "../chat/Dictation";
 import "../chat/dictation.css";
+import { LargerModel } from "./LargerModel";
 import type { Preferences } from "./preferences";
 import { ReadAloudSettings } from "./ReadAloudSettings";
 import { Row } from "./SettingsRow";
@@ -24,11 +25,14 @@ function modelDetail(model: DictationModel | null | "failed"): string {
   if (model === "failed") return "o7 could not read the speech model's status.";
   if (!model.supported) return UNSUPPORTED_MESSAGE;
   if (!model.installed) return MISSING_MESSAGE;
+  if (model.larger.state === "ready")
+    return `${model.name}, downloaded and ready: English and 24 other European languages, with punctuation and capitals.`;
   return `${model.name}, built in and ready: English, with punctuation and capitals.`;
 }
 
 /**
- * Settings' Voice page: dictation's built-in model, the microphone it hears, and a test that shows
+ * Settings' Voice page: dictation's built-in model and the larger one it can fetch, the microphone
+ * it hears, and a test that shows
  * the level and the words without a chat (docs/local-dictation.md); then reading aloud, with the
  * voice answers are read in (docs/read-aloud.md).
  */
@@ -43,24 +47,36 @@ export function VoicePage({
   readonly prefs?: Preferences;
 }) {
   const [model, setModel] = useState<DictationModel | null | "failed">(null);
-  useEffect(() => {
-    let live = true;
+  const shown = useRef(true);
+  // Read again whenever the larger model arrives or goes: the model in use changes with it.
+  const read = useCallback(() => {
     api.model().then(
       (value) => {
-        if (live) setModel(value);
+        if (shown.current) setModel(value);
       },
       () => {
-        if (live) setModel("failed");
+        if (shown.current) setModel("failed");
       },
     );
-    return () => {
-      live = false;
-    };
   }, [api]);
+  useEffect(() => {
+    shown.current = true;
+    read();
+    return () => {
+      shown.current = false;
+    };
+  }, [read]);
+  const larger =
+    api.larger && model !== null && model !== "failed" && model.installed && model.supported
+      ? model.larger.available
+      : false;
   return (
     <>
       <div className="settings-group">
         <Row title="Dictation" detail={modelDetail(model)} />
+        {larger && api.larger && model !== null && model !== "failed" ? (
+          <LargerModel api={api.larger} model={model} onChanged={read} />
+        ) : null}
         <Row
           title="Microphone"
           detail="Dictation hears your system's default input. Choose another in your system's sound settings."

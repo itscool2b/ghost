@@ -7,9 +7,10 @@ activity). There is no time limit (owner, 4 November 2026: "don't have a limit f
 them install it").
 
 Larger models were measured on 22 November 2026 (owner: "do hella research on the best voice to
-text model and change it"). The best of them makes about 40% fewer errors, and is too large to
-ship inside the app: [Why the built-in model is small](#why-the-built-in-model-is-small) has the
-comparison and the reason.
+text model and change it"). The best of them, Parakeet Ultra, makes about 40% fewer errors and
+hears 24 more languages. It is too large to ship inside the app, so it is a one-time download
+from Settings > Voice: [The larger model](#the-larger-model). [Why the built-in model is
+small](#why-the-built-in-model-is-small) has the comparison and the reason.
 
 ## Using it
 
@@ -35,12 +36,44 @@ Closing the chat, hiding the window, switching profiles or quitting cancels a re
 motion (the system's or the app's) keeps every state and drops the movement: no sweep, dissolve,
 word fade, caret pulse or waveform slide.
 
+## The larger model
+
+Settings > Voice > Larger model offers Parakeet Ultra: what it is, that it is a 486 MB download
+from Hugging Face, and Download. While it arrives the row counts the megabytes and offers Cancel;
+what arrived is kept, and Continue goes on from it. Once it is here dictation uses it in the
+built-in model's place, from the next recording on, and the Dictation row names it and its
+languages; Remove deletes it and returns to the built-in model. Nothing is fetched until the
+person presses Download, and dictation works without it.
+
+Who may do what, and how that is held (`src-tauri/src/dictation/larger.rs`):
+
+- Only the app's own page starts, cancels or removes the download (`dictation_larger_download`,
+  `dictation_larger_cancel`, `dictation_larger_remove`), and the page supplies nothing: the
+  address, the size and the SHA-256 are constants of the build (`dictation::model::LARGER`,
+  pinned to a Hugging Face revision). Agents, linked assistants and remote sessions have no tool
+  for it.
+- The connection is HTTPS only and follows a redirect only to `huggingface.co`, its subdomains or
+  `*.hf.co`, on the default port, with no credentials in the address.
+- The file is written as `<name>.partial` in `models/dictation` under the data folder (shared by
+  profiles: a model is nobody's data), never past the pinned size. It gets its name only after
+  all of it hashed to the pinned SHA-256; anything else is deleted. A continued download hashes
+  what it kept again instead of trusting it. Dictation loads the file only under its final name
+  and at its pinned size.
+- One download runs at a time. It goes on if the page that started it leaves, and another page
+  shows that it runs.
+- The file is weights for the speech engine. Nothing in it is run.
+
+Each refusal has a test (`dictation::larger::tests`, `dictation::model::tests`). The notices credit
+the model although the app does not carry it.
+
 ## Privacy
 
 Audio lives only in memory and is zeroed when the recording ends: at most a 12 s capture backlog,
 the phrase in progress (at most 20 s) and the last 30 s of settled phrases. No audio or transcript
 is written to disk or logged; transcribe.cpp's and ggml's native logging is turned off before the
-first model loads. Nothing makes a network request, and no account, API key, cloud speech service,
+first model loads. Dictating makes no network request (the one request this feature can make is
+the larger model's download, when the person asks for it, to Hugging Face, and it carries no
+audio and no text), and no account, API key, cloud speech service,
 Python or external executable is involved. The finished text becomes a normal draft and follows
 the draft's usual persistence.
 
@@ -93,7 +126,8 @@ was published: with a 486 MB model inside, the macOS package is about 570 MB and
 (`MAX_PACKAGE` in `src-tauri/src/updater.rs`; `o7-release` holds the same line). Those copies
 could never have updated again. And where it did fit (Windows, 519 MB), every update would have
 downloaded the model again, since an update is the whole installer. So the model that ships stays
-small, and a large one has to arrive some other way than inside the installer.
+small, and the large one arrives once, on request, outside the installer: [The larger
+model](#the-larger-model).
 
 A large model also costs about four times as much per pass and holds about half a gigabyte of
 memory; the pacing below was built for that and stays, since it is right for any model on a slow
@@ -211,7 +245,9 @@ is no longer needed.
 - `cargo test -p o7-desktop --lib dictation`: capture, conversion, voice detection, live
   agreement, settling, the finishing window, the pacing (a slow model is read less often and in
   shorter phrases, finishing skips a pass that would be slow or redundant), zeroing, operation
-  ownership and the model pins (19 tests). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
+  ownership, the model pins, and the larger model's download (it gets its name only when whole
+  and matching, a wrong or oversized file is discarded, a continued download is hashed again,
+  only Hugging Face over HTTPS may send it) (27 tests). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
   every 16 kHz mono WAV in `O7_DICTATION_FIXTURE_DIR` as the microphone would deliver it, and
   prints the live updates, timing and final text (`-- --ignored --nocapture`).
 - `vitest run src/lib/dictation.test.ts`: the controller (live text, the bounded waveform, finishing,
@@ -221,6 +257,15 @@ is no longer needed.
   the caret, Esc and Cancel, chat switching, every failure, a microphone that drops, and, with full
   motion, the sweep and the dissolve ending and typing ending the sweep. It also compares the draft
   as the ghost draws it with the message box pixel for pixel. The fixture never opens a microphone.
+- `node scripts/check-dictation-larger.mjs` (port 1467), Chromium and WebKit, light and dark:
+  the offer, the download's progress, Cancel and Continue, the model in use once it arrives,
+  Remove, a failure, a copy with nowhere to keep a model, Settings' search, and axe.
+- Natively, on Windows x64 (debug app, scratch profile), 22 November 2026: the real download
+  from Hugging Face through the app's commands was cancelled at 30%, continued from the byte it
+  stopped at, verified and put in place (9 s in all on this connection); a second request while it
+  ran, and one after it was there, were refused; dictation then transcribed read aloud's sentence
+  through the downloaded model word for word; Remove deleted it and the built-in model was in use
+  again.
 - Natively, on Windows x64 (debug app, scratch profile, driven over CDP), 22 November 2026, in a
   build that carried Parakeet Ultra: the models were found and loaded, the real microphone reported every
   80 ms, and read aloud spoke "I fixed the login flow, and all 42 tests pass. Nothing else
@@ -236,6 +281,7 @@ on-device run of either. Linux is deferred with the rest of the Linux port.
 
 The bundled model is English only. Parakeet Ultra also hears 24 other European languages (a few
 sentences each of Spanish, French and German came out at 4.0%, 3.9% and 9.0% through this
-pipeline), and the live text's word agreement does not depend on the language.
+pipeline), and the live text's word agreement does not depend on the language. No language can be
+chosen: the model writes what it hears.
 Spanish, French and German have been run here; the other languages rest on the model's published
 numbers. A language cannot be chosen: the model writes what it hears.

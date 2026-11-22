@@ -54,6 +54,22 @@ export const MODELS = [
   },
 ];
 
+/**
+ * Not bundled. The larger speech model the app fetches when a person asks for it in Settings >
+ * Voice (src-tauri/src/dictation/larger.rs): Moondream's Parakeet Ultra, a further-trained NVIDIA
+ * parakeet-tdt-0.6b-v3, CC-BY-4.0, in handy-computer's GGUF conversion. Q4_K_M: 1.82% WER on
+ * LibriSpeech test-clean, F32 1.80%. With it inside, a macOS or Linux package would pass the
+ * 512 MiB an installed copy accepts as an update (docs/local-dictation.md). It is pinned here so
+ * the notices record it, and a test keeps `dictation::model::LARGER` in step.
+ */
+export const LARGER = {
+  file: "parakeet-ultra-Q4_K_M.gguf",
+  repo: "handy-computer/parakeet-ultra-gguf",
+  revision: "a1539be1b849ea7463b88343e5277b373d0c4ea9",
+  size: 486280096,
+  sha256: "c69b7a5f9071a7afd8a1818ef7ae542c386c4b01ed0cac380c19a99947646bf9",
+};
+
 export const SPEECH_DIR = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../src-tauri/resources/speech",
