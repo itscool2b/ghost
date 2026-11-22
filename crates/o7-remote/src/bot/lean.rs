@@ -229,7 +229,7 @@ pub(super) async fn run(
                 Some(markdown) => {
                     if markdown.len() > MAX_MEMORY {
                         return Err(Answer::failed(
-                            "Project memory holds at most 16 KiB. Shorten it.",
+                            "Project memory holds at most 4 KiB here, because every chat receives it. Shorten it.",
                         ));
                     }
                     act(

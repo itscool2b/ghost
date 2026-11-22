@@ -137,6 +137,10 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::memory_commands::project_memory_proposals,
             crate::memory_commands::export_project_memory,
             crate::memory_commands::import_project_memory,
+            crate::memory_commands::read_memory_note,
+            crate::memory_commands::save_memory_note,
+            crate::memory_commands::delete_memory_note,
+            crate::memory_commands::undo_memory_edit,
             crate::config_library::library_copy_history,
             crate::config_library::library_item_preview,
             crate::config_library::library_copy_preview,
@@ -291,6 +295,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::git_commands::worktree_recreate_preview,
             crate::git_commands::worktree_recreate_apply,
             commands::chats_list,
+            crate::launch_cache::launch_cache,
             crate::workspace_commands::workspace_snapshot,
             crate::workspace_removal_commands::workspace_removed,
             crate::workspace_removal_commands::workspace_removal_preview,
@@ -488,6 +493,7 @@ mod tests {
             "envRefresh",
             "pickFolder",
             "chatsList",
+            "launchCache",
             "chatCreate",
             "chatCreateOnHost",
             "chatAttach",
@@ -799,7 +805,7 @@ mod tests {
     }
 
     /// The chat commands of M1a (spec 7.1) exactly as the generated bindings declare them.
-    const CHAT_COMMANDS: [(&str, &str); 26] = [
+    const CHAT_COMMANDS: [(&str, &str); 27] = [
         (
             "agentsList",
             "() => __TAURI_INVOKE<AgentEntry[]>(\"agents_list\")",
@@ -823,6 +829,10 @@ mod tests {
         (
             "chatsList",
             "() => typedError<ChatSummary[], AppError>(__TAURI_INVOKE(\"chats_list\"))",
+        ),
+        (
+            "launchCache",
+            "() => typedError<LaunchCache, AppError>(__TAURI_INVOKE(\"launch_cache\"))",
         ),
         (
             "chatCreate",

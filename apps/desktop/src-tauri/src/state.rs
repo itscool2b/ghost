@@ -241,6 +241,12 @@ impl AppState {
         if let Some(chats) = &runtime.chats {
             info.notices
                 .extend(lock(&chats.late_notices).iter().cloned());
+            if let Some(db) = &mut info.db {
+                let timings = chats.store.startup_timings();
+                let ms = |ms: u64| u32::try_from(ms).unwrap_or(u32::MAX);
+                db.recovery_ms = timings.recovery_ms.map(ms);
+                db.indexes_ms = timings.indexes_ms.map(ms);
+            }
         }
         info.recovery_notice = lock(&self.recovery)
             .as_ref()

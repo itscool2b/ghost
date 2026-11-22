@@ -145,4 +145,97 @@ impl SessionManager {
             _ => Err(failed("Invalid memory reply.")),
         }
     }
+    /// One note of a project's memory, with its text.
+    pub async fn read_memory_note(
+        &self,
+        project_id: &str,
+        name: &str,
+    ) -> Result<MemoryNote, SessionError> {
+        match self
+            .deps()
+            .store
+            .memory(Command::ReadNote {
+                project_id: project_id.into(),
+                name: name.into(),
+            })
+            .await
+            .map_err(failed)?
+        {
+            Reply::Note(v) => Ok(v),
+            _ => Err(failed("Invalid memory reply.")),
+        }
+    }
+    /// The user's save of one note, from the revision they read.
+    pub async fn save_memory_note(
+        &self,
+        input: SaveMemoryNote,
+    ) -> Result<MemoryNote, SessionError> {
+        match self
+            .deps()
+            .store
+            .memory(Command::SaveNote(input))
+            .await
+            .map_err(failed)?
+        {
+            Reply::Note(v) => Ok(v),
+            _ => Err(failed("Invalid memory reply.")),
+        }
+    }
+    /// The user's removal of one note; answers the memory as it then stands.
+    pub async fn delete_memory_note(
+        &self,
+        input: DeleteMemoryNote,
+    ) -> Result<ProjectMemory, SessionError> {
+        match self
+            .deps()
+            .store
+            .memory(Command::DeleteNote(input))
+            .await
+            .map_err(failed)?
+        {
+            Reply::Memory(v) => Ok(v),
+            _ => Err(failed("Invalid memory reply.")),
+        }
+    }
+    /// Takes back a run of edits to the brief or to one note (`first` to `last`; the same
+    /// revision for one edit), as the user's own save. Refused once the brief or the note has
+    /// moved on from `last`.
+    pub async fn undo_memory_edit(
+        &self,
+        project_id: &str,
+        first: &str,
+        last: &str,
+    ) -> Result<ProjectMemory, SessionError> {
+        match self
+            .deps()
+            .store
+            .memory(Command::Undo {
+                project_id: project_id.into(),
+                first: first.into(),
+                last: last.into(),
+            })
+            .await
+            .map_err(failed)?
+        {
+            Reply::Memory(v) => Ok(v),
+            _ => Err(failed("Invalid memory reply.")),
+        }
+    }
+    /// A linked bot's save of the brief: saved as a bot's, so the window says so and offers to
+    /// undo it, as it does for an agent's.
+    pub async fn bot_save_project_memory(
+        &self,
+        input: SaveProjectMemory,
+    ) -> Result<ProjectMemory, SessionError> {
+        match self
+            .deps()
+            .store
+            .memory(Command::BotSave(input))
+            .await
+            .map_err(failed)?
+        {
+            Reply::Memory(v) => Ok(v),
+            _ => Err(failed("Invalid memory reply.")),
+        }
+    }
 }

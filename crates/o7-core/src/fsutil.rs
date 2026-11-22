@@ -231,7 +231,11 @@ pub(crate) fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<
         source,
     })?;
     bytes.push(b'\n');
+    write_atomic(path, &bytes)
+}
 
+/// Writes `bytes` to `path` atomically, as [`write_json_atomic`] writes its JSON.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let file_name = path.file_name().ok_or_else(|| CoreError::Io {
         path: path.to_path_buf(),
         source: io::Error::from(io::ErrorKind::InvalidInput),
@@ -242,7 +246,7 @@ pub(crate) fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<
     temp_name.push(format!(".tmp-{}", new_id()));
     let temp = dir.join(temp_name);
 
-    if let Err(source) = write_synced_then_rename(&temp, path, &bytes) {
+    if let Err(source) = write_synced_then_rename(&temp, path, bytes) {
         let _ = fs::remove_file(&temp);
         return Err(CoreError::Io {
             path: path.to_path_buf(),

@@ -9,6 +9,7 @@ import {
   glassLabel,
   osName,
   outcomeLabel,
+  startupTimings,
   stopReasonLabel,
 } from "./format";
 
@@ -21,6 +22,18 @@ describe("labels", () => {
     expect(glassLabel("liquid_glass")).toBe("Liquid Glass");
     expect(glassLabel("acrylic")).toBe("Acrylic");
     expect(glassLabel("none")).toBe("None (opaque)");
+  });
+
+  it("says how long this launch's work on the database took, as far as it is known", () => {
+    expect(startupTimings({ open_ms: 12, recovery_ms: null, indexes_ms: null })).toBe(
+      "opened in 12 ms, still starting",
+    );
+    expect(startupTimings({ open_ms: 4630, recovery_ms: 8, indexes_ms: null })).toBe(
+      "opened in 4,630 ms, ready 8 ms after that",
+    );
+    expect(startupTimings({ open_ms: 12, recovery_ms: 86, indexes_ms: 1080 })).toBe(
+      "opened in 12 ms, ready 86 ms after that, indexes built in 1,080 ms",
+    );
   });
 
   it("describes what opening the database did", () => {

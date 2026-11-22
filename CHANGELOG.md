@@ -9,6 +9,12 @@ adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-22
+
+- Project memory is now a short brief plus notes. Every chat in a project still gets the brief, so keep in it only what every chat needs. Everything else goes in notes: each has a name and one line saying when to read it, and an agent reads a note only when it fits the task. Agents add or change one note at a time, so adding a fact no longer pushes another out, and chats stop paying for memory they do not use. Settings > Project memory lists the notes under the brief. Memory you already have is split at its headings when o7 updates, with nothing lost. ([#165](https://github.com/itscool2b/o7/pull/165))
+- An agent that updates project memory is no longer sent the whole memory back with your next message. It wrote that text itself a moment before, so sending it again only used up your allowance. Other chats in the project still get the update, marked as an agent's. Agents are also told, as soon as they connect, what project memory is for and what does not belong in it. ([#164](https://github.com/itscool2b/o7/pull/164))
+- o7 opens with your projects and chats already there. A long-used o7 used to show an empty sidebar for about ten seconds, with a red "database is busy" line, before your chats appeared. Now the window opens with them in place, and o7 goes straight to your chats instead of showing its logo first. Clearing up after chats that were still working when you quit happens once the window is open, not before it. If your chats really cannot be read, the message has a Retry button. Diagnostics shows how long opening took. ([#163](https://github.com/itscool2b/o7/pull/163))
+
 ## 2026-11-21
 
 - A phone beside your chat, for building phone apps. Press the phone button in a chat and o7 starts an Android phone that you and your agent both use: the agent can install your app, tap, type, read the screen and check the logs. Each chat gets its own phone. The first time, o7 shows what it will download from Google and the licence, then sets Android up for you. Your own Android phone on a cable works too, once you allow the agent to use it. Turn it off in Settings > Mobile. ([#162](https://github.com/itscool2b/o7/pull/162))

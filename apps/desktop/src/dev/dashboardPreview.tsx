@@ -203,6 +203,7 @@ function fixture(kind: string | null) {
       })),
     },
     error: null,
+    cached: false,
     pending: 0,
   };
   const workspace = {

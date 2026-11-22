@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MemoryRevision, ProjectMemory, ProjectMemoryChanged } from "../bindings";
+import type { ProjectMemory, ProjectMemoryChanged } from "../bindings";
 
 const native = vi.hoisted(() => ({ available: true, listen: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: native.listen }));
@@ -11,10 +11,13 @@ import {
   agentEditText,
   agentEditToast,
   agentLabel,
+  editedNotes,
   MAX_MEMORY_BYTES,
+  MAX_NOTE_BYTES,
   MEMORY_CHANGED_ANYWHERE,
   memoryBytes,
   memoryChats,
+  NOTE_NAME,
   newerVersion,
   noticeAgentEdit,
   PROJECT_MEMORY_CHANGED,
@@ -28,23 +31,26 @@ const memory: ProjectMemory = {
   markdown: "Current",
   updated_at: 1,
 };
-const revision = (id: string, parent: string | null, markdown: string, source = "user") =>
-  ({
-    revision: id,
-    parent_revision: parent,
-    project_id: "one",
-    markdown,
-    reason: `Saved ${id}`,
-    source,
-    created_at: 1793505600000,
-  }) satisfies MemoryRevision;
 const chats = memoryChats([
   { id: "login", title: "Fix the login flow", agent_name: "Claude Code" },
   { id: "untitled", title: null, agent_name: "Codex" },
 ]);
-const edit = (id: string, parent: string | null, chat = "login"): ProjectMemoryChanged => ({
+const edit = (
+  id: string,
+  parent: string | null,
+  chat = "login",
+  note: string | null = null,
+  deleted = false,
+): ProjectMemoryChanged => ({
   project_id: "one",
-  agent_edit: { revision: id, parent_revision: parent, chat_id: chat },
+  agent_edit: { revision: id, parent_revision: parent, chat_id: chat, note, deleted },
+});
+/** One run of edits to the brief, or to a note. */
+const run = (first: string, last = first, note: string | null = null, deleted = false) => ({
+  note,
+  first,
+  last,
+  deleted,
 });
 
 describe("project memory", () => {
@@ -52,6 +58,16 @@ describe("project memory", () => {
     expect(memoryBytes("é")).toBe(2);
     expect(memoryBytes("é".repeat(MAX_MEMORY_BYTES / 2))).toBe(MAX_MEMORY_BYTES);
     expect(memoryBytes("é".repeat(MAX_MEMORY_BYTES / 2 + 1))).toBeGreaterThan(MAX_MEMORY_BYTES);
+  });
+  it("keeps the brief short and gives a note more room, as Rust does", () => {
+    expect(MAX_MEMORY_BYTES).toBe(4096);
+    expect(MAX_NOTE_BYTES).toBe(16384);
+  });
+  it("names a note in lowercase letters, digits and dashes", () => {
+    for (const name of ["windows-build", "a", "2026-plan", "n".repeat(40)])
+      expect(NOTE_NAME.test(name), name).toBe(true);
+    for (const name of ["", "Windows", "-lead", "has space", "under_score", "../x", "n".repeat(41)])
+      expect(NOTE_NAME.test(name), name).toBe(false);
   });
 });
 
@@ -93,7 +109,7 @@ describe("agent edit notices", () => {
     expect(notice).toEqual({
       projectId: "one",
       revision: "r2",
-      restores: "r1",
+      subjects: [run("r2")],
       chats: ["login"],
       edits: 1,
       state: { status: "shown" },
@@ -107,7 +123,7 @@ describe("agent edit notices", () => {
       {
         projectId: "one",
         revision: "r4",
-        restores: "r1",
+        subjects: [run("r2", "r4")],
         chats: ["login", "untitled"],
         edits: 3,
         state: { status: "shown" },
@@ -120,12 +136,57 @@ describe("agent edit notices", () => {
     const first = noticeAgentEdit([], edit("r2", "r1"));
     // The person saved r3 in between: Undo must never discard it.
     expect(noticeAgentEdit(first, edit("r4", "r3"))).toEqual([
-      expect.objectContaining({ revision: "r4", restores: "r3", edits: 1 }),
+      expect.objectContaining({ revision: "r4", subjects: [run("r4")], edits: 1 }),
     ]);
     const undone = first.map((notice) => ({ ...notice, state: { status: "undone" } as const }));
     expect(noticeAgentEdit(undone, edit("r3", "r2"))).toEqual([
-      expect.objectContaining({ revision: "r3", restores: "r2", edits: 1 }),
+      expect.objectContaining({ revision: "r3", subjects: [run("r3")], edits: 1 }),
     ]);
+  });
+  it("keeps what each edit touched apart: the brief, and each note by name", () => {
+    let notices = noticeAgentEdit([], edit("r2", "r1", "login", "windows-build"));
+    notices = noticeAgentEdit(notices, edit("r3", "r2"));
+    notices = noticeAgentEdit(notices, edit("r4", "r3", "login", "windows-build"));
+    notices = noticeAgentEdit(notices, edit("r5", "r4", "untitled", "release", true));
+    expect(notices).toEqual([
+      {
+        projectId: "one",
+        revision: "r5",
+        // A second edit to a note lengthens its run; the brief and another note have their own.
+        subjects: [run("r2", "r4", "windows-build"), run("r3"), run("r5", "r5", "release", true)],
+        chats: ["login", "untitled"],
+        edits: 4,
+        state: { status: "shown" },
+      },
+    ]);
+    const [notice] = notices;
+    if (!notice) throw new Error("notice");
+    expect(editedNotes(notice)).toBe("windows-build, release");
+    expect(agentEditToast(notice, chats, "o7")).toEqual({
+      title: "4 edits to project memory",
+      detail: "Agents in 2 chats · windows-build, release · o7",
+    });
+  });
+  it("says which note an agent saved or deleted, and names a linked assistant", () => {
+    const [saved] = noticeAgentEdit([], edit("r2", "r1", "login", "windows-build"));
+    const [deleted] = noticeAgentEdit([], edit("r2", "r1", "login", "release", true));
+    const [bot] = noticeAgentEdit([], edit("r2", "r1", ""));
+    if (!saved || !deleted || !bot) throw new Error("notices");
+    expect(agentEditToast(saved, chats, "o7")).toEqual({
+      title: "Memory note saved",
+      detail: "Claude Code · Fix the login flow · windows-build · o7",
+    });
+    expect(agentEditText(saved, chats, "o7")).toBe(
+      "Claude Code in Fix the login flow saved the note windows-build in project memory for o7.",
+    );
+    expect(agentEditToast(deleted, chats, null).title).toBe("Memory note deleted");
+    expect(agentEditText(deleted, chats, null)).toBe(
+      "Claude Code in Fix the login flow deleted the note release from project memory.",
+    );
+    expect(agentLabel("", chats)).toBe("A linked assistant");
+    expect(agentEditText(bot, chats, "o7")).toBe(
+      "A linked assistant updated project memory for o7.",
+    );
   });
   it("keeps the newest three projects", () => {
     let notices: readonly AgentEditNotice[] = [];
@@ -174,58 +235,39 @@ describe("agent edit notices", () => {
 describe("undoing an agent's edit", () => {
   const notice: AgentEditNotice = {
     projectId: "one",
-    revision: "r3",
-    restores: "r1",
+    revision: "r5",
+    subjects: [run("r2", "r4", "windows-build"), run("r3"), run("r5", "r5", "release", true)],
     chats: ["login"],
-    edits: 2,
+    edits: 4,
     state: { status: "shown" },
   };
-  const history = [
-    revision("r3", "r2", "Second agent edit", "agent:login"),
-    revision("r2", "r1", "First agent edit", "agent:login"),
-    revision("r1", null, "Owner notes"),
-  ];
-  it("saves what the edits replaced as the person's revision, only over their result", async () => {
-    const save = vi.fn(async () => memory);
-    await undoAgentEdit({ history: async () => history, save }, notice, chats);
-    expect(save).toHaveBeenCalledExactlyOnceWith({
-      project_id: "one",
-      expected_revision: "r3",
-      markdown: "Owner notes",
-      reason: "Undid 2 edits by Claude Code in Fix the login flow",
+  it("takes back each run through Rust, newest first, and saves nothing itself", async () => {
+    const undo = vi.fn(async () => memory);
+    expect(await undoAgentEdit({ undo }, notice)).toBe(memory);
+    expect(undo.mock.calls).toEqual([
+      ["one", "r5", "r5"],
+      ["one", "r3", "r3"],
+      ["one", "r2", "r4"],
+    ]);
+  });
+  it("passes Rust's refusal on when nothing could be undone", async () => {
+    const undo = vi.fn(async () => {
+      throw new Error("Memory changed after that edit, so it cannot be undone.");
     });
+    await expect(undoAgentEdit({ undo }, notice)).rejects.toThrow("Memory changed after that edit");
+    expect(undo).toHaveBeenCalledTimes(1);
   });
-  it("empties memory an agent wrote first, and names an unknown agent in lower case", async () => {
-    const save = vi.fn(async () => memory);
-    const history = vi.fn(async () => []);
-    await undoAgentEdit(
-      { history, save },
-      { ...notice, restores: null, edits: 1, chats: ["gone"] },
-      chats,
+  it("says how far it got when a later run could not be undone", async () => {
+    let calls = 0;
+    const undo = vi.fn(async () => {
+      calls += 1;
+      if (calls === 2) throw new Error("Memory changed after that edit, so it cannot be undone.");
+      return memory;
+    });
+    await expect(undoAgentEdit({ undo }, notice)).rejects.toThrow(
+      "1 of 3 was undone. Memory changed after that edit",
     );
-    expect(history).not.toHaveBeenCalled();
-    expect(save).toHaveBeenCalledWith(
-      expect.objectContaining({ markdown: "", reason: "Undid an edit by an agent" }),
-    );
-  });
-  it("refuses when the earlier revision is missing, and passes a stale save's refusal on", async () => {
-    const save = vi.fn(async () => memory);
-    await expect(undoAgentEdit({ history: async () => [], save }, notice, chats)).rejects.toThrow(
-      "not on this device",
-    );
-    expect(save).not.toHaveBeenCalled();
-    await expect(
-      undoAgentEdit(
-        {
-          history: async () => history,
-          save: async () => {
-            throw new Error("Project memory changed. Review the current revision before saving.");
-          },
-        },
-        notice,
-        chats,
-      ),
-    ).rejects.toThrow("Project memory changed");
+    expect(undo).toHaveBeenCalledTimes(2);
   });
 });
 

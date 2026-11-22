@@ -35,6 +35,7 @@ pub(crate) mod history;
 pub(crate) mod image_refs;
 pub(crate) mod line_edits;
 pub(crate) mod memory;
+pub(crate) mod memory_notes;
 pub(crate) mod organization;
 pub(crate) mod recover;
 pub(crate) mod rows;
@@ -48,10 +49,11 @@ pub(crate) mod workspace_removal;
 pub(crate) mod worktree_setup;
 mod writer;
 
+use std::collections::HashSet;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use o7_protocol::session::{BlobText, HistoryPage, PauseReason, StorageStatus};
@@ -68,10 +70,14 @@ use crate::store::Store;
 use writer::{Permits, Request, Shared, Work, Writer};
 #[cfg(test)]
 pub(crate) use writer::{SavedRead, TestWork};
-pub(crate) use writer::{WaitError, WriterConfig, await_reply, op_bytes};
+pub(crate) use writer::{WaitError, WriterConfig, await_reply, await_reply_while, op_bytes};
 
 /// A call that gets no answer within this fails.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The longest a call waits for an answer while the writer is at work it knows to be long
+/// (startup recovery, building an index): it is not busy then, only not ready yet.
+const SETTLING_LIMIT: Duration = Duration::from_secs(120);
 
 /// How long one call for line edits goes on counting turns that have not been counted yet before it
 /// answers with what it has.
@@ -566,13 +572,127 @@ impl ChatStore {
                 }
             })
             .map_err(CoreError::io(profile.db_path()))?;
-        Ok(Arc::new(ChatStore {
+        let store = Arc::new(ChatStore {
             shared,
             rt,
             db_path: profile.db_path(),
             attachment_dir: profile.attachments_dir(),
             recovered: recovered_rx,
-        }))
+        });
+        if config.leftovers {
+            store.rt.spawn(ChatStore::leftovers(Arc::downgrade(&store)));
+        }
+        Ok(store)
+    }
+
+    /// What startup leaves for afterwards, as ordinary queued work that reads and live chats go
+    /// between: every ended turn that is not compacted yet is compacted, now and each time the
+    /// writer says one may wait, and a while in, the indexes recovery reads through are built when
+    /// they are missing. A turn too large to merge is read on a connection of its own, off the
+    /// writer, and only its text is saved through the FIFO. Ends when the store closes.
+    async fn leftovers(store: Weak<ChatStore>) {
+        let Some(this) = store.upgrade() else {
+            return;
+        };
+        this.recovered().await;
+        let shared = Arc::clone(&this.shared);
+        drop(this);
+        // The indexes wait a while: the window is asking for its first lists right now. A thread of
+        // its own keeps the time, not the runtime's clock: a timer here would be one more thing a
+        // test on paused time has to account for.
+        let delay = shared.config.index_delay;
+        if delay.is_zero() {
+            shared.set_index_due();
+        } else {
+            let due = Arc::clone(&shared);
+            let spawned = std::thread::Builder::new()
+                .name("aura-chat-indexes".into())
+                .spawn(move || {
+                    std::thread::sleep(delay);
+                    due.set_index_due();
+                });
+            if spawned.is_err() {
+                shared.set_index_due();
+            }
+        }
+        let mut indexed = false;
+        // Each turn is tried once: one that cannot be compacted must not be read again and again.
+        let mut tried: HashSet<String> = HashSet::new();
+        loop {
+            let Some(this) = store.upgrade() else {
+                return;
+            };
+            match this.compact_leftovers(&mut tried).await {
+                Ok(()) => {}
+                Err(StoreError::Closed) => return,
+                Err(error) => {
+                    tracing::warn!(%error, "could not compact the turns left from earlier; a later pass tries again");
+                }
+            }
+            if !indexed && shared.index_due() {
+                indexed = true;
+                let (reply, answer) = oneshot::channel();
+                match this
+                    .request(Request::EnsureIndexes { reply }, answer)
+                    .await
+                    .and_then(|built| built)
+                {
+                    Ok(_) => {}
+                    Err(StoreError::Closed) => return,
+                    Err(error) => {
+                        tracing::warn!(%error, "could not build the indexes recovery reads through; the next start tries again");
+                    }
+                }
+            }
+            drop(this);
+            // Woken for a turn, when the indexes are due, or because the store closed.
+            shared.leftovers.notified().await;
+        }
+    }
+
+    /// One pass of [`leftovers`](Self::leftovers) over the turns not in `tried`.
+    async fn compact_leftovers(&self, tried: &mut HashSet<String>) -> Result<(), StoreError> {
+        if self.is_paused() {
+            return Ok(());
+        }
+        let (reply, answer) = oneshot::channel();
+        let waiting = self.request(Request::Leftovers { reply }, answer).await??;
+        let limits = self.shared.config.compact;
+        for turn in waiting {
+            if !tried.insert(turn.turn_id.clone()) {
+                continue;
+            }
+            if turn.bytes <= limits.merge_limit {
+                let permit = self.reserve(256).await.map_err(|_| StoreError::Closed)?;
+                permit.send(Op::CompactTurn {
+                    chat_id: turn.chat_id,
+                    turn_id: turn.turn_id,
+                });
+                continue;
+            }
+            let db = self.db_path.clone();
+            let turn_id = turn.turn_id.clone();
+            let rows = self
+                .rt
+                .spawn_blocking(move || compact::collect_text_at(&db, &turn_id, &limits))
+                .await
+                .map_err(|_| StoreError::Other("Reading a turn's text stopped.".into()))?
+                .map_err(|error| {
+                    StoreError::Other(format!("Couldn't read a turn's text: {error}"))
+                })?;
+            let (reply, answer) = oneshot::channel();
+            self.request(
+                Request::SaveTurnText {
+                    chat_id: turn.chat_id,
+                    turn_id: turn.turn_id,
+                    rows,
+                    reply,
+                },
+                answer,
+            )
+            .await??;
+        }
+        Ok(())
     }
 
     /// Whether saving runs, is paused (with how much is unsaved), or failed.
@@ -586,6 +706,15 @@ impl ChatStore {
 
     pub(crate) fn attachment_dir(&self) -> &std::path::Path {
         &self.attachment_dir
+    }
+
+    /// How long startup's work on the database took, as far as it is known yet.
+    pub fn startup_timings(&self) -> StartupTimings {
+        let (recovery_ms, indexes_ms) = self.shared.startup_timings();
+        StartupTimings {
+            recovery_ms,
+            indexes_ms,
+        }
     }
 
     /// What startup recovery did, once it finished.
@@ -802,7 +931,10 @@ impl ChatStore {
         answer: oneshot::Receiver<T>,
         limit: Duration,
     ) -> Result<T, StoreError> {
-        match await_reply(&self.rt, answer, limit).await {
+        // While the writer recovers or builds an index, the answer is late, not lost.
+        let settling = || self.shared.is_settling();
+        match await_reply_while(&self.rt, answer, limit, SETTLING_LIMIT.max(limit), settling).await
+        {
             Ok(value) => Ok(value),
             Err(WaitError::Gone) => Err(StoreError::Closed),
             Err(WaitError::TimedOut) => Err(self.timed_out()),
@@ -1138,6 +1270,18 @@ pub enum TitleSource {
     FirstLine,
     Agent,
     Manual,
+}
+
+/// How long startup's work on the database took, for the diagnostics card: the next time opening
+/// the app is slow, this says where.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StartupTimings {
+    /// Startup recovery, the writer's first op, which every first read waits behind. `None`
+    /// until it finished.
+    pub recovery_ms: Option<u64>,
+    /// Building the indexes recovery reads through, after startup. `None` when this start built
+    /// none, as every start but the first with them does.
+    pub indexes_ms: Option<u64>,
 }
 
 /// What recovery did.
@@ -2493,9 +2637,376 @@ mod tests {
                 )
                 .expect("turn");
         });
+        // Nothing is timed before it happened, and this crate's tests leave the indexes unbuilt.
         let report = fixture.store.recovered().await;
         assert_eq!(report.interrupted_turns, 1);
         assert_eq!(report.compacted_turns, 1);
+        let timings = fixture.store.startup_timings();
+        assert!(timings.recovery_ms.is_some_and(|ms| ms < 60_000));
+        assert_eq!(timings.indexes_ms, None);
+    }
+
+    /// A chat with one turn left running, holding a streamed answer of about 2 KiB.
+    fn interrupted_turn(store: &Store) -> String {
+        let chat = rows::create_chat(
+            store.conn(),
+            &NewChat {
+                agent_host: Default::default(),
+                agent_id: "mock".into(),
+                folder: PathBuf::from("/w"),
+                device_id: "dev".into(),
+                now: 1,
+            },
+        )
+        .expect("chat");
+        store
+            .conn()
+            .execute(
+                "INSERT INTO turns (id, chat_id, seq, status, started_at, device_id, first_event_seq) \
+                 VALUES ('t', ?1, 1, 'running', 1, 'dev', 0)",
+                params![chat.id],
+            )
+            .expect("turn");
+        let rows: Vec<EventRow> = (0..40)
+            .map(|seq| {
+                event_row(
+                    seq,
+                    Some("t"),
+                    &O7Event::MessageDelta {
+                        message_id: "t.m1".into(),
+                        text: "streamed ".into(),
+                    },
+                )
+            })
+            .collect();
+        rows::append_events(store.conn(), "dev", &chat.id, &rows).expect("events");
+        chat.id
+    }
+
+    /// Runs `read` on the writer's connection and waits for what it found.
+    async fn on_store<T: Send + 'static>(
+        store: &ChatStore,
+        read: impl Fn(&Connection) -> T + Send + Sync + 'static,
+    ) -> T {
+        let (found, answer) = oneshot::channel();
+        store.with_store(move |store| {
+            let _ = found.send(read(store.conn()));
+        });
+        await_reply(&Handle::current(), answer, Duration::from_secs(10))
+            .await
+            .expect("the store answers")
+    }
+
+    /// Waits until the pass after startup compacted turn `t`; returns how many events it has.
+    async fn compacted(store: &ChatStore) -> i64 {
+        for _ in 0..400 {
+            let (done, events) = on_store(store, |conn| {
+                let done: bool = conn
+                    .query_row(
+                        "SELECT compacted_at IS NOT NULL FROM turns WHERE id = 't'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("turn");
+                let events: i64 = conn
+                    .query_row(
+                        "SELECT count(*) FROM events WHERE turn_id = 't'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("events");
+                (done, events)
+            })
+            .await;
+            if done {
+                return events;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        panic!("turn t was never compacted");
+    }
+
+    async fn searchable(store: &ChatStore) -> i64 {
+        on_store(store, |conn| {
+            conn.query_row(
+                "SELECT count(*) FROM message_fts WHERE message_fts MATCH 'streamed'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("search")
+        })
+        .await
+    }
+
+    /// Startup ends a large turn without compacting it; the pass after startup builds recovery's
+    /// indexes and compacts the turn as ordinary queued work.
+    #[tokio::test]
+    async fn the_pass_after_startup_compacts_what_recovery_left() {
+        let config = WriterConfig {
+            leftovers: true,
+            index_delay: Duration::ZERO,
+            compact: compact::CompactLimits {
+                inline_limit: 200,
+                ..compact::CompactLimits::STANDARD
+            },
+            ..WriterConfig::STANDARD
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fixture = start_in(dir, config, |store| {
+            interrupted_turn(store);
+            // As a database from before the indexes recovery reads through.
+            store
+                .conn()
+                .execute_batch("DROP INDEX events_steering; DROP INDEX events_turn_ended;")
+                .expect("drop");
+        });
+        let store = &fixture.store;
+        let report = store.recovered().await;
+        assert_eq!(
+            (report.interrupted_turns, report.compacted_turns),
+            (1, 0),
+            "startup ends the turn and leaves its compaction"
+        );
+        // The stream of 40 pieces merges into one message, beside the end recovery appended.
+        assert_eq!(compacted(store).await, 2);
+        assert_eq!(searchable(store).await, 1);
+        let indexes = on_store(store, |conn| {
+            conn.query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type = 'index' \
+                 AND name IN ('events_steering', 'events_turn_ended')",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("indexes")
+        })
+        .await;
+        assert_eq!(indexes, 2);
+        // They were built here, after startup, and the launch says how long that took.
+        assert!(store.startup_timings().indexes_ms.is_some());
+        assert!(store.shutdown(Duration::from_secs(5)).await);
+        // A store that carries those indexes opens as any other.
+        let (reopened, info) = Store::open(&fixture.profile).expect("reopen");
+        assert!(
+            matches!(info.outcome, crate::store::OpenOutcome::Opened),
+            "{:?}",
+            info.outcome
+        );
+        drop(reopened);
+    }
+
+    /// A turn too large to merge keeps its rows: the pass reads its text on a connection of its
+    /// own and saves only that, so the writer never reads the turn.
+    #[tokio::test]
+    async fn a_turn_too_large_to_merge_is_read_off_the_writer() {
+        let config = WriterConfig {
+            leftovers: true,
+            // The indexes stay unbuilt here: the turn is compacted without them.
+            index_delay: Duration::from_secs(3_600),
+            compact: compact::CompactLimits {
+                inline_limit: 200,
+                merge_limit: 300,
+                ..compact::CompactLimits::STANDARD
+            },
+            ..WriterConfig::STANDARD
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fixture = start_in(dir, config, |store| {
+            interrupted_turn(store);
+        });
+        let store = &fixture.store;
+        assert_eq!(store.recovered().await.compacted_turns, 0);
+        assert_eq!(compacted(store).await, 41, "its rows stay as they were");
+        assert_eq!(searchable(store).await, 1);
+        // The writer leaves such a turn alone when an actor asks, too.
+        let chat = store.chats().await.expect("chats").remove(0);
+        send(
+            store,
+            Op::CompactTurn {
+                chat_id: chat.id,
+                turn_id: "t".into(),
+            },
+        )
+        .await;
+        assert!(store.barrier().await);
+        assert_eq!(compacted(store).await, 41);
+        assert_eq!(searchable(store).await, 1, "and it is not stored twice");
+    }
+
+    /// A profile the size of a long-used one: `events` rows of about 1 KiB each over 40 chats whose
+    /// turns ended and were compacted, and three chats that were mid-turn when the app quit, one of
+    /// them with a turn far above the inline limit.
+    fn large_profile(store: &Store, events: u32) {
+        let conn = store.conn();
+        let filler = super::test_support::payload(&O7Event::Notice {
+            level: NoticeLevel::Info,
+            message: "x".repeat(1000),
+        });
+        let chat = |folder: &str| {
+            rows::create_chat(
+                conn,
+                &NewChat {
+                    agent_host: Default::default(),
+                    agent_id: "mock".into(),
+                    folder: PathBuf::from(folder),
+                    device_id: "dev".into(),
+                    now: 1,
+                },
+            )
+            .expect("chat")
+            .id
+        };
+        let fill = |chat_id: &str, turn: &str, status: &str, compacted: bool, count: u32| {
+            conn.execute(
+                "INSERT INTO turns (id, chat_id, seq, status, started_at, device_id, first_event_seq, compacted_at) \
+                 VALUES (?1, ?2, 1, ?3, 1, 'dev', 0, ?4)",
+                params![turn, chat_id, status, compacted.then_some(1)],
+            )
+            .expect("turn");
+            conn.execute(
+                "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?4 - 1) \
+                 INSERT INTO events (id, chat_id, turn_id, seq, kind, payload, created_at, device_id) \
+                 SELECT ?2 || '-' || i, ?1, ?2, i, 'notice', ?3, 1, 'dev' FROM n",
+                params![chat_id, turn, filler, count],
+            )
+            .expect("events");
+        };
+        // A profile this size comes from before the indexes recovery builds after startup.
+        conn.execute_batch("DROP INDEX events_steering; DROP INDEX events_turn_ended;")
+            .expect("drop");
+        conn.execute_batch("BEGIN").expect("begin");
+        for index in 0..40 {
+            let id = chat(&format!("/w/{index}"));
+            fill(
+                &id,
+                &format!("done-{index}"),
+                "completed",
+                true,
+                events / 40,
+            );
+        }
+        for (index, count) in [(0, 40_000), (1, 400), (2, 40)] {
+            let id = chat(&format!("/w/live-{index}"));
+            fill(&id, &format!("live-{index}"), "running", false, count);
+        }
+        conn.execute_batch("COMMIT").expect("commit");
+    }
+
+    /// Measures startup on a large profile (`cargo test -p o7-core --lib large_profile -- --ignored
+    /// --nocapture`; `O7_LARGE_EVENTS` sets its size, 300,000 events when unset). It prints what
+    /// the search this version dropped costs on the same data, then holds startup recovery and the
+    /// first list to a second on a first start (no indexes yet) and on the next (indexes built).
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "builds a database of hundreds of megabytes"]
+    async fn startup_on_a_large_profile_does_not_read_its_events() {
+        let events = std::env::var("O7_LARGE_EVENTS")
+            .ok()
+            .and_then(|count| count.parse().ok())
+            .unwrap_or(300_000);
+        let config = WriterConfig {
+            leftovers: true,
+            index_delay: Duration::from_millis(200),
+            ..WriterConfig::STANDARD
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let built = std::time::Instant::now();
+        // When the writer was started: recovery is its first op.
+        let begun = Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
+        let mark = Arc::clone(&begun);
+        let fixture = start_in(dir, config, move |store| {
+            large_profile(store, events);
+            eprintln!("built {events} events in {:?}", built.elapsed());
+            let scan = std::time::Instant::now();
+            let pending: i64 = store
+                .conn()
+                .query_row(
+                    "SELECT count(*) FROM (SELECT DISTINCT e.chat_id FROM events e \
+                     WHERE e.kind='steering_status' AND json_extract(e.payload,'$.state')='pending')",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("the search startup used to run");
+            eprintln!(
+                "the search startup used to run over every event: {:?} (found {pending})",
+                scan.elapsed()
+            );
+            *mark.lock().expect("mark") = std::time::Instant::now();
+        });
+        let store = &fixture.store;
+        let started = *begun.lock().expect("begun");
+        let report = store.recovered().await;
+        let recovered = started.elapsed();
+        let chats = store.chats().await.expect("chats").len();
+        let listed = started.elapsed();
+        eprintln!("first start: recovered in {recovered:?}, {chats} chats listed after {listed:?}");
+        assert_eq!(report.interrupted_turns, 3);
+        assert_eq!(chats, 43);
+        assert!(
+            listed < Duration::from_secs(1),
+            "the first list waited {listed:?}"
+        );
+        // The pass after startup builds the indexes and compacts the large turn it was left.
+        let pass = std::time::Instant::now();
+        for _ in 0..2_400 {
+            let left = on_store(store, |conn| {
+                let turns: i64 = conn
+                    .query_row(
+                        "SELECT count(*) FROM turns WHERE status <> 'running' AND compacted_at IS NULL",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("turns");
+                let indexes: i64 = conn
+                    .query_row(
+                        "SELECT count(*) FROM sqlite_schema WHERE type = 'index' \
+                         AND name IN ('events_steering', 'events_turn_ended')",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("indexes");
+                (turns, indexes)
+            })
+            .await;
+            if left == (0, 2) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        eprintln!("the pass after startup finished in {:?}", pass.elapsed());
+        assert!(store.shutdown(Duration::from_secs(30)).await);
+
+        // The next start, with a turn left running again.
+        let profile = fixture.profile.clone();
+        let owner = ProfileOwner::acquire(&profile).expect("owner");
+        let (reopened, _) = Store::open(&profile).expect("reopen");
+        reopened
+            .conn()
+            .execute_batch(
+                "DELETE FROM events WHERE turn_id = 'live-1' AND kind = 'turn_ended'; \
+                 UPDATE turns SET status = 'running', stop_reason = NULL, ended_at = NULL, \
+                 compacted_at = NULL WHERE id = 'live-1';",
+            )
+            .expect("leave a turn running");
+        let again = ChatStore::start_with(
+            reopened,
+            owner,
+            &profile,
+            "dev".into(),
+            Handle::current(),
+            config,
+        )
+        .expect("start");
+        let started = std::time::Instant::now();
+        let report = again.recovered().await;
+        let recovered = started.elapsed();
+        let chats = again.chats().await.expect("chats").len();
+        let listed = started.elapsed();
+        eprintln!("next start: recovered in {recovered:?}, {chats} chats listed after {listed:?}");
+        assert_eq!(report.interrupted_turns, 1);
+        assert!(
+            listed < Duration::from_secs(1),
+            "the next list waited {listed:?}"
+        );
+        assert!(again.shutdown(Duration::from_secs(30)).await);
     }
 
     /// Marks the child copy of the crash tests; holds the data root it works on.

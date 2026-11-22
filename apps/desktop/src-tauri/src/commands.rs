@@ -257,7 +257,10 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
 #[tauri::command]
 #[specta::specta]
 pub async fn chats_list(state: State<'_, AppState>) -> Result<Vec<ChatSummary>, AppError> {
-    Ok(state.sessions()?.chats().await?)
+    let chats = state.sessions()?.chats().await?;
+    // The next launch's first frame starts from this list.
+    crate::launch_cache::keep(&state, o7_core::launch_cache::Part::Chats, &chats);
+    Ok(chats)
 }
 
 /// Creates a chat with `agent_id` in `folder` (an absolute path) and starts its agent. Creating a

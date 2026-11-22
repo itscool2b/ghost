@@ -47,6 +47,10 @@ export const MODES = [
   // The start screen: its shortest piece, grown to fit, and its tallest, shrunk to fit.
   "launch&art=b-1b-lancer",
   "launch&art=sr-71-blackbird",
+  // The sidebar while the app opens: its placeholders (the lists never answer here), and a fault
+  // with Retry beside it.
+  "opening&late=600000",
+  "opening&fail&late=50",
   "history",
   "history-question",
   "partial-history",

@@ -43,6 +43,7 @@ pub mod device;
 pub mod error;
 pub mod gitworkspaces;
 pub mod ids;
+pub mod launch_cache;
 pub mod mcp;
 pub mod memory_service;
 pub mod onboarding;

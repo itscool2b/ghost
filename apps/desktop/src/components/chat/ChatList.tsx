@@ -73,6 +73,46 @@ export function projectName(folder: string): string {
   return parts[parts.length - 1] ?? folder;
 }
 
+/**
+ * A sidebar with nothing to show yet waits this long before it draws placeholder rows: a list
+ * that answers at once must never flash them.
+ */
+export const SKELETON_AFTER_MS = 150;
+/** The lists are this late before the sidebar says, quietly, what the app is doing. */
+export const OPENING_NOTE_AFTER_MS = 2000;
+
+/** Whether `on` has held for `ms` without a break. */
+function useHeldFor(on: boolean, ms: number): boolean {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setHeld(false);
+      return;
+    }
+    const timer = setTimeout(() => setHeld(true), ms);
+    return () => clearTimeout(timer);
+  }, [on, ms]);
+  return on && held;
+}
+
+/**
+ * The sidebar before its first list, on a launch with nothing kept from the last one: two projects
+ * and their chats as bars of the rows' own size. It says nothing and is not read out; the section
+ * around it is marked busy.
+ */
+function SidebarSkeleton() {
+  return (
+    <ul className="chat-skeleton" aria-hidden="true" data-testid="chats-skeleton">
+      <li data-project="" />
+      <li />
+      <li />
+      <li />
+      <li data-project="" />
+      <li />
+    </ul>
+  );
+}
+
 /** How long a chat that just appeared keeps its arrival mark: its row's rise, with room to spare. */
 const ARRIVAL_MS = 700;
 
@@ -141,10 +181,19 @@ export function ChatList({
   onProjectBoard,
   boardProject = null,
   members,
+  opening = false,
+  onRetry,
 }: {
   readonly active?: boolean;
   readonly chats: readonly ChatSummary[] | null;
   readonly error: string | null;
+  /**
+   * The database has not answered with the lists yet: `chats` is what the last launch kept, or
+   * nothing. The rows read as they will; only a wait long enough to notice is mentioned.
+   */
+  readonly opening?: boolean;
+  /** Reads the lists again, for the error's Retry. */
+  readonly onRetry?: () => void;
   readonly selected: string | null;
   readonly onSelect: (chatId: string) => void;
   readonly onNewChat: () => void;
@@ -179,6 +228,12 @@ export function ChatList({
   const search = useRef<HTMLInputElement>(null);
   const all = chats ?? [];
   const arrived = useArrivals(chats === null ? null : chats.map((chat) => chat.id));
+  const unanswered = opening && error === null;
+  const skeleton = useHeldFor(unanswered && chats === null, SKELETON_AFTER_MS);
+  const late = useHeldFor(unanswered, OPENING_NOTE_AFTER_MS);
+  // The rows that take the placeholders' place ease in once, so the swap is not a cut.
+  const followsSkeleton = useRef(false);
+  if (skeleton) followsSkeleton.current = true;
   const filtered = all.filter((chat) =>
     `${chat.title ?? "New chat"} ${chat.folder} ${chat.agent_name}`
       .toLowerCase()
@@ -327,8 +382,18 @@ export function ChatList({
         ) : null}
       </div>
       {error !== null ? (
-        <p role="alert" className="ui-error" data-testid="chats-error">
-          {error}
+        <p role="alert" className="ui-error chat-sidebar-error" data-testid="chats-error">
+          <span>{error}</span>
+          {onRetry ? (
+            <button type="button" className="g-button g-button-ghost g-button-24" onClick={onRetry}>
+              Retry
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+      {late ? (
+        <p role="status" className="chat-sidebar-empty" data-testid="chats-opening">
+          Finishing the last session
         </p>
       ) : null}
       <div className="chat-project-scroll">
@@ -361,7 +426,11 @@ export function ChatList({
             ))}
           </section>
         ) : null}
-        <section className="chat-project-section" aria-label={section}>
+        <section
+          className="chat-project-section"
+          aria-label={section}
+          aria-busy={unanswered && chats === null ? true : undefined}
+        >
           <h2 className="chat-section-label">
             <button
               type="button"
@@ -394,7 +463,11 @@ export function ChatList({
               {query && filtered.length === 0 ? (
                 <p className="chat-sidebar-empty">No chats match “{query}”.</p>
               ) : null}
-              <ul className="chat-projects">
+              {skeleton ? <SidebarSkeleton /> : null}
+              <ul
+                className="chat-projects"
+                data-settled={followsSkeleton.current && chats !== null ? "" : undefined}
+              >
                 {projects.map((project) => {
                   const open = !folded.has(project.folder);
                   return (

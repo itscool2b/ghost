@@ -45,6 +45,7 @@ pub mod glass;
 pub mod instructions_commands;
 pub mod integrity;
 pub mod launch;
+pub mod launch_cache;
 pub mod memory_commands;
 pub mod mobile;
 pub mod native_shell;

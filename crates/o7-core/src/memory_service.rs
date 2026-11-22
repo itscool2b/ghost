@@ -6,7 +6,7 @@ use crate::chatstore::{
 };
 use o7_protocol::{
     mcp::{McpCredentials, McpDefinition, McpTransport, ResolvedMcpServer},
-    memory::SaveProjectMemory,
+    memory::{DeleteMemoryNote, SaveMemoryNote, SaveProjectMemory},
 };
 use serde::Deserialize;
 use std::{
@@ -49,6 +49,13 @@ struct Request {
     markdown: Option<String>,
     #[serde(default)]
     reason: Option<String>,
+    /// The note a read, a note write or a note delete names. A read without one answers the
+    /// brief and the list of notes.
+    #[serde(default)]
+    note: Option<String>,
+    /// A note's one line that says when to read it.
+    #[serde(default)]
+    description: Option<String>,
     /// Proposals carried one. A helper from before they were removed still sends it, and unknown
     /// fields are refused, so it is accepted and unused.
     #[serde(default, rename = "idempotency_key")]
@@ -96,7 +103,20 @@ impl MemoryGrant {
                     let Some(project)=project else {revoked=true;return Ok(serde_json::json!({"error":"The project is unavailable."}));};
                     // Scope is derived from the app-owned chat, never a client supplied project ID.
                     let command=match request.operation.as_str(){
-                        "read"=>Command::Read(project),
+                        "read"=>match request.note {
+                            Some(name)=>Command::ReadNote{project_id:project,name},
+                            None=>Command::Read(project),
+                        },
+                        "note_write"=>{
+                            if !direct_writes.load(Ordering::Acquire){return Ok(serde_json::json!({"error":READ_ONLY}));}
+                            let (Some(name),Some(description),Some(markdown),Some(reason))=(request.note,request.description,request.markdown,request.reason) else {return Ok(serde_json::json!({"error":"A note write needs the note's name, its one-line description, its complete Markdown, its base revision and a reason."}));};
+                            Command::AgentSaveNote{input:SaveMemoryNote{project_id:project,name,expected_revision:request.base_revision,description,markdown,reason},chat_id:chat_id.clone()}
+                        }
+                        "note_delete"=>{
+                            if !direct_writes.load(Ordering::Acquire){return Ok(serde_json::json!({"error":READ_ONLY}));}
+                            let (Some(name),Some(reason))=(request.note,request.reason) else {return Ok(serde_json::json!({"error":"A note delete needs the note's name, its base revision and a reason."}));};
+                            Command::AgentDeleteNote{input:DeleteMemoryNote{project_id:project,name,expected_revision:request.base_revision,reason},chat_id:chat_id.clone()}
+                        }
                         "write"=>{
                             if !direct_writes.load(Ordering::Acquire){return Ok(serde_json::json!({"error":READ_ONLY}));}
                             let (Some(markdown),Some(reason))=(request.markdown,request.reason) else {return Ok(serde_json::json!({"error":"A memory write needs the complete replacement Markdown, its base revision and a reason."}));};
@@ -104,9 +124,9 @@ impl MemoryGrant {
                         }
                         // A session started before proposals went still has the tool: it is told so.
                         "propose"=>return Ok(serde_json::json!({"error":NO_PROPOSALS})),
-                        _=>return Ok(serde_json::json!({"error":"Unsupported memory operation. Use read or write."}))
+                        _=>return Ok(serde_json::json!({"error":"Unsupported memory operation. Use read, write, note_write or note_delete."}))
                     };
-                    Ok(match store.memory(command).await {Ok(Reply::Memory(v))=>serde_json::json!({"result":v}),Ok(Reply::Proposal(v))=>serde_json::json!({"result":v}),Ok(_)=>serde_json::json!({"error":"Unexpected memory response."}),Err(error)=>serde_json::json!({"error":error.to_string()})})
+                    Ok(match store.memory(command).await {Ok(Reply::Memory(v))=>serde_json::json!({"result":v}),Ok(Reply::Note(v))=>serde_json::json!({"result":v}),Ok(Reply::Proposal(v))=>serde_json::json!({"result":v}),Ok(_)=>serde_json::json!({"error":"Unexpected memory response."}),Err(error)=>serde_json::json!({"error":error.to_string()})})
                 }).await;
                 let response=match result{Ok(Ok(v))=>v,_=>serde_json::json!({"error":"The o7 memory service is unavailable."})};
                 if let Ok(mut bytes)=serde_json::to_vec(&response){bytes.push(b'\n');let _=tokio::time::timeout(std::time::Duration::from_secs(1),stream.write_all(&bytes)).await;}

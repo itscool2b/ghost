@@ -16,6 +16,21 @@ const snapshotOf = (name: string) =>
   ({ projects: [{ id: name }], chats: [] }) as unknown as WorkspaceSnapshot;
 
 describe("workspace operations", () => {
+  it("shows the workspace kept from the last launch until the first read answers", async () => {
+    const read = deferred<WorkspaceSnapshot>();
+    const store = new WorkspaceStore({ snapshot: () => read.promise } as unknown as WorkspaceApi);
+    store.hydrate(snapshotOf("kept"));
+    expect(store.getSnapshot()).toMatchObject({ data: snapshotOf("kept"), cached: true });
+    const reading = store.refresh();
+    expect(store.getSnapshot().cached).toBe(true);
+    read.resolve(snapshotOf("read"));
+    await reading;
+    expect(store.getSnapshot()).toMatchObject({ data: snapshotOf("read"), cached: false });
+    // What was kept never replaces what was read.
+    store.hydrate(snapshotOf("stale"));
+    expect(store.getSnapshot()).toMatchObject({ data: snapshotOf("read"), cached: false });
+  });
+
   it("runs two operations at once, each with its own result or error", async () => {
     const snapshot = vi.fn(async () => snapshotOf("after"));
     const store = new WorkspaceStore({ snapshot } as unknown as WorkspaceApi);

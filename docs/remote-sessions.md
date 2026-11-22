@@ -83,6 +83,11 @@ What was missing is there too: `projects` prints the project ids `memory` takes 
 and `answer` answers an agent's question in words, a choice word for word or free text where
 the question takes it. A form or a sign-in an MCP server asks for is left for the owner.
 
+`memory` reads and writes a project's brief: the short part of its memory that every chat
+receives, at most 4 KiB (see "Project memory" in [desktop-customization.md](desktop-customization.md)).
+A bot does not see or change the project's notes. Its save is recorded as a bot's, not as the
+owner's, so the computer shows a notice of it with Undo, as it does for an agent's.
+
 The relay serves both sets, because the app and the relay are updated apart: a copy of the app
 says which set it answers in its bot links (`v`), a relay lists that one, and an older copy,
 which says nothing, is listed the first (`apps/relay/src/tools-first.json`, `bot.rs`). A copy
