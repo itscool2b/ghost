@@ -81,16 +81,19 @@ async function inspect(engine, launcher) {
       assert.equal(await skeleton.locator("li").count(), 6);
       assert.equal(await skeleton.getAttribute("aria-hidden"), "true");
       // Bars of the rows' own height, in ink, with no blur and no glow.
-      const bar = await skeleton.locator("li").first().evaluate((item) => {
-        const style = getComputedStyle(item, "::before");
-        return {
-          row: item.getBoundingClientRect().height,
-          filter: style.filter,
-          backdrop: style.backdropFilter ?? style.webkitBackdropFilter ?? "none",
-          shadow: style.boxShadow,
-          animation: style.animationName,
-        };
-      });
+      const bar = await skeleton
+        .locator("li")
+        .first()
+        .evaluate((item) => {
+          const style = getComputedStyle(item, "::before");
+          return {
+            row: item.getBoundingClientRect().height,
+            filter: style.filter,
+            backdrop: style.backdropFilter ?? style.webkitBackdropFilter ?? "none",
+            shadow: style.boxShadow,
+            animation: style.animationName,
+          };
+        });
       assert.equal(bar.row, 32);
       assert.equal(bar.filter, "none");
       assert.equal(bar.backdrop, "none");
@@ -180,7 +183,9 @@ async function inspect(engine, launcher) {
       .evaluate((list) => getComputedStyle(list).animationDuration);
     assert.equal(settle, "0s", "no fade with reduced motion");
     await still.close();
-    console.log(`${engine}: the sidebar opens from kept lists, placeholders, a late answer and a fault`);
+    console.log(
+      `${engine}: the sidebar opens from kept lists, placeholders, a late answer and a fault`,
+    );
   } finally {
     await browser.close();
   }

@@ -684,6 +684,15 @@ impl ChatStore {
         &self.attachment_dir
     }
 
+    /// How long startup's work on the database took, as far as it is known yet.
+    pub fn startup_timings(&self) -> StartupTimings {
+        let (recovery_ms, indexes_ms) = self.shared.startup_timings();
+        StartupTimings {
+            recovery_ms,
+            indexes_ms,
+        }
+    }
+
     /// What startup recovery did, once it finished.
     pub async fn recovered(&self) -> RecoveryReport {
         let mut recovered = self.recovered.clone();
@@ -1237,6 +1246,18 @@ pub enum TitleSource {
     FirstLine,
     Agent,
     Manual,
+}
+
+/// How long startup's work on the database took, for the diagnostics card: the next time opening
+/// the app is slow, this says where.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StartupTimings {
+    /// Startup recovery, the writer's first op, which every first read waits behind. `None`
+    /// until it finished.
+    pub recovery_ms: Option<u64>,
+    /// Building the indexes recovery reads through, after startup. `None` when this start built
+    /// none, as every start but the first with them does.
+    pub indexes_ms: Option<u64>,
 }
 
 /// What recovery did.
@@ -2592,9 +2613,13 @@ mod tests {
                 )
                 .expect("turn");
         });
+        // Nothing is timed before it happened, and this crate's tests leave the indexes unbuilt.
         let report = fixture.store.recovered().await;
         assert_eq!(report.interrupted_turns, 1);
         assert_eq!(report.compacted_turns, 1);
+        let timings = fixture.store.startup_timings();
+        assert!(timings.recovery_ms.is_some_and(|ms| ms < 60_000));
+        assert_eq!(timings.indexes_ms, None);
     }
 
     /// A chat with one turn left running, holding a streamed answer of about 2 KiB.

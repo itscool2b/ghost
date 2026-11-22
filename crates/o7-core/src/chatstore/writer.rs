@@ -21,7 +21,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -88,6 +88,16 @@ impl WriterConfig {
     };
 }
 
+/// A duration that is not known yet.
+const NOT_TIMED: u64 = u64::MAX;
+
+/// Milliseconds since `started`, for a log line or a timing.
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis())
+        .unwrap_or(u64::MAX)
+        .min(NOT_TIMED - 1)
+}
+
 /// What the store and the writer share.
 pub(crate) struct Shared {
     pub(crate) workspace_activity: Arc<super::workspace_activity::Activity>,
@@ -108,6 +118,10 @@ pub(crate) struct Shared {
     settling: AtomicBool,
     /// Wakes the store's pass over ended turns that are not compacted yet.
     pub(crate) leftovers: tokio::sync::Notify,
+    /// How long startup recovery took, and building recovery's indexes when this start built any,
+    /// in milliseconds; [`NOT_TIMED`] until then.
+    recovery_ms: AtomicU64,
+    indexes_ms: AtomicU64,
     pub(crate) config: WriterConfig,
     /// Tests: transactions committed for batches.
     #[cfg(test)]
@@ -608,6 +622,8 @@ impl Shared {
             // From the start: startup recovery is the writer's first op.
             settling: AtomicBool::new(true),
             leftovers: tokio::sync::Notify::new(),
+            recovery_ms: AtomicU64::new(NOT_TIMED),
+            indexes_ms: AtomicU64::new(NOT_TIMED),
             config,
             #[cfg(test)]
             commits: std::sync::atomic::AtomicU64::new(0),
@@ -659,6 +675,16 @@ impl Shared {
 
     fn set_settling(&self, settling: bool) {
         self.settling.store(settling, Ordering::Release);
+    }
+
+    /// How long startup recovery took and, when this start built recovery's indexes, how long
+    /// that took, each once it is known.
+    pub(crate) fn startup_timings(&self) -> (Option<u64>, Option<u64>) {
+        let timed = |slot: &AtomicU64| {
+            let ms = slot.load(Ordering::Acquire);
+            (ms != NOT_TIMED).then_some(ms)
+        };
+        (timed(&self.recovery_ms), timed(&self.indexes_ms))
     }
 
     /// Tests: how many items wait in the FIFO.
@@ -973,10 +999,9 @@ impl Writer {
     pub(crate) fn run(mut self) {
         let started = Instant::now();
         let report = self.recover_all();
-        tracing::info!(
-            elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-            "startup recovery finished"
-        );
+        let elapsed = elapsed_ms(started);
+        tracing::info!(elapsed_ms = elapsed, "startup recovery finished");
+        self.shared.recovery_ms.store(elapsed, Ordering::Release);
         self.shared.set_settling(false);
         self.recovered.send_replace(Some(report));
         // The turns recovery left for after startup.
@@ -1518,12 +1543,13 @@ impl Writer {
                     let result = self.read(recover::ensure_indexes);
                     self.shared.set_settling(false);
                     if let Ok(built @ 1..) = result {
+                        let elapsed = elapsed_ms(started);
                         tracing::info!(
                             built,
-                            elapsed_ms =
-                                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                            elapsed_ms = elapsed,
                             "built the indexes recovery reads through"
                         );
+                        self.shared.indexes_ms.store(elapsed, Ordering::Release);
                     }
                     result
                 };

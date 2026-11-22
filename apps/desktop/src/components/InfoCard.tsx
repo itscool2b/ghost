@@ -1,7 +1,13 @@
 import { Fragment, type ReactNode, useState } from "react";
 import type { AppInfo } from "../bindings";
 import { errorMessage } from "../lib/errors";
-import { fileManagerName, glassLabel, osName, outcomeLabel } from "../lib/format";
+import {
+  fileManagerName,
+  glassLabel,
+  osName,
+  outcomeLabel,
+  startupTimings,
+} from "../lib/format";
 import { revealDataDir } from "../lib/ipc";
 import { RecoveryNotice } from "./RecoveryNotice";
 
@@ -45,7 +51,10 @@ export function InfoCard({
           {info.db ? (
             <>
               Schema v{info.db.schema_version}{" "}
-              <span className="muted">{outcomeLabel(info.db.outcome)}</span>
+              <span className="muted">{outcomeLabel(info.db.outcome)}</span>{" "}
+              <span className="muted" data-testid="db-timings">
+                {startupTimings(info.db)}
+              </span>
             </>
           ) : (
             <span className="muted">Unavailable</span>

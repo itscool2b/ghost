@@ -39,6 +39,15 @@ pub struct DbInfo {
     pub schema_version: u32,
     /// What opening the database had to do (create, migrate, recover).
     pub outcome: OpenOutcome,
+    /// How long opening it took, in milliseconds: the backup and the migration too when it
+    /// migrated, all before the window exists.
+    pub open_ms: u32,
+    /// How long startup recovery took, which every first read waits behind; `null` until it
+    /// finished. Read live (`AppState::app_info`).
+    pub recovery_ms: Option<u32>,
+    /// How long building the indexes recovery reads through took, after startup; `null` when
+    /// this launch built none.
+    pub indexes_ms: Option<u32>,
 }
 
 /// A database repair whose notice the user has not dismissed yet.
@@ -150,8 +159,11 @@ fn boot_selected(root: o7_core::Result<DataRoot>, selected: Option<Profile>) -> 
         Err(error) => return booted.fail("take ownership of your profile", &error),
     }
 
+    let opening = std::time::Instant::now();
     match Store::open(&profile) {
         Ok((store, info)) => {
+            let open_ms = u32::try_from(opening.elapsed().as_millis()).unwrap_or(u32::MAX);
+            tracing::info!(open_ms, "opened the profile database");
             if preparing && info.unclean_shutdown {
                 match store.check_integrity() {
                     Ok(o7_core::store::Integrity::Ok) => {}
@@ -188,6 +200,9 @@ fn boot_selected(root: o7_core::Result<DataRoot>, selected: Option<Profile>) -> 
                 path: info.path.display().to_string(),
                 schema_version: info.schema_version,
                 outcome: info.outcome,
+                open_ms,
+                recovery_ms: None,
+                indexes_ms: None,
             });
             booted.store = Some(store);
         }

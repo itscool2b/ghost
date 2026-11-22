@@ -62,6 +62,26 @@ export function outcomeLabel(outcome: OpenOutcome): string {
   }
 }
 
+/**
+ * How long this launch's work on the database took, for the diagnostics card: opening it (before
+ * the window exists), startup recovery (which the first lists wait behind), and building
+ * recovery's indexes when this launch built them. The next time opening the app is slow, this
+ * says where.
+ */
+export function startupTimings(db: {
+  readonly open_ms: number;
+  readonly recovery_ms: number | null;
+  readonly indexes_ms: number | null;
+}): string {
+  const ms = (value: number) => `${value.toLocaleString("en-US")} ms`;
+  const parts = [`opened in ${ms(db.open_ms)}`];
+  parts.push(
+    db.recovery_ms === null ? "still starting" : `ready ${ms(db.recovery_ms)} after that`,
+  );
+  if (db.indexes_ms !== null) parts.push(`indexes built in ${ms(db.indexes_ms)}`);
+  return parts.join(", ");
+}
+
 export function stopReasonLabel(reason: StopReason): string {
   switch (reason) {
     case "end_turn":
