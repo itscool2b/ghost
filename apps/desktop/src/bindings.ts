@@ -1194,9 +1194,10 @@ export type Capabilities = {
 	add_dirs: boolean,
 	/**
 	 *  A plan waiting for approval can be accepted as the person edited it: the agent is told
-	 *  the edited text is the approved plan.
+	 *  the edited text is the approved plan. Written only when true, so what an agent without
+	 *  it reports, and every record made before it existed, reads the same as before.
 	 */
-	plan_edits: boolean,
+	plan_edits?: boolean,
 	autonomy_levels: Autonomy[],
 };
 
