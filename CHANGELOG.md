@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-21
 
+- A phone beside your chat, for building phone apps. Press the phone button in a chat and o7 starts an Android phone that you and your agent both use: the agent can install your app, tap, type, read the screen and check the logs. Each chat gets its own phone. The first time, o7 shows what it will download from Google and the licence, then sets Android up for you. Your own Android phone on a cable works too, once you allow the agent to use it. Turn it off in Settings > Mobile. ([#162](https://github.com/itscool2b/o7/pull/162))
 - Your own assistant can run your coding agents, and setup looks better. Link Grok Bot, Muse, Hermes or OpenClaw in Settings > Remote access or during setup: pick yours and o7 shows what to paste and where. A linked assistant now needs fewer steps, so it uses far less of its own allowance: one request sends your message and brings back the answer. Setup has a picture that fills in as you go. Plan mode no longer asks you to allow every command when the chat is on Full access; it still asks before any file edit. ([#159](https://github.com/itscool2b/o7/pull/159))
 - New chat's agent menu shows every agent in full again. It had shrunk to the width of the agent button, cutting off names and the search box and scrolling sideways. ([#158](https://github.com/itscool2b/o7/pull/158))
 
