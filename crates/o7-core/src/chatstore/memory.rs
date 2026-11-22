@@ -438,7 +438,16 @@ pub(crate) fn execute(conn: &Connection, command: Command, now: i64) -> rusqlite
                     return Ok(Reply::Snapshot(Some(Snapshot{revision,visible_text:embedded,already_attached:true})));
             }
             let memory = read(conn, &id)?;
-            let visible_text = if memory.revision == previous {
+            // Nothing new to this chat: it saw this revision, or its own agent wrote every revision
+            // since the one it saw, and so already holds their text.
+            let seen = memory.revision == previous
+                || only_own_edits(
+                    conn,
+                    memory.revision.as_deref(),
+                    previous.as_deref(),
+                    &chat_id,
+                )?;
+            let visible_text = if seen {
                 String::new()
             } else {
                 let editor = agent_editor(conn, memory.revision.as_deref(), &chat_id)?;
@@ -453,6 +462,47 @@ pub(crate) fn execute(conn: &Connection, command: Command, now: i64) -> rusqlite
         }
     }
 }
+/// How far back a chat's own run of edits is followed. An agent that rewrote memory more often
+/// than this since its last message simply gets the text again.
+const OWN_EDITS_FOLLOWED: usize = 32;
+
+/// Whether every revision from `head` back to `previous`, the one `chat_id` last received, was
+/// written by that chat's own agent. Sending such a chat the memory again only repeats, at full
+/// length, what its agent wrote a moment ago. With nothing received yet (`previous` is `None`: a
+/// new chat, or an agent process that just started) the answer is no, and it gets the memory.
+fn only_own_edits(
+    conn: &Connection,
+    head: Option<&str>,
+    previous: Option<&str>,
+    chat_id: &str,
+) -> rusqlite::Result<bool> {
+    let Some(previous) = previous else {
+        return Ok(false);
+    };
+    let own = format!("{AGENT_SOURCE}{chat_id}");
+    let mut at = head.map(str::to_owned);
+    for _ in 0..OWN_EDITS_FOLLOWED {
+        let Some(revision) = at else {
+            return Ok(false);
+        };
+        if revision == previous {
+            return Ok(true);
+        }
+        let row: Option<(Option<String>, String)> = conn
+            .query_row(
+                "SELECT parent_revision,source FROM project_memory_revisions WHERE revision=?1",
+                [&revision],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        match row {
+            Some((parent, source)) if source == own => at = parent,
+            _ => return Ok(false),
+        }
+    }
+    Ok(false)
+}
+
 /// The line that says an agent, not the user, last edited `revision`, so a later agent weighs the
 /// memory as reference rather than as the user's instructions. `None` for any other source.
 fn agent_editor(
@@ -696,6 +746,71 @@ mod tests {
         let after = snapshot(&reader, "after");
         assert!(after.starts_with(&format!("{}Use this as", header(&mine))));
         assert!(!after.contains("Last edited by an agent"));
+    }
+    /// A chat whose own agent wrote memory is not sent that memory back on its next message; any
+    /// other chat is, and so is the writer once someone else has written too.
+    #[test]
+    fn a_chat_is_not_sent_back_what_its_own_agent_wrote() {
+        let (db, id, chat) = fixture();
+        let reader = db.chat("/memory");
+        let snapshot = |chat: &str, prompt: &str, previous: &Option<String>| {
+            let Reply::Snapshot(Some(snapshot)) = execute(
+                db.conn(),
+                Command::Snapshot {
+                    chat_id: chat.into(),
+                    prompt_id: prompt.into(),
+                    previous: previous.clone(),
+                    embedded_context: None,
+                },
+                30,
+            )
+            .unwrap() else {
+                panic!("snapshot")
+            };
+            snapshot
+        };
+        let first = saved(db.conn(), &id, None, "Owner notes");
+        let seen = first.revision.clone();
+        let once = agent(db.conn(), &id, &chat, seen.clone(), "Owner notes\n\nOne").unwrap();
+        let twice = agent(
+            db.conn(),
+            &id,
+            &chat,
+            once.revision.clone(),
+            "Owner notes\n\nOne\n\nTwo",
+        )
+        .unwrap();
+        // The writer: nothing attached, and it is now at the newest revision.
+        let own = snapshot(&chat, "own", &seen);
+        assert_eq!(own.visible_text, "");
+        assert_eq!(own.revision, twice.revision);
+        // Another chat that saw the same revision gets the text, marked as an agent's.
+        let other = snapshot(&reader, "other", &seen);
+        assert!(other.visible_text.contains("Owner notes\n\nOne\n\nTwo"));
+        assert!(other.visible_text.contains("Last edited by an agent in"));
+        // A process that just started has received nothing, whoever wrote last.
+        assert!(
+            snapshot(&chat, "restarted", &None)
+                .visible_text
+                .contains("Last edited by an agent in this chat")
+        );
+        // Once the other chat's agent has written too, the first writer gets the text again.
+        let theirs = agent(
+            db.conn(),
+            &id,
+            &reader,
+            twice.revision.clone(),
+            "Owner notes\n\nOne\n\nTwo\n\nThree",
+        )
+        .unwrap();
+        let mixed = snapshot(&chat, "mixed", &seen);
+        assert!(mixed.visible_text.contains("Three"));
+        assert_eq!(mixed.revision, theirs.revision);
+        // And the user's own save reaches the chat that wrote before it.
+        let mine = saved(db.conn(), &id, theirs.revision.clone(), "Owner rewrite");
+        let after = snapshot(&reader, "after", &theirs.revision);
+        assert!(after.visible_text.contains("Owner rewrite"));
+        assert_eq!(after.revision, mine.revision);
     }
     #[test]
     fn tracked_writes_name_only_new_agent_revisions() {
