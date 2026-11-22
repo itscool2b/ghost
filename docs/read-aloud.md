@@ -59,8 +59,9 @@ card. Those ratings move; the choice rests on it being the best-rated model that
 other needs: permissive licence, no copyleft dependency, streaming, and real-time speed on two
 threads.
 
-What it costs: installers grow by about 72 MB (the model is 64.5 MB, the 37 catalogue voices
-256 KB each); it speaks English only; and once something has been read the model stays loaded
+What it costs: installers grow by about 60 MB (measured on the first release with it, 0.1.1728:
+58 MB on Windows, 62 MB for the AppImage, 65 MB for the macOS image; the model is 64.5 MB and the
+37 catalogue voices 256 KB each, before the installer's compression); it speaks English only; and once something has been read the model stays loaded
 until o7 quits, about 230 MB of memory.
 
 ## Privacy and what may ask
