@@ -9,6 +9,10 @@ adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-22
+
+- o7 opens with your projects and chats already there. A long-used o7 used to show an empty sidebar for about ten seconds, with a red "database is busy" line, before your chats appeared. Now the window opens with them in place, and o7 goes straight to your chats instead of showing its logo first. Clearing up after chats that were still working when you quit happens once the window is open, not before it. If your chats really cannot be read, the message has a Retry button. Diagnostics shows how long opening took. ([#163](https://github.com/itscool2b/o7/pull/163))
+
 ## 2026-11-21
 
 - A phone beside your chat, for building phone apps. Press the phone button in a chat and o7 starts an Android phone that you and your agent both use: the agent can install your app, tap, type, read the screen and check the logs. Each chat gets its own phone. The first time, o7 shows what it will download from Google and the licence, then sets Android up for you. Your own Android phone on a cable works too, once you allow the agent to use it. Turn it off in Settings > Mobile. ([#162](https://github.com/itscool2b/o7/pull/162))
