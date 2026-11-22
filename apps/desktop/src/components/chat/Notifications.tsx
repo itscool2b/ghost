@@ -73,6 +73,7 @@ export function Notifications({ items }: { readonly items: readonly NoticeItem[]
         <span
           className="chat-inbox-bell"
           data-testid="notifications-bell"
+          data-tour="notifications"
           data-attention={attention ?? undefined}
         >
           <Bell size={16} aria-hidden="true" />

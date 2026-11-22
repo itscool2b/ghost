@@ -1,8 +1,15 @@
 import { usePrefersReducedMotion } from "@o7/ui";
-import { BOTS, type BotId, BotMark, botNamed, Keycap, Wordmark } from "@o7/ui/graphite";
+import { BOTS, type BotId, BotMark, botNamed, Keycap, Wing, Wordmark } from "@o7/ui/graphite";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowRight, Check, FolderOpen, GitBranch, RefreshCw } from "lucide-react";
-import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type CSSProperties,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   AgentEntry,
   ProjectSummary,
@@ -19,6 +26,7 @@ import { type RemoteApi, remoteApi } from "../../lib/remote";
 import { type SetupApi, setMotionPreference, setupApi } from "../../lib/setup";
 import { type CloneApi, cloneApi } from "../../lib/setup-actions/api";
 import type { CloneDraft } from "../../lib/setup-actions/clone";
+import { FLIGHT_MS } from "../../lib/tour/flight";
 import type { WorkspaceStore } from "../../lib/workspace";
 import { projectName } from "../chat/ChatList";
 import { type BotChoice, BotDialog } from "../settings/RemotePanel";
@@ -26,6 +34,7 @@ import { AgentRoster } from "./AgentsScreen";
 import { CloneBody, cloneHeading, useClone } from "./CloneProject";
 import { type IntroMode, SetupIntro } from "./SetupIntro";
 import { type MapFocus, SetupMap } from "./SetupMap";
+import "../tour/wing.css";
 import "./setup.css";
 import { Select } from "../Select";
 
@@ -109,6 +118,20 @@ export function Onboarding({
   const saving = current(saved?.preferences.step);
   const step: Page = saving === "agents" && onBots ? "bots" : saving;
   const index = STEPS.findIndex((item) => item.id === step);
+  // The wing on the progress line: which way the last move went, so the page glides in from
+  // that side, and the wing flies back nose first before it turns to face what is next.
+  const [travel, setTravel] = useState({ from: index, to: index });
+  const [facing, setFacing] = useState<"forward" | "back">("forward");
+  if (travel.to !== index) {
+    setTravel({ from: travel.to, to: index });
+    setFacing(index < travel.to ? "back" : "forward");
+  }
+  const back = travel.to < travel.from;
+  useEffect(() => {
+    if (facing !== "back") return;
+    const timer = setTimeout(() => setFacing("forward"), reduced ? 0 : FLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [facing, reduced]);
   useEffect(() => {
     if (step !== "bots") return;
     let live = true;
@@ -388,7 +411,12 @@ export function Onboarding({
       </header>
       <section className="setup-column">
         <div className="setup-panel">
-          <nav aria-label="Setup steps" className="setup-progress">
+          <nav
+            aria-label="Setup steps"
+            className="setup-progress"
+            data-facing={facing}
+            style={{ "--at": Math.max(0, index), "--legs": STEPS.length - 1 } as CSSProperties}
+          >
             <ol>
               {STEPS.map((item, at) => (
                 <li key={item.id}>
@@ -407,9 +435,14 @@ export function Onboarding({
                 </li>
               ))}
             </ol>
+            <span className="setup-progress-flown" aria-hidden="true" />
+            <span className="setup-progress-wing" aria-hidden="true">
+              {/* A new wing at each step: its first blink is its nod on landing. */}
+              <Wing small key={index} />
+            </span>
           </nav>
           {step === "project" && cloning ? (
-            <div className="setup-content" key="clone">
+            <div className="setup-content" key="clone" data-travel="forward">
               <ProjectClone
                 heading={heading}
                 api={clone?.api ?? cloneApi}
@@ -420,7 +453,7 @@ export function Onboarding({
               />
             </div>
           ) : (
-            <div className="setup-content" key={step}>
+            <div className="setup-content" key={step} data-travel={back ? "back" : "forward"}>
               <h1 ref={heading} tabIndex={-1} className="setup-heading">
                 {headings[step][0]}
                 <span>{headings[step][1]}</span>

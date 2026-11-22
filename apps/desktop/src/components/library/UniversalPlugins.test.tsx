@@ -46,6 +46,7 @@ function prefs(general: Partial<SetupPreferences["general"]> = {}): Preferences 
       text_size: "compact",
       completed: true,
       first_project_id: null,
+      tour_seen: [],
       general: { ...DEFAULT_GENERAL, ...general },
     },
     error: null,

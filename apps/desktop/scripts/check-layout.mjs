@@ -51,6 +51,9 @@ export const MODES = [
   // with Retry beside it.
   "opening&late=600000",
   "opening&fail&late=50",
+  // The tour: its offer at the sidebar's foot, and a stop beside an open chat's header.
+  "tour&offer",
+  "tour&go&open",
   "history",
   "history-question",
   "partial-history",

@@ -39,7 +39,7 @@ export const LOGO_EYE_PATHS = [
 export const LOGO_PATH = LOGO_OUTLINE_PATH + LOGO_EYE_PATHS.join("");
 
 /** The eyes of the small variant: half again as large, grown away from the centre line. */
-const LOGO_SMALL_EYE_PATHS = [
+export const LOGO_SMALL_EYE_PATHS = [
   "M508.5 233.5C508.5 236.4 506.1 238.8 503.2 238.8L391.3 238.8" +
     "C387.8 238.8 384.7 236.6 383.5 233.2L363.5 175.2" +
     "C359.7 164.3 369.7 153.7 380.8 156.8L504.6 191.4" +

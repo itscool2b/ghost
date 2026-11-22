@@ -88,10 +88,47 @@
   }
 }
 
-/* Progress: one soft bar per step; the steps behind fill grey, the current one fills white. */
+/*
+ * Progress is a flight line: a waypoint a step on one hairline, and the wing on the step that is
+ * open, nose toward what comes next. It flies along the line when the step changes; going back
+ * it flies nose first and then turns round. Each waypoint is still the button that opens its step.
+ */
+.setup-progress {
+  --leg: 56px;
+  --wing: 30px;
+  --dot: 6px;
+  position: relative;
+  width: fit-content;
+  /* The first waypoint, not the wing over it, starts on the heading's edge. */
+  margin: calc(var(--g-space-8) * -1) 0 var(--g-space-16) calc((var(--wing) - var(--dot)) / -2);
+}
+
+.setup-progress::before,
+.setup-progress-flown {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--wing) / 2);
+  height: 1px;
+  pointer-events: none;
+}
+
+.setup-progress::before {
+  width: calc(var(--legs, 3) * var(--leg));
+  background-color: var(--g-line-strong);
+}
+
+/* The part already flown. */
+.setup-progress-flown {
+  width: calc(var(--at, 0) * var(--leg));
+  background-color: var(--g-fg-3);
+  transition: width var(--g-dur-flight) var(--g-ease-glide);
+}
+
 .setup-progress ol {
+  position: relative;
   display: flex;
-  margin: calc(var(--g-space-8) * -1) 0 var(--g-space-24);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -100,8 +137,8 @@
   display: grid;
   align-items: center;
   justify-items: start;
-  width: 28px;
-  height: 20px;
+  width: var(--leg);
+  height: var(--wing);
   padding: 0;
   border: 0;
   border-radius: var(--g-radius-4);
@@ -109,62 +146,113 @@
   cursor: pointer;
 }
 
+.setup-progress li:last-child > .setup-progress-step {
+  width: var(--wing);
+}
+
 .setup-progress-step:disabled {
   cursor: default;
 }
 
+/* A waypoint: hollow ahead, filled behind, and under the wing where the flight is now. */
 .setup-progress-step > span {
-  position: relative;
-  width: 24px;
-  height: 4px;
-  overflow: hidden;
+  box-sizing: border-box;
+  width: var(--dot);
+  height: var(--dot);
+  margin-left: calc((var(--wing) - var(--dot)) / 2);
   border-radius: var(--g-radius-pill);
-  background-color: var(--g-line-strong);
-  transition: background-color var(--g-dur-fast) var(--g-ease);
-}
-
-/* The fill sweeps in from the left when a step is reached, and back out when it is left. */
-.setup-progress-step > span::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background-color: var(--g-fg-1);
-  transform: scaleX(0);
-  transform-origin: left center;
+  background-color: var(--ui-card-fill);
+  box-shadow: inset 0 0 0 1px var(--g-fg-4);
   transition:
-    transform var(--g-dur-step) var(--g-ease-quint),
-    background-color var(--g-dur-fast) var(--g-ease);
+    background-color var(--g-dur-fast) var(--g-ease),
+    box-shadow var(--g-dur-fast) var(--g-ease),
+    opacity var(--g-dur-fast) var(--g-ease);
 }
 
-.setup-progress-step:where([data-state="done"]) > span::after {
+.setup-progress-step:where([data-state="done"]) > span {
   background-color: var(--g-fg-3);
-  transform: none;
+  box-shadow: none;
 }
 
-.setup-progress-step:where([data-state="current"]) > span::after {
-  transform: none;
+.setup-progress-step:where([data-state="current"]) > span {
+  opacity: 0;
 }
 
 @media (hover: hover) {
   .setup-progress-step:where(:not(:disabled):hover) > span {
-    background-color: var(--g-fg-4);
-  }
-
-  .setup-progress-step:where([data-state="done"]:not(:disabled):hover) > span::after {
     background-color: var(--g-fg-1);
+    box-shadow: none;
   }
+}
+
+.setup-progress-wing {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--wing);
+  color: var(--g-fg-1);
+  pointer-events: none;
+  translate: calc(var(--at, 0) * var(--leg)) -50%;
+  rotate: 90deg;
+  transition:
+    translate var(--g-dur-flight) var(--g-ease-glide),
+    rotate var(--g-dur-row) var(--g-ease-out);
+}
+
+.setup-progress[data-facing="back"] > .setup-progress-wing {
+  rotate: -90deg;
 }
 
 /* No fill after the entrance, as the card's: the roster and its glass sit in here. */
 .setup-content {
-  animation: setup-open var(--g-dur-panel) var(--g-ease-quint) backwards;
+  --setup-from: 16px;
+  animation: setup-open var(--g-dur-row) var(--g-ease-glide) backwards;
+}
+
+.setup-content[data-travel="back"] {
+  --setup-from: -16px;
 }
 
 @keyframes setup-open {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateX(var(--setup-from));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:where(.setup-content) :where(.agent-list, .setup-bots) > li {
+  animation: setup-land var(--g-dur-land) var(--g-ease-expo) backwards;
+  animation-delay: calc(var(--g-dur-wave) * var(--row, 0));
+}
+
+:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(2) {
+  --row: 1;
+}
+
+:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(3) {
+  --row: 2;
+}
+
+:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(4) {
+  --row: 3;
+}
+
+:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(5) {
+  --row: 4;
+}
+
+:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(n + 6) {
+  --row: 5;
+}
+
+@keyframes setup-land {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -457,17 +545,17 @@
   width: 0;
   height: 0;
   transition:
-    opacity var(--g-dur-base) var(--g-ease-out),
-    transform var(--g-dur-reveal) var(--g-ease-quint);
+    opacity var(--g-dur-base) linear var(--g-dur-base),
+    transform var(--g-dur-land) var(--g-ease-glide);
 }
 
 /*
- * Handing over, the mark and the word lift a little and are gone before the card rises; the water
- * underneath is setup's own, so nothing else changes.
+ * Handing over, the wing flies off toward the card's own flight line, growing small, and is gone
+ * before the card rises; under it is the window itself, so nothing else changes.
  */
 .setup-intro[data-leaving] .setup-intro-stage {
   opacity: 0;
-  transform: translateY(-2px);
+  transform: translate(-14vw, -16vh) scale(0.3);
 }
 
 .setup-intro[data-leaving="fast"] .setup-intro-stage {
@@ -478,15 +566,11 @@
   position: absolute;
   top: calc(var(--intro-logo) / -2);
   left: calc(var(--intro-logo) / -2);
+  display: grid;
+  align-items: center;
   width: var(--intro-logo);
   height: var(--intro-logo);
   color: var(--g-fg-1);
-}
-
-.setup-intro-mark > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .setup-intro-word {
@@ -501,12 +585,28 @@
   transform-origin: 50% 100%;
 }
 
+/*
+ * A first launch: the wing flies up into its place from below, nose first, banked and large as if
+ * it were close, and levels out; the name forms under it once it is nearly there.
+ */
 .setup-intro[data-mode="live"] .setup-intro-mark {
-  animation: setup-intro-form var(--g-dur-base) var(--g-ease-out) both;
+  animation: setup-wing-arrive var(--g-dur-arrive) var(--g-ease-expo) both;
 }
 
 .setup-intro[data-mode="live"] .setup-intro-word > .g-wordmark {
-  animation: setup-intro-form var(--g-dur-base) var(--g-ease-out) both;
+  animation: setup-intro-form var(--g-dur-reveal) var(--g-ease-out) calc(var(--g-dur-arrive) * 0.55)
+    both;
+}
+
+@keyframes setup-wing-arrive {
+  from {
+    opacity: 0;
+    transform: translate(-22vw, 52vh) rotate(26deg) scale(2.2);
+  }
+
+  35% {
+    opacity: 1;
+  }
 }
 
 @keyframes setup-intro-form {
@@ -1111,11 +1211,21 @@ html[data-motion="off"] * {
     animation: none;
   }
 
+  :where(.setup-content) :where(.agent-list, .setup-bots) > li {
+    animation: none;
+  }
+
   .setup-intro,
   .setup-intro-stage,
   .setup-progress-step > span,
-  .setup-progress-step > span::after {
+  .setup-progress-flown,
+  .setup-progress-wing {
     transition: none;
+  }
+
+  /* Leaving, the mark simply goes: it does not fly off. */
+  .setup-intro[data-leaving] .setup-intro-stage {
+    transform: none;
   }
 }
 

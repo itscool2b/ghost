@@ -41,9 +41,12 @@ import {
 } from "../../lib/projectMemory";
 import { type SetupApi, setupApi } from "../../lib/setup";
 import { TerminalPanels } from "../../lib/terminalPanel";
+import { markTourSeen } from "../../lib/tour/seen";
+import { reachable, seenAfter, TOUR_STOPS, type TourStop, tourOffer } from "../../lib/tour/stops";
 import type { UpdatesApi } from "../../lib/updates";
 import { EMPTY_WORKSPACE, type WorkspaceStore, type WorkspaceView } from "../../lib/workspace";
 import { ProjectPage } from "../project/ProjectPage";
+import { Tour, type TourState } from "../tour/Tour";
 import { type AgentUpdateActions, AgentUpdateBanner } from "./AgentUpdateBanner";
 import { AppUpdate } from "./AppUpdate";
 import { Banners, noticeItems } from "./Banners";
@@ -59,6 +62,9 @@ import { SidebarFooter } from "./SidebarFooter";
 import { createXtermRuntime } from "./terminalRuntime";
 
 const noSubscribe = () => () => {};
+
+/** How long the window is left alone before the tour is offered. */
+const TOUR_OFFER_AFTER_MS = 700;
 
 /** `set` with `key` in or out, the same set when nothing changes. */
 function toggled(set: ReadonlySet<string>, key: string, present: boolean): ReadonlySet<string> {
@@ -140,6 +146,9 @@ export function ChatsScreen({
   onOpenMemory,
   updates,
   coordinator = coordinatorApi,
+  offersTour = false,
+  tourRequest,
+  tourArrive = false,
 }: {
   readonly app: AppStore;
   readonly transport: Transport;
@@ -170,6 +179,15 @@ export function ChatsScreen({
   readonly updates?: UpdatesApi;
   /** Coordinated projects (an experiment): shown only while Settings > Experiments has it on. */
   readonly coordinator?: CoordinatorApi;
+  /**
+   * Offer the tour here by itself: to a profile that never met it, and the stops added since to
+   * one that has. Off in previews and checks, which ask for the tour when they want it.
+   */
+  readonly offersTour?: boolean;
+  /** Take the whole tour now (Settings > General). */
+  readonly tourRequest?: { id: string };
+  /** Setup just ended: the wing flies in to the sidebar's foot before it offers the tour. */
+  readonly tourArrive?: boolean;
 }) {
   const snapshot = useSyncExternalStore(app.subscribe, app.getSnapshot, app.getSnapshot);
   const dismissedUpdates = useSyncExternalStore(
@@ -221,6 +239,8 @@ export function ChatsScreen({
       (saved) => {
         if (!live) return;
         setDefaultAgent(saved.preferences.general.default_agent);
+        // A profile still in setup is not offered the tour; setup's end offers it.
+        setTourSeen(saved.preferences.completed ? (saved.preferences.tour_seen ?? []) : null);
         setCoordination(saved.preferences.general.coordinated_projects);
         if (!saved.preferences.general.coordinated_projects) setBoardProject(null);
       },
@@ -234,6 +254,14 @@ export function ChatsScreen({
     };
   }, [active, setup]);
   const [collapsed, setCollapsed] = useState(false);
+  // The tour: what it is doing, the stops this profile has seen, and what the window showed
+  // before a flight, which its end puts back.
+  const [tour, setTour] = useState<TourState | null>(null);
+  const [tourSeen, setTourSeen] = useState<readonly string[] | null>(null);
+  const tourBefore = useRef<{ selected: string | null; composing: boolean; collapsed: boolean }>(
+    null,
+  );
+  const arrived = useRef(false);
   const organization = useSyncExternalStore(
     workspace?.subscribe ?? noSubscribe,
     workspace?.getSnapshot ?? emptyWorkspace,
@@ -374,6 +402,50 @@ export function ChatsScreen({
     return () => app.stop();
   }, [app]);
 
+  const hasChat = (displayed?.length ?? 0) > 0;
+  const opening = sidebarOpening(snapshot, organization, workspace !== undefined);
+  const startTour = (stops: readonly TourStop[]) => {
+    if (stops.length === 0) return;
+    tourBefore.current = { selected, composing, collapsed };
+    setCollapsed(false);
+    setTour({ phase: "flight", stops });
+  };
+  /** Saves what a flight or a "Not now" means this profile has seen. */
+  const recordTour = (stops: readonly string[]) => {
+    if (stops.length === 0) return;
+    setTourSeen((seen) => [...new Set([...(seen ?? []), ...stops])]);
+    // A save that fails costs only a second offer on a later launch.
+    void markTourSeen(setup, stops).then(setTourSeen, () => undefined);
+  };
+  // The tour is offered, never started by itself: once the window shows its own lists, to a
+  // profile that never met it, and the stops added since to one that has.
+  useEffect(() => {
+    if (!offersTour || !active || tour !== null || tourSeen === null || opening) return;
+    const offer = tourOffer(tourSeen, hasChat);
+    if (!offer) return;
+    const arrive = tourArrive && !arrived.current;
+    const timer = setTimeout(
+      () => {
+        arrived.current = true;
+        setTour({ phase: "offer", offer, arrive });
+      },
+      arrive ? 0 : TOUR_OFFER_AFTER_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [offersTour, active, tour, tourSeen, opening, hasChat, tourArrive]);
+  // Leaving the chats (Settings, the Dashboard) puts the tour away; coming back offers it again.
+  useEffect(() => {
+    if (active) return;
+    const before = tourBefore.current;
+    tourBefore.current = null;
+    if (before) setCollapsed(before.collapsed);
+    setTour(null);
+  }, [active]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only a new request starts a flight.
+  useEffect(() => {
+    if (tourRequest) startTour(reachable(TOUR_STOPS, hasChat));
+  }, [tourRequest]);
+
   useEffect(() => {
     if (!active) return;
     const toggle = (event: KeyboardEvent) => {
@@ -406,7 +478,7 @@ export function ChatsScreen({
           onSearch={transport.search && active ? () => setPalette(true) : undefined}
           chats={displayed}
           error={organization.error ?? snapshot.chatsError}
-          opening={sidebarOpening(snapshot, organization, workspace !== undefined)}
+          opening={opening}
           onRetry={() => {
             void app.reloadChats();
             void workspace?.refresh();
@@ -462,6 +534,7 @@ export function ChatsScreen({
         />
         <SidebarFooter
           onSettings={onSettings}
+          wingAway={tour !== null && active}
           update={
             updates ? <AppUpdate api={updates} working={chatsWorking(snapshot.chats)} /> : undefined
           }
@@ -667,12 +740,54 @@ export function ChatsScreen({
               run: () => setCollapsed((value) => !value),
             },
             {
+              id: "tour",
+              title: "Take the tour",
+              detail: "The wing shows you around, about a minute",
+              run: () => startTour(reachable(TOUR_STOPS, hasChat)),
+            },
+            {
               id: "diagnostics",
               title: "Open diagnostics",
               detail: "Storage and app information",
               run: onDiagnostics,
             },
           ]}
+        />
+      ) : null}
+      {tour && active ? (
+        <Tour
+          state={tour}
+          onTake={() => {
+            if (tour.phase === "offer") startTour(tour.offer.stops);
+          }}
+          onDecline={() => {
+            setTour(null);
+            recordTour(seenAfter("declined", []));
+          }}
+          onPrepare={(stop) => {
+            if (stop.place === "window") return;
+            setBoardProject(null);
+            if (stop.place === "new-chat") {
+              setSelected(null);
+              setComposing(true);
+              return;
+            }
+            // A stop inside a chat: the chat that was open, else the first one listed.
+            const chat = tourBefore.current?.selected ?? displayed?.[0]?.id ?? null;
+            if (chat !== null) setSelected(chat);
+          }}
+          onEnd={(outcome, visited) => {
+            const before = tourBefore.current;
+            tourBefore.current = null;
+            setTour(null);
+            if (before) {
+              setSelected(before.selected);
+              setComposing(before.composing);
+              setCollapsed(before.collapsed);
+            }
+            recordTour(seenAfter(outcome, visited));
+            restoreFocusSoon();
+          }}
         />
       ) : null}
       {projectDialog && workspace ? (

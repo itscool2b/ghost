@@ -15,6 +15,9 @@ use crate::fsutil::{quarantine_file, write_json_atomic};
 
 const VERSION: u32 = 1;
 const MAX_BYTES: u64 = 16 * 1024;
+/// How many tour stops a profile may record as seen, and how long a stop's name may be.
+const MAX_TOUR_STOPS: usize = 64;
+const MAX_TOUR_STOP_NAME: usize = 40;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
@@ -109,6 +112,11 @@ pub struct SetupPreferences {
     pub text_size: TextSizePreference,
     pub completed: bool,
     pub first_project_id: Option<String>,
+    /// The tour's stops this profile has been shown or has declined, by name (owner,
+    /// 22 November 2026: every feature with a UI joins the tour). A stop that is not listed is
+    /// new to this person, so an update that adds stops can offer a short flight of only those.
+    /// Empty for a profile that never met the tour; a file from before it reads as empty.
+    pub tour_seen: Vec<String>,
     /// Files written before these settings existed read their defaults ([`fill_defaults`]).
     pub general: GeneralPreferences,
 }
@@ -229,6 +237,10 @@ pub enum SetupAction {
     },
     Finish,
     Restart,
+    /// Records tour stops as seen. Names already listed are kept once; the list only grows.
+    TourSeen {
+        stops: Vec<String>,
+    },
     /// Changing the agent clears the default model and thinking level, which belong to the
     /// previous agent.
     DefaultAgent {
@@ -317,6 +329,7 @@ impl Default for Record {
                 text_size: TextSizePreference::default(),
                 completed: false,
                 first_project_id: None,
+                tour_seen: Vec::new(),
                 general: GeneralPreferences::default(),
             },
         }
@@ -441,6 +454,20 @@ impl OnboardingStore {
             SetupAction::Restart => {
                 next.preferences.step = SetupStep::Welcome;
                 next.preferences.completed = false;
+            }
+            SetupAction::TourSeen { stops } => {
+                if stops.len() > MAX_TOUR_STOPS || !stops.iter().all(|stop| tour_stop(stop)) {
+                    return Err(SetupError::Invalid("The tour stop is invalid."));
+                }
+                let seen = &mut next.preferences.tour_seen;
+                for stop in stops {
+                    if !seen.contains(&stop) {
+                        seen.push(stop);
+                    }
+                }
+                if seen.len() > MAX_TOUR_STOPS {
+                    return Err(SetupError::Invalid("Too many tour stops are recorded."));
+                }
             }
             SetupAction::DefaultAgent { agent_id } => {
                 if let Some(agent) = &agent_id {
@@ -572,6 +599,21 @@ fn fill_defaults(mut value: serde_json::Value) -> serde_json::Value {
     {
         *text_size = serde_json::Value::String("compact".into());
     }
+    // No tour yet: nothing seen. A list this build cannot read (too long, or holding anything
+    // but stop names) reads as empty too, so the tour is offered again instead of the whole
+    // file being set aside.
+    let tour = preferences
+        .entry("tour_seen")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    let readable = tour.as_array().is_some_and(|stops| {
+        stops.len() <= MAX_TOUR_STOPS
+            && stops
+                .iter()
+                .all(|stop| stop.as_str().is_some_and(tour_stop))
+    });
+    if !readable {
+        *tour = serde_json::Value::Array(Vec::new());
+    }
     let Ok(serde_json::Value::Object(defaults)) =
         serde_json::to_value(GeneralPreferences::default())
     else {
@@ -598,6 +640,15 @@ fn fill_defaults(mut value: serde_json::Value) -> serde_json::Value {
         }
     }
     value
+}
+
+/// A tour stop's name: lowercase letters, digits and dashes, as the interface names its stops.
+fn tour_stop(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_TOUR_STOP_NAME
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 /// Agent and model identifiers are opaque, bounded and single-line.
@@ -1007,6 +1058,88 @@ mod tests {
                 .appearance,
             AppearancePreference::System
         );
+    }
+
+    /// The tour's seen stops: empty for a profile from before the tour, growing only by valid
+    /// names, kept once, bounded, and kept across Restart and reopening.
+    #[test]
+    fn tour_stops_seen_are_recorded_once_bounded_and_survive_reopening() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("onboarding.json"),
+            br#"{"version":1,"boot_seen":true,"preferences":{"revision":3,"step":"project","motion":"full","completed":true,"first_project_id":null}}"#,
+        )
+        .unwrap();
+        let store = OnboardingStore::open(dir.path()).unwrap();
+        let snapshot = store.snapshot().unwrap();
+        assert!(snapshot.notice.is_none(), "an older file is not damaged");
+        assert!(snapshot.preferences.tour_seen.is_empty());
+        let seen = |stops: &[&str]| SetupAction::TourSeen {
+            stops: stops.iter().map(|stop| (*stop).to_owned()).collect(),
+        };
+        let next = store.apply(3, seen(&["projects", "new-chat"])).unwrap();
+        assert_eq!(next.preferences.tour_seen, ["projects", "new-chat"]);
+        let again = store.apply(4, seen(&["new-chat", "browser"])).unwrap();
+        assert_eq!(
+            again.preferences.tour_seen,
+            ["projects", "new-chat", "browser"],
+            "a stop is listed once"
+        );
+        // Refusals leave the list and the revision alone.
+        let too_long = "x".repeat(MAX_TOUR_STOP_NAME + 1);
+        for bad in [
+            "",
+            "New-Chat",
+            "a b",
+            "a/b",
+            "../x",
+            "line\nbreak",
+            too_long.as_str(),
+        ] {
+            assert!(
+                matches!(store.apply(5, seen(&[bad])), Err(SetupError::Invalid(_))),
+                "{bad:?}"
+            );
+        }
+        let many: Vec<String> = (0..=MAX_TOUR_STOPS).map(|at| format!("s{at}")).collect();
+        assert!(matches!(
+            store.apply(5, SetupAction::TourSeen { stops: many }),
+            Err(SetupError::Invalid(_))
+        ));
+        // Names that are each fine still cannot grow the list past its bound.
+        let most: Vec<String> = (0..MAX_TOUR_STOPS - 2).map(|at| format!("s{at}")).collect();
+        assert!(matches!(
+            store.apply(5, SetupAction::TourSeen { stops: most }),
+            Err(SetupError::Invalid(_))
+        ));
+        assert_eq!(store.preferences().revision, 5);
+        // Running setup again does not bring the tour back by itself.
+        let restarted = store.apply(5, SetupAction::Restart).unwrap();
+        assert_eq!(restarted.preferences.tour_seen.len(), 3);
+        assert_eq!(
+            OnboardingStore::open(dir.path())
+                .unwrap()
+                .preferences()
+                .tour_seen,
+            ["projects", "new-chat", "browser"]
+        );
+        // A list this build cannot read is empty, and the rest of the file is kept.
+        for saved in [r#""yes""#, r#"["ok","Not Ok"]"#, r#"[1,2]"#] {
+            std::fs::write(
+                dir.path().join("onboarding.json"),
+                format!(
+                    r#"{{"version":1,"boot_seen":true,"preferences":{{"revision":9,"step":"project","motion":"reduced","completed":true,"first_project_id":null,"tour_seen":{saved}}}}}"#
+                ),
+            )
+            .unwrap();
+            let snapshot = OnboardingStore::open(dir.path())
+                .unwrap()
+                .snapshot()
+                .unwrap();
+            assert!(snapshot.notice.is_none(), "{saved}");
+            assert!(snapshot.preferences.tour_seen.is_empty(), "{saved}");
+            assert_eq!(snapshot.preferences.motion, MotionPreference::Reduced);
+        }
     }
 
     #[test]

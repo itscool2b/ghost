@@ -578,6 +578,7 @@ export function NewChat({
             ref={messageBox}
             className="new-chat-message"
             data-testid="new-chat-message"
+            data-tour="first-message"
             aria-label="First message"
             placeholder={selected ? `Ask ${selected.name} to…` : "What should the agent do?"}
             rows={3}
@@ -593,7 +594,7 @@ export function NewChat({
         )}
         <div className="new-chat-controls">
           <div className="new-chat-chips">
-            <div className="new-chat-agents" data-testid="new-chat-agent">
+            <div className="new-chat-agents" data-testid="new-chat-agent" data-tour="agents">
               {agents === null ? (
                 <span className="new-chat-scan" role="status">
                   <span className="new-chat-scan-pulse" aria-hidden="true">

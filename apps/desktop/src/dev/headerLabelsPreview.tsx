@@ -119,6 +119,7 @@ const setup: SetupApi = {
       text_size: getTextSizePreference(),
       completed: true,
       first_project_id: "client",
+      tour_seen: [],
       general: { ...DEFAULT_GENERAL },
     },
   }),

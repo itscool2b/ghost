@@ -3774,6 +3774,8 @@ export type Setup = {
 };
 
 export type SetupAction = { type: "visit"; step: SetupStep } | { type: "motion"; value: MotionPreference } | { type: "appearance"; value: AppearancePreference } | { type: "theme"; value: ThemePreference } | { type: "text_size"; value: TextSizePreference } | { type: "project"; project_id: string } | { type: "finish" } | { type: "restart" } | 
+/**  Records tour stops as seen. Names already listed are kept once; the list only grows. */
+{ type: "tour_seen"; stops: string[] } | 
 /**
  *  Changing the agent clears the default model and thinking level, which belong to the
  *  previous agent.
@@ -3817,6 +3819,13 @@ export type SetupPreferences = {
 	text_size: TextSizePreference,
 	completed: boolean,
 	first_project_id: string | null,
+	/**
+	 *  The tour's stops this profile has been shown or has declined, by name (owner,
+	 *  22 November 2026: every feature with a UI joins the tour). A stop that is not listed is
+	 *  new to this person, so an update that adds stops can offer a short flight of only those.
+	 *  Empty for a profile that never met the tour; a file from before it reads as empty.
+	 */
+	tour_seen: string[],
 	/**  Files written before these settings existed read their defaults ([`fill_defaults`]). */
 	general: GeneralPreferences,
 };

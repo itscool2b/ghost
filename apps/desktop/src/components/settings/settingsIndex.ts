@@ -81,6 +81,7 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
     title: "Welcome and setup",
     words: "onboarding run setup again first project",
   },
+  { page: "general", title: "Tour", words: "walkthrough guide show me around wing help" },
   { page: "appearance", title: "Appearance", words: "dark light system mode" },
   { page: "appearance", title: "Theme", words: "palette colours colors claude codex grok cursor" },
   { page: "appearance", title: "Motion", words: "animation reduced off" },

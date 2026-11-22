@@ -34,6 +34,7 @@ describe("native smoke appearance restoration", () => {
         step: "motion",
         completed: true,
         first_project_id: null,
+        tour_seen: [],
         general: { ...DEFAULT_GENERAL },
       },
     });

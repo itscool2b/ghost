@@ -1,8 +1,12 @@
-import { Logo, Wordmark } from "@o7/ui/graphite";
+import { Wing, Wordmark } from "@o7/ui/graphite";
+import "../tour/wing.css";
 
 export type IntroMode = "pending" | "live" | "still";
 
-/** The first-launch mark preserves setup's existing timing and skip behavior. */
+/**
+ * The first launch's opening: the wing flies in from below, nose first, and levels out over the
+ * name. Later launches and reduced motion hold the formed mark. It keeps setup's timing and skip.
+ */
 export function SetupIntro({
   mode,
   leaving,
@@ -21,7 +25,7 @@ export function SetupIntro({
       {mode === "pending" ? null : (
         <div className="setup-intro-stage">
           <span className="setup-intro-mark">
-            <Logo size={128} />
+            <Wing />
           </span>
           <span className="setup-intro-word">
             <Wordmark size={32} mark={false} />

@@ -13,6 +13,7 @@ const base: SetupPreferences = {
   text_size: "compact",
   completed: true,
   first_project_id: null,
+  tour_seen: [],
   general: {
     ...DEFAULT_GENERAL,
     default_agent: "codex",

@@ -252,10 +252,11 @@ try {
       });
       await page.locator(".nav-menu-button").click();
       await page.getByRole("navigation", { name: "Menu" }).waitFor();
-      // The menu holds the page's sections and nothing else: there is no account to sign in to.
+      // The menu holds the page's five sections, the public repository and nothing else: there
+      // is no account to sign in to.
       assert.equal(
         await page.getByRole("navigation", { name: "Menu" }).getByRole("link").count(),
-        5,
+        6,
       );
       await page.waitForFunction(() =>
         document

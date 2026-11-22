@@ -145,6 +145,7 @@ const snapshot: SetupSnapshot = {
     motion: "full",
     completed: true,
     first_project_id: null,
+    tour_seen: [],
     appearance: getAppearancePreference(),
     theme: getThemePreference(),
     text_size: getTextSizePreference(),

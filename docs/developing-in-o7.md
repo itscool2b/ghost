@@ -120,6 +120,41 @@ mid-turn: the one search startup used to run over every event took 490 ms on dat
 memory (far longer from a cold disk); the first list now answers 86 ms after the writer starts
 on a first launch and 8 ms on the next, and the work moved after startup takes about a second.
 
+## The tour
+
+The app has a tour that o7's wing flies: it lifts off from the logo at the sidebar's foot,
+settles beside one control after another, and a card says what each is. The rule (owner,
+22 November 2026): **every feature with a UI adds its stop to the tour in the same pull
+request.** The tour is how a person finds out what the app can do, so a feature that is not in it
+has not been introduced.
+
+To add a stop:
+
+1. Put `data-tour="<id>"` on the real control. The id is lowercase letters, digits and dashes,
+   40 characters at most, and never changes afterwards: a profile saves the stops it has seen by
+   id, so a renamed stop is offered to everybody again.
+2. Add its entry to `TOUR_STOPS` in `apps/desktop/src/lib/tour/stops.ts`, where the tour should
+   visit it: its `place` (`window` when the control is always there, `new-chat` when it is on the
+   New chat page, `chat` when it needs an open chat), the `side` the wing settles on, a short
+   title and one or two sentences in plain words.
+
+Nothing else is needed. A profile that took the tour is offered a short flight of only the new
+stop ("One more thing to see"); a profile that never took it gets it with the rest. A control
+that a chat may lack (Run, the browser while its plugin is off) is passed, not waited for.
+
+A control that should not have a stop gets a line in `NOT_TOURED` in the same file, saying why.
+`node apps/desktop/scripts/check-tour.mjs` (part of `check:fixtures`) flies every stop against
+`?preview=tour` in both engines and both appearances, and fails when a stop's control is missing
+or when a control of the sidebar or of the chat's header has neither a stop nor a reason. A new
+surface that should be held to the same rule is added to that check's list of controls.
+
+How it is built: `components/tour/Tour.tsx` draws the wing, the ring and the card;
+`lib/tour/flight.ts` is the geometry (where the wing settles, the arc it flies), tested without a
+window; the seen stops are `tour_seen` in the profile's setup preferences
+(`crates/o7-core/src/onboarding.rs`), which accepts only stop names and only ever grows. The wing
+is the shared `Wing` (`packages/ui`), which the website flies too. On the desktop it flies only in
+setup and the tour ([design/visual-language.md](design/visual-language.md)).
+
 ## Changelog
 
 The changelog is for the app only (owner, 21 November 2026: "change log is just for the app").
