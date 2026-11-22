@@ -95,7 +95,13 @@ pub async fn workspace_snapshot(
     state: State<'_, AppState>,
     filter: WorkspaceFilter,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    Ok(state.sessions()?.workspace_snapshot(filter).await?)
+    // The sidebar reads the workspace whole; the next launch's first frame starts from that read.
+    let whole = filter.include_archived && filter.project_id.is_none();
+    let snapshot = state.sessions()?.workspace_snapshot(filter).await?;
+    if whole {
+        crate::launch_cache::keep(&state, o7_core::launch_cache::Part::Workspace, &snapshot);
+    }
+    Ok(snapshot)
 }
 
 #[tauri::command]

@@ -291,6 +291,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::git_commands::worktree_recreate_preview,
             crate::git_commands::worktree_recreate_apply,
             commands::chats_list,
+            crate::launch_cache::launch_cache,
             crate::workspace_commands::workspace_snapshot,
             crate::workspace_removal_commands::workspace_removed,
             crate::workspace_removal_commands::workspace_removal_preview,
@@ -488,6 +489,7 @@ mod tests {
             "envRefresh",
             "pickFolder",
             "chatsList",
+            "launchCache",
             "chatCreate",
             "chatCreateOnHost",
             "chatAttach",
@@ -823,6 +825,10 @@ mod tests {
         (
             "chatsList",
             "() => typedError<ChatSummary[], AppError>(__TAURI_INVOKE(\"chats_list\"))",
+        ),
+        (
+            "launchCache",
+            "() => typedError<LaunchCache, AppError>(__TAURI_INVOKE(\"launch_cache\"))",
         ),
         (
             "chatCreate",
