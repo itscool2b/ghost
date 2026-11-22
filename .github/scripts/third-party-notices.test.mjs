@@ -81,7 +81,11 @@ test("the bundled speech models keep their licenses, conversion notices and attr
   assert.deepEqual(
     models.map((r) => [r.name, r.license, r.distributions]),
     [
-      ["Parakeet Ultra speech model (parakeet-ultra-Q4_K_M.gguf)", "CC-BY-4.0", ["desktop"]],
+      [
+        "Parakeet TDT-CTC 110M speech model (parakeet-tdt_ctc-110m-Q6_K.gguf)",
+        "CC-BY-4.0",
+        ["desktop"],
+      ],
       [
         "Phonon 31M English voice model (model.q8.gguf, with its config.json, tokenizer.json and default-voice.safetensors)",
         "Apache-2.0",
@@ -99,7 +103,6 @@ test("the bundled speech models keep their licenses, conversion notices and attr
   const [parakeet, phonon, voices, silero] = models;
   assert.match(texts(parakeet), /Attribution 4\.0 International/);
   assert.match(texts(parakeet), /Modifications: handy-computer converted/);
-  assert.match(texts(parakeet), /moondream\/parakeet-ultra at commit 73175eb/);
   assert.match(texts(silero), /Copyright \(c\) 2020-present Silero Team/);
   assert.match(texts(silero), /Modifications: handy-computer converted/);
   // Read aloud's voice model and its voices: under Apache 2.0.

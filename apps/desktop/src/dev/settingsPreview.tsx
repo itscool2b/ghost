@@ -236,8 +236,8 @@ let heard: (event: Parameters<Parameters<DictationApi["start"]>[1]>[0]) => void 
 const dictation: DictationApi = {
   model: async () => ({
     installed: true,
-    name: "Parakeet Ultra",
-    bytes: 487521152,
+    name: "Parakeet TDT-CTC 110M",
+    bytes: 113552320,
     supported: true,
   }),
   start: async (_id, receive) => {
