@@ -230,6 +230,7 @@ try {
         mobile: true,
         automatic_updates: false,
         coordinated_projects: false,
+        speech_voice: null,
       });
       // Sounds are off until turned on; turning them on plays one and saves the choice.
       await page.getByRole("switch", { name: "Sounds" }).check();

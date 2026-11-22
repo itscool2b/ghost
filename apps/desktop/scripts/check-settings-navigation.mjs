@@ -86,6 +86,9 @@ export async function checkSettingsNavigation(page, url) {
     for (const title of await page
       .locator(".settings-page:not([hidden]) [data-setting]")
       .evaluateAll((nodes) => nodes.map((node) => node.dataset.setting))) {
+      // A row of the person's own data (a project memory note, named `note:<name>`) is not a
+      // setting: the search finds the page's settings, not what was saved in them.
+      if (title.includes(":")) continue;
       titles.push([label, title]);
     }
   }
