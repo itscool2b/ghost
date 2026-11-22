@@ -585,29 +585,20 @@ impl ChatStore {
     }
 
     /// What startup leaves for afterwards, as ordinary queued work that reads and live chats go
-    /// between: the indexes recovery reads through are built when missing, then every ended turn
-    /// that is not compacted yet is compacted, now and each time the writer says one may wait. A
-    /// turn too large to merge is read on a connection of its own, off the writer, and only its
-    /// text is saved through the FIFO. Ends when the store closes.
+    /// between: every ended turn that is not compacted yet is compacted, now and each time the
+    /// writer says one may wait, and a while in, the indexes recovery reads through are built when
+    /// they are missing. A turn too large to merge is read on a connection of its own, off the
+    /// writer, and only its text is saved through the FIFO. Ends when the store closes.
     async fn leftovers(store: Weak<ChatStore>) {
         let Some(this) = store.upgrade() else {
             return;
         };
         this.recovered().await;
-        let (reply, answer) = oneshot::channel();
-        match this
-            .request(Request::EnsureIndexes { reply }, answer)
-            .await
-            .and_then(|built| built)
-        {
-            Ok(_) => {}
-            Err(StoreError::Closed) => return,
-            Err(error) => {
-                tracing::warn!(%error, "could not build the indexes recovery reads through; the next start tries again");
-            }
-        }
         let shared = Arc::clone(&this.shared);
         drop(this);
+        // The indexes wait a while: the window is asking for its first lists right now.
+        let index_at = tokio::time::Instant::now() + shared.config.index_delay;
+        let mut indexed = false;
         // Each turn is tried once: one that cannot be compacted must not be read again and again.
         let mut tried: HashSet<String> = HashSet::new();
         loop {
@@ -621,8 +612,28 @@ impl ChatStore {
                     tracing::warn!(%error, "could not compact the turns left from earlier; a later pass tries again");
                 }
             }
+            if !indexed && tokio::time::Instant::now() >= index_at {
+                indexed = true;
+                let (reply, answer) = oneshot::channel();
+                match this
+                    .request(Request::EnsureIndexes { reply }, answer)
+                    .await
+                    .and_then(|built| built)
+                {
+                    Ok(_) => {}
+                    Err(StoreError::Closed) => return,
+                    Err(error) => {
+                        tracing::warn!(%error, "could not build the indexes recovery reads through; the next start tries again");
+                    }
+                }
+            }
             drop(this);
-            shared.leftovers.notified().await;
+            if indexed {
+                shared.leftovers.notified().await;
+            } else {
+                // Woken for a turn, or by the time the indexes are due: either way, another pass.
+                let _ = tokio::time::timeout_at(index_at, shared.leftovers.notified()).await;
+            }
         }
     }
 
@@ -2720,6 +2731,7 @@ mod tests {
     async fn the_pass_after_startup_compacts_what_recovery_left() {
         let config = WriterConfig {
             leftovers: true,
+            index_delay: Duration::ZERO,
             compact: compact::CompactLimits {
                 inline_limit: 200,
                 ..compact::CompactLimits::STANDARD
@@ -2768,6 +2780,8 @@ mod tests {
     async fn a_turn_too_large_to_merge_is_read_off_the_writer() {
         let config = WriterConfig {
             leftovers: true,
+            // The indexes stay unbuilt here: the turn is compacted without them.
+            index_delay: Duration::from_secs(3_600),
             compact: compact::CompactLimits {
                 inline_limit: 200,
                 merge_limit: 300,
@@ -2867,6 +2881,7 @@ mod tests {
             .unwrap_or(300_000);
         let config = WriterConfig {
             leftovers: true,
+            index_delay: Duration::from_millis(200),
             ..WriterConfig::STANDARD
         };
         let dir = tempfile::tempdir().expect("tempdir");

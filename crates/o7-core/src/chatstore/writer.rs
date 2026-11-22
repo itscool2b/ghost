@@ -67,13 +67,17 @@ pub(crate) struct WriterConfig {
     pub(crate) compact: CompactLimits,
     /// Whether the store's pass after startup runs ([`super::ChatStore`]'s leftovers).
     pub(crate) leftovers: bool,
+    /// How long after startup that pass builds the indexes recovery reads through, when they are
+    /// missing. A build visits every event, and the writer answers nothing meanwhile, so it must
+    /// not fall on the moment the window asks for its first lists.
+    pub(crate) index_delay: Duration,
 }
 
 impl WriterConfig {
     /// FIFO 1,024 ops and 32 MiB; batches of 256 ops or 4 MiB; disk-full retry 5 s; busy backoff
-    /// 100 ms to 2 s, paused after 10 s; the pass after startup runs. This crate's own tests leave
-    /// the pass off unless they ask for it: they place every op of a batch themselves, and its
-    /// requests would land between them.
+    /// 100 ms to 2 s, paused after 10 s; the pass after startup runs, and builds missing indexes
+    /// 15 s in. This crate's own tests leave the pass off unless they ask for it: they place every
+    /// op of a batch themselves, and its requests would land between them.
     pub(crate) const STANDARD: WriterConfig = WriterConfig {
         fifo_ops: 1024,
         fifo_bytes: 32 * 1024 * 1024,
@@ -85,6 +89,7 @@ impl WriterConfig {
         busy_pause_after: Duration::from_secs(10),
         compact: CompactLimits::STANDARD,
         leftovers: !cfg!(test),
+        index_delay: Duration::from_secs(15),
     };
 }
 
