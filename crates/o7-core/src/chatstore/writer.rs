@@ -65,11 +65,15 @@ pub(crate) struct WriterConfig {
     /// A database busy this long pauses saving.
     pub(crate) busy_pause_after: Duration,
     pub(crate) compact: CompactLimits,
+    /// Whether the store's pass after startup runs ([`super::ChatStore`]'s leftovers).
+    pub(crate) leftovers: bool,
 }
 
 impl WriterConfig {
     /// FIFO 1,024 ops and 32 MiB; batches of 256 ops or 4 MiB; disk-full retry 5 s; busy backoff
-    /// 100 ms to 2 s, paused after 10 s.
+    /// 100 ms to 2 s, paused after 10 s; the pass after startup runs. This crate's own tests leave
+    /// the pass off unless they ask for it: they place every op of a batch themselves, and its
+    /// requests would land between them.
     pub(crate) const STANDARD: WriterConfig = WriterConfig {
         fifo_ops: 1024,
         fifo_bytes: 32 * 1024 * 1024,
@@ -80,6 +84,7 @@ impl WriterConfig {
         busy_backoff_max: Duration::from_secs(2),
         busy_pause_after: Duration::from_secs(10),
         compact: CompactLimits::STANDARD,
+        leftovers: !cfg!(test),
     };
 }
 
@@ -2316,6 +2321,52 @@ mod tests {
     use super::*;
     use crate::paths::DataRoot;
     use crate::profile::Profiles;
+
+    /// A caller waits past its bound only while it is told to, and never past the longest wait.
+    #[tokio::test]
+    async fn a_wait_goes_on_past_its_bound_only_while_asked_to() {
+        let rt = Handle::current();
+        let late = |after: Duration| {
+            let (reply, answer) = oneshot::channel();
+            std::thread::spawn(move || {
+                std::thread::sleep(after);
+                let _ = reply.send(7);
+            });
+            answer
+        };
+        let short = Duration::from_millis(20);
+        let long = Duration::from_secs(30);
+        assert_eq!(
+            await_reply_while(&rt, late(Duration::from_millis(400)), short, long, || true).await,
+            Ok(7)
+        );
+        assert_eq!(
+            await_reply_while(&rt, late(Duration::from_millis(400)), short, long, || false).await,
+            Err(WaitError::TimedOut)
+        );
+        assert_eq!(
+            await_reply_while(
+                &rt,
+                late(Duration::from_secs(2)),
+                short,
+                Duration::from_millis(300),
+                || true
+            )
+            .await,
+            Err(WaitError::TimedOut),
+            "the longest wait still ends it"
+        );
+        assert_eq!(
+            await_reply(&rt, late(Duration::from_millis(400)), short).await,
+            Err(WaitError::TimedOut)
+        );
+        let (reply, answer) = oneshot::channel::<u32>();
+        drop(reply);
+        assert_eq!(
+            await_reply_while(&rt, answer, short, long, || true).await,
+            Err(WaitError::Gone)
+        );
+    }
 
     /// Decision 11 when recovery cannot run: in a damaged database `load_chat` skips recovery, and
     /// the rows queued before the crash still come back held, so a start sends none of them.

@@ -578,7 +578,9 @@ impl ChatStore {
             attachment_dir: profile.attachments_dir(),
             recovered: recovered_rx,
         });
-        store.rt.spawn(ChatStore::leftovers(Arc::downgrade(&store)));
+        if config.leftovers {
+            store.rt.spawn(ChatStore::leftovers(Arc::downgrade(&store)));
+        }
         Ok(store)
     }
 
@@ -2593,6 +2595,182 @@ mod tests {
         let report = fixture.store.recovered().await;
         assert_eq!(report.interrupted_turns, 1);
         assert_eq!(report.compacted_turns, 1);
+    }
+
+    /// A chat with one turn left running, holding a streamed answer of about 2 KiB.
+    fn interrupted_turn(store: &Store) -> String {
+        let chat = rows::create_chat(
+            store.conn(),
+            &NewChat {
+                agent_host: Default::default(),
+                agent_id: "mock".into(),
+                folder: PathBuf::from("/w"),
+                device_id: "dev".into(),
+                now: 1,
+            },
+        )
+        .expect("chat");
+        store
+            .conn()
+            .execute(
+                "INSERT INTO turns (id, chat_id, seq, status, started_at, device_id, first_event_seq) \
+                 VALUES ('t', ?1, 1, 'running', 1, 'dev', 0)",
+                params![chat.id],
+            )
+            .expect("turn");
+        let rows: Vec<EventRow> = (0..40)
+            .map(|seq| {
+                event_row(
+                    seq,
+                    Some("t"),
+                    &O7Event::MessageDelta {
+                        message_id: "t.m1".into(),
+                        text: "streamed ".into(),
+                    },
+                )
+            })
+            .collect();
+        rows::append_events(store.conn(), "dev", &chat.id, &rows).expect("events");
+        chat.id
+    }
+
+    /// Runs `read` on the writer's connection and waits for what it found.
+    async fn on_store<T: Send + 'static>(
+        store: &ChatStore,
+        read: impl Fn(&Connection) -> T + Send + Sync + 'static,
+    ) -> T {
+        let (found, answer) = oneshot::channel();
+        store.with_store(move |store| {
+            let _ = found.send(read(store.conn()));
+        });
+        await_reply(&Handle::current(), answer, Duration::from_secs(10))
+            .await
+            .expect("the store answers")
+    }
+
+    /// Waits until the pass after startup compacted turn `t`; returns how many events it has.
+    async fn compacted(store: &ChatStore) -> i64 {
+        for _ in 0..400 {
+            let (done, events) = on_store(store, |conn| {
+                let done: bool = conn
+                    .query_row(
+                        "SELECT compacted_at IS NOT NULL FROM turns WHERE id = 't'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("turn");
+                let events: i64 = conn
+                    .query_row(
+                        "SELECT count(*) FROM events WHERE turn_id = 't'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .expect("events");
+                (done, events)
+            })
+            .await;
+            if done {
+                return events;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        panic!("turn t was never compacted");
+    }
+
+    async fn searchable(store: &ChatStore) -> i64 {
+        on_store(store, |conn| {
+            conn.query_row(
+                "SELECT count(*) FROM message_fts WHERE message_fts MATCH 'streamed'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("search")
+        })
+        .await
+    }
+
+    /// Startup ends a large turn without compacting it; the pass after startup builds recovery's
+    /// indexes and compacts the turn as ordinary queued work.
+    #[tokio::test]
+    async fn the_pass_after_startup_compacts_what_recovery_left() {
+        let config = WriterConfig {
+            leftovers: true,
+            compact: compact::CompactLimits {
+                inline_limit: 200,
+                ..compact::CompactLimits::STANDARD
+            },
+            ..WriterConfig::STANDARD
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fixture = start_in(dir, config, |store| {
+            interrupted_turn(store);
+        });
+        let store = &fixture.store;
+        let report = store.recovered().await;
+        assert_eq!(
+            (report.interrupted_turns, report.compacted_turns),
+            (1, 0),
+            "startup ends the turn and leaves its compaction"
+        );
+        // The stream of 40 pieces merges into one message, beside the end recovery appended.
+        assert_eq!(compacted(store).await, 2);
+        assert_eq!(searchable(store).await, 1);
+        let indexes = on_store(store, |conn| {
+            conn.query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type = 'index' \
+                 AND name IN ('events_steering', 'events_turn_ended')",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("indexes")
+        })
+        .await;
+        assert_eq!(indexes, 2);
+        assert!(store.shutdown(Duration::from_secs(5)).await);
+        // A store that carries those indexes opens as any other.
+        let (reopened, info) = Store::open(&fixture.profile).expect("reopen");
+        assert!(
+            matches!(info.outcome, crate::store::OpenOutcome::Opened),
+            "{:?}",
+            info.outcome
+        );
+        drop(reopened);
+    }
+
+    /// A turn too large to merge keeps its rows: the pass reads its text on a connection of its
+    /// own and saves only that, so the writer never reads the turn.
+    #[tokio::test]
+    async fn a_turn_too_large_to_merge_is_read_off_the_writer() {
+        let config = WriterConfig {
+            leftovers: true,
+            compact: compact::CompactLimits {
+                inline_limit: 200,
+                merge_limit: 300,
+                ..compact::CompactLimits::STANDARD
+            },
+            ..WriterConfig::STANDARD
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fixture = start_in(dir, config, |store| {
+            interrupted_turn(store);
+        });
+        let store = &fixture.store;
+        assert_eq!(store.recovered().await.compacted_turns, 0);
+        assert_eq!(compacted(store).await, 41, "its rows stay as they were");
+        assert_eq!(searchable(store).await, 1);
+        // The writer leaves such a turn alone when an actor asks, too.
+        let chat = store.chats().await.expect("chats").remove(0);
+        send(
+            store,
+            Op::CompactTurn {
+                chat_id: chat.id,
+                turn_id: "t".into(),
+            },
+        )
+        .await;
+        assert!(store.barrier().await);
+        assert_eq!(compacted(store).await, 41);
+        assert_eq!(searchable(store).await, 1, "and it is not stored twice");
     }
 
     /// Marks the child copy of the crash tests; holds the data root it works on.
