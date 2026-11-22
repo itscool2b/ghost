@@ -35,6 +35,7 @@ pub(crate) mod history;
 pub(crate) mod image_refs;
 pub(crate) mod line_edits;
 pub(crate) mod memory;
+pub(crate) mod memory_notes;
 pub(crate) mod organization;
 pub(crate) mod recover;
 pub(crate) mod rows;
@@ -2753,6 +2754,11 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let fixture = start_in(dir, config, |store| {
             interrupted_turn(store);
+            // As a database from before the indexes recovery reads through.
+            store
+                .conn()
+                .execute_batch("DROP INDEX events_steering; DROP INDEX events_turn_ended;")
+                .expect("drop");
         });
         let store = &fixture.store;
         let report = store.recovered().await;
@@ -2775,6 +2781,8 @@ mod tests {
         })
         .await;
         assert_eq!(indexes, 2);
+        // They were built here, after startup, and the launch says how long that took.
+        assert!(store.startup_timings().indexes_ms.is_some());
         assert!(store.shutdown(Duration::from_secs(5)).await);
         // A store that carries those indexes opens as any other.
         let (reopened, info) = Store::open(&fixture.profile).expect("reopen");
@@ -2862,6 +2870,9 @@ mod tests {
             )
             .expect("events");
         };
+        // A profile this size comes from before the indexes recovery builds after startup.
+        conn.execute_batch("DROP INDEX events_steering; DROP INDEX events_turn_ended;")
+            .expect("drop");
         conn.execute_batch("BEGIN").expect("begin");
         for index in 0..40 {
             let id = chat(&format!("/w/{index}"));

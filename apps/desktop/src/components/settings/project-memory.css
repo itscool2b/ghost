@@ -78,3 +78,78 @@
 .project-memory-error {
   color: var(--g-red);
 }
+
+/* The notes: a heading with New note beside it, the list, and the one note that is open. */
+.project-memory-notes {
+  display: grid;
+  gap: var(--g-space-8);
+  min-width: 0;
+  margin-top: var(--g-space-8);
+}
+
+.project-memory-notes-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--g-space-16);
+}
+
+.project-memory-notes-heading h3 {
+  margin: 0;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-heading);
+  line-height: var(--g-leading-heading);
+  font-weight: var(--g-weight-medium);
+}
+
+.project-memory-notes-heading p {
+  margin-top: var(--g-space-4);
+}
+
+.project-memory-notes-heading > .g-button {
+  flex: none;
+}
+
+/* The list is the page's own group of rows; only its markup is a list. */
+.project-memory-note-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-memory-notes-empty {
+  color: var(--g-fg-3);
+}
+
+/* Who saved a note and when, after what it is for. */
+.project-memory-note-meta {
+  color: var(--g-fg-3);
+}
+
+.project-memory-note > .project-memory-note-fields {
+  display: grid;
+  gap: var(--g-space-12);
+  padding: var(--g-space-12) var(--g-space-16) 0;
+}
+
+.project-memory-note-fields > label {
+  display: grid;
+  gap: var(--g-space-4);
+  min-width: 0;
+}
+
+.project-memory-note-fields > label > span {
+  color: var(--g-fg-2);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}
+
+.project-memory-note-fields > label > small {
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}
+
+.project-memory-note-delete {
+  color: var(--g-red);
+}

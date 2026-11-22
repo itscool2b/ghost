@@ -147,6 +147,19 @@ export const commands = {
 	projectMemoryProposals: (projectId: string) => typedError<MemoryProposal[], AppError>(__TAURI_INVOKE("project_memory_proposals", { projectId })),
 	exportProjectMemory: (projectId: string) => typedError<ProjectMemoryBundle, AppError>(__TAURI_INVOKE("export_project_memory", { projectId })),
 	importProjectMemory: (input: ImportProjectMemory) => typedError<ProjectMemory, AppError>(__TAURI_INVOKE("import_project_memory", { input })),
+	/**
+	 *  One note of a project's memory, with its text. The page lists notes from
+	 *  `read_project_memory` and reads one when it is opened.
+	 */
+	readMemoryNote: (projectId: string, name: string) => typedError<MemoryNote, AppError>(__TAURI_INVOKE("read_memory_note", { projectId, name })),
+	saveMemoryNote: (input: SaveMemoryNote) => typedError<MemoryNote, AppError>(__TAURI_INVOKE("save_memory_note", { input })),
+	deleteMemoryNote: (input: DeleteMemoryNote) => typedError<ProjectMemory, AppError>(__TAURI_INVOKE("delete_memory_note", { input })),
+	/**
+	 *  Takes back a run of edits an agent or a linked bot made to the brief or to one note: the
+	 *  notice's Undo. `first` is the earliest edit of the run and `last` the latest. Rust decides
+	 *  whether they can still be undone, so a later edit is never taken with them.
+	 */
+	undoMemoryEdit: (projectId: string, first: string, last: string) => typedError<ProjectMemory, AppError>(__TAURI_INVOKE("undo_memory_edit", { projectId, first, last })),
 	libraryCopyHistory: (folderId: string | null) => typedError<LibraryCopyReceipt[], AppError>(__TAURI_INVOKE("library_copy_history", { folderId })),
 	libraryItemPreview: (folderId: string | null, item: LibraryItemRef, revision: string) => typedError<LibraryItemPreview, AppError>(__TAURI_INVOKE("library_item_preview", { folderId, item, revision })),
 	libraryCopyPreview: (folderId: string | null, item: LibraryItemRef, revision: string, toSource: string) => typedError<LibraryCopyPreview, AppError>(__TAURI_INVOKE("library_copy_preview", { folderId, item, revision, toSource })),
@@ -799,7 +812,12 @@ export type AgentMaintenance = {
 export type AgentMemoryEdit = {
 	revision: string,
 	parent_revision: string | null,
+	/**  The chat whose agent saved it; empty when a linked bot did. */
 	chat_id: string,
+	/**  The note it saved or removed; `None` when it saved the brief. */
+	note?: string | null,
+	/**  It removed the note. */
+	deleted?: boolean,
 };
 
 /**  One agent's section of the Plugin library. */
@@ -1882,6 +1900,13 @@ export type DbInfo = {
 	indexes_ms: number | null,
 };
 
+export type DeleteMemoryNote = {
+	project_id: string,
+	name: string,
+	expected_revision: string | null,
+	reason: string,
+};
+
 /**  Which scripted turn to play. */
 export type DemoKind = 
 /**  A realistic turn: a thought, a file read, an edit, a plan, a markdown answer, usage. */
@@ -2832,6 +2857,31 @@ export type McpTestResult = {
 
 export type McpTransport = { type: "stdio"; command: string; args: string[] } | { type: "http"; url: string } | { type: "sse"; url: string };
 
+/**  A note with its text. */
+export type MemoryNote = {
+	project_id: string,
+	name: string,
+	description: string,
+	revision: string,
+	markdown: string,
+	updated_at: number,
+	by: string,
+};
+
+/**  A note as the list shows it: enough to decide whether to read it. */
+export type MemoryNoteSummary = {
+	/**  Lowercase letters, digits and dashes; a note keeps its name. */
+	name: string,
+	/**  One line that says when to read it. */
+	description: string,
+	/**  What a save or a delete of this note names as its base. */
+	revision: string,
+	updated_at: number,
+	/**  Who saved it last: `user`, `agent` or `bot`. */
+	by: string,
+	bytes: number,
+};
+
 export type MemoryProposal = {
 	id: string,
 	project_id: string,
@@ -2852,6 +2902,12 @@ export type MemoryRevision = {
 	reason: string,
 	source: string,
 	created_at: number,
+	/**  The note this revision is of; `None` for the brief. */
+	note?: string | null,
+	/**  The note's description at this revision. */
+	description?: string | null,
+	/**  This revision removed the note. */
+	deleted?: boolean,
 };
 
 /**  Everything the pane shows, as one value. It is small, and sent whole on every change. */
@@ -3185,11 +3241,28 @@ export type ProjectInput = {
 	default_model: string | null,
 };
 
+/**
+ *  A project's memory: a short brief that every chat in the project receives, and notes that are
+ *  listed to every chat and read when one fits the task.
+ */
 export type ProjectMemory = {
 	project_id: string,
+	/**
+	 *  The brief's own revision: what a save of the brief names as its base. `None` while no
+	 *  brief was ever saved.
+	 */
 	revision: string | null,
+	/**  The brief. */
 	markdown: string,
+	/**  When the brief was last saved. */
 	updated_at: number,
+	/**
+	 *  The newest revision of anything in this memory, the brief or a note. A chat is sent memory
+	 *  again when this moves past the one it last received.
+	 */
+	head?: string | null,
+	/**  The notes, by name. */
+	notes?: MemoryNoteSummary[],
 };
 
 export type ProjectMemoryBundle = {
@@ -3540,6 +3613,19 @@ export type Salvage =
 { type: "partial"; tables: string[] } | 
 /**  Nothing could be read, so the new database started out empty. */
 { type: "nothing" };
+
+/**
+ *  Saves a note whole. `expected_revision` is the revision that was read, or `None` to add a
+ *  note that does not exist yet.
+ */
+export type SaveMemoryNote = {
+	project_id: string,
+	name: string,
+	expected_revision: string | null,
+	description: string,
+	markdown: string,
+	reason: string,
+};
 
 export type SaveProjectMemory = {
 	project_id: string,

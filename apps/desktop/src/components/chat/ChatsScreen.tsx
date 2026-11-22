@@ -283,7 +283,7 @@ export function ChatsScreen({
             onOpenMemory(notice.projectId);
           }
         : undefined,
-      onUndo: () => void memoryEdits.undo(notice, knownChats),
+      onUndo: () => void memoryEdits.undo(notice),
       onDismiss: () => memoryEdits.dismiss(notice),
     };
   });

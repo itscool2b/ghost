@@ -78,8 +78,9 @@ pub fn allowed(tool: &str, full: bool) -> bool {
     chat_tool(tool) || (full && full_tool(tool))
 }
 
-/// The longest project memory a bot may write, in bytes: the app's own limit.
-const MAX_MEMORY: usize = 16 * 1024;
+/// The longest project memory a bot may write, in bytes: the app's own limit for the brief, which
+/// is the part of memory a bot reads and writes (every chat of the project receives it).
+const MAX_MEMORY: usize = 4 * 1024;
 /// How much of one side of a change is shown.
 const MAX_DIFF: usize = 24 * 1024;
 
@@ -634,7 +635,7 @@ async fn run(
             let args: Memory = arguments(args)?;
             if args.markdown.len() > MAX_MEMORY {
                 return Err(Answer::failed(
-                    "Project memory holds at most 16 KiB. Shorten it.",
+                    "Project memory holds at most 4 KiB here, because every chat receives it. Shorten it.",
                 ));
             }
             act(

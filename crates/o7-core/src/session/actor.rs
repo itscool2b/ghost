@@ -2669,6 +2669,9 @@ impl ChatActor {
                     }
                     _ => None,
                 }),
+            // An agent with a memory grant can read a note when it wants one. One without (on
+            // another host, or started without tools) is sent the notes with the brief.
+            tools: self.memory_grant.is_some(),
         };
         let task = self
             .shared

@@ -65,7 +65,7 @@ use lock::OpenLock;
 use recovery::Recovery;
 
 /// The schema version this build reads and writes; equals the number of migrations.
-pub const SCHEMA_VERSION: u32 = 21;
+pub const SCHEMA_VERSION: u32 = 22;
 
 /// Pre-migration backups kept per database. Enough to step back through several upgrades without
 /// letting a long-lived install fill the disk with copies.
@@ -114,11 +114,29 @@ static MIGRATIONS: std::sync::LazyLock<[M<'static>; SCHEMA_VERSION as usize]> =
             M::up(include_str!("../migrations/0019_coordinator.sql")).foreign_key_check(),
             M::up(include_str!("../migrations/0020_chat_roles.sql")).foreign_key_check(),
             M::up(include_str!("../migrations/0021_line_edits.sql")).foreign_key_check(),
+            M::up_with_hook(
+                include_str!("../migrations/0022_memory_notes.sql"),
+                split_long_memory,
+            )
+            .foreign_key_check(),
         ]
     });
 
 fn migrations() -> &'static [M<'static>] {
     &*MIGRATIONS
+}
+
+/// Migration 22: a project's memory that is too long for a brief is split into a brief and notes
+/// at its headings, without losing a character ([`crate::chatstore::memory_notes::split`]).
+fn split_long_memory(tx: &rusqlite::Transaction) -> rusqlite_migration::HookResult {
+    let split = crate::chatstore::memory_notes::split_all(tx, now_millis())?;
+    if split > 0 {
+        tracing::info!(
+            projects = split,
+            "split project memory into a brief and notes"
+        );
+    }
+    Ok(())
 }
 
 /// Migration 14: every saved folder location that is a Windows verbatim path takes its plain
