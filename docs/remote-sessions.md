@@ -76,7 +76,9 @@ access, which its person may have set to edit without asking or to full access, 
 anything is sent to it the chat is held to `ask` for a link without "Answer what agents ask",
 to `auto_edit` for one without "Full access in a chat", and left at the default only for a link
 with both (`bot::Most`, `hold_access`). When its access cannot be held, nothing is sent to it.
-An automated security review of #195 found this for automations, whose tasks always ask.
+An automated security review of #195 found this for automations, whose tasks always ask. The
+chat that reviews a task is held the same way before its brief is sent (a later review, #199):
+the brief carries the task's goal, and an automation's goal carries what a service sent.
 
 Links made before then approve nothing until they are made again. A link unused for 90 days
 stops working (a call is told it expired); **Renew** in its row gives it a new address, shown
