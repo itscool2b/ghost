@@ -11,7 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-23
 
-- When you switch a chat to another agent, the new agent now gets the real state of the work, not just the conversation. The handoff lists the commands that ran and how each ended, the folder they ran in, and the last command that was still failing with its first error, so the new agent does not have to find the broken test again. You can see exactly what it was sent: before you confirm, while it waits above the message box, and later on the message that carried it, where it opens from one line instead of filling your message. (PR)
+- When you switch a chat to another agent, the new agent now gets the real state of the work, not just the conversation. The handoff lists the commands that ran and how each ended, the folder they ran in, and the last command that was still failing with its first error, so the new agent does not have to find the broken test again. You can see exactly what it was sent: before you confirm, while it waits above the message box, and later on the message that carried it, where it opens from one line instead of filling your message. ([#177](https://github.com/itscool2b/o7/pull/177))
 
 ## 2026-11-22
 
