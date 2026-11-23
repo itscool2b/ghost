@@ -221,6 +221,41 @@ impl Demo {
             asked.notified().await;
             self.status(&chat_id, SessionStatus::Running, false);
             tokio::time::sleep(Duration::from_millis(300)).await;
+            // What it was allowed to run, and one command that fails: a reading of the turn
+            // says how each ended.
+            let ran = |id: &str, command: &str, exit: i32, output: &str| {
+                O7Event::ToolCall(ToolCall {
+                    tool_call_id: format!("{turn}.{id}"),
+                    kind: ToolKind::Execute,
+                    title: command.into(),
+                    status: if exit == 0 {
+                        ToolStatus::Completed
+                    } else {
+                        ToolStatus::Failed
+                    },
+                    locations: vec![],
+                    raw_input: Some(json!({ "command": command })),
+                    tool_name: Some("Bash".into()),
+                    content: vec![o7_protocol::ToolContent::Terminal {
+                        output: output.into(),
+                        exit_code: Some(exit),
+                        truncated: None,
+                    }],
+                    truncated: None,
+                })
+            };
+            self.emit(
+                &chat_id,
+                vec![
+                    ran("x2", "npm test", 0, "PASS login.test.ts"),
+                    ran(
+                        "x3",
+                        "npm run lint",
+                        1,
+                        "src/login.ts\n  3:7  error  'old' is assigned a value but never used\n",
+                    ),
+                ],
+            );
             self.emit(
                 &chat_id,
                 vec![O7Event::MessageDelta {

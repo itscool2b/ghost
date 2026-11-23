@@ -58,7 +58,7 @@ pub use lean::{CHAT_TOOLS as LEAN_CHAT_TOOLS, FULL_TOOLS as LEAN_FULL_TOOLS};
 
 /// The set of tools this copy of the app answers, which it tells the relay with its bot links.
 /// A relay that knows the number lists that set; one that does not lists the first.
-pub const TOOLS_VERSION: u32 = 2;
+pub const TOOLS_VERSION: u32 = 3;
 
 fn chat_tool(tool: &str) -> bool {
     CHAT_TOOLS.contains(&tool) || lean::CHAT_TOOLS.contains(&tool)

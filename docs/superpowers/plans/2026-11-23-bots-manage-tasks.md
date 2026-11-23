@@ -7,8 +7,9 @@ The owner's plan of 23 November 2026, from two rounds of research and their own 
 | Phase | State |
 |---|---|
 | A: a chat is ready when you click into it | Merged, #180 (23 November 2026). Checked on the debug build with the scripted agent and with Claude Code (no prompt sent, no usage spent). A long plan also shows as the plan card again. |
-| 0: the link correct and measurable | In this document's pull request. What the live documentation changed: OpenClaw's `--timeout` flag exists and Hermes' tool timeout defaults to 300 seconds, so only Grok Bot's steps were wrong. |
-| 1 to 8 | Not started. |
+| 0: the link correct and measurable | Merged, #181. What the live documentation changed: OpenClaw's `--timeout` flag exists and Hermes' tool timeout defaults to 300 seconds, so only Grok Bot's steps were wrong. It also fixed a `send` that could read a chat before it moved. |
+| 1: the loop | First part merged with #182: safer waits (45 by default, 200 at most), the `inbox` tool, and results that say what ran and what still fails, as a third tool set. Still to do: the call-back (outbox), and a result's diff stat, branch, pull request link and usage state, which need a new call into the app. |
+| 2 to 8 | Not started. |
 
 Still true of every phase: no real Grok Bot or Muse has been run against the link.
 

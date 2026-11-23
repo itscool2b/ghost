@@ -1438,8 +1438,8 @@ async fn full_control_is_a_links_own_level_and_the_computer_enforces_it() {
     assert_eq!(
         listed,
         json!([
-            { "id": chats.0, "hash": crypto::hash(&chats.1), "full": false, "v": 2 },
-            { "id": full.0, "hash": crypto::hash(&full.1), "full": true, "v": 2 },
+            { "id": chats.0, "hash": crypto::hash(&chats.1), "full": false, "v": 3 },
+            { "id": full.0, "hash": crypto::hash(&full.1), "full": true, "v": 3 },
         ])
     );
     let status = rig.service.status();
@@ -1635,7 +1635,7 @@ async fn a_linked_bot_calls_tools_with_its_token() {
         listed,
         format!(
             "l{}",
-            json!([{ "id": bot, "hash": crypto::hash(token), "full": false, "v": 2 }])
+            json!([{ "id": bot, "hash": crypto::hash(token), "full": false, "v": 3 }])
         )
     );
     assert!(

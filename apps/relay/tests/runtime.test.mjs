@@ -135,8 +135,10 @@ test("reports health and hides everything else", async () => {
   assert.deepEqual(await health.json(), {
     ok: true,
     protocol: 1,
-    tools: 7,
-    full_tools: 11,
+    tools: 8,
+    full_tools: 12,
+    second_tools: 7,
+    second_full_tools: 11,
     first_tools: 8,
     first_full_tools: 21,
   });
@@ -718,7 +720,10 @@ test("serves a bot's MCP calls through the desktop", async () => {
 test("lists the current tools to a bot whose computer answers them", async () => {
   const hostKey = id(32);
   const hostId = idOf(hostKey);
-  const [chats, wide, older, odd] = [0, 1, 2, 3].map(() => ({ id: id(8), token: id(32) }));
+  const [chats, wide, older, odd, newer, newest] = [0, 1, 2, 3, 4, 5].map(() => ({
+    id: id(8),
+    token: id(32),
+  }));
   const desk = await host(hostId, hostKey);
   desk.send(
     `l${JSON.stringify([
@@ -727,6 +732,9 @@ test("lists the current tools to a bot whose computer answers them", async () =>
       // No set named, and a set this relay does not know: the first tools.
       { id: older.id, hash: hash(older.token), full: true },
       { id: odd.id, hash: hash(odd.token), full: true, v: "2" },
+      // The latest set, and a copy of the app newer than this relay: the latest it knows.
+      { id: newer.id, hash: hash(newer.token), full: false, v: 3 },
+      { id: newest.id, hash: hash(newest.token), full: true, v: 4 },
     ])}`,
   );
   await desk.quiet(100);
@@ -767,6 +775,29 @@ test("lists the current tools to a bot whose computer answers them", async () =>
     assert.equal(tool.inputSchema.additionalProperties, false, tool.name);
     assert.ok(tool.description.length > 20, tool.name);
   }
+  // A copy of the app that answers the latest set is also shown inbox, first; one that does
+  // not is never shown a tool it would refuse.
+  const latest = await tools(newer);
+  assert.deepEqual(
+    latest.map((tool) => tool.name),
+    ["inbox", ...few.map((tool) => tool.name)],
+  );
+  const latestAll = await tools(newest);
+  assert.deepEqual(
+    latestAll.map((tool) => tool.name),
+    ["inbox", ...all.map((tool) => tool.name)],
+  );
+  for (const tool of [...latestAll, ...all]) assert.equal("since" in tool, false, tool.name);
+  assert.match(
+    (await ask(newer, { method: "initialize", params: {} })).result.instructions,
+    /inbox says what needs you/,
+  );
+  const refusedInbox = await ask(chats, {
+    method: "tools/call",
+    params: { name: "inbox", arguments: {} },
+  });
+  assert.equal(refusedInbox.error.code, -32602, "inbox is not in the second set");
+
   // The point of the set: it costs a bot well under half of what the first one did to carry.
   const size = (list) => JSON.stringify({ tools: list }).length;
   const first = await tools(older);
@@ -775,10 +806,12 @@ test("lists the current tools to a bot whose computer answers them", async () =>
   assert.ok(size(all) * 2 < size(first), `${size(all)} of ${size(first)}`);
   assert.ok(size(few) < 3500, String(size(few)));
   assert.ok(size(all) < 5600, String(size(all)));
+  assert.ok(size(latest) < 3900, String(size(latest)));
+  assert.ok(size(latestAll) < 6000, String(size(latestAll)));
 
   const hello = await ask(chats, { method: "initialize", params: {} });
   assert.match(hello.result.instructions, /one send/);
-  assert.doesNotMatch(hello.result.instructions, /list_chats/);
+  assert.doesNotMatch(hello.result.instructions, /list_chats|inbox/);
   assert.match(
     (await ask(older, { method: "initialize", params: {} })).result.instructions,
     /list_chats/,

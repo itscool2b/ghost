@@ -16,6 +16,7 @@
 pub mod activity;
 pub mod agents;
 pub mod changes;
+pub mod commands;
 pub mod composer;
 pub mod config_vendor;
 pub mod conversation;

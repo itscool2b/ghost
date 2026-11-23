@@ -1,5 +1,12 @@
 [
   {
+    "name": "inbox",
+    "since": 3,
+    "description": "What needs you across every chat, in one call: chats asking for an answer (with the request and its options), chats still working, and chats that finished in the last day with what each came to. Start here when you come back to o7.",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+    "annotations": { "readOnlyHint": true }
+  },
+  {
     "name": "chats",
     "description": "List the open chats on the computer, newest first: id, status, title, project, agent.",
     "inputSchema": {
@@ -60,8 +67,8 @@
         "wait": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 240,
-          "description": "Seconds to wait for the result, within your own tool timeout. Default 30; 0 returns at once."
+          "maximum": 200,
+          "description": "Seconds to wait for the result, within your own tool timeout. Default 45; 0 returns at once."
         },
         "model": {
           "type": "string",
@@ -92,7 +99,7 @@
       "type": "object",
       "properties": {
         "chat": { "type": "string" },
-        "seconds": { "type": "integer", "minimum": 1, "maximum": 240, "description": "Default 30." }
+        "seconds": { "type": "integer", "minimum": 1, "maximum": 200, "description": "Default 45." }
       },
       "required": ["chat"],
       "additionalProperties": false
@@ -112,7 +119,7 @@
           "type": "string",
           "description": "The answer in words, or a choice word for word. Several questions: one line each."
         },
-        "wait": { "type": "integer", "minimum": 0, "maximum": 240 }
+        "wait": { "type": "integer", "minimum": 0, "maximum": 200 }
       },
       "required": ["chat", "request"],
       "additionalProperties": false
