@@ -765,6 +765,14 @@ async fn main() {
             .expect("bot")
             .url
     );
+    // An automation in the demo project, for what is sent to an address (`/hook/`).
+    println!(
+        "HOOK {}",
+        service
+            .create_automation("Demo automation", "p1", "Look into what was sent.")
+            .expect("automation")
+            .url
+    );
     // Each line on standard input asks for a fresh pairing link; its end stops the demo.
     let lines = tokio::task::spawn_blocking(move || {
         for line in std::io::stdin().lock().lines() {

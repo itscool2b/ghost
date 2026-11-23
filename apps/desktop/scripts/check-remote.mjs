@@ -316,6 +316,42 @@ export async function checkRemote(browser, url, out, engine) {
     await page.waitForFunction(() => window.remoteFixture.calls().at(-1) === "keep-awake:false");
     assert.equal(await awake.isChecked(), false);
 
+    // Automations: the one there says where its tasks start; a new one needs an instruction, is
+    // made in the project chosen, and shows its address once, at /hook/.
+    const automations = page.locator(".settings-row", { hasText: "CI failures" });
+    await automations.getByText("In web. Last used", { exact: false }).waitFor();
+    await page.getByRole("button", { name: "New automation", exact: true }).click();
+    const making = page.getByRole("dialog", { name: "New automation" });
+    await making.getByRole("textbox", { name: "Name" }).fill("New issues");
+    await making.getByRole("combobox", { name: "Project" }).selectOption("project-api");
+    const create = making.getByRole("button", { name: "Create automation" });
+    assert.equal(await create.isDisabled(), true, "nothing to do yet");
+    await making
+      .getByRole("textbox", { name: "What its agent does with what is sent" })
+      .fill("Reproduce the issue and fix it on a branch.");
+    await settled(page);
+    assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
+    await create.click();
+    const hookAddress = making.getByRole("textbox", { name: "Automation address" });
+    assert.match(await hookAddress.inputValue(), /^https:\/\/o7\.codes\/api\/remote\/v1\/hook\//);
+    assert.equal((await calls()).at(-1), "create-automation:New issues:project-api");
+    await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-automation.png`) });
+    await making.getByRole("button", { name: "Done" }).click();
+    const made = page.locator(".settings-row", { hasText: "New issues" });
+    await made.getByText("In api. Not used yet").waitFor();
+    await page.getByRole("button", { name: "Renew, New issues" }).click();
+    const renewed = page.getByRole("dialog", { name: "A new address for New issues" });
+    assert.match(
+      await renewed.getByRole("textbox", { name: "Automation address" }).inputValue(),
+      /\/hook\//,
+    );
+    await renewed.getByRole("button", { name: "Done" }).click();
+    await page.getByRole("button", { name: "Remove New issues" }).click();
+    await made.waitFor({ state: "detached" });
+    await page.screenshot({
+      path: resolve(out, `${engine}-${colorScheme}-remote-automations.png`),
+    });
+
     // From off, creating a bot link is what turns remote access on.
     await page.goto(`${url}/?preview=settings&page=remote`);
     await page.getByRole("button", { name: "Link a bot", exact: true }).click();

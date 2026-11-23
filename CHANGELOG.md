@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-23
 
+- New: automations. Give GitHub, your CI or a monitor an automation's address, and what it sends starts a task in your project with your instruction. The agent treats what was sent as information, never as orders. Find them in Settings > Remote access. ([#195](https://github.com/itscool2b/o7/pull/195))
 - When a task your assistant started opens a pull request, o7 watches it and tells your assistant when its checks fail or pass, when someone reviews or comments, and when it is merged. It passes on what was written only by people of your repository. ([#194](https://github.com/itscool2b/o7/pull/194))
 - Your assistant can leave work for tonight. o7 starts it between 1 and 6 in the morning, one task at a time and at most three a night, so it runs while your plan has room you are not using. ([#193](https://github.com/itscool2b/o7/pull/193))
 - With full control, your assistant can now see a picture of a chat's web page or emulator, to check that the work looks right. It never sees your own phone. ([#192](https://github.com/itscool2b/o7/pull/192))

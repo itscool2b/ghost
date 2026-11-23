@@ -223,6 +223,33 @@ A reading of a chat on a branch of its own also names its pull request ("Pull re
 <address>, open; checks failed: test"), read again at most every two minutes. Without GitHub
 CLI, or signed out, nothing is said. What was last seen is kept in `remote.json` (`prs`).
 
+### Automations
+
+An automation (Settings > Remote access > Automations, 23 November 2026) is an address that
+starts a task from what a service sends it: a failed build, a new issue, an alert. It is made
+with a name, the project its tasks start in and an instruction, and its address
+(`/api/remote/v1/hook/<computer>/<id>.<token>`, shown once) takes a plain POST of up to 64 KiB,
+as webhooks send. No assistant is in between.
+
+- **What its agent is given.** The instruction, then what was sent, fenced (`<<<` ... `>>>`)
+  and named as from outside o7, data it must not obey; at most 16,000 characters of it. The
+  task starts as `task` starts one: its own branch, a review, the project's default agent, the
+  chat's usual access. The agent asks before changing anything, as any chat's does, and nothing
+  approves for it.
+- **Limits.** At most three of its tasks work at once and twenty start a day; what is sent
+  beyond that is refused, and the sender is told so. What is sent to one automation is taken one
+  at a time, so things sent together cannot pass the limits together, and the day's count is
+  kept in the automation's own log, which nothing else can push out (an automated security
+  review of #195 found both).
+- **What the sender hears.** 202 `{"ok": true, "text": "Started a task."}`; 409 when the
+  computer refused it; 503 when the computer is away (a sender that retries gets it there
+  later); 404 for a wrong address. A start that fails says only that it failed: why (which can
+  name projects and agents) is shown in Settings, in the automation's row.
+- **What it is not.** Its address is no MCP server (the relay answers it 404 there), a bot
+  link's address is no automation's, and the computer refuses anything but a trigger from it.
+  A page cannot send to it (the relay refuses a request with an `Origin`). It expires after 90
+  days unused, as a bot link does, and Renew gives it a new address.
+
 ### Telling a bot when a chat is done (the call-back)
 
 A bot that hands o7 a task used to have two ways to learn how it went: hold a call open, or ask

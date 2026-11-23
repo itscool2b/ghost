@@ -186,6 +186,12 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   { page: "remote", title: "Devices", words: "paired phone browser remove unpair remote" },
   { page: "remote", title: "Link a bot", words: "grok bot mcp connector assistant remote" },
   { page: "remote", title: "Bots", words: "linked bot remove level full control remote" },
+  {
+    page: "remote",
+    title: "New automation",
+    words: "automation webhook hook trigger ci github alert issue remote",
+  },
+  { page: "remote", title: "Automations", words: "automation webhook address remove renew remote" },
   { page: "privacy", title: "Data folder", words: "files location storage" },
   { page: "privacy", title: "What stays on this device", words: "privacy local audio" },
   {

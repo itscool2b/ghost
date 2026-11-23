@@ -939,6 +939,71 @@ test("lists the current tools to a bot whose computer answers them", async () =>
   desk.close();
 });
 
+test("an automation's address takes what a service sends, and is no MCP server", async () => {
+  const key = id(32);
+  const hostId = idOf(key);
+  const hook = { id: id(8), token: id(32) };
+  const bot = { id: id(8), token: id(32) };
+  const desk = await host(hostId, key);
+  desk.send(
+    `l${JSON.stringify([
+      { id: hook.id, hash: hash(hook.token), full: false, v: 6, hook: true },
+      { id: bot.id, hash: hash(bot.token), full: false, v: 6 },
+    ])}`,
+  );
+  await desk.quiet(100);
+  const send = (link, body, headers = {}) =>
+    runtime.dispatchFetch(`${BASE}/hook/${hostId}/${link.id}.${link.token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body,
+    });
+
+  // What is sent reaches the computer whole, as the automation's one tool.
+  const payload = JSON.stringify({ action: "completed", check_run: { conclusion: "failure" } });
+  const answered = send(hook, payload);
+  const call = JSON.parse((await desk.message()).slice(1));
+  assert.deepEqual(
+    { ...call, rid: "" },
+    { rid: "", bot: hook.id, token: hook.token, tool: "trigger", args: { text: payload } },
+  );
+  desk.send(`b${JSON.stringify({ rid: call.rid, text: "Started task c2.", error: false })}`);
+  const started = await answered;
+  assert.equal(started.status, 202);
+  assert.deepEqual(await started.json(), { ok: true, text: "Started task c2." });
+
+  // Refused by the computer: 409, with why.
+  const refused = send(hook, "again");
+  const second = JSON.parse((await desk.message()).slice(1));
+  desk.send(
+    `b${JSON.stringify({ rid: second.rid, text: "Three of its tasks are still working.", error: true })}`,
+  );
+  assert.equal((await refused).status, 409);
+
+  // A bot link's address is not an automation's, an automation's is no MCP server, a page is
+  // not let in, and what is too large or empty is refused before the computer hears of it.
+  assert.equal((await send(bot, "x")).status, 404);
+  const asMcp = await runtime.dispatchFetch(`${BASE}/mcp/${hostId}/${hook.id}.${hook.token}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  });
+  assert.equal(asMcp.status, 404);
+  assert.equal((await send(hook, "x", { Origin: "https://example.com" })).status, 403);
+  assert.equal((await send({ ...hook, token: id(32) }, "x")).status, 404);
+  assert.equal((await send(hook, "x".repeat(64 * 1024 + 1))).status, 413);
+  assert.equal((await send(hook, "  ")).status, 400);
+  const got = await runtime.dispatchFetch(`${BASE}/hook/${hostId}/${hook.id}.${hook.token}`);
+  assert.equal(got.status, 405);
+
+  // The computer away: 503, so a sender that retries gets it there later.
+  desk.close();
+  await new Promise((done) => setTimeout(done, 100));
+  const away = await send(hook, "later");
+  assert.equal(away.status, 503);
+  assert.match((await away.json()).text, /^Nothing was done: the computer is not reachable/);
+});
+
 test("a removed bot link stops working", async () => {
   const key = id(32);
   const hostId = idOf(key);

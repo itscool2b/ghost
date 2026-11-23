@@ -45,6 +45,7 @@ pub(super) fn bot_links(shared: &Shared) -> String {
             full: bot.full && !bot.read_only,
             read: bot.read_only,
             v: crate::bot::TOOLS_VERSION,
+            hook: bot.hook.is_some(),
         })
         .collect();
     format!(
