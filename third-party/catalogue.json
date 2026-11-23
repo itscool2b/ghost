@@ -9,7 +9,7 @@
     "apps/desktop/scripts/dictation-models.mjs": "79cf94d8f336cec15dfa0e98191ecb40ca40307e93f7525fe65938bddf53a400",
     "apps/desktop/src-tauri/Cargo.toml": "1563052c66fc28d3a0682dd5f2a8ae91e70eabbaf2f150fd05fe00b87d6bb28f",
     "apps/relay/package.json": "b1d300dc154b9cd2cb6dce7b0374eec38c88bb8530edca4ca22f44515fe7ceaf",
-    "apps/web-worker/Cargo.toml": "eb67bdbb18e338548930f4c39dc7b5ec9e5a06b39b8f9249603ce8512dc451e0",
+    "apps/web-worker/Cargo.toml": "0b2cbbdf3101daa5ab29f1cfe32bfb28f9e6165290f22f94abbc5ff101db12fb",
     "apps/web-worker/package.json": "bd69d164d4a1cfeef2ea458ecb74bd9956a78d9998f58746107b4855a54a730d",
     "apps/web/package.json": "7804d1b092d0f81ce3b436ba33dff254ecf3004dae377f4705f62f2a855c707b",
     "crates/o7-agents/Cargo.toml": "3566601b1730348b82bcba7cbaa78595e47eb166303641e7484a545497ad1b76",

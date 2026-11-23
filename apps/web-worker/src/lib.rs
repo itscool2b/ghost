@@ -248,10 +248,8 @@ mod edge {
         let former = crate::FORMER_HOSTS
             .iter()
             .any(|former| host.eq_ignore_ascii_case(former));
-        if !former {
-            if let Some(plan) = count::plan(request.method().as_ref(), &path, url.query()) {
-                return counting(plan, &request, &env, COMMON).await;
-            }
+        if !former && let Some(plan) = count::plan(request.method().as_ref(), &path, url.query()) {
+            return counting(plan, &request, &env, COMMON).await;
         }
         let conditional = request.headers().get("If-None-Match")?;
         let plan = crate::respond(
