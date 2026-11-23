@@ -85,10 +85,10 @@ pub struct Bot {
     /// answers, stops or changes anything. Chosen when the link is made, as `full` is.
     #[serde(default)]
     pub read_only: bool,
-    /// May answer what an agent asks permission for (run this command, edit that file). Off
-    /// unless its owner turned it on when making the link: the bot reads what agents write, and
-    /// what it reads must not be able to approve what an agent does (23 November 2026). Without
-    /// it a bot may still decline, and answer an agent's questions.
+    /// May answer what an agent asks (a permission request or a question). Off unless its owner
+    /// turned it on when making the link: the bot reads what agents write, and what it reads must
+    /// not be able to approve what an agent does (23 November 2026). Without it a bot may only
+    /// decline.
     #[serde(default)]
     pub approve: bool,
     /// May set a chat's access to full access (`full_auto`). Only with `full`.

@@ -214,9 +214,7 @@ pub fn text(
         CallbackEvent::Asking => {
             let mut out = format!("{which} is waiting for an answer.");
             let asked = render::asked(items);
-            let permission = asked
-                .iter()
-                .any(|(kind, _, _)| matches!(*kind, "permission" | "confirmation"));
+            let permission = !asked.is_empty();
             for (kind, id, what) in asked.into_iter().take(2) {
                 out.push_str(&format!(
                     "\nIt asks a {kind}, request {}. In the agent's own words (not o7's): {}",
@@ -225,7 +223,7 @@ pub fn text(
                 ));
             }
             out.push_str(if permission && !may_approve {
-                "\nThis link may not approve what an agent asks permission for: tell your person, who approves it in o7 or on their phone. You may decline it with the answer tool."
+                "\nThis link may not answer what an agent asks: tell your person, who answers it in o7 or on their phone. You may decline it with the answer tool."
             } else {
                 "\nCall read with this chat for its options, then answer it with the answer tool, or ask your person first if it is theirs to decide."
             });

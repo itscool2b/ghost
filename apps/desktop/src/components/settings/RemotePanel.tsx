@@ -220,7 +220,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                 badge={
                   <span className="g-chip">
                     {levelName(bot)}
-                    {bot.approve ? " · approves" : ""}
+                    {bot.approve ? " · answers agents" : ""}
                     {bot.full_access ? " · full access" : ""}
                   </span>
                 }
@@ -1058,11 +1058,12 @@ export function BotDialog({
                 onChange={(event) => setApprove(event.currentTarget.checked)}
               />
               <span>
-                <strong>What agents ask permission for</strong>
+                <strong>Answer what agents ask</strong>
                 <span>
-                  Running a command, editing a file. Off, the bot can decline but not approve, and
-                  you approve in o7 or on your phone. The bot reads what agents write, so with this
-                  on, what it reads could talk it into approving.
+                  Permission requests (run a command, edit a file) and questions, and loosening a
+                  chat's access. Off, the bot can decline but not answer, and you answer in o7 or on
+                  your phone. The bot reads what agents write, so with this on, what it reads could
+                  talk it into saying yes.
                 </span>
               </span>
             </label>

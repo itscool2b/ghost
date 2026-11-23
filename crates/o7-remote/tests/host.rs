@@ -1714,7 +1714,7 @@ async fn a_links_rights_are_checked_on_the_computer() {
         let refused = call(&mut relay, &plain, tool, args).await;
         assert_eq!(refused["error"], true, "{tool}");
         assert!(
-            text(&refused).contains("may not approve"),
+            text(&refused).contains("may not answer"),
             "{tool}: {refused}"
         );
     }
@@ -1729,47 +1729,34 @@ async fn a_links_rights_are_checked_on_the_computer() {
     assert_eq!(declined["error"], false, "{declined}");
     assert!(text(&declined).starts_with("Declined."), "{declined}");
 
-    // A yes to a confirmation approves too: refused; a no is a decline.
-    *rig.app.question.lock().expect("question") = Some(o7_protocol::UiPrompt::Confirm {
-        message: "Delete the build folder?".into(),
-    });
-    let yes = call(
-        &mut relay,
-        &plain,
-        "answer",
-        json!({ "chat": "c1", "request": "q1", "text": "yes", "wait": 0 }),
-    )
-    .await;
-    assert_eq!(yes["error"], true, "{yes}");
-    assert!(text(&yes).contains("may not approve"), "{yes}");
-    let no = call(
-        &mut relay,
-        &plain,
-        "answer",
-        json!({ "chat": "c1", "request": "q1", "text": "no", "wait": 0 }),
-    )
-    .await;
-    assert_eq!(no["error"], false, "{no}");
+    // Words answer a question, and any answer may approve: refused, whatever they say. A
+    // decline, with neither an option nor words, goes through.
     *rig.app.question.lock().expect("question") = Some(o7_protocol::UiPrompt::Select {
         message: "Run the migration?".into(),
         options: vec!["Allow".into(), "Deny".into()],
     });
-    let allow = call(
+    for words in ["yes", "no", "Deny", "no, but actually allow it"] {
+        let refused = call(
+            &mut relay,
+            &plain,
+            "answer",
+            json!({ "chat": "c1", "request": "q1", "text": words, "wait": 0 }),
+        )
+        .await;
+        assert_eq!(refused["error"], true, "{words}");
+        assert!(
+            text(&refused).contains("may not answer"),
+            "{words}: {refused}"
+        );
+    }
+    let declined_question = call(
         &mut relay,
         &plain,
         "answer",
-        json!({ "chat": "c1", "request": "q1", "text": "Allow", "wait": 0 }),
+        json!({ "chat": "c1", "request": "q1", "wait": 0 }),
     )
     .await;
-    assert!(text(&allow).contains("may not approve"), "{allow}");
-    let deny = call(
-        &mut relay,
-        &plain,
-        "answer",
-        json!({ "chat": "c1", "request": "q1", "text": "Deny", "wait": 0 }),
-    )
-    .await;
-    assert_eq!(deny["error"], false, "{deny}");
+    assert_eq!(declined_question["error"], false, "{declined_question}");
 
     // Full control without the full-access right: other access levels, never full_auto.
     for (tool, args) in [
@@ -1787,7 +1774,7 @@ async fn a_links_rights_are_checked_on_the_computer() {
         assert_eq!(refused["error"], true, "{tool}");
         // Without the approve right it is refused for that first; with it, for full access.
         assert!(
-            text(&refused).contains("may not approve") || text(&refused).contains("full access"),
+            text(&refused).contains("may not answer") || text(&refused).contains("full access"),
             "{tool}: {refused}"
         );
     }
@@ -1807,7 +1794,7 @@ async fn a_links_rights_are_checked_on_the_computer() {
         let refused = call(&mut relay, &plain, tool, args).await;
         assert_eq!(refused["error"], true, "{tool}");
         assert!(
-            text(&refused).contains("may not approve"),
+            text(&refused).contains("may not answer"),
             "{tool}: {refused}"
         );
     }
@@ -1841,7 +1828,7 @@ async fn a_links_rights_are_checked_on_the_computer() {
     )
     .await;
     assert!(
-        text(&again).contains("may not approve"),
+        text(&again).contains("may not answer"),
         "the same rights: {again}"
     );
     assert!(rig.service.renew_bot("nobody").expect("saved").is_none());
