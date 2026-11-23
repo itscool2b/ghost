@@ -287,13 +287,19 @@ fn read_commands(
         }
         match serde_json::from_str::<O7Event>(&payload) {
             Ok(O7Event::ToolCall(call)) => {
-                match calls.iter_mut().find(|known| known.tool_call_id == call.tool_call_id) {
+                match calls
+                    .iter_mut()
+                    .find(|known| known.tool_call_id == call.tool_call_id)
+                {
                     Some(known) => *known = call,
                     None => calls.push(call),
                 }
             }
             Ok(O7Event::ToolUpdate(update)) => {
-                match calls.iter().position(|known| known.tool_call_id == update.tool_call_id) {
+                match calls
+                    .iter()
+                    .position(|known| known.tool_call_id == update.tool_call_id)
+                {
                     Some(index) => {
                         let known = calls.remove(index);
                         calls.insert(index, super::compact::apply_update(known, update));

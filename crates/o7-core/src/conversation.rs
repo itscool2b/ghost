@@ -82,7 +82,9 @@ impl CommandRun {
                     let words: Vec<&str> = parts.iter().filter_map(Value::as_str).collect();
                     match words.as_slice() {
                         [shell, flag, script]
-                            if flag.starts_with('-') && flag.ends_with('c') && !shell.is_empty() =>
+                            if flag.starts_with('-')
+                                && flag.ends_with('c')
+                                && !shell.is_empty() =>
                         {
                             Some((*script).to_owned())
                         }
@@ -196,9 +198,15 @@ pub(crate) fn first_error(output: &str) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let looks_wrong = |line: &&str| {
         let lower = line.to_ascii_lowercase();
-        let calm = ["0 failed", "0 errors", "no errors", "0 error(s)", "error: 0"]
-            .iter()
-            .any(|ok| lower.contains(ok));
+        let calm = [
+            "0 failed",
+            "0 errors",
+            "no errors",
+            "0 error(s)",
+            "error: 0",
+        ]
+        .iter()
+        .any(|ok| lower.contains(ok));
         !calm
             && [
                 "error",
@@ -250,7 +258,11 @@ fn work(turns: &[&ContextTurn], folder: &str) -> String {
         ));
     }
     for (ordinal, run) in shown {
-        value.push_str(&format!("[turn {ordinal}] {} | {}\n", run.outcome(), run.line()));
+        value.push_str(&format!(
+            "[turn {ordinal}] {} | {}\n",
+            run.outcome(),
+            run.line()
+        ));
         if let Some(cwd) = run.cwd.as_deref().filter(|cwd| *cwd != folder) {
             value.push_str(&format!("  in {}\n", cut(cwd, 512)));
         }
@@ -412,7 +424,10 @@ mod tests {
         let read = CommandRun::of(&bash).expect("a command");
         assert_eq!(read.command, "cargo test");
         assert!(read.failed());
-        assert_eq!(read.output, "error: test failed\n", "colour codes and CR go");
+        assert_eq!(
+            read.output, "error: test failed\n",
+            "colour codes and CR go"
+        );
         // Codex: an argument list through a shell, a folder, and a terminal with its exit code.
         let mut codex = call(
             ToolKind::Execute,
@@ -428,7 +443,10 @@ mod tests {
         assert_eq!(read.command, "npm test");
         assert_eq!(read.cwd.as_deref(), Some("/work/web"));
         assert_eq!(read.exit_code, Some(1));
-        assert!(read.failed(), "a non-zero exit fails though the tool completed");
+        assert!(
+            read.failed(),
+            "a non-zero exit fails though the tool completed"
+        );
         let plain = call(
             ToolKind::Execute,
             serde_json::json!({"command": ["git", "status"]}),
@@ -436,7 +454,11 @@ mod tests {
         );
         assert_eq!(CommandRun::of(&plain).unwrap().command, "git status");
         // An execute call with no input names its command in the title.
-        let mut titled = call(ToolKind::Execute, serde_json::json!({}), ToolStatus::Pending);
+        let mut titled = call(
+            ToolKind::Execute,
+            serde_json::json!({}),
+            ToolStatus::Pending,
+        );
         titled.raw_input = None;
         titled.title = "ls -la".into();
         assert_eq!(CommandRun::of(&titled).unwrap().command, "ls -la");
@@ -458,9 +480,15 @@ mod tests {
         assert!(error.starts_with("error[E0425]"), "{error}");
         assert!(error.contains("src/lib.rs:3:5"));
         // Nothing that looks wrong: the last lines.
-        let quiet = (1..=20).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
+        let quiet = (1..=20)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         let tail = first_error(&quiet);
-        assert!(tail.starts_with("line 9") && tail.ends_with("line 20"), "{tail}");
+        assert!(
+            tail.starts_with("line 9") && tail.ends_with("line 20"),
+            "{tail}"
+        );
         // Long output is cut, and says so.
         let long = format!("error: {}", "x".repeat(5000));
         assert!(first_error(&long).ends_with('…'));
@@ -485,7 +513,12 @@ mod tests {
         second.answer = String::new();
         second.commands = vec![CommandRun {
             cwd: Some("/work/web".into()),
-            ..run("npm run lint", None, ToolStatus::Failed, "Error: Cannot find module 'x'")
+            ..run(
+                "npm run lint",
+                None,
+                ToolStatus::Failed,
+                "Error: Cannot find module 'x'",
+            )
         }];
         let (context, _) = handoff(&[first.clone(), second.clone()], None, "/work", "", "");
         assert!(context.contains("\nWorking folder\n/work\n"), "{context}");
@@ -503,12 +536,17 @@ mod tests {
         assert!(context.ends_with("End of handoff"));
 
         // The failing test later passed: the failure still open is the lint, then nothing.
-        second.commands.push(run("npm run lint", Some(0), ToolStatus::Completed, ""));
+        second
+            .commands
+            .push(run("npm run lint", Some(0), ToolStatus::Completed, ""));
         let (context, _) = handoff(&[first.clone(), second], None, "/work", "", "");
         assert!(context.contains("\nLast failing command\n[turn 1] exit 101 | cargo test -p core\nFirst error\nthread 'a' panicked"), "{context}");
-        first
-            .commands
-            .push(run("cargo test -p core", Some(0), ToolStatus::Completed, "ok"));
+        first.commands.push(run(
+            "cargo test -p core",
+            Some(0),
+            ToolStatus::Completed,
+            "ok",
+        ));
         let (context, _) = handoff(&[first], None, "/work", "", "");
         assert!(!context.contains("Last failing command"), "{context}");
     }
@@ -519,10 +557,17 @@ mod tests {
         busy.commands = (1..=20)
             .map(|n| run(&format!("step {n}"), Some(0), ToolStatus::Completed, ""))
             .collect();
-        busy.commands
-            .push(run("cat <<'EOF' > a.txt\nhello\nEOF", None, ToolStatus::InProgress, ""));
+        busy.commands.push(run(
+            "cat <<'EOF' > a.txt\nhello\nEOF",
+            None,
+            ToolStatus::InProgress,
+            "",
+        ));
         let (context, _) = handoff(&[busy], None, "/work", "", "");
-        assert!(context.contains("[9 earlier commands are not listed.]\n"), "{context}");
+        assert!(
+            context.contains("[9 earlier commands are not listed.]\n"),
+            "{context}"
+        );
         assert!(!context.contains("| step 9\n") && context.contains("| step 10\n"));
         assert!(context.contains("[turn 1] running | cat <<'EOF' > a.txt …\n"));
         assert!(context.len() <= HANDOFF_BYTES);
@@ -534,7 +579,6 @@ mod tests {
         assert!(context.contains("\nWorking folder\nC:\\work\n\nCurrent file changes\na.rs\n"));
         assert!(!context.contains("Commands run"));
     }
-
 
     #[test]
     fn edit_retains_context_parts_and_visible_labels_exactly() {
