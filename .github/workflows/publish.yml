@@ -23,6 +23,7 @@ on:
       - pnpm-workspace.yaml
       - rust-toolchain.toml
       - .cargo/**
+      - VERSION
       - .github/workflows/publish.yml
       - .github/scripts/release-plan.mjs
       - .github/scripts/release-notes.mjs
@@ -83,21 +84,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # <major>.<minor>.N: the first two numbers are the version people know o7 by, read from
-          # the workspace's Cargo.toml (raise it there to name a new version), and N is the number
-          # of commits on main: higher with every merge, and the same for the same commit however
-          # often this runs. N never starts again, so a build is always newer than the last.
-          named="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\([0-9]*\.[0-9]*\)\.[0-9]*" *$/\1/p' Cargo.toml | head -n 1)"
-          if [ -z "$named" ]; then
-            echo "::error::Cargo.toml has no [workspace.package] version of three numbers."
+          # The version is VERSION's, chosen by the pull request that changed the app: the minor
+          # number up for a big feature, the patch for a small change (docs/developing-in-o7.md,
+          # "Version"). It must be newer than every published one, or installed copies would never
+          # be offered it.
+          version="$(tr -d '[:space:]' <VERSION)"
+          if ! [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::VERSION must be three plain numbers, like 0.2.1, not '$version'."
             exit 1
           fi
-          version="$named.$(git rev-list --count HEAD)"
           echo "version=$version" >>"$GITHUB_OUTPUT"
           if gh release view "v$version" --json tagName >/dev/null 2>&1; then
-            echo "::notice::v$version is already published; nothing to do."
-            echo "publish=false" >>"$GITHUB_OUTPUT"
-            exit 0
+            tagged="$(git rev-list -n 1 "v$version" 2>/dev/null || true)"
+            app=(apps/desktop crates packages/ui Cargo.toml Cargo.lock package.json pnpm-lock.yaml pnpm-workspace.yaml rust-toolchain.toml .cargo)
+            if [ "$tagged" = "$(git rev-parse HEAD)" ] || { [ -n "$tagged" ] && git diff --quiet "$tagged" HEAD -- "${app[@]}"; }; then
+              # A rerun, or a merge of release tooling alone: nothing new in the app to publish.
+              echo "::notice::v$version is already published and the app has not changed since; nothing to do."
+              echo "publish=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::v$version is already published, and this merge changed the app. Raise VERSION (the patch for a small change, the minor number for a big feature) in a pull request; it publishes when merged."
+            exit 1
+          fi
+          latest="$(gh release view --json tagName -q .tagName 2>/dev/null || true)"
+          latest="${latest#v}"
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+            echo "::error::VERSION $version is older than the published $latest. Installed copies would never be offered it; raise VERSION above $latest."
+            exit 1
           fi
           echo "publish=true" >>"$GITHUB_OUTPUT"
           previous=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || true)
@@ -294,7 +307,7 @@ jobs:
           # latest.json goes up with the packages: once this release is the newest, it is the
           # manifest every installed copy reads.
           gh release create "v$VERSION" "$payload"/* "$RUNNER_TEMP/stage/latest.json" \
-            --target "$GITHUB_SHA" --title "o7 ${VERSION%.*} (build ${VERSION##*.})" --notes-file "$RUNNER_TEMP/notes.md" --latest
+            --target "$GITHUB_SHA" --title "o7 $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
       - name: Check what installed copies will read
         run: |
           # The address is the one compiled into the app. It must answer with this version's

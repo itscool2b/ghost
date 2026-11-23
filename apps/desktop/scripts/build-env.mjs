@@ -29,7 +29,7 @@ export function releaseBuildEnv(env, roots) {
 export function appVersion(value) {
   const parts = /^(\d{1,5})\.(\d{1,5})\.(\d{1,5})$/u.exec(value ?? "");
   if (!parts || parts.slice(1).some((part) => Number(part) > 65535 || /^0\d/u.test(part))) {
-    throw new Error(`--app-version takes a version like 0.1.1570, not ${JSON.stringify(value)}.`);
+    throw new Error(`--app-version takes a version like 0.2.1, not ${JSON.stringify(value)}.`);
   }
   return parts[0];
 }
