@@ -63,10 +63,13 @@ Two more choices are off unless the person turns them on for the link (23 Novemb
 
 - **Approve what agents ask permission for.** Without it a bot may decline a permission request
   and answer an agent's questions, but never approve running a command or editing a file: its
-  person does, in o7 or on their phone, and the call-back says so. It fails closed: no answer of
-  such a link may read as a go-ahead, so a yes to a confirmation, a choice or a typed reply that
-  starts with "yes", "allow", "proceed", "run" and the like, or a submitted form, is refused
-  (`goes_ahead` in `bot/lean.rs`). The bot reads what agents
+  person does, in o7 or on their phone, and the call-back says so. It fails closed
+  (`goes_ahead` in `bot/lean.rs`): a prompt that guards an action (a confirmation, a choice
+  from a list, a line to type) may only be declined ("no", "deny", "cancel" and the like); an
+  agent's questions may be answered, but not with a choice or reply that starts with a go-ahead
+  ("yes", "allow", "proceed", "run" and the like, read past leading marks and digits); a form is
+  refused. Setting a chat's access to anything but "ask" approves on the person's behalf too, so
+  it takes this right as well. The bot reads what agents
   write, and what it reads must not be able to approve what an agent does unless its person
   chose that.
 - **Full access in a chat** (full control only): switching a chat to `full_auto`.

@@ -142,6 +142,11 @@ fn access_level(access: &str, rights: Rights) -> Result<(), Answer> {
             "access is one of ask, auto_edit and full_auto.",
         ));
     }
+    // Any level that asks less than "ask" approves on the person's behalf: edits (auto_edit) or
+    // everything (full_auto). So it takes the approve right, and full access its own besides.
+    if access != "ask" && !rights.approve {
+        return Err(Answer::failed(NO_APPROVAL));
+    }
     if access == "full_auto" && !rights.full_access {
         return Err(Answer::failed(NO_FULL_ACCESS));
     }
@@ -501,42 +506,66 @@ async fn answer(
     ))
 }
 
-/// The words that open a go-ahead: a choice or a reply starting with one of them approves.
-const GO_AHEAD: [&str; 22] = [
-    "yes", "y", "yeah", "yep", "sure", "ok", "okay", "allow", "allowed", "approve", "approved",
-    "accept", "accepted", "proceed", "continue", "confirm", "go", "run", "execute", "apply",
-    "grant", "trust",
+/// The words that decline: the only answers a link without the approve right gives to a prompt
+/// that guards an action.
+const DECLINE: [&str; 12] = [
+    "no", "n", "nope", "deny", "denied", "reject", "rejected", "cancel", "decline", "abort",
+    "stop", "skip",
 ];
 
-/// Whether `words` read as a go-ahead: their first word is one of [`GO_AHEAD`].
-fn reads_as_go_ahead(words: &str) -> bool {
-    let first: String = words
-        .trim()
+/// The words that open a go-ahead, for the answers to an agent's questions.
+const GO_AHEAD: [&str; 24] = [
+    "yes", "y", "yeah", "yep", "sure", "ok", "okay", "allow", "allowed", "approve", "approved",
+    "accept", "accepted", "proceed", "continue", "confirm", "go", "run", "execute", "apply",
+    "grant", "trust", "do", "agree",
+];
+
+/// The first word of `words`, lower case, past any leading marks, digits and spaces ("**Yes**",
+/// "1. Allow", "- proceed").
+fn first_word(words: &str) -> String {
+    words
         .chars()
+        .skip_while(|c| !c.is_alphabetic())
         .take_while(|c| c.is_alphanumeric())
         .collect::<String>()
-        .to_lowercase();
-    GO_AHEAD.contains(&first.as_str())
+        .to_lowercase()
 }
 
-/// Whether answering `prompt` with `answer` approves something: a yes to a confirmation, a chosen
-/// option or a typed reply that reads as a go-ahead, or a form submitted.
+fn declines(words: &str) -> bool {
+    DECLINE.contains(&first_word(words).as_str())
+}
+
+/// Whether `words` read as a go-ahead. Words with no letters at all are taken as one: they
+/// cannot be read, so they are not given.
+fn reads_as_go_ahead(words: &str) -> bool {
+    let first = first_word(words);
+    first.is_empty() || GO_AHEAD.contains(&first.as_str())
+}
+
+/// Whether answering `prompt` with `answer` may approve something, which a link without the
+/// approve right may not do. It fails closed: a prompt that guards an action (a confirmation, a
+/// choice from a list, a line to type) may only be declined; an agent's questions may be
+/// answered, but not with a choice or words that read as a go-ahead; anything else is refused.
 fn goes_ahead(prompt: &UiPrompt, answer: &UiAnswer) -> bool {
     match (prompt, answer) {
         (_, UiAnswer::Confirm { yes }) => *yes,
         (UiPrompt::Select { options, .. }, UiAnswer::Select { index }) => options
             .get(*index as usize)
-            .is_none_or(|option| reads_as_go_ahead(option)),
-        (_, UiAnswer::Input { text }) => reads_as_go_ahead(text),
+            .is_none_or(|option| !declines(option)),
+        (UiPrompt::Input { .. }, UiAnswer::Input { text }) => !declines(text),
         (UiPrompt::Questions { questions, .. }, UiAnswer::Questions { answers }) => {
             answers.iter().any(|answer| {
-                let question = questions
+                let Some(question) = questions
                     .iter()
-                    .find(|question| question.id == answer.question_id);
+                    .find(|question| question.id == answer.question_id)
+                else {
+                    return true;
+                };
                 answer.text.as_deref().is_some_and(reads_as_go_ahead)
                     || answer.selected.iter().any(|index| {
                         question
-                            .and_then(|question| question.options.get(*index as usize))
+                            .options
+                            .get(*index as usize)
                             .is_none_or(|option| reads_as_go_ahead(&option.label))
                     })
             })
@@ -1067,33 +1096,49 @@ mod tests {
         };
         assert!(goes_ahead(&confirm, &UiAnswer::Confirm { yes: true }));
         assert!(!goes_ahead(&confirm, &UiAnswer::Confirm { yes: false }));
+        // A choice from a list guards an action: only a decline is given.
         let select = UiPrompt::Select {
             message: "Run npm install?".into(),
             options: vec!["Allow once".into(), "Deny".into(), "Postgres".into()],
         };
         assert!(goes_ahead(&select, &UiAnswer::Select { index: 0 }));
-        assert!(!goes_ahead(&select, &UiAnswer::Select { index: 1 }));
-        assert!(!goes_ahead(&select, &UiAnswer::Select { index: 2 }));
+        assert!(
+            !goes_ahead(&select, &UiAnswer::Select { index: 1 }),
+            "a decline"
+        );
+        assert!(
+            goes_ahead(&select, &UiAnswer::Select { index: 2 }),
+            "not a decline, so not given"
+        );
         assert!(
             goes_ahead(&select, &UiAnswer::Select { index: 9 }),
             "fails closed"
         );
+        // So does a line to type.
         let input = UiPrompt::Input {
             message: "Type yes to continue".into(),
             placeholder: None,
         };
-        for words in ["yes", "Proceed with it", "OK.", "go ahead"] {
+        for words in [
+            "yes",
+            "Proceed with it",
+            "OK.",
+            "use Postgres",
+            "**yes**",
+            "!!!",
+        ] {
             assert!(
                 goes_ahead(&input, &UiAnswer::Input { text: words.into() }),
                 "{words}"
             );
         }
-        for words in ["no", "use Postgres", "stop", "yesterday's branch"] {
+        for words in ["no", "No, stop.", "cancel", "- deny"] {
             assert!(
                 !goes_ahead(&input, &UiAnswer::Input { text: words.into() }),
                 "{words}"
             );
         }
+        // An agent's questions are answered, but not with a go-ahead, read past leading marks.
         let questions = UiPrompt::Questions {
             message: String::new(),
             questions: vec![question("db", &["Postgres", "Approve the migration"], true)],
@@ -1107,11 +1152,37 @@ mod tests {
         };
         assert!(!goes_ahead(&questions, &picked(vec![0], None)));
         assert!(goes_ahead(&questions, &picked(vec![1], None)));
-        assert!(goes_ahead(&questions, &picked(vec![], Some("yes do it"))));
         assert!(!goes_ahead(
             &questions,
             &picked(vec![], Some("SQLite please"))
         ));
+        for words in [
+            "yes do it",
+            "**Yes**",
+            "1. Allow it",
+            "- proceed",
+            "\u{2705} go",
+            "!!!",
+            "42",
+        ] {
+            assert!(
+                goes_ahead(&questions, &picked(vec![], Some(words))),
+                "{words}"
+            );
+        }
+        // An answer to a question it was not asked fails closed.
+        assert!(goes_ahead(
+            &questions,
+            &UiAnswer::Questions {
+                answers: vec![UiQuestionAnswer {
+                    question_id: "other".into(),
+                    selected: vec![],
+                    text: Some("SQLite".into()),
+                }],
+            }
+        ));
+        // A form is not given either.
+        assert!(goes_ahead(&input, &UiAnswer::Questions { answers: vec![] }));
     }
 
     #[test]
