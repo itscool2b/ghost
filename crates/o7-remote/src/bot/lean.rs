@@ -171,7 +171,9 @@ pub(super) async fn run(
         "wait" => {
             let args: Wait = arguments(args)?;
             let seconds = args.seconds.unwrap_or(WAIT_SENT).clamp(1, WAIT_MAX);
-            Ok(Answer::ok(wait(backend, owner, &args.chat, seconds).await?))
+            Ok(Answer::ok(
+                wait(backend, owner, &args.chat, seconds, false).await?,
+            ))
         }
         "answer" => answer(backend, owner, arguments(args)?).await,
         "stop" => {
@@ -367,7 +369,7 @@ async fn send(
             "Sent to chat {chat_id}. Call wait for the result."
         ))));
     }
-    match wait(backend, owner, &chat_id, seconds).await {
+    match wait(backend, owner, &chat_id, seconds, true).await {
         Ok(text) => Ok(Answer::ok(begun(text))),
         // The message is with the agent; only the reading failed.
         Err(answer) => Ok(Answer::ok(begun(format!(
@@ -425,7 +427,7 @@ async fn answer(backend: &Arc<dyn Backend>, owner: &str, args: Reply) -> Result<
         return Ok(Answer::ok(format!("{said} Call wait for the result.")));
     }
     Ok(Answer::ok(
-        match wait(backend, owner, &args.chat, seconds).await {
+        match wait(backend, owner, &args.chat, seconds, true).await {
             Ok(text) => format!("{said} {text}"),
             Err(_) => format!("{said} Call wait for the result."),
         },
@@ -634,13 +636,21 @@ async fn read(
 /// Waits until the chat is between turns or asks for something, then reads its last turn. A wait
 /// that runs out says how far the turn is and no more: the bot asks again, and what it was told
 /// stays in what it reads on every later step.
+/// How long a chat that was just sent a message or an answer may still look as it did before.
+/// The computer acknowledges either a moment before the chat's state says so; a look in that
+/// moment found the chat "stopped" or still "waiting for an answer" and reported that as the
+/// turn's result.
+const MOVE_GRACE: Duration = Duration::from_secs(3);
+
+/// `acted`: this call just sent the chat a message or an answer, so the chat is about to move.
 async fn wait(
     backend: &Arc<dyn Backend>,
     owner: &str,
     chat_id: &str,
     seconds: u64,
+    acted: bool,
 ) -> Result<String, Answer> {
-    let result = waited(backend, owner, chat_id, Duration::from_secs(seconds)).await;
+    let result = waited(backend, owner, chat_id, Duration::from_secs(seconds), acted).await;
     backend.release(owner);
     result
 }
@@ -650,6 +660,7 @@ async fn waited(
     owner: &str,
     chat_id: &str,
     timeout: Duration,
+    acted: bool,
 ) -> Result<String, Answer> {
     // Watch before looking, so a change between the two is not missed.
     let (changed, mut changes) = tokio::sync::watch::channel(());
@@ -662,11 +673,22 @@ async fn waited(
     });
     backend.watch(owner, statuses)?;
     let deadline = tokio::time::Instant::now() + timeout;
+    // Until the chat is seen working, or its state changes, or the grace runs out.
+    let mut unmoved = acted.then(|| tokio::time::Instant::now() + MOVE_GRACE.min(timeout));
     let timed_out = loop {
         let overview = backend.overview().await?;
         if render::settled(find(&overview, chat_id)?) {
-            break false;
+            let Some(until) = unmoved.filter(|until| tokio::time::Instant::now() < *until) else {
+                break false;
+            };
+            match tokio::time::timeout_at(until, changes.changed()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => break false,
+                Err(_) => unmoved = None,
+            }
+            continue;
         }
+        unmoved = None;
         match tokio::time::timeout_at(deadline, changes.changed()).await {
             Ok(Ok(())) => {}
             // The watch ended (another profile opened): report what is known now.
