@@ -283,6 +283,7 @@ impl SessionManager {
             } else {
                 None
             },
+            &snapshot.chat.folder.display().to_string(),
             &files,
             &diff_stat,
         );

@@ -3887,11 +3887,13 @@ The person continues this conversation here, in your terminal. Reply only that y
                     prompt: turn.prompt.clone(),
                     parts: Vec::new(),
                     answer: turn.answer.clone(),
+                    commands: Vec::new(),
                 })
                 .collect();
             let (handoff, _) = crate::conversation::handoff(
                 &turns,
                 None,
+                &self.chat.folder.display().to_string(),
                 "Unchanged by o7; see the folder.",
                 "Not read for a terminal session.",
             );
