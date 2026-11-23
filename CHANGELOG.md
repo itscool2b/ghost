@@ -9,6 +9,10 @@ adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-23
+
+- When you switch a chat to another agent, the new agent now gets the real state of the work, not just the conversation. The handoff lists the commands that ran and how each ended, the folder they ran in, and the last command that was still failing with its first error, so the new agent does not have to find the broken test again. You can see exactly what it was sent: before you confirm, while it waits above the message box, and later on the message that carried it, where it opens from one line instead of filling your message. ([#177](https://github.com/itscool2b/o7/pull/177))
+
 ## 2026-11-22
 
 - A chat no longer dies while its agent waits on background work. When Claude Code left a command running in the background (a build, tests, a server) and you went to another chat, o7 stopped that agent after ten minutes, so the chat never carried on. Now o7 leaves it running until that work is done. ([#174](https://github.com/itscool2b/o7/pull/174))

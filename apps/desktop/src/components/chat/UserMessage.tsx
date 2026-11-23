@@ -1,12 +1,14 @@
-import { BookOpen, ChevronRight, History, Pencil, Workflow } from "lucide-react";
-import { useCallback, useId, useState } from "react";
+import { ArrowRightLeft, BookOpen, ChevronRight, History, Pencil, Workflow } from "lucide-react";
+import { useCallback, useId, useMemo, useState } from "react";
 import type { ChatImageContext } from "../../bindings";
+import { parseHandoff } from "../../lib/chat/handoff";
 import type { MemoryContext } from "../../lib/chat/memoryContext";
 import { type ProjectEvent, projectEvent } from "../../lib/chat/projectEvent";
 import { steeringState, type UserItem } from "../../lib/chat/transcript";
 import { MessageImages } from "./ChatImages";
 import { CopyAction } from "./CopyAction";
 import { useDisclosure } from "./DisclosureMemory";
+import { HandoffView, handoffSummary } from "./HandoffView";
 
 export function UserMessage({
   item,
@@ -43,6 +45,7 @@ export function UserMessage({
     );
   return (
     <div className="chat-user-wrap" data-testid="item" data-test-kind="user">
+      {item.handoff ? <SentHandoff itemKey={item.key} handoff={item.handoff} /> : null}
       {/* The block and its actions keep to the words' width when memory opens wider below. */}
       {item.text || !item.memory ? (
         <div className="chat-user-row">
@@ -103,6 +106,40 @@ export function UserMessage({
             }
           </span>
           {item.steering?.detail ? <span>{item.steering.detail}</span> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The handoff a new agent received with this message: one quiet line saying what it held, which
+ * opens it laid out, with the exact text one row further. The person did not type it, so it is
+ * no bubble.
+ */
+function SentHandoff({ itemKey, handoff }: { readonly itemKey: string; readonly handoff: string }) {
+  const [open, setOpen] = useDisclosure(itemKey, "handoff", false);
+  const body = useId();
+  const parsed = useMemo(() => parseHandoff(handoff), [handoff]);
+  const summary = parsed ? handoffSummary(parsed) : "";
+  return (
+    <div className="chat-sent-handoff" data-testid="sent-handoff">
+      <button
+        type="button"
+        className="chat-project-event-toggle"
+        aria-expanded={open}
+        aria-controls={body}
+        title="Context o7 sent to the new agent with this message"
+        onClick={() => setOpen(!open)}
+      >
+        <ArrowRightLeft size={14} aria-hidden="true" />
+        <span>Handoff sent with this message</span>
+        {summary ? <span className="chat-sent-handoff-summary">{summary}</span> : null}
+        <ChevronRight className="chat-disclosure" size={12} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="chat-sent-handoff-body" id={body}>
+          <HandoffView text={handoff} />
         </div>
       ) : null}
     </div>

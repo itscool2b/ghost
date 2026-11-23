@@ -11,6 +11,7 @@ import type {
 import { hasProcess } from "../../lib/chat/transcript";
 import type { ConversationTransport } from "../../lib/conversation";
 import { errorMessage } from "../../lib/errors";
+import { HandoffView } from "./HandoffView";
 import { Modal } from "./Modal";
 
 export type ConversationIntent =
@@ -312,12 +313,16 @@ export function ConversationDialog({
           </div>
           <section className="conversation-context" aria-label="Exact continuation context">
             <h3>Handoff</h3>
-            <pre>
-              {preview.handoff ||
-                (preview.uses_native_fork || preview.resumes_native
-                  ? "No extra context is needed."
-                  : "No earlier context is included.")}
-            </pre>
+            <div className="conversation-handoff">
+              <HandoffView
+                text={preview.handoff}
+                emptyText={
+                  preview.uses_native_fork || preview.resumes_native
+                    ? "No extra context is needed."
+                    : "No earlier context is included."
+                }
+              />
+            </div>
             {preview.prompt !== null ? (
               <>
                 <h3>Prompt to send</h3>

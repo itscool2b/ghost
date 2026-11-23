@@ -852,3 +852,91 @@ async fn a_never_messaged_claude_session_starts_again_under_its_own_id() {
     );
     assert_eq!(starts[2].2.new_session_id, None);
 }
+
+#[tokio::test]
+async fn a_handoff_carries_the_failing_command_and_its_error_with_secrets_hidden() {
+    // Fake secrets, built here so no realistic-looking one sits in the source.
+    let flag_value = format!("{}{}", "flag", "value-1234567890");
+    let bearer = format!("{}{}", "abcdefghij", "klmnopqrstuv");
+    let command = format!(
+        "curl -H 'Authorization: Bearer {bearer}' --token {flag_value} https://example.test/api"
+    );
+    let mut ready = ready_step("tools-native");
+    if let Step::Emit(DriverEvent::Ready(info)) = &mut ready {
+        info.capabilities.resume = true;
+    }
+    let tool = |event| Step::EmitInTurn(DriverEvent::Event { turn: None, event });
+    let (driver, _handle) = ScriptedDriver::new(vec![
+        ready,
+        Step::Expect(CommandMatch::Prompt),
+        tool(O7Event::ToolCall(o7_protocol::ToolCall {
+            tool_call_id: "run-1".into(),
+            kind: o7_protocol::ToolKind::Execute,
+            title: "Call the API".into(),
+            status: o7_protocol::ToolStatus::InProgress,
+            locations: Vec::new(),
+            raw_input: Some(serde_json::json!({ "command": command })),
+            tool_name: None,
+            content: Vec::new(),
+            truncated: None,
+        })),
+        tool(O7Event::ToolUpdate(o7_protocol::ToolUpdate {
+            tool_call_id: "run-1".into(),
+            status: Some(o7_protocol::ToolStatus::Completed),
+            title: None,
+            kind: None,
+            locations: None,
+            raw_input: None,
+            tool_name: None,
+            content: Some(vec![o7_protocol::ToolContent::Terminal {
+                output: "connecting\ncurl: (6) Could not resolve host: example.test\n".into(),
+                exit_code: Some(6),
+                truncated: None,
+            }]),
+            truncated: None,
+        })),
+        delta("The API call failed."),
+        Step::EmitInTurn(DriverEvent::Event {
+            turn: None,
+            event: O7Event::MessageCompleted {
+                message_id: "m1".into(),
+            },
+        }),
+        Step::EndTurn {
+            stop_reason: StopReason::EndTurn,
+            usage: None,
+            error: None,
+        },
+        Step::Expect(CommandMatch::Shutdown),
+        Step::Exit(DriverExit::Closed),
+    ]);
+    let rig = rig(vec![driver], WriterConfig::STANDARD, Knobs::STANDARD);
+    let chat = rig
+        .manager
+        .create_chat("mock", &rig.folder)
+        .await
+        .expect("chat");
+    status(&rig, &chat.id, SessionStatus::Ready).await;
+    rig.manager
+        .send(&chat.id, "call the API".into())
+        .await
+        .expect("send");
+    status(&rig, &chat.id, SessionStatus::Ready).await;
+    stop(&rig, &chat.id).await;
+    let preview = rig
+        .manager
+        .continuation_preview(&chat.id, ContinuationAction::FreshSession)
+        .await
+        .expect("preview");
+    let handoff = &preview.handoff;
+    assert!(
+        handoff.contains(&format!("\nWorking folder\n{}\n", rig.folder.display())),
+        "{handoff}"
+    );
+    assert!(handoff.contains("\nCommands run (newest last)\n[turn 1] exit 6 | curl "));
+    assert!(handoff.contains("\nLast failing command\n[turn 1] exit 6 | curl "));
+    assert!(handoff.contains("First error\ncurl: (6) Could not resolve host: example.test"));
+    assert!(handoff.contains("--token <SECRET>"), "{handoff}");
+    assert!(!handoff.contains(&flag_value), "the flag's value is hidden");
+    assert!(!handoff.contains(&bearer), "the bearer token is hidden");
+}

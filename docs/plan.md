@@ -130,7 +130,10 @@ prerender public pages and serve static assets through Cloudflare. Rust owns API
 - **One thread, many agents.** Switching agent resumes that agent's native session if it has one in this
   chat (sending only what happened since its last turn), else starts one in the same cwd; either way the
   first prompt carries a visible, token-budgeted handoff block (earlier user messages, other agents' final
-  answers, files changed + `git diff --stat`). Agents that can't resume (restart, cwd change) take the same
+  answers, how a turn that did not finish ended, the working folder, the newest shell commands with how
+  each ended, the last command still failing with its first error, files changed + `git diff --stat`;
+  12 KiB at most). The window lays it out in the review dialog, over the composer while it waits, and on
+  the message that carried it, with the exact text one row away (`HandoffView.tsx`). Agents that can't resume (restart, cwd change) take the same
   handoff path. Claude Code resumes after a cwd change, so a Claude chat moving between Direct and
   Isolated folders keeps its native session without the handoff block: `--resume=<id>` from the new folder
   (the transcript keeps appending under the original folder's project dir), or, when the original chat

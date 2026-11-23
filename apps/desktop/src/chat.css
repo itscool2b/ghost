@@ -99,6 +99,47 @@
   max-width: 82%;
 }
 
+/*
+ * The handoff a message carried to a new agent: a quiet line over the bubble, as a project's own
+ * prompts are (project.css), with what it held after it in fg-3; it opens into the laid-out
+ * handoff on a flat card as wide as the message may be.
+ */
+.chat-sent-handoff {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-bottom: var(--g-space-4);
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}
+
+.chat-sent-handoff-summary {
+  color: var(--g-fg-3);
+}
+
+.chat-sent-handoff-summary::before {
+  content: "·";
+  margin-right: var(--g-space-6);
+}
+
+.chat-sent-handoff-body {
+  width: min(560px, 100%);
+  margin-top: var(--g-space-6);
+  padding: var(--g-space-12) var(--g-space-16);
+  border-radius: var(--g-radius-14);
+  background-color: var(--ui-card-flat);
+}
+
+/*
+ * Inside a surface that is filled already, the failure takes a hairline instead of a second fill:
+ * stacked fills lift the ground enough to take its red text under 4.5:1 in dark.
+ */
+:is(.chat-sent-handoff-body, .chat-handoff-body) .handoff-failure {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--g-line);
+}
+
 /* The block and its actions keep to the words' width when memory opened below is wider. */
 .chat-user-row {
   position: relative;
@@ -2065,6 +2106,19 @@
   min-width: 0;
 }
 
+.chat-handoff-count {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--g-fg-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-handoff-count::before {
+  content: "·";
+  margin-right: var(--g-space-8);
+}
+
 .chat-handoff-preview {
   margin-left: auto;
   padding-left: var(--g-space-4);
@@ -2072,12 +2126,135 @@
   font-weight: var(--g-weight-medium);
 }
 
-.chat-handoff pre {
-  max-height: 200px;
-  margin: 0;
-  padding: var(--g-space-12) var(--g-space-16);
+.chat-handoff-body {
+  max-height: min(420px, 50vh);
+  padding: var(--g-space-12) var(--g-space-16) var(--g-space-16);
   overflow: auto;
   border-top: 1px solid var(--g-line);
+  overscroll-behavior: contain;
+}
+
+/*
+ * A handoff, laid out (HandoffView.tsx). The folder in one mono line; the command still failing
+ * in a flat card with a red dot and its first error in a well; then each other part folded to a
+ * quiet row (commands, the conversation, the changes, the exact text) that opens in place. Dots
+ * mark how each command ended: green done, red failed, amber still running. Nothing glows.
+ */
+.handoff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-12);
+  min-width: 0;
+  color: var(--g-fg-2);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  text-align: left;
+}
+
+.handoff p {
+  margin: 0;
+}
+
+.handoff code {
+  font-family: var(--g-mono);
+  font-size: var(--g-text-term);
+}
+
+.handoff-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.handoff-preface {
+  color: var(--g-fg-2);
+}
+
+.handoff-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-width: 0;
+  color: var(--g-fg-3);
+}
+
+.handoff-folder code {
+  overflow: hidden;
+  color: var(--g-fg-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.handoff-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-fg-3);
+}
+
+.handoff-dot[data-state="ok"] {
+  background-color: var(--g-green);
+}
+
+.handoff-dot[data-state="failed"] {
+  background-color: var(--g-red);
+}
+
+.handoff-dot[data-state="running"] {
+  background-color: var(--g-warning);
+}
+
+.handoff-failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-8);
+  padding: var(--g-space-12);
+  border-radius: var(--g-radius-12);
+  background-color: var(--ui-card-flat);
+}
+
+.handoff-failure-head {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-width: 0;
+}
+
+.handoff-failure-head .handoff-command-text {
+  flex: 1;
+  color: var(--g-fg-1);
+}
+
+.handoff-failure-meta {
+  flex: none;
+  color: var(--g-red);
+  font-weight: var(--g-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.handoff-command-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handoff-error,
+.handoff-well,
+.handoff-raw {
+  max-height: 220px;
+  margin: 0;
+  padding: var(--g-space-8) var(--g-space-12);
+  overflow: auto;
+  border-radius: var(--g-radius-8);
+  background-color: var(--g-glass-control);
+  box-shadow: inset 0 0 0 1px var(--g-line);
   color: var(--g-code-fg);
   font-family: var(--g-mono);
   font-size: var(--g-text-term);
@@ -2085,6 +2262,173 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+}
+
+.handoff-error {
+  color: var(--g-fg-1);
+}
+
+.handoff-parts {
+  display: flex;
+  flex-direction: column;
+}
+
+.handoff-part + .handoff-part {
+  border-top: 1px solid var(--g-line);
+}
+
+.handoff-part > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-height: 32px;
+  border-radius: var(--g-radius-8);
+  list-style: none;
+  cursor: pointer;
+  color: var(--g-fg-2);
+}
+
+.handoff-part > summary::-webkit-details-marker {
+  display: none;
+}
+
+.handoff-part > summary:hover {
+  color: var(--g-fg-1);
+}
+
+.handoff-part > summary:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: 2px;
+}
+
+.handoff-part-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--g-fg-3);
+}
+
+.handoff-part-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.handoff-part-chevron {
+  flex: none;
+  color: var(--g-fg-3);
+  transition: transform var(--g-dur-base) var(--g-ease-out);
+}
+
+.handoff-part[open] > summary .handoff-part-chevron {
+  transform: rotate(90deg);
+}
+
+.handoff-part-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-8);
+  padding: 0 0 var(--g-space-12) var(--g-space-24);
+}
+
+.handoff-commands,
+.handoff-turns {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.handoff-command {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-height: 28px;
+  min-width: 0;
+}
+
+.handoff-command-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.handoff-command .handoff-command-text {
+  color: var(--g-fg-1);
+}
+
+.handoff-command[data-state="failed"] .handoff-command-meta {
+  color: var(--g-red);
+}
+
+.handoff-command-cwd {
+  overflow: hidden;
+  color: var(--g-fg-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handoff-command-meta {
+  display: flex;
+  flex: none;
+  gap: var(--g-space-8);
+  color: var(--g-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.handoff-command-turn {
+  color: var(--g-fg-3);
+}
+
+.handoff-note,
+.handoff-empty {
+  color: var(--g-fg-3);
+}
+
+.handoff-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-4);
+  padding: var(--g-space-8) 0;
+}
+
+.handoff-turn + .handoff-turn {
+  border-top: 1px solid var(--g-line);
+}
+
+.handoff-turn-head {
+  color: var(--g-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.handoff-turn-ended {
+  color: var(--g-red);
+}
+
+.handoff-turn-user,
+.handoff-turn-answer {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+}
+
+.handoff-turn-user {
+  color: var(--g-fg-1);
+}
+
+.handoff-exact {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--g-space-4);
+}
+
+.handoff-exact .handoff-well {
+  flex: 1;
+  min-width: 0;
 }
 
 /*
