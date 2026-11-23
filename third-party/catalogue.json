@@ -2,7 +2,7 @@
   "version": 1,
   "scope": "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources, the bundled dictation models and the bundled scrcpy server are explicitly included. Linker-level and installer SDK qualification is separate.",
   "inputs": {
-    "Cargo.lock": "c28e86ef6826ffff3eb6aed4f3e5abc93035c1e82a70dff0a6c4a880844b9d56",
+    "Cargo.lock": "37016fe42778974a749a7f7bd0f2b2622e484c5399a2dcf94d93fe37ff52d9dd",
     "Cargo.toml": "d1154c3d9897e2f4b948e74c4f7d76852e6edf9e9bec663de0a4d5ec873e708c",
     "apps/design-lab/package.json": "de7f4c743231878aa792ffc1d5211d60aff122e3dd43aa0c77c0c506f499835b",
     "apps/desktop/package.json": "1cfac48cf24ce2bff773ba0761546f1d4be779d8d6e5e0327be46dfdafa9a8c6",
@@ -21,7 +21,7 @@
     "crates/o7-process/Cargo.toml": "a26ac18a85988786b21b8a662466094d65af0b9079e468b92bf4d6e61e002845",
     "crates/o7-protocol/Cargo.toml": "3720ac6f79dd101b8a27fac38958fa4ff9a0449760e7ff61a5674c6f6c20c57e",
     "crates/o7-release/Cargo.toml": "9baf0d5a93fd7a3cf66c587421c1d2fcedb532f76655a00be723aad1334aab90",
-    "crates/o7-remote/Cargo.toml": "e5ab850272da2b409342b809f2278a7f80ccd40fbcaaf3ea8a50d9a8d36596f0",
+    "crates/o7-remote/Cargo.toml": "d89d7d2bb514f04a300113ecef3775ad4638d53b88b70ffe8107ba702661aeab",
     "packages/ui/package.json": "64333cf2b2abcd796fcdf3b5630762705fc92117db7cde2270133e8b50a4f71e",
     "pnpm-lock.yaml": "94743a07ce95296d0a9fba8dbbf75a41c089ee7b78bbdbe097076994dd34a2dd",
     "third-party/models.json": "b947dabe6328cbe3787b60da7cbca0b4796fd113989316aaf91a27a5842a7b79",

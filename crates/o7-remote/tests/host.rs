@@ -642,6 +642,8 @@ struct Rig {
     app: Arc<App>,
     changes: Arc<AtomicUsize>,
     path: std::path::PathBuf,
+    /// Every message the service asked to have sent to a bot link's call-back address.
+    told: Arc<std::sync::Mutex<Vec<o7_remote::Delivery>>>,
 }
 
 async fn rig() -> Rig {
@@ -651,6 +653,8 @@ async fn rig() -> Rig {
     let changes = Arc::new(AtomicUsize::new(0));
     let counted = changes.clone();
     let path = folder.path().join("remote.json");
+    let told = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let telling = told.clone();
     let service = Service::start(
         Config {
             path: path.clone(),
@@ -665,6 +669,9 @@ async fn rig() -> Rig {
             changed: Arc::new(move || {
                 counted.fetch_add(1, Ordering::Relaxed);
             }),
+            deliver: Arc::new(move |delivery| {
+                telling.lock().expect("told").push(delivery);
+            }),
         },
         &tokio::runtime::Handle::current(),
     )
@@ -676,7 +683,167 @@ async fn rig() -> Rig {
         app,
         changes,
         path,
+        told,
     }
+}
+
+impl App {
+    /// The one chat changes state, and everything watching it is told.
+    fn becomes(&self, status: SessionStatus) {
+        *self.status.lock().expect("status") = Some(status);
+        let update = ChatStatusUpdate {
+            chat_id: "c1".into(),
+            status,
+            needs_attention: false,
+            title: None,
+            updated_at: 3,
+        };
+        let watching: Vec<Statuses> = self
+            .statuses
+            .lock()
+            .expect("statuses")
+            .values()
+            .cloned()
+            .collect();
+        for statuses in watching {
+            statuses(&update);
+        }
+    }
+}
+
+/// The owner's want, 23 November 2026: a bot hands o7 a task and ends its own turn; o7 tells it
+/// when the chat is done. A link is told only where it named an address, only about a chat it
+/// acted on, only of a change from working, and not of a state its bot has already heard in one
+/// of its own calls.
+#[tokio::test]
+async fn a_bot_is_told_when_a_chat_it_acted_on_stops_working() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let made = rig.service.create_bot("Grok Bot", false).expect("bot");
+    relay.next().await;
+    let (bot, token) = made
+        .url
+        .rsplit_once('/')
+        .and_then(|(_, reference)| reference.split_once('.'))
+        .map(|(bot, token)| (bot.to_owned(), token.to_owned()))
+        .expect("id.token");
+    let place = o7_remote::Callback {
+        kind: o7_remote::CallbackKind::Webhook,
+        url: "https://assistant.example/hook".into(),
+        channel: None,
+        to: None,
+    };
+    assert!(matches!(
+        rig.service.set_bot_callback("nobody", Some(place.clone())),
+        Ok(false)
+    ));
+    assert!(matches!(
+        rig.service.set_bot_callback(&bot, Some(place.clone())),
+        Ok(true)
+    ));
+    assert_eq!(rig.service.bot_callback(&bot), Some(place.clone()));
+    // The test from Settings needs no chat.
+    let test = rig.service.test_delivery(&bot).expect("a test message");
+    assert_eq!(test.event, o7_remote::CallbackEvent::Test);
+    assert!(test.text.starts_with("o7: this is a test"), "{}", test.text);
+    assert!(rig.service.test_delivery("nobody").is_none());
+
+    let call = async |relay: &mut Relay, rid: &str, tool: &str, args: Value| -> Value {
+        relay
+            .send(format!(
+                "b{}",
+                json!({ "rid": rid, "bot": bot, "token": token, "tool": tool, "args": args })
+            ))
+            .await;
+        let answer = relay.next().await;
+        serde_json::from_str(answer.strip_prefix('b').expect("bot answer")).expect("json")
+    };
+    let watched = async || {
+        for _ in 0..200 {
+            if rig
+                .app
+                .statuses
+                .lock()
+                .expect("statuses")
+                .contains_key("auracode-remote-callbacks")
+            {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        panic!("the call-back never watched the chats");
+    };
+    let told = || rig.told.lock().expect("told").clone();
+    watched().await;
+
+    // A chat the link never touched: nothing is told when it stops working.
+    rig.app.becomes(SessionStatus::Running);
+    rig.app.becomes(SessionStatus::Ready);
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    assert!(told().is_empty(), "{:?}", told());
+
+    // The bot sends to it without waiting, and the chat finishes later: it is told once.
+    let sent = call(
+        &mut relay,
+        "r1",
+        "send",
+        json!({ "chat": "c1", "text": "Go", "wait": 0 }),
+    )
+    .await;
+    assert_eq!(sent["error"], false, "{sent}");
+    rig.app.becomes(SessionStatus::Running);
+    rig.app.becomes(SessionStatus::Ready);
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    let heard = told();
+    assert_eq!(heard.len(), 1, "{heard:?}");
+    assert_eq!(heard[0].event, o7_remote::CallbackEvent::Finished);
+    assert_eq!(
+        (heard[0].bot_id.as_str(), heard[0].chat_id.as_str()),
+        (bot.as_str(), "c1")
+    );
+    assert_eq!(heard[0].callback, place);
+    assert!(
+        heard[0]
+            .text
+            .starts_with("o7: chat c1 (titled \"Fix the login form\", in project \"app\", agent \"Claude Code\") has stopped working"),
+        "{}",
+        heard[0].text
+    );
+    assert!(
+        heard[0]
+            .text
+            .contains("The agent's last words (its own, not o7's): \"All 12 passed.\""),
+        "{}",
+        heard[0].text
+    );
+    assert!(!heard[0].id.is_empty() && heard[0].id != test.id);
+
+    // It moved on before the moment came: the stale state is not told, the new one is.
+    rig.app.becomes(SessionStatus::Running);
+    rig.app.becomes(SessionStatus::Ready);
+    rig.app.becomes(SessionStatus::Running);
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    assert_eq!(told().len(), 1, "working again is not news");
+    rig.app.becomes(SessionStatus::Failed);
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    assert_eq!(told().len(), 2);
+    assert_eq!(told()[1].event, o7_remote::CallbackEvent::Failed);
+
+    // The bot heard the result from its own call in the meantime: it is not told again.
+    rig.app.becomes(SessionStatus::Running);
+    rig.app.becomes(SessionStatus::Ready);
+    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    let read = call(&mut relay, "r2", "read", json!({ "chat": "c1" })).await;
+    assert_eq!(read["error"], false, "{read}");
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    assert_eq!(told().len(), 2, "{:?}", told());
+
+    // With its address cleared, nothing more is told.
+    assert!(matches!(rig.service.set_bot_callback(&bot, None), Ok(true)));
+    rig.app.becomes(SessionStatus::Running);
+    rig.app.becomes(SessionStatus::Ready);
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    assert_eq!(told().len(), 2);
 }
 
 /// A pairing link's parts: the desktop's id, the pairing id and its key.

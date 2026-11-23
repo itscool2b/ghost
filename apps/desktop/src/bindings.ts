@@ -438,7 +438,23 @@ export const commands = {
 	remoteRemoveDevice: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_remove_device", { id })),
 	/**  Creates a bot link. Its address carries the bot's token and is returned only here. */
 	remoteCreateBot: (name: string, full: boolean) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_create_bot", { name, full })),
+	/**
+	 *  Removes a bot link. Its address stops working, and the key of its call-back, if it had
+	 *  one, leaves this computer's secure storage.
+	 */
 	remoteRemoveBot: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_remove_bot", { id })),
+	/**
+	 *  Sets where the bot link `id` is told that a chat it acted on finished or asks for an answer:
+	 *  which assistant the address is, the address, and the key it takes. The key goes to this
+	 *  computer's secure storage and is never returned; without a new one the kept one stays, so
+	 *  an address can be corrected without typing the key again. Only the window calls this: a bot
+	 *  has no tool that reads or changes its own link.
+	 */
+	remoteSetBotCallback: (id: string, kind: string, url: string, key: string | null, channel: string | null, to: string | null) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_set_bot_callback", { id, kind, url, key, channel, to })),
+	/**  Stops telling the bot link `id` anything, and forgets its key. */
+	remoteClearBotCallback: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_clear_bot_callback", { id })),
+	/**  Sends the bot link `id`'s address a test message now and answers with how it went. */
+	remoteTestBotCallback: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_test_bot_callback", { id })),
 	gitInitializePreview: (chatId: string, initialBranch: string) => typedError<GitInitializePreview, AppError>(__TAURI_INVOKE("git_initialize_preview", { chatId, initialBranch })),
 	gitInitializeApply: (chatId: string, token: string) => typedError<GitWorkspace, AppError>(__TAURI_INVOKE("git_initialize_apply", { chatId, token })),
 	projectToolsReview: (chatId: string) => typedError<ProjectToolsReview, AppError>(__TAURI_INVOKE("project_tools_review", { chatId })),
@@ -3562,6 +3578,24 @@ export type RemoteBot = {
 	 */
 	calls: number,
 	failed: number,
+	/**  Where the link's bot is told that a chat it acted on finished or asks for an answer. */
+	callback: RemoteBotCallback | null,
+};
+
+/**
+ *  A bot link's call-back as Settings shows it. The key its address takes is never here, and
+ *  the address is shown without its path, which for some assistants is a secret too.
+ */
+export type RemoteBotCallback = {
+	/**  `grok`, `hermes`, `openclaw` or `webhook`. */
+	kind: string,
+	/**  The address's scheme and host. */
+	address: string,
+	/**  OpenClaw only: where its answer is delivered. */
+	channel: string | null,
+	to: string | null,
+	/**  How the last message sent there went, since the app started. */
+	last: RemoteTold | null,
 };
 
 /**  A new bot link, shown once: the MCP address a bot connects to. It carries the bot's token. */
@@ -3601,6 +3635,13 @@ export type RemoteStatus = {
 	bots: RemoteBot[],
 	/**  A pairing link is open: its address is not repeated here, only when it stops opening. */
 	pairing_expires_at: number | null,
+};
+
+export type RemoteTold = {
+	at: number,
+	ok: boolean,
+	/**  In words, without the address or the key. */
+	detail: string,
 };
 
 export type RemovedWorkspace = {

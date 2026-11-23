@@ -119,6 +119,55 @@ of the app answers both, so it also works with a relay from before.
 The level limits the bot's own tools. It is not a wall around the computer: at either level a
 bot sends messages to agents and answers their permission requests, and agents run commands.
 
+### Telling a bot when a chat is done (the call-back)
+
+A bot that hands o7 a task used to have two ways to learn how it went: hold a call open, or ask
+again and again, each time re-reading everything it holds. Since 23 November 2026 a link can
+name one place to be told instead (**Settings > Remote access**, a link's **Call back**): the
+assistant's own way of being woken from outside. The bot then sends once, ends its turn, and is
+woken once.
+
+| Assistant | The address | The key | How o7 speaks to it |
+|---|---|---|---|
+| Grok Bot | a routine's webhook ("POST to") | the routine's key | `Authorization: Bearer <key>`, a JSON body the Bot is given with the routine's instruction |
+| Hermes | a webhook route, `http://<host>:8644/webhooks/<route>` | the route's secret | `X-Webhook-Timestamp` and `X-Webhook-Signature-V2`: the hex HMAC-SHA256 of `<timestamp>.<body>`. With `--deliver-only` Hermes passes the text on without a model turn |
+| OpenClaw | the Gateway's `/hooks/agent` | `hooks.token` | `Authorization: Bearer <token>`, `message` (which OpenClaw wraps as outside content), and optionally the channel and recipient its answer goes to |
+| Another | any receiver of Standard Webhooks | its signing secret | `webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 of id.timestamp.body>` |
+
+Each form was read from the assistant's own documentation on 23 November 2026; none has been
+run against the real assistant. Muse documents no way to be woken.
+
+**When a link is told.** Only about a chat it started, sent to or answered (the last forty),
+only when that chat stops working (it finished, failed, or asks for an answer or a permission),
+and two seconds after it did. In those two seconds a bot that was waiting on the chat gets the
+result in its own call's answer, and is then not told again; a chat that moved on meanwhile is
+told of where it ends up instead. Nothing is sent for how chats stood when o7 started. A
+failed message is tried once more after three seconds (never after a refusal), and Settings
+shows how the last one went. If a bot's own call returned the result but the bot had already
+given up on that call, it is not told: it asks again, as before.
+
+**What it is told.** One short paragraph o7 writes: which chat, what happened, and the one call
+that reads the rest. Everything in it that an agent or a person wrote (the chat's title, what a
+request asks, a failing command, the agent's last words) is on one line, cut short, inside a
+quotation and named as theirs. A request's options and the commands that ran are not in it;
+the bot reads them with `read`. The assistant that receives it may hold its person's mail and
+messages, so a chat's output must never be able to speak to it as o7.
+
+**Who may do what.** Only the window sets, tests or clears a link's address: a bot has no tool
+that reads or changes its own link. The address must be `https`, except on this computer or a
+private network, where a Hermes or OpenClaw gateway speaks `http`; it may not carry a sign-in
+or a fragment, and o7 follows no redirect from it, so the key goes where its owner pointed and
+nowhere else. The key lives in the computer's secure storage (one entry per link, named by a
+digest), is read only at the moment of sending, and is never shown again, written to
+`remote.json`, sent to the relay or logged; nor is the address, whose path is itself a secret
+for some assistants. Settings shows an address's scheme and host only. Removing the link, or
+its call-back, removes the key; so does uninstalling. The relay has no part in any of this:
+the computer sends the message itself.
+
+**What the address learns.** That a chat exists, its title, its project and agent by name,
+and a line of the agent's last words. That is the tradeoff of being told: it is the same
+service the bot's calls already pass through, but it is one more place the words go.
+
 ## The parts
 
 | Part | Where | What it does |
@@ -374,9 +423,9 @@ Security, from the review of 10 November 2026 (each is a known limit, not a surp
 
 Features:
 
-- **Telling a bot when a chat needs it.** A bot still asks (`wait`). MCP has no way to call a
-  client back over the stateless transport the relay speaks, and each of the four assistants
-  has its own way to be woken.
+- **Telling a bot through MCP itself.** A link is told through its assistant's own webhook
+  ("Telling a bot when a chat is done"). The MCP Events extension would let a bot subscribe
+  without its person copying an address and a key; too few assistants take it yet.
 - Notifications on the phone when a chat needs an answer.
 - A read-only level for a device or a bot.
 - New chats in a worktree, attachments, images, the queue's controls and the model picker from

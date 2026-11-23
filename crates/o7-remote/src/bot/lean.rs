@@ -152,6 +152,26 @@ pub(super) async fn run(
     args: &Value,
     full: bool,
 ) -> Result<Answer, Answer> {
+    // Which chat the call is about, where its arguments name one (`send` says so itself: it may
+    // make the chat). An answer about a chat tells the link's bot how that chat stands.
+    let chat = match tool {
+        "read" | "wait" | "answer" | "stop" => args.get("chat").and_then(Value::as_str),
+        _ => None,
+    };
+    let result = run_tool(backend, owner, tool, args, full).await;
+    match (chat, result) {
+        (Some(chat), Ok(answer)) => Ok(answer.about(chat, tool == "answer")),
+        (_, result) => result,
+    }
+}
+
+async fn run_tool(
+    backend: &Arc<dyn Backend>,
+    owner: &str,
+    tool: &str,
+    args: &Value,
+    full: bool,
+) -> Result<Answer, Answer> {
     match tool {
         "chats" => {
             let args: Chats = arguments(args)?;
@@ -294,7 +314,7 @@ pub(super) async fn run(
 async fn send(
     backend: &Arc<dyn Backend>,
     owner: &str,
-    args: Send,
+    mut args: Send,
     full: bool,
 ) -> Result<Answer, Answer> {
     message(&args.text)?;
@@ -305,7 +325,7 @@ async fn send(
     if let Some(access) = &args.access {
         access_level(access)?;
     }
-    let (chat_id, started) = match (args.chat, args.folder) {
+    let (chat_id, started) = match (args.chat.take(), args.folder.take()) {
         (Some(chat), None) => {
             if args.agent.is_some() {
                 return Err(Answer::failed(
@@ -324,6 +344,20 @@ async fn send(
             ));
         }
     };
+    let touched = chat_id.clone();
+    let result = sent(backend, owner, chat_id, started, args).await;
+    // Whatever came of the message, the chat is this link's to hear about from here on.
+    result.map(|answer| answer.about(&touched, true))
+}
+
+/// `send` once its chat exists: how the agent runs, the message, then the wait.
+async fn sent(
+    backend: &Arc<dyn Backend>,
+    owner: &str,
+    chat_id: String,
+    started: Option<String>,
+    args: Send,
+) -> Result<Answer, Answer> {
     let begun = |text: String| match &started {
         Some(agent) => format!("Started chat {chat_id} with {agent}. {text}"),
         None => text,

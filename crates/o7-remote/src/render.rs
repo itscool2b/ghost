@@ -410,6 +410,38 @@ pub fn chat_with(
     out
 }
 
+/// What a chat waits on, as the bare facts of each request: whether it is a permission or a
+/// question, its id, and what it asks as the agent wrote it. For a message that must set the
+/// agent's words apart itself (the call-back).
+pub fn asked(items: &[HistoryItem]) -> Vec<(&'static str, String, String)> {
+    digest(items)
+        .waiting
+        .iter()
+        .map(|request| match request {
+            Waiting::Permission(request) => (
+                "permission",
+                request.request_id.clone(),
+                request.title.clone(),
+            ),
+            Waiting::Question(request) => (
+                "question",
+                request.request_id.clone(),
+                match &request.prompt {
+                    UiPrompt::Confirm { message }
+                    | UiPrompt::Input { message, .. }
+                    | UiPrompt::Notify { message }
+                    | UiPrompt::Form { message, .. }
+                    | UiPrompt::Link { message, .. }
+                    | UiPrompt::Select { message, .. } => message.clone(),
+                    UiPrompt::Questions { message, questions } => questions
+                        .first()
+                        .map_or_else(|| message.clone(), |first| first.question.clone()),
+                },
+            ),
+        })
+        .collect()
+}
+
 /// What a chat is asking, each request as `read` shows it, for a reading of several chats.
 pub fn asking(items: &[HistoryItem]) -> String {
     digest(items)
@@ -427,9 +459,36 @@ pub fn asking(items: &[HistoryItem]) -> String {
 /// What a chat's last turn came to, in one line: how it ended, whether a command still fails,
 /// and how the agent's last message begins.
 pub fn brief(chat: &ChatSummary, items: &[HistoryItem]) -> String {
+    let parts = brief_parts(chat, items);
+    let mut out = parts.ended;
+    if let Some(failing) = parts.failing {
+        out.push_str(&format!(", still failing: {failing}"));
+    }
+    if let Some(said) = parts.said {
+        out.push_str(&format!(". {said}"));
+    }
+    out
+}
+
+/// What [`brief`] says, apart: a message that must keep the agent's own words visibly the
+/// agent's (the call-back) sets them out itself.
+pub struct Brief {
+    /// How the last turn ended, or the chat's status when it has not.
+    pub ended: String,
+    /// The last command still failing, as one line.
+    pub failing: Option<String>,
+    /// How the agent's last message begins, or the turn's last error.
+    pub said: Option<String>,
+}
+
+pub fn brief_parts(chat: &ChatSummary, items: &[HistoryItem]) -> Brief {
     let digest = digest(items);
     let Some(turn) = digest.turns.last() else {
-        return status(chat);
+        return Brief {
+            ended: status(chat),
+            failing: None,
+            said: None,
+        };
     };
     let ended = match turn.ended {
         None => status(chat),
@@ -447,16 +506,16 @@ pub fn brief(chat: &ChatSummary, items: &[HistoryItem]) -> String {
                 .iter()
                 .any(|later| later.command == run.command && later.succeeded())
     });
-    let mut out = ended;
-    if let Some((_, run)) = failing {
-        out.push_str(&format!(", still failing: {}", run_line(run)));
+    Brief {
+        ended,
+        failing: failing.map(|(_, run)| run_line(run)),
+        said: turn
+            .said
+            .last()
+            .filter(|said| !said.trim().is_empty())
+            .map(|said| one_line(said.trim(), 200))
+            .or_else(|| turn.errors.last().map(|error| one_line(error, 200))),
     }
-    if let Some(said) = turn.said.last().filter(|said| !said.trim().is_empty()) {
-        out.push_str(&format!(". {}", one_line(said.trim(), 200)));
-    } else if let Some(error) = turn.errors.last() {
-        out.push_str(&format!(". {}", one_line(error, 200)));
-    }
-    out
 }
 
 /// A command as one line: how it ended, then the command with secret-looking values hidden.

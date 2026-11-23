@@ -17,8 +17,28 @@ export interface RemoteApi {
   /** `full`: every tool, where a link without it has the chat tools only. */
   readonly createBot: (name: string, full: boolean) => Promise<RemoteBotLink>;
   readonly removeBot: (id: string) => Promise<RemoteStatus>;
+  /**
+   * Where a bot link is told that a chat it acted on finished or asks for an answer. The key is
+   * kept in this computer's secure storage and never comes back; `null` keeps the one kept.
+   */
+  readonly setBotCallback: (id: string, callback: BotCallbackInput) => Promise<RemoteStatus>;
+  readonly clearBotCallback: (id: string) => Promise<RemoteStatus>;
+  /** Sends the address a test message now; the status says how it went. */
+  readonly testBotCallback: (id: string) => Promise<RemoteStatus>;
   /** Calls back whenever the status changed (a device paired, connected or left). */
   readonly subscribe: (changed: (status: RemoteStatus) => void) => () => void;
+}
+
+/** Which assistant's way of being woken an address is. */
+export type CallbackKind = "grok" | "hermes" | "openclaw" | "webhook";
+
+export interface BotCallbackInput {
+  readonly kind: CallbackKind;
+  readonly url: string;
+  readonly key: string | null;
+  /** OpenClaw only: where its answer goes. Both or neither. */
+  readonly channel: string | null;
+  readonly to: string | null;
 }
 
 export const remoteApi: RemoteApi = {
@@ -29,6 +49,19 @@ export const remoteApi: RemoteApi = {
   removeDevice: (id) => settle(commands.remoteRemoveDevice(id)),
   createBot: (name, full) => settle(commands.remoteCreateBot(name, full)),
   removeBot: (id) => settle(commands.remoteRemoveBot(id)),
+  setBotCallback: (id, callback) =>
+    settle(
+      commands.remoteSetBotCallback(
+        id,
+        callback.kind,
+        callback.url,
+        callback.key,
+        callback.channel,
+        callback.to,
+      ),
+    ),
+  clearBotCallback: (id) => settle(commands.remoteClearBotCallback(id)),
+  testBotCallback: (id) => settle(commands.remoteTestBotCallback(id)),
   subscribe: (changed) => {
     if (!inTauri()) return () => {};
     let stopped = false;

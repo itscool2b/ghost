@@ -212,7 +212,9 @@ fn execute_cleanup(options: &Options, targets: &Targets) -> i32 {
     let plan = uninstall::plan(targets, &git);
     let choice = choose(&plan, options);
     // Added agent accounts' tokens go with the profiles that list them, read before those go.
-    let kept_tokens = remove_agent_tokens(&uninstall::agent_account_ids(&plan));
+    let kept_tokens = remove_agent_tokens(&uninstall::agent_account_ids(&plan))
+        // A bot link's call-back key goes with the data folder that lists the link.
+        + crate::remote_callback::remove_keys(&remote_bot_ids(&targets.data_roots));
     let mut report = uninstall::execute(&plan, &choice, &git, &Retry::PATIENT);
     if kept_tokens > 0 {
         report.notes.push(format!(
@@ -263,6 +265,26 @@ fn remove_agent_tokens(ids: &[String]) -> usize {
                 .is_err()
         })
         .count()
+}
+
+/// The ids of the bot links each data folder's `remote.json` lists, read before the folders go:
+/// a link may have a call-back key in secure storage under its id.
+fn remote_bot_ids(roots: &[PathBuf]) -> Vec<String> {
+    roots
+        .iter()
+        .filter_map(|root| std::fs::read(root.join("remote.json")).ok())
+        .filter_map(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .flat_map(|settings| {
+            settings["bots"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|bot| bot["id"].as_str().map(str::to_owned))
+                .filter(|id| !id.is_empty() && id.len() <= 64)
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn environment_root() -> Option<PathBuf> {

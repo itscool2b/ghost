@@ -17,7 +17,10 @@ use std::{
 use futures::{SinkExt, StreamExt};
 use o7_protocol::{
     EventBatch,
-    remote::{RemoteBot, RemoteBotLink, RemoteDevice, RemoteLink, RemotePairing, RemoteStatus},
+    remote::{
+        RemoteBot, RemoteBotCallback, RemoteBotLink, RemoteDevice, RemoteLink, RemotePairing,
+        RemoteStatus, RemoteTold,
+    },
     session::{ChatStatusUpdate, HistoryPage},
 };
 use tokio::{
@@ -29,6 +32,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::{
     backend::{Backend, BackendError, Frames, Statuses},
     bot,
+    callback::{self, Callback, CallbackEvent, Delivery},
     crypto::{self, Channel, NONCE_BYTES, Side},
     registry::{Registry, RegistryError},
     relay,
@@ -64,6 +68,13 @@ const SWEEP_EVERY: Duration = Duration::from_secs(5);
 /// No answer to a keep-alive for this long: the socket is dead.
 const SILENCE: Duration = Duration::from_secs(70);
 const WATCHER: &str = "auracode-remote";
+/// The owner the call-back watches chats under.
+const TELLER: &str = "auracode-remote-callbacks";
+/// How long after a chat settles its links' bots are told. A bot that was waiting on the chat
+/// gets the result in its own call's answer within this time, and is then not told again.
+const TELL_AFTER: Duration = Duration::from_secs(2);
+/// How often the call-back looks again at whether anything is to be watched at all.
+const TELL_CHECK: Duration = Duration::from_secs(5);
 
 pub struct Config {
     /// `remote.json` in the data folder.
@@ -80,6 +91,9 @@ pub struct Config {
     pub backend: Arc<dyn Backend>,
     /// Called after anything Settings shows has changed.
     pub changed: Arc<dyn Fn() + Send + Sync>,
+    /// Sends one message to a bot link's call-back address. The app does the sending: the key
+    /// the address takes is in its secure storage. Never called for a link without an address.
+    pub deliver: Arc<dyn Fn(Delivery) + Send + Sync>,
 }
 
 enum Control {
@@ -95,6 +109,13 @@ struct Shared {
     link: Mutex<RemoteLink>,
     /// Sessions open per device.
     connected: Mutex<HashMap<String, usize>>,
+    /// When each link's bot last heard how a chat stands from one of its own calls, by link and
+    /// chat. A state it has heard is not told again.
+    heard: Mutex<HashMap<(String, String), i64>>,
+    /// How the last message to each link's call-back address went, by link.
+    told: Mutex<HashMap<String, RemoteTold>>,
+    /// The service was shut down: the call-back stops watching.
+    closing: AtomicBool,
     config: Config,
 }
 
@@ -132,16 +153,21 @@ impl Service {
             }),
             registry: Mutex::new(registry),
             connected: Mutex::new(HashMap::new()),
+            heard: Mutex::new(HashMap::new()),
+            told: Mutex::new(HashMap::new()),
+            closing: AtomicBool::new(false),
             config,
         });
         let (control, receiver) = unbounded_channel();
         runtime.spawn(run(shared.clone(), receiver));
+        runtime.spawn(tell(shared.clone()));
         Ok(Self { shared, control })
     }
 
     pub fn status(&self) -> RemoteStatus {
         let mut registry = lock(&self.shared.registry);
         let connected = lock(&self.shared.connected);
+        let told = lock(&self.shared.told);
         RemoteStatus {
             enabled: registry.enabled(),
             link: lock(&self.shared.link).clone(),
@@ -168,6 +194,16 @@ impl Service {
                     full: bot.full,
                     calls: u32::try_from(bot.calls).unwrap_or(u32::MAX),
                     failed: u32::try_from(bot.failed).unwrap_or(u32::MAX),
+                    callback: bot.callback.as_ref().map(|callback| RemoteBotCallback {
+                        kind: serde_json::to_value(callback.kind)
+                            .ok()
+                            .and_then(|kind| kind.as_str().map(str::to_owned))
+                            .unwrap_or_default(),
+                        address: callback::shown(&callback.url),
+                        channel: callback.channel.clone(),
+                        to: callback.to.clone(),
+                        last: told.get(&bot.id).cloned(),
+                    }),
                 })
                 .collect(),
             pairing_expires_at: registry.pairing(now()).map(|pairing| pairing.expires_at),
@@ -248,6 +284,59 @@ impl Service {
         Ok(())
     }
 
+    /// Sets or clears where the open workspace's bot link `id` is told. `false`: no such link.
+    /// The caller has checked the address (`callback::check_url`) and keeps its key.
+    pub fn set_bot_callback(
+        &self,
+        id: &str,
+        callback: Option<Callback>,
+    ) -> Result<bool, RegistryError> {
+        let found = lock(&self.shared.registry).set_bot_callback(id, callback)?;
+        // What was said of the address before is not about this one.
+        lock(&self.shared.told).remove(id);
+        (self.shared.config.changed)();
+        Ok(found)
+    }
+
+    /// Where the open workspace's bot link `id` is told, if anywhere.
+    pub fn bot_callback(&self, id: &str) -> Option<Callback> {
+        lock(&self.shared.registry)
+            .bots()
+            .into_iter()
+            .find(|bot| bot.id == id)
+            .and_then(|bot| bot.callback.clone())
+    }
+
+    /// Notes how a message to the bot link `id`'s address went, for Settings to show.
+    pub fn note_told(&self, id: &str, ok: bool, detail: String) {
+        lock(&self.shared.told).insert(
+            id.to_owned(),
+            RemoteTold {
+                at: now(),
+                ok,
+                detail,
+            },
+        );
+        (self.shared.config.changed)();
+    }
+
+    /// The message Settings sends to check a link's address. `None`: no such link or address.
+    pub fn test_delivery(&self, id: &str) -> Option<Delivery> {
+        let registry = lock(&self.shared.registry);
+        let bot = registry.bots().into_iter().find(|bot| bot.id == id)?;
+        Some(Delivery {
+            bot_id: bot.id.clone(),
+            bot_name: bot.name.clone(),
+            callback: bot.callback.clone()?,
+            event: CallbackEvent::Test,
+            id: crypto::encode(&crypto::random::<12>().ok()?),
+            chat_id: String::new(),
+            title: String::new(),
+            text: callback::test_text(),
+            at: now(),
+        })
+    }
+
     /// Another profile was opened: browsers start over from its chats.
     pub fn profile_changed(&self, profile: &str) {
         lock(&self.shared.registry).set_scope(profile);
@@ -257,7 +346,173 @@ impl Service {
 
     /// Ends the connection task. Paired devices and bot links stay saved.
     pub fn shutdown(&self) {
+        self.shared.closing.store(true, Ordering::Relaxed);
         let _ = self.control.send(Control::Shutdown);
+    }
+}
+
+/// How a chat stands, as far as telling a bot goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stage {
+    /// Its agent is working.
+    Busy,
+    /// It waits for an answer or a permission.
+    Asking,
+    /// Its agent failed, or needs its owner to sign in.
+    Failed,
+    /// Between turns.
+    Rest,
+}
+
+impl Stage {
+    fn of(status: o7_protocol::SessionStatus, needs_attention: bool) -> Self {
+        use o7_protocol::SessionStatus as S;
+        if needs_attention {
+            return Self::Asking;
+        }
+        match status {
+            S::Running | S::Starting | S::Cancelling => Self::Busy,
+            S::Failed | S::AuthRequired => Self::Failed,
+            S::Ready | S::Stopped | S::Stopping => Self::Rest,
+        }
+    }
+}
+
+/// The call-back's task: watches the open workspace's chats while any of its bot links names an
+/// address, and tells a link's bot when a chat that link acted on stops working: it finished,
+/// failed or asks for an answer. Only a change from working (or from asking) is told, so nothing
+/// is sent for how chats stood when the watching began.
+async fn tell(shared: Arc<Shared>) {
+    while !shared.closing.load(Ordering::Relaxed) {
+        let scope = {
+            let registry = lock(&shared.registry);
+            (registry.enabled() && registry.any_callback() && !registry.scope().is_empty())
+                .then(|| registry.scope().to_owned())
+        };
+        let Some(scope) = scope else {
+            tokio::time::sleep(TELL_CHECK).await;
+            continue;
+        };
+        let backend = shared.config.backend.clone().bound(&scope);
+        let (updates, mut received) = unbounded_channel::<ChatStatusUpdate>();
+        let statuses: Statuses = Arc::new(move |update| updates.send(update.clone()).is_ok());
+        let mut stages: HashMap<String, Stage> = HashMap::new();
+        let watching = backend.watch(TELLER, statuses).is_ok();
+        if let (true, Ok(overview)) = (watching, backend.overview().await) {
+            for entry in &overview.chats {
+                stages.insert(
+                    entry.chat.id.clone(),
+                    Stage::of(entry.chat.status, entry.chat.needs_attention),
+                );
+            }
+        } else {
+            backend.release(TELLER);
+            tokio::time::sleep(TELL_CHECK).await;
+            continue;
+        }
+        loop {
+            let update = match tokio::time::timeout(TELL_CHECK, received.recv()).await {
+                Ok(Some(update)) => update,
+                // The watch ended: another workspace opened, or the app is closing.
+                Ok(None) => break,
+                Err(_) => {
+                    let registry = lock(&shared.registry);
+                    if shared.closing.load(Ordering::Relaxed)
+                        || !registry.enabled()
+                        || !registry.any_callback()
+                        || registry.scope() != scope
+                    {
+                        break;
+                    }
+                    continue;
+                }
+            };
+            let stage = Stage::of(update.status, update.needs_attention);
+            let before = stages.insert(update.chat_id.clone(), stage);
+            let event = match (before, stage) {
+                (Some(Stage::Busy), Stage::Asking) => CallbackEvent::Asking,
+                (Some(Stage::Busy | Stage::Asking), Stage::Rest) => CallbackEvent::Finished,
+                (Some(Stage::Busy | Stage::Asking), Stage::Failed) => CallbackEvent::Failed,
+                _ => continue,
+            };
+            if lock(&shared.registry).told_of(&update.chat_id).is_empty() {
+                continue;
+            }
+            tokio::spawn(tell_later(
+                shared.clone(),
+                backend.clone(),
+                update.chat_id,
+                stage,
+                event,
+                now(),
+            ));
+        }
+        backend.release(TELLER);
+    }
+}
+
+/// Tells the links that follow `chat_id` of `event`, a moment after it happened: unless the chat
+/// has moved on by then (a later change tells of that), and not a link whose bot has heard of
+/// this state from a call of its own meanwhile.
+async fn tell_later(
+    shared: Arc<Shared>,
+    backend: Arc<dyn Backend>,
+    chat_id: String,
+    stage: Stage,
+    event: CallbackEvent,
+    settled_at: i64,
+) {
+    tokio::time::sleep(TELL_AFTER).await;
+    let Ok(overview) = backend.overview().await else {
+        return;
+    };
+    let Some(entry) = overview.chats.iter().find(|entry| entry.chat.id == chat_id) else {
+        return;
+    };
+    if Stage::of(entry.chat.status, entry.chat.needs_attention) != stage {
+        return;
+    }
+    let told: Vec<_> = {
+        let heard = lock(&shared.heard);
+        lock(&shared.registry)
+            .told_of(&chat_id)
+            .into_iter()
+            .filter(|(bot, _, _)| {
+                heard
+                    .get(&(bot.clone(), chat_id.clone()))
+                    // Heard in the same millisecond it settled: told anyway. Twice is harmless;
+                    // never is a bot left waiting.
+                    .is_none_or(|at| *at <= settled_at)
+            })
+            .collect()
+    };
+    if told.is_empty() {
+        return;
+    }
+    let Ok(page) = backend.history(&chat_id, u32::MAX).await else {
+        return;
+    };
+    let project = overview
+        .projects
+        .iter()
+        .find(|project| project.id == entry.project_id)
+        .map_or("no project", |project| project.name.as_str());
+    let text = callback::text(event, &entry.chat, project, &page.items);
+    for (bot_id, bot_name, callback) in told {
+        let Ok(id) = crypto::random::<12>() else {
+            continue;
+        };
+        (shared.config.deliver)(Delivery {
+            bot_id,
+            bot_name,
+            callback,
+            event,
+            id: crypto::encode(&id),
+            chat_id: chat_id.clone(),
+            title: crate::render::title(&entry.chat),
+            text: text.clone(),
+            at: now(),
+        });
     }
 }
 
@@ -676,6 +931,13 @@ impl Serving {
             running.fetch_sub(1, Ordering::Relaxed);
             if answer.error {
                 lock(&shared.registry).bot_failed(&call.bot);
+            } else if let Some(chat) = &answer.chat {
+                // The bot has heard how this chat stands, and a chat it acted on is its to hear
+                // about from now on.
+                if answer.acted {
+                    lock(&shared.registry).follow(&call.bot, chat);
+                }
+                lock(&shared.heard).insert((call.bot.clone(), chat.clone()), now());
             }
             let _ = out.send(Out::Bot {
                 rid: call.rid,

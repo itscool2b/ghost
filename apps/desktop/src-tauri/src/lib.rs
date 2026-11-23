@@ -56,6 +56,7 @@ pub mod processes;
 pub mod profile_commands;
 pub mod project_tools;
 pub mod remote;
+mod remote_callback;
 pub mod repository_publication_commands;
 pub mod reveal;
 pub mod search_commands;

@@ -7,6 +7,7 @@
 
 pub mod backend;
 pub mod bot;
+pub mod callback;
 pub mod crypto;
 pub mod host;
 pub mod registry;
@@ -17,6 +18,7 @@ pub mod wire;
 pub use backend::{
     Action, Backend, BackendError, BoxFuture, ChatOptions, Choice, Frames, Outcome, Statuses,
 };
+pub use callback::{Callback, CallbackEvent, CallbackKind, Delivery};
 pub use host::{Config, Service};
 pub use registry::RegistryError;
 pub use wire::{Look, Overview, RemoteAgent};

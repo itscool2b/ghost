@@ -174,6 +174,50 @@ export async function checkRemote(browser, url, out, engine) {
     const linked = page.locator(".settings-row", { hasText: "Research bot" });
     assert.equal(await linked.locator(".g-chip").textContent(), "Full control");
     await linked.getByText("Not used yet", { exact: true }).waitFor();
+    // Where the bot is told when a chat is done: its assistant's address and key, typed once.
+    await linked.getByRole("button", { name: "Call back, Research bot" }).click();
+    const telling = page.getByRole("dialog", { name: "Tell Research bot when a chat is done" });
+    await telling
+      .getByText("o7 sends only to the address you give here", { exact: false })
+      .waitFor();
+    const kinds = telling.getByRole("group", { name: "Its assistant" });
+    assert.equal(await kinds.getByRole("radio", { name: "Another" }).isChecked(), true);
+    await kinds.getByRole("radio", { name: "Hermes" }).check();
+    await telling.getByText("hermes webhook subscribe o7", { exact: false }).waitFor();
+    await kinds.getByRole("radio", { name: "Grok Bot" }).check();
+    await telling
+      .getByText("Its Webhook section shows POST to and key", { exact: false })
+      .waitFor();
+    const save = telling.getByRole("button", { name: "Save" });
+    assert.equal(await save.isDisabled(), true, "nothing to save without an address");
+    await telling.getByRole("textbox", { name: "Address" }).fill("ftp://example.com/hook");
+    await telling.getByLabel("Key").fill("routine-key");
+    await save.click();
+    await telling.getByRole("alert").getByText("The address starts with https://.").waitFor();
+    await telling
+      .getByRole("textbox", { name: "Address" })
+      .fill("https://bot.example/routines/r1/webhook");
+    await save.click();
+    await telling
+      .getByText("Grok Bot is told at https://bot.example. Send a test to check it.")
+      .waitFor();
+    assert.equal((await calls()).at(-1), "set-callback:bot-1:grok:key");
+    // Once kept, neither the address's path nor the key is on the page again.
+    assert.equal(await page.getByText("routines/r1").count(), 0);
+    assert.equal(await telling.getByRole("textbox").count(), 0, "nothing is asked for again");
+    await settled(page);
+    assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
+    await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-callback.png`) });
+    await telling.getByRole("button", { name: "Send a test" }).click();
+    await telling.getByText("The last message was delivered just now.", { exact: false }).waitFor();
+    assert.equal((await calls()).at(-1), "test-callback:bot-1");
+    await telling.getByRole("button", { name: "Done" }).click();
+    await linked.getByRole("button", { name: "Call back: on, Research bot" }).waitFor();
+    assert.equal(await linked.getByTestId("remote-bot-callback").textContent(), "Call back: on");
+    await linked.getByTestId("remote-bot-callback").click();
+    await telling.getByRole("button", { name: "Stop telling it" }).click();
+    assert.equal((await calls()).at(-1), "clear-callback:bot-1");
+    assert.equal(await linked.getByTestId("remote-bot-callback").textContent(), "Call back");
     assert.equal(await page.getByText(/t{43}/).count(), 0, "the address stayed on the page");
     await page.getByRole("button", { name: "Remove Research bot" }).click();
     assert.equal((await calls()).at(-1), "remove-bot:bot-1");

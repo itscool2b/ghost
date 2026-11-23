@@ -83,6 +83,25 @@ pub(crate) fn setup(app: &tauri::AppHandle, runtime: &tokio::runtime::Handle) {
                 let _ = notify.emit(REMOTE_CHANGED, service.status());
             }
         }),
+        // A chat a bot acted on finished or asks: its link's address is told, off this thread.
+        deliver: {
+            let app = app.clone();
+            let runtime = runtime.clone();
+            Arc::new(move |delivery| {
+                let app = app.clone();
+                runtime.spawn(async move {
+                    let bot = delivery.bot_id.clone();
+                    let told = crate::remote_callback::send(delivery).await;
+                    if !told.ok {
+                        // Why, never where: the address and the key stay out of the log.
+                        tracing::warn!(detail = %told.detail, "a bot's call-back was not delivered");
+                    }
+                    if let Some(service) = app.try_state::<Service>() {
+                        service.note_told(&bot, told.ok, told.detail);
+                    }
+                });
+            })
+        },
     };
     match Service::start(config, runtime) {
         Ok(service) => {
@@ -200,11 +219,150 @@ pub fn remote_create_bot(
     service(&app)?.create_bot(&name, full).map_err(refused)
 }
 
+/// Removes a bot link. Its address stops working, and the key of its call-back, if it had
+/// one, leaves this computer's secure storage.
 #[tauri::command]
 #[specta::specta]
-pub fn remote_remove_bot(app: tauri::AppHandle, id: String) -> Result<RemoteStatus, AppError> {
+pub async fn remote_remove_bot(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<RemoteStatus, AppError> {
     let service = service(&app)?;
     service.remove_bot(&id).map_err(refused)?;
+    let _ = tokio::task::spawn_blocking(move || crate::remote_callback::remove_key(&id)).await;
+    Ok(service.status())
+}
+
+fn callback_kind(kind: &str) -> Result<o7_remote::CallbackKind, AppError> {
+    match kind {
+        "grok" => Ok(o7_remote::CallbackKind::Grok),
+        "hermes" => Ok(o7_remote::CallbackKind::Hermes),
+        "openclaw" => Ok(o7_remote::CallbackKind::Openclaw),
+        "webhook" => Ok(o7_remote::CallbackKind::Webhook),
+        _ => Err(AppError::invalid_argument(
+            "Choose which assistant this address is.",
+        )),
+    }
+}
+
+fn stored(error: crate::agent_tokens::TokenError) -> AppError {
+    match error {
+        crate::agent_tokens::TokenError::Invalid => {
+            AppError::invalid_argument("That key cannot be kept: it is empty or too long.")
+        }
+        other => AppError::new(AppErrorCode::StorageUnavailable, other.to_string()),
+    }
+}
+
+/// One short field of a call-back: a line of ordinary text, or nothing.
+fn short_field(value: Option<String>, what: &str) -> Result<Option<String>, AppError> {
+    match value.map(|value| value.trim().to_owned()) {
+        None => Ok(None),
+        Some(value) if value.is_empty() => Ok(None),
+        Some(value) if value.len() > 200 || value.chars().any(char::is_control) => Err(
+            AppError::invalid_argument(format!("That {what} is not one short line.")),
+        ),
+        Some(value) => Ok(Some(value)),
+    }
+}
+
+/// Sets where the bot link `id` is told that a chat it acted on finished or asks for an answer:
+/// which assistant the address is, the address, and the key it takes. The key goes to this
+/// computer's secure storage and is never returned; without a new one the kept one stays, so
+/// an address can be corrected without typing the key again. Only the window calls this: a bot
+/// has no tool that reads or changes its own link.
+#[tauri::command]
+#[specta::specta]
+pub async fn remote_set_bot_callback(
+    app: tauri::AppHandle,
+    id: String,
+    kind: String,
+    url: String,
+    key: Option<String>,
+    channel: Option<String>,
+    to: Option<String>,
+) -> Result<RemoteStatus, AppError> {
+    let service = service(&app)?;
+    let kind = callback_kind(&kind)?;
+    // Kept as the parser wrote it: what is sent to is exactly what was checked.
+    let url = o7_remote::callback::check_url(url.trim())
+        .map_err(|refusal| AppError::invalid_argument(refusal.0))?;
+    let (channel, to) = (
+        short_field(channel, "channel")?,
+        short_field(to, "recipient")?,
+    );
+    let (channel, to) = match (kind, channel, to) {
+        (o7_remote::CallbackKind::Openclaw, Some(channel), Some(to)) => (Some(channel), Some(to)),
+        (o7_remote::CallbackKind::Openclaw, None, None) => (None, None),
+        (o7_remote::CallbackKind::Openclaw, ..) => {
+            return Err(AppError::invalid_argument(
+                "Give both the channel and who to send to, or neither.",
+            ));
+        }
+        _ => (None, None),
+    };
+    if !service.status().bots.iter().any(|bot| bot.id == id) {
+        return Err(AppError::invalid_argument("That bot link is gone."));
+    }
+    let key = key.filter(|key| !key.trim().is_empty());
+    let bot = id.clone();
+    let kept = tokio::task::spawn_blocking(move || match key {
+        Some(key) => crate::remote_callback::save_key(&bot, &key).map(|()| true),
+        None => Ok(crate::remote_callback::has_key(&bot)),
+    })
+    .await
+    .map_err(|_| {
+        AppError::new(
+            AppErrorCode::StorageUnavailable,
+            "Secure storage did not answer.",
+        )
+    })?
+    .map_err(stored)?;
+    if !kept {
+        return Err(AppError::invalid_argument(
+            "Give the key this address takes.",
+        ));
+    }
+    service
+        .set_bot_callback(
+            &id,
+            Some(o7_remote::Callback {
+                kind,
+                url,
+                channel,
+                to,
+            }),
+        )
+        .map_err(refused)?;
+    Ok(service.status())
+}
+
+/// Stops telling the bot link `id` anything, and forgets its key.
+#[tauri::command]
+#[specta::specta]
+pub async fn remote_clear_bot_callback(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<RemoteStatus, AppError> {
+    let service = service(&app)?;
+    service.set_bot_callback(&id, None).map_err(refused)?;
+    let _ = tokio::task::spawn_blocking(move || crate::remote_callback::remove_key(&id)).await;
+    Ok(service.status())
+}
+
+/// Sends the bot link `id`'s address a test message now and answers with how it went.
+#[tauri::command]
+#[specta::specta]
+pub async fn remote_test_bot_callback(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<RemoteStatus, AppError> {
+    let service = service(&app)?;
+    let delivery = service
+        .test_delivery(&id)
+        .ok_or_else(|| AppError::invalid_argument("Set where to tell this bot first."))?;
+    let told = crate::remote_callback::send(delivery).await;
+    service.note_told(&id, told.ok, told.detail);
     Ok(service.status())
 }
 
