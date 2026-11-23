@@ -37,6 +37,31 @@ const PICTURE_QUALITY: u8 = 75;
 /// The most a picture may take on the wire, in base64.
 const PICTURE_BYTES: usize = 1536 * 1024;
 
+/// The hour on the computer's own clock, 0 to 23, for work bots leave for tonight.
+#[allow(unsafe_code)] // Read-only clock queries; the contract is stated at each call.
+fn local_hour() -> Option<u8> {
+    #[cfg(windows)]
+    {
+        // SAFETY: GetLocalTime only writes the SYSTEMTIME it is given.
+        let mut now: windows_sys::Win32::Foundation::SYSTEMTIME = unsafe { std::mem::zeroed() };
+        unsafe { windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut now) };
+        u8::try_from(now.wHour).ok().filter(|hour| *hour < 24)
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: localtime_r is the reentrant form: it writes only the tm it is given.
+        let now = unsafe { libc::time(std::ptr::null_mut()) };
+        let mut parts: libc::tm = unsafe { std::mem::zeroed() };
+        let read = unsafe { libc::localtime_r(&now, &mut parts) };
+        (!read.is_null())
+            .then(|| u8::try_from(parts.tm_hour).ok())
+            .flatten()
+            .filter(|hour| *hour < 24)
+    }
+    #[cfg(not(any(windows, unix)))]
+    None
+}
+
 /// `bytes` (a PNG or a JPEG) as a JPEG no larger than [`PICTURE_SIDE`] on its longer side.
 fn shrink(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let picture = image::load_from_memory(bytes)
@@ -1199,6 +1224,10 @@ impl Backend for AppBackend {
 
     /// A chat's branch and what is not committed in its folder, and its agent's usage as last
     /// reported. A part that cannot be read is left out, never guessed.
+    fn local_hour(&self) -> Option<u8> {
+        local_hour()
+    }
+
     /// The chat's browser tab or emulator as a JPEG, only while this backend's profile is the
     /// open one. The chat is one of its own: the tool found it in the overview.
     fn picture<'a>(
@@ -1269,6 +1298,13 @@ impl Backend for AppBackend {
 #[cfg(test)]
 mod tests {
     use super::on_this_computer;
+
+    /// The clock's hour is one of the day's.
+    #[test]
+    fn the_computers_hour_is_read() {
+        let hour = super::local_hour().expect("an hour");
+        assert!(hour < 24);
+    }
 
     /// A bot is shown a JPEG whose longer side is at most 1600 pixels; a smaller picture keeps
     /// its size, and bytes that are no picture are refused.

@@ -82,12 +82,22 @@ struct Send {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TaskArgs {
-    goal: String,
+    goal: Option<String>,
     project: Option<String>,
     agent: Option<String>,
     review: Option<bool>,
     wait: Option<u64>,
+    /// `now` (unsaid) or `tonight`.
+    when: Option<String>,
+    /// A task queued for tonight, to take off the queue.
+    cancel: Option<String>,
 }
+
+/// The night, in the computer's own hours: tasks queued for tonight start from 1 until 6 in the
+/// morning, when the person's agents have the most room.
+pub const NIGHT_HOURS: std::ops::Range<u8> = 1..6;
+/// The most tasks started from the queue in one night, one at a time.
+pub const NIGHT_BUDGET: usize = 3;
 
 /// The longest goal kept with a task for its review, in characters.
 const GOAL_KEPT: usize = 2_000;
@@ -207,6 +217,7 @@ pub(super) async fn run(
     tool: &str,
     args: &Value,
     rights: Rights,
+    later: &dyn super::Later,
 ) -> Result<Answer, Answer> {
     // Which chat the call is about, where its arguments name one (`send` says so itself: it may
     // make the chat). An answer about a chat tells the link's bot how that chat stands.
@@ -214,7 +225,7 @@ pub(super) async fn run(
         "read" | "wait" | "answer" | "stop" => args.get("chat").and_then(Value::as_str),
         _ => None,
     };
-    let result = run_tool(backend, owner, tool, args, rights).await;
+    let result = run_tool(backend, owner, tool, args, rights, later).await;
     match (chat, result) {
         (Some(chat), Ok(answer)) => Ok(answer.about(chat, tool == "answer")),
         (_, result) => result,
@@ -227,6 +238,7 @@ async fn run_tool(
     tool: &str,
     args: &Value,
     rights: Rights,
+    later: &dyn super::Later,
 ) -> Result<Answer, Answer> {
     match tool {
         "chats" => {
@@ -239,7 +251,7 @@ async fn run_tool(
         }
         "inbox" => {
             arguments::<Nothing>(args)?;
-            Ok(Answer::ok(inbox(backend).await?))
+            Ok(Answer::ok(inbox(backend, &later.queued()).await?))
         }
         "projects" => {
             arguments::<Nothing>(args)?;
@@ -264,7 +276,7 @@ async fn run_tool(
             ))
         }
         "answer" => answer(backend, owner, arguments(args)?, rights).await,
-        "task" => task(backend, owner, arguments(args)?).await,
+        "task" => task(backend, owner, arguments(args)?, later).await,
         "stop" => {
             let args: ChatOnly = arguments(args)?;
             backend.interrupt(&args.chat).await?;
@@ -477,32 +489,139 @@ fn brief(goal: &str, branch: Option<&str>) -> String {
 /// Hands o7 a whole piece of work: a chat of its own on a new branch, the goal with how to go
 /// about it, and, when the work is done, a review by a second agent. The bot is told when it is
 /// all done (its call-back), so by default it does not wait.
-async fn task(backend: &Arc<dyn Backend>, owner: &str, args: TaskArgs) -> Result<Answer, Answer> {
-    message(&args.goal)?;
+async fn task(
+    backend: &Arc<dyn Backend>,
+    owner: &str,
+    args: TaskArgs,
+    later: &dyn super::Later,
+) -> Result<Answer, Answer> {
+    if let Some(id) = &args.cancel {
+        return if later.cancel(id) {
+            Ok(Answer::ok(format!("Took {id} off the queue for tonight.")))
+        } else {
+            Err(Answer::failed(format!(
+                "Nothing is queued for tonight as {id}. inbox lists what is."
+            )))
+        };
+    }
+    let Some(goal) = args.goal.clone() else {
+        return Err(Answer::failed("Say the task's goal."));
+    };
+    match args.when.as_deref() {
+        None | Some("now") => {}
+        Some("tonight") => return queue(backend, &goal, &args, later).await,
+        Some(_) => return Err(Answer::failed("when is now or tonight.")),
+    }
+    let started = start_task(
+        backend,
+        &goal,
+        args.project.as_deref(),
+        args.agent.as_deref(),
+        args.review,
+    )
+    .await?;
+    let mut text = started.text;
+    text.push_str(
+        " o7 tells you when it is all done if this link has a call back; otherwise call wait with this chat.",
+    );
+    let seconds = args.wait.unwrap_or(0).min(WAIT_MAX);
+    if seconds > 0
+        && let Ok(result) = wait(backend, owner, &started.chat, seconds, true).await
+    {
+        text = format!("{text}\n\n{result}");
+    }
+    let mut answer = Answer::ok(text).about(&started.chat, true);
+    answer.task = Some(Box::new(started.task));
+    Ok(answer)
+}
+
+/// Leaves a task for tonight. Its project and agent are checked now, so a wrong name is said
+/// while the bot is still there to hear it.
+async fn queue(
+    backend: &Arc<dyn Backend>,
+    goal: &str,
+    args: &TaskArgs,
+    later: &dyn super::Later,
+) -> Result<Answer, Answer> {
+    message(goal)?;
     let overview = backend.overview().await?;
     let project = pick_project(&overview, args.project.as_deref())?;
+    if let Some(agent) = &args.agent
+        && !overview.agents.iter().any(|known| &known.id == agent)
+    {
+        return Err(Answer::failed(format!(
+            "There is no agent \"{agent}\" here. projects lists them."
+        )));
+    }
+    let letters = crate::crypto::random::<4>()
+        .map_err(|_| Answer::failed("The system's random source is unavailable."))?;
+    let id = format!(
+        "q{}",
+        crate::crypto::encode(&letters)
+            .to_lowercase()
+            .replace(['-', '_'], "x")
+    );
+    later
+        .queue(crate::registry::Queued {
+            id: id.clone(),
+            bot: String::new(),
+            goal: goal.chars().take(GOAL_KEPT).collect(),
+            project: Some(project.id.clone()),
+            agent: args.agent.clone(),
+            review: args.review,
+            created_at: 0,
+            failed: None,
+            failed_at: None,
+        })
+        .map_err(Answer::failed)?;
+    Ok(Answer::ok(format!(
+        "Queued for tonight as {id}: \"{}\" in {}. o7 starts it between {} and {} in the morning, computer time, as a task now starts (its own branch, then a review), one at a time and at most {NIGHT_BUDGET} a night. If this link has a call back, o7 tells you when each is done. inbox lists the queue; task with cancel {id} takes it off.",
+        render::cut(goal.lines().next().unwrap_or("Task").trim(), 60),
+        project.name,
+        NIGHT_HOURS.start,
+        NIGHT_HOURS.end,
+    )))
+}
+
+/// A task, started: what the bot is told, its chat, and what the service keeps for its review.
+pub(crate) struct Started {
+    pub text: String,
+    pub chat: String,
+    pub task: crate::registry::Task,
+}
+
+/// Starts a task, now or from the queue at night: a chat on a branch of its own, its brief,
+/// and who reviews it. `project` is a project's name or id, or none.
+pub(crate) async fn start_task(
+    backend: &Arc<dyn Backend>,
+    goal: &str,
+    project: Option<&str>,
+    agent: Option<&str>,
+    review: Option<bool>,
+) -> Result<Started, Answer> {
+    message(goal)?;
+    let overview = backend.overview().await?;
+    let project = pick_project(&overview, project)?;
     let folder = project.folders.first().ok_or_else(|| {
         Answer::failed(format!("The project \"{}\" has no folder.", project.name))
     })?;
-    if let Some(agent) = &args.agent
+    if let Some(agent) = agent
         && !overview
             .agents
             .iter()
-            .any(|known| &known.id == agent && known.available)
+            .any(|known| known.id == agent && known.available)
     {
         return Err(Answer::failed(format!(
             "No agent \"{agent}\" is ready here. projects lists the ready ones."
         )));
     }
-    let title: String = render::cut(args.goal.lines().next().unwrap_or("Task").trim(), 60);
-    let made = backend
-        .create_task_chat(&folder.id, args.agent.as_deref(), &title)
-        .await?;
+    let title: String = render::cut(goal.lines().next().unwrap_or("Task").trim(), 60);
+    let made = backend.create_task_chat(&folder.id, agent, &title).await?;
     let chat_id = made.chat.chat.id.clone();
     let builder_agent = made.chat.chat.agent_id.clone();
     // The review: by another agent where one is ready, so a second vendor looks at the work; and
     // only where the work is on a branch of its own, which the reviewer can read with Git.
-    let reviewer = (args.review != Some(false) && made.branch.is_some())
+    let reviewer = (review != Some(false) && made.branch.is_some())
         .then(|| {
             overview
                 .agents
@@ -512,7 +631,7 @@ async fn task(backend: &Arc<dyn Backend>, owner: &str, args: TaskArgs) -> Result
         })
         .flatten();
     let ack = backend
-        .send(&chat_id, brief(&args.goal, made.branch.as_deref()))
+        .send(&chat_id, brief(goal, made.branch.as_deref()))
         .await
         .map_err(|error| {
             Answer::failed(format!(
@@ -530,7 +649,7 @@ async fn task(backend: &Arc<dyn Backend>, owner: &str, args: TaskArgs) -> Result
         None => text
             .push_str(", in the project folder (not a Git repository, so no branch of its own)."),
     }
-    match (reviewer, args.review) {
+    match (reviewer, review) {
         (Some(agent), _) => text.push_str(&format!(
             " When the work is done, {} reviews it in a chat of its own.",
             agent.name
@@ -541,29 +660,22 @@ async fn task(backend: &Arc<dyn Backend>, owner: &str, args: TaskArgs) -> Result
         }
         (None, _) => text.push_str(" No review: no second agent is ready on this computer."),
     }
-    text.push_str(
-        " o7 tells you when it is all done if this link has a call back; otherwise call wait with this chat.",
-    );
-    let seconds = args.wait.unwrap_or(0).min(WAIT_MAX);
-    if seconds > 0
-        && let Ok(result) = wait(backend, owner, &chat_id, seconds, true).await
-    {
-        text = format!("{text}\n\n{result}");
-    }
-    let mut answer = Answer::ok(text).about(&chat_id, true);
-    answer.task = Some(Box::new(crate::registry::Task {
-        bot: String::new(),
-        builder: chat_id,
-        folder_id: folder.id.clone(),
-        goal: args.goal.chars().take(GOAL_KEPT).collect(),
-        branch: made.branch,
-        path: made.path,
-        base: made.base,
-        review_agent: reviewer.map(|agent| agent.id.clone()),
-        reviewer: None,
-        created_at: 0,
-    }));
-    Ok(answer)
+    Ok(Started {
+        text,
+        chat: chat_id.clone(),
+        task: crate::registry::Task {
+            bot: String::new(),
+            builder: chat_id,
+            folder_id: folder.id.clone(),
+            goal: goal.chars().take(GOAL_KEPT).collect(),
+            branch: made.branch,
+            path: made.path,
+            base: made.base,
+            review_agent: reviewer.map(|agent| agent.id.clone()),
+            reviewer: None,
+            created_at: 0,
+        },
+    })
 }
 
 /// An agent's id without its connection (`claude-code-acp` and `claude-code` are one agent).
@@ -999,7 +1111,10 @@ async fn waited(
 /// an answer with what each asks, the chats still working, and the chats that finished in the
 /// last day with what each came to. A bot that is woken, or comes back after a while, starts
 /// here instead of listing the chats and reading them one by one.
-async fn inbox(backend: &Arc<dyn Backend>) -> Result<String, Answer> {
+async fn inbox(
+    backend: &Arc<dyn Backend>,
+    queued: &[crate::registry::Queued],
+) -> Result<String, Answer> {
     let overview = backend.overview().await?;
     let project = |id: &str| {
         overview
@@ -1050,7 +1165,7 @@ async fn inbox(backend: &Arc<dyn Backend>) -> Result<String, Answer> {
         })
         .collect();
     done.sort_by_key(|entry| std::cmp::Reverse(entry.chat.updated_at));
-    if asking.is_empty() && working.is_empty() && done.is_empty() {
+    if asking.is_empty() && working.is_empty() && done.is_empty() && queued.is_empty() {
         return Ok(
             "Nothing needs you: no chat is asking, working or finished in the last day.".into(),
         );
@@ -1097,6 +1212,20 @@ async fn inbox(backend: &Arc<dyn Backend>) -> Result<String, Answer> {
                 "and {} more; chats lists them.\n",
                 done.len() - INBOX_DONE
             ));
+        }
+    }
+    if !queued.is_empty() {
+        out.push_str(&format!("\nQueued for tonight ({}):\n", queued.len()));
+        for item in queued {
+            let project = item.project.as_deref().map_or("no project", project);
+            let goal = render::cut(item.goal.lines().next().unwrap_or("Task").trim(), 60);
+            match &item.failed {
+                None => out.push_str(&format!("{} \"{goal}\" ({project})\n", item.id)),
+                Some(why) => out.push_str(&format!(
+                    "{} \"{goal}\" ({project}): could not start: {why}\n",
+                    item.id
+                )),
+            }
         }
     }
     Ok(out.trim_start().to_owned())

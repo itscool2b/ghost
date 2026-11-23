@@ -25,7 +25,7 @@ interface Tool {
   readonly full?: boolean;
   readonly since?: number;
   readonly inputSchema: {
-    readonly properties?: Record<string, { readonly full?: boolean }>;
+    readonly properties?: Record<string, { readonly full?: boolean; readonly since?: number }>;
     readonly [key: string]: unknown;
   };
   readonly [key: string]: unknown;
@@ -45,8 +45,8 @@ function listed(tools: readonly Tool[], wide: boolean, version = 2): Listed[] {
         ...inputSchema,
         properties: Object.fromEntries(
           Object.entries(inputSchema.properties ?? {})
-            .filter(([, argument]) => wide || !argument.full)
-            .map(([name, { full: _mark, ...argument }]) => [name, argument]),
+            .filter(([, argument]) => (wide || !argument.full) && (argument.since ?? 2) <= version)
+            .map(([name, { full: _mark, since: _since, ...argument }]) => [name, argument]),
         ),
       },
     }));
@@ -71,9 +71,10 @@ const INSTRUCTIONS: Record<number, string> = {
   3: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
   4: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so hand over only what the person asked for.",
   5: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
+  6: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. Work that can wait goes to task with when tonight. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
 };
 /** The newest set this relay knows. */
-const NEWEST_TOOLS = 5;
+const NEWEST_TOOLS = 6;
 interface ToolSet {
   readonly chat: Listed[];
   readonly full: Listed[];

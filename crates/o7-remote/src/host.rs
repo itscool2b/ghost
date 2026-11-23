@@ -75,6 +75,8 @@ const TELLER: &str = "auracode-remote-callbacks";
 const TELL_AFTER: Duration = Duration::from_secs(2);
 /// How often the call-back looks again at whether anything is to be watched at all.
 const TELL_CHECK: Duration = Duration::from_secs(5);
+/// How often the queue for tonight is looked at.
+const LATER_CHECK: Duration = Duration::from_secs(60);
 
 pub struct Config {
     /// `remote.json` in the data folder.
@@ -161,7 +163,14 @@ impl Service {
         let (control, receiver) = unbounded_channel();
         runtime.spawn(run(shared.clone(), receiver));
         runtime.spawn(tell(shared.clone()));
+        runtime.spawn(tonight(shared.clone()));
         Ok(Self { shared, control })
+    }
+
+    /// One look at the queue for tonight, as the service takes every minute; for tests.
+    #[doc(hidden)]
+    pub async fn later_tick(&self) {
+        later_tick(&self.shared).await;
     }
 
     pub fn status(&self) -> RemoteStatus {
@@ -423,6 +432,125 @@ impl Stage {
 /// address, and tells a link's bot when a chat that link acted on stops working: it finished,
 /// failed or asks for an answer. Only a change from working (or from asking) is told, so nothing
 /// is sent for how chats stood when the watching began.
+/// A link's own queue for tonight, as its calls reach it.
+struct LinkLater {
+    shared: Arc<Shared>,
+    bot: String,
+}
+
+impl bot::Later for LinkLater {
+    fn queue(&self, mut item: crate::registry::Queued) -> Result<(), String> {
+        item.bot = self.bot.clone();
+        item.created_at = now();
+        lock(&self.shared.registry)
+            .queue(item)
+            .map_err(|error| error.to_string())
+    }
+
+    fn cancel(&self, id: &str) -> bool {
+        lock(&self.shared.registry).cancel_queued(&self.bot, id)
+    }
+
+    fn queued(&self) -> Vec<crate::registry::Queued> {
+        lock(&self.shared.registry).queued_of(&self.bot, now())
+    }
+}
+
+/// Starts what bots left for tonight, a minute at a time, until the service closes.
+async fn tonight(shared: Arc<Shared>) {
+    while !shared.closing.load(Ordering::Relaxed) {
+        tokio::time::sleep(LATER_CHECK).await;
+        later_tick(&shared).await;
+    }
+}
+
+/// Starts the next task left for tonight, when it is night on the computer's clock, remote
+/// access is on, the night's budget allows, and the night's last task and its review no longer
+/// work. One that cannot start stays listed a day with why, and its bot is told if it has a call
+/// back.
+async fn later_tick(shared: &Arc<Shared>) {
+    let backend = shared.config.backend.clone();
+    let Some(hour) = backend.local_hour() else {
+        return;
+    };
+    if !bot::NIGHT_HOURS.contains(&hour) {
+        return;
+    }
+    let at = now();
+    let (next, scope, running) = {
+        let mut registry = lock(&shared.registry);
+        if !registry.enabled()
+            || registry.scope().is_empty()
+            || registry.started_tonight(at) >= bot::NIGHT_BUDGET
+        {
+            return;
+        }
+        let Some(next) = registry.next_queued(at) else {
+            return;
+        };
+        (next, registry.scope().to_owned(), registry.night_chats(at))
+    };
+    let bound = backend.bound(&scope);
+    let Ok(overview) = bound.overview().await else {
+        return;
+    };
+    let working = overview.chats.iter().any(|entry| {
+        running.contains(&entry.chat.id)
+            && matches!(
+                entry.chat.status,
+                o7_protocol::SessionStatus::Starting
+                    | o7_protocol::SessionStatus::Running
+                    | o7_protocol::SessionStatus::Cancelling
+            )
+    });
+    if working {
+        return;
+    }
+    match bot::start_task(
+        &bound,
+        &next.goal,
+        next.project.as_deref(),
+        next.agent.as_deref(),
+        next.review,
+    )
+    .await
+    {
+        Ok(started) => {
+            let mut task = started.task;
+            task.bot = next.bot.clone();
+            task.created_at = at;
+            let mut registry = lock(&shared.registry);
+            registry.add_task(task);
+            registry.follow(&next.bot, &started.chat);
+            registry.started_queued(&next.id, &started.chat, at);
+        }
+        Err(answer) => {
+            let callback = {
+                let mut registry = lock(&shared.registry);
+                registry.failed_queued(&next.id, &answer.text, at);
+                registry.callback_of(&next.bot)
+            };
+            let title = crate::render::cut(next.goal.lines().next().unwrap_or("Task").trim(), 60);
+            if let (Some((bot_name, callback)), Ok(id)) = (callback, crypto::random::<12>()) {
+                (shared.config.deliver)(Delivery {
+                    bot_id: next.bot.clone(),
+                    bot_name,
+                    callback,
+                    event: CallbackEvent::Failed,
+                    id: crypto::encode(&id),
+                    chat_id: String::new(),
+                    title: title.clone(),
+                    text: format!(
+                        "o7: the task queued for tonight as {} (\"{title}\") could not start: {}",
+                        next.id, answer.text
+                    ),
+                    at,
+                });
+            }
+        }
+    }
+}
+
 async fn tell(shared: Arc<Shared>) {
     while !shared.closing.load(Ordering::Relaxed) {
         let scope = {
@@ -1044,7 +1172,11 @@ impl Serving {
         );
         tokio::spawn(async move {
             let owner = format!("{WATCHER}-bot:{}", call.rid);
-            let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights).await;
+            let later = LinkLater {
+                shared: shared.clone(),
+                bot: call.bot.clone(),
+            };
+            let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights, &later).await;
             running.fetch_sub(1, Ordering::Relaxed);
             if let Some(task) = &answer.task {
                 let mut task = (**task).clone();
