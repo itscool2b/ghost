@@ -300,7 +300,14 @@ const HIDDEN: &str = "<SECRET>";
 /// the agents' own credentials are the session redactor's (`o7_process` log redaction); this
 /// catches what a command names only by its flag or variable.
 pub(crate) fn hide_secret_flags(command: &str) -> String {
-    const NAMES: [&str; 6] = ["token", "password", "passwd", "secret", "apikey", "credential"];
+    const NAMES: [&str; 6] = [
+        "token",
+        "password",
+        "passwd",
+        "secret",
+        "apikey",
+        "credential",
+    ];
     let secret_name = |name: &str| {
         let plain: String = name
             .trim_start_matches('-')
