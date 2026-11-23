@@ -174,6 +174,11 @@ export async function checkRemote(browser, url, out, engine) {
     await bot.getByText("works like a password").waitFor();
     // The dialog says whether the assistant has reached this computer yet.
     await bot.getByText("Waiting for Research bot's first call", { exact: false }).waitFor();
+    // Then o7's skill, at the site's own address.
+    assert.equal(
+      await bot.getByRole("textbox", { name: "o7's skill" }).inputValue(),
+      "https://o7.codes/skill.md",
+    );
     // An assistant on this computer can use o7's own helper instead, with the same address.
     await bot.getByText("If your assistant runs on this computer").click();
     assert.match(

@@ -1308,6 +1308,11 @@ export function BotDialog({
               <li key={step}>{step}</li>
             ))}
           </ol>
+          <p className="remote-note">
+            Then teach it o7: ask it to read this and keep it as a skill. Try "Have o7 fix the
+            failing login test", "What needs me in o7?" or "Queue the README cleanup for tonight".
+          </p>
+          <CopyField value="https://o7.codes/skill.md" label="o7's skill" />
           {program ? <OnThisComputer address={link.url} program={program} /> : null}
           {called ? (
             <p className="remote-note" role="status" data-testid="remote-bot-called">
