@@ -152,6 +152,30 @@ pub enum Outcome {
     },
 }
 
+/// A chat made for a task: in a Git worktree of its own where the folder is a repository.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskChat {
+    pub chat: WorkspaceChat,
+    /// The new branch and the worktree's folder, when one was made.
+    pub branch: Option<String>,
+    pub path: Option<String>,
+    /// The commit the branch started from.
+    pub base: Option<String>,
+}
+
+/// What a chat stands on, for a reading of it: its branch, what is not committed, how much of
+/// its agent's usage is gone. Each part is left out where it cannot be read.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ChatFacts {
+    pub branch: Option<String>,
+    /// The chat works in a worktree of its own.
+    pub worktree: bool,
+    /// Files changed in the folder and not committed.
+    pub uncommitted: Option<usize>,
+    /// The agent's usage limits as it last reported them: a window's name and how much is used.
+    pub usage: Vec<(String, f64)>,
+}
+
 pub trait Backend: Send + Sync + 'static {
     /// One [`Action`] of a full-control link. A backend that offers none refuses them all.
     fn act(&self, _action: Action) -> BoxFuture<'_, Result<Outcome, BackendError>> {
@@ -220,4 +244,30 @@ pub trait Backend: Send + Sync + 'static {
         folder_id: &'a str,
         agent_id: Option<&'a str>,
     ) -> BoxFuture<'a, Result<WorkspaceChat, BackendError>>;
+    /// A new chat for a task: in a new Git worktree of the folder, on a new branch named from
+    /// `title`, so its work touches nothing else; in the folder itself where it is not a
+    /// repository. A backend without worktrees makes an ordinary chat.
+    fn create_task_chat<'a>(
+        &'a self,
+        folder_id: &'a str,
+        agent_id: Option<&'a str>,
+        _title: &'a str,
+    ) -> BoxFuture<'a, Result<TaskChat, BackendError>> {
+        Box::pin(async move {
+            Ok(TaskChat {
+                chat: self.create(folder_id, agent_id).await?,
+                branch: None,
+                path: None,
+                base: None,
+            })
+        })
+    }
+    /// What `chat_id` stands on (its agent is `agent_id`). A backend that cannot say says nothing.
+    fn facts<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _agent_id: &'a str,
+    ) -> BoxFuture<'a, Result<ChatFacts, BackendError>> {
+        Box::pin(async { Ok(ChatFacts::default()) })
+    }
 }

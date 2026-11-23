@@ -269,6 +269,60 @@ pub fn text(
     }
 }
 
+/// What a task's reviewer is told: read the work on its branch with Git, change nothing, and
+/// report what is wrong, most serious first.
+pub fn review_brief(task: &crate::registry::Task) -> String {
+    let path = task.path.as_deref().unwrap_or(".");
+    let base = task.base.as_deref().unwrap_or("HEAD~1");
+    format!(
+        "Review the work just done for a task, without changing any file.\n\nThe task was:\n{}\n\nThe work is on the branch `{}` in the folder {path}. See what changed with Git there: `git -C \"{path}\" log --oneline {base}..HEAD`, `git -C \"{path}\" diff {base}`, and `git -C \"{path}\" status` for anything not committed. Read the changed files.\n\nReport, most serious first: bugs, missing or failing tests, security problems, and anything the task asked for that is not done. If it is ready, say so in one line.",
+        task.goal,
+        task.branch.as_deref().unwrap_or("(none)"),
+    )
+}
+
+/// What a bot is told when a task's review is done: the work and the review in one message, each
+/// agent's own words quoted, cut and named as theirs.
+pub fn reviewed_text(
+    builder: &ChatSummary,
+    work: &[HistoryItem],
+    reviewer: &ChatSummary,
+    review: &[HistoryItem],
+    project: &str,
+) -> String {
+    let done = render::brief_parts(builder, work);
+    let verdict = render::brief_parts(reviewer, review);
+    let mut out = format!(
+        "o7: task chat {} (titled {}, in project {}, agent {}) is done and was reviewed by {} in chat {}.",
+        builder.id,
+        quoted(&render::title(builder), 80),
+        quoted(project, 60),
+        quoted(&builder.agent_name, 40),
+        quoted(&reviewer.agent_name, 40),
+        reviewer.id,
+    );
+    if let Some(failing) = done.failing {
+        out.push_str(&format!(
+            "\nA command is still failing. As the agent ran it (not o7's words): {}",
+            quoted(&failing, FAILING)
+        ));
+    }
+    if let Some(said) = done.said {
+        out.push_str(&format!(
+            "\nThe working agent's last words (its own, not o7's): {}",
+            quoted(&said, SAID)
+        ));
+    }
+    if let Some(said) = verdict.said {
+        out.push_str(&format!(
+            "\nThe review's last words (the reviewer's own, not o7's): {}",
+            quoted(&said, SAID)
+        ));
+    }
+    out.push_str("\nCall read with either chat for the full answer.");
+    out
+}
+
 /// What the test from Settings says.
 pub fn test_text() -> String {
     "o7: this is a test from Settings. Your o7 link can now tell you when a chat finishes or asks for an answer. Nothing needs doing.".into()

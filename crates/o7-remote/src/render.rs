@@ -522,6 +522,42 @@ pub fn brief_parts(chat: &ChatSummary, items: &[HistoryItem]) -> Brief {
     }
 }
 
+/// What a chat stands on, in a line or two after its reading: its branch and what is not
+/// committed, and its agent's usage as last reported. Nothing where nothing is known.
+pub fn facts(facts: &crate::backend::ChatFacts) -> String {
+    let mut out = String::new();
+    if let Some(branch) = &facts.branch {
+        out.push_str(&format!(
+            "Branch: {}{}",
+            one_line(branch, 120),
+            if facts.worktree {
+                " (its own worktree)"
+            } else {
+                ""
+            }
+        ));
+        match facts.uncommitted {
+            Some(0) => out.push_str(", nothing uncommitted.\n"),
+            Some(1) => out.push_str(", 1 file changed and not committed.\n"),
+            Some(n) => out.push_str(&format!(", {n} files changed and not committed.\n")),
+            None => out.push_str(".\n"),
+        }
+    }
+    if !facts.usage.is_empty() {
+        let windows: Vec<String> = facts
+            .usage
+            .iter()
+            .take(3)
+            .map(|(label, used)| format!("{} {:.0}%", one_line(label, 40), used.clamp(0.0, 100.0)))
+            .collect();
+        out.push_str(&format!(
+            "Agent usage, as last reported: {}.\n",
+            windows.join(", ")
+        ));
+    }
+    out
+}
+
 /// A command as one line: how it ended, then the command with secret-looking values hidden.
 fn run_line(run: &CommandRun) -> String {
     format!("{} | {}", run.outcome(), hide_secret_flags(&run.line()))

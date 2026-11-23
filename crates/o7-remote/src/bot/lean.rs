@@ -22,8 +22,8 @@ use crate::{
 };
 
 /// The tools every bot link has.
-pub const CHAT_TOOLS: [&str; 8] = [
-    "inbox", "chats", "projects", "read", "send", "wait", "answer", "stop",
+pub const CHAT_TOOLS: [&str; 9] = [
+    "inbox", "chats", "projects", "read", "send", "wait", "answer", "stop", "task",
 ];
 /// The tools only a full-control link has.
 pub const FULL_TOOLS: [&str; 4] = ["set", "changes", "memory", "new_project"];
@@ -78,6 +78,19 @@ struct Send {
     thinking: Option<String>,
     access: Option<String>,
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TaskArgs {
+    goal: String,
+    project: Option<String>,
+    agent: Option<String>,
+    review: Option<bool>,
+    wait: Option<u64>,
+}
+
+/// The longest goal kept with a task for its review, in characters.
+const GOAL_KEPT: usize = 2_000;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -218,6 +231,7 @@ async fn run_tool(
             ))
         }
         "answer" => answer(backend, owner, arguments(args)?, rights).await,
+        "task" => task(backend, owner, arguments(args)?).await,
         "stop" => {
             let args: ChatOnly = arguments(args)?;
             backend.interrupt(&args.chat).await?;
@@ -358,6 +372,170 @@ async fn send(
     let result = sent(backend, owner, chat_id, started, args).await;
     // Whatever came of the message, the chat is this link's to hear about from here on.
     result.map(|answer| answer.about(&touched, true))
+}
+
+/// The project a task is for: the one named (by id or name), else the only one, else the one
+/// worked in most recently.
+fn pick_project<'a>(
+    overview: &'a Overview,
+    asked: Option<&str>,
+) -> Result<&'a o7_protocol::workspace::ProjectSummary, Answer> {
+    let names = || {
+        overview
+            .projects
+            .iter()
+            .map(|project| format!("{} ({})", project.name, project.id))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    if overview.projects.is_empty() {
+        return Err(Answer::failed(
+            "There are no projects yet. With full control, new_project makes one from a folder.",
+        ));
+    }
+    if let Some(asked) = asked.map(str::trim).filter(|asked| !asked.is_empty()) {
+        return overview
+            .projects
+            .iter()
+            .find(|project| project.id == asked || project.name.eq_ignore_ascii_case(asked))
+            .ok_or_else(|| {
+                Answer::failed(format!(
+                    "There is no project \"{asked}\". The projects: {}.",
+                    names()
+                ))
+            });
+    }
+    if let [only] = overview.projects.as_slice() {
+        return Ok(only);
+    }
+    overview
+        .chats
+        .iter()
+        .filter(|entry| !entry.archived)
+        .max_by_key(|entry| entry.chat.updated_at)
+        .and_then(|entry| {
+            overview
+                .projects
+                .iter()
+                .find(|project| project.id == entry.project_id)
+        })
+        .ok_or_else(|| Answer::failed(format!("Name the project: {}.", names())))
+}
+
+/// The brief a task's agent is given: the goal, then how to go about it.
+fn brief(goal: &str, branch: Option<&str>) -> String {
+    let place = match branch {
+        Some(branch) => format!(
+            "your own Git worktree on the new branch `{branch}`. It is a fresh checkout: dependencies are not installed, so install what the project's checks need"
+        ),
+        None => "the project folder itself, which others may use too".to_owned(),
+    };
+    format!(
+        "{goal}\n\n---\nThis is a task handed to you through o7 by the person's assistant. Work on it end to end, without waiting for more instructions:\n- You are in {place}.\n- Plan briefly, then make the change.\n- Run the project's own checks (its tests, type checks and linters) and fix what fails.\n- Commit your work{} with a clear message. Do not push, merge or open a pull request unless the task asks for it.\n- Finish with a short summary: what changed, how you checked it, and anything left or uncertain.",
+        if branch.is_some() {
+            " on this branch"
+        } else {
+            ""
+        }
+    )
+}
+
+/// Hands o7 a whole piece of work: a chat of its own on a new branch, the goal with how to go
+/// about it, and, when the work is done, a review by a second agent. The bot is told when it is
+/// all done (its call-back), so by default it does not wait.
+async fn task(backend: &Arc<dyn Backend>, owner: &str, args: TaskArgs) -> Result<Answer, Answer> {
+    message(&args.goal)?;
+    let overview = backend.overview().await?;
+    let project = pick_project(&overview, args.project.as_deref())?;
+    let folder = project.folders.first().ok_or_else(|| {
+        Answer::failed(format!("The project \"{}\" has no folder.", project.name))
+    })?;
+    if let Some(agent) = &args.agent {
+        if !overview
+            .agents
+            .iter()
+            .any(|known| &known.id == agent && known.available)
+        {
+            return Err(Answer::failed(format!(
+                "No agent \"{agent}\" is ready here. projects lists the ready ones."
+            )));
+        }
+    }
+    let title: String = render::cut(args.goal.lines().next().unwrap_or("Task").trim(), 60);
+    let made = backend
+        .create_task_chat(&folder.id, args.agent.as_deref(), &title)
+        .await?;
+    let chat_id = made.chat.chat.id.clone();
+    let builder_agent = made.chat.chat.agent_id.clone();
+    // The review: by another agent where one is ready, so a second vendor looks at the work; and
+    // only where the work is on a branch of its own, which the reviewer can read with Git.
+    let reviewer = (args.review != Some(false) && made.branch.is_some())
+        .then(|| {
+            overview
+                .agents
+                .iter()
+                .filter(|agent| agent.available)
+                .find(|agent| o7_like(&agent.id) != o7_like(&builder_agent))
+        })
+        .flatten();
+    let ack = backend
+        .send(&chat_id, brief(&args.goal, made.branch.as_deref()))
+        .await
+        .map_err(|error| {
+            Answer::failed(format!(
+                "Chat {chat_id} was made, but the task could not be sent to it: {}",
+                error.message
+            ))
+        })?;
+    let _ = ack;
+    let mut text = format!(
+        "Started task {chat_id} in {} with {}",
+        project.name, made.chat.chat.agent_name
+    );
+    match &made.branch {
+        Some(branch) => text.push_str(&format!(", on its own branch {branch}.")),
+        None => text
+            .push_str(", in the project folder (not a Git repository, so no branch of its own)."),
+    }
+    match (reviewer, args.review) {
+        (Some(agent), _) => text.push_str(&format!(
+            " When the work is done, {} reviews it in a chat of its own.",
+            agent.name
+        )),
+        (None, Some(false)) => {}
+        (None, _) if made.branch.is_none() => {
+            text.push_str(" No review: there is no branch to read.")
+        }
+        (None, _) => text.push_str(" No review: no second agent is ready on this computer."),
+    }
+    text.push_str(
+        " o7 tells you when it is all done if this link has a call back; otherwise call wait with this chat.",
+    );
+    let seconds = args.wait.unwrap_or(0).min(WAIT_MAX);
+    if seconds > 0 {
+        if let Ok(result) = wait(backend, owner, &chat_id, seconds, true).await {
+            text = format!("{text}\n\n{result}");
+        }
+    }
+    let mut answer = Answer::ok(text).about(&chat_id, true);
+    answer.task = Some(crate::registry::Task {
+        bot: String::new(),
+        builder: chat_id,
+        folder_id: folder.id.clone(),
+        goal: args.goal.chars().take(GOAL_KEPT).collect(),
+        branch: made.branch,
+        path: made.path,
+        base: made.base,
+        review_agent: reviewer.map(|agent| agent.id.clone()),
+        reviewer: None,
+        created_at: 0,
+    });
+    Ok(answer)
+}
+
+/// An agent's id without its connection (`claude-code-acp` and `claude-code` are one agent).
+fn o7_like(agent: &str) -> &str {
+    agent.split(['-', ':']).next().unwrap_or(agent)
 }
 
 /// `send` once its chat exists: how the agent runs, the message, then the wait.
@@ -698,7 +876,14 @@ async fn read(
     let overview = backend.overview().await?;
     let chat = find(&overview, chat_id)?;
     let page = backend.history(chat_id, u32::MAX).await?;
-    Ok(render::chat_with(chat, &page.items, turns, limits))
+    let mut text = render::chat_with(chat, &page.items, turns, limits);
+    // The current tools' readings end with what the chat stands on.
+    if limits.lean
+        && let Ok(facts) = backend.facts(chat_id, &chat.agent_id).await
+    {
+        text.push_str(&render::facts(&facts));
+    }
+    Ok(text)
 }
 
 /// Waits until the chat is between turns or asks for something, then reads its last turn. A wait

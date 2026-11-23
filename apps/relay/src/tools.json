@@ -3,8 +3,14 @@
     "name": "inbox",
     "since": 3,
     "description": "What needs you across every chat, in one call: chats asking for an answer (with the request and its options), chats still working, and chats that finished in the last day with what each came to. Start here when you come back to o7.",
-    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-    "annotations": { "readOnlyHint": true }
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
   },
   {
     "name": "chats",
@@ -16,17 +22,28 @@
           "type": "string",
           "description": "Only chats whose title, project or agent contains this."
         },
-        "page": { "type": "integer", "minimum": 1 }
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": true }
+    "annotations": {
+      "readOnlyHint": true
+    }
   },
   {
     "name": "projects",
     "description": "List the projects with their ids, their folder ids (send starts a chat in one) and the agents ready to start one.",
-    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-    "annotations": { "readOnlyHint": true }
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
   },
   {
     "name": "read",
@@ -34,19 +51,65 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chat": { "type": "string", "description": "The chat's id." },
+        "chat": {
+          "type": "string",
+          "description": "The chat's id."
+        },
         "turns": {
           "type": "integer",
           "minimum": 1,
           "maximum": 10,
           "description": "How many of the latest turns. Default 1."
         },
-        "full": { "type": "boolean", "description": "Longer excerpts." }
+        "full": {
+          "type": "boolean",
+          "description": "Longer excerpts."
+        }
       },
       "required": ["chat"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": true }
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "task",
+    "since": 4,
+    "description": "Hand o7 a whole piece of work in one call. It starts an agent on its own Git branch, so nothing else is touched, tells it to plan, build, run the project's checks and commit, and, with review on, has a second agent review the result. o7 tells you when it is all done if this link has a call back; then end your turn. Use it for new work; send continues a chat.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string",
+          "description": "What to do, as you would tell a colleague: the outcome wanted, and anything the person said that matters."
+        },
+        "project": {
+          "type": "string",
+          "description": "A project's id or name from projects. Without one: the project worked in most recently."
+        },
+        "agent": {
+          "type": "string",
+          "description": "An agent id from projects. Without one: the project's usual agent."
+        },
+        "review": {
+          "type": "boolean",
+          "description": "A second agent reviews the work when it is done. Default true."
+        },
+        "wait": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Seconds to wait for the work. Default 0: o7 tells you."
+        }
+      },
+      "required": ["goal"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
   },
   {
     "name": "send",
@@ -54,7 +117,10 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chat": { "type": "string", "description": "An existing chat's id." },
+        "chat": {
+          "type": "string",
+          "description": "An existing chat's id."
+        },
         "folder": {
           "type": "string",
           "description": "Instead of chat: a folder id from projects, to start a new chat there."
@@ -63,7 +129,10 @@
           "type": "string",
           "description": "With folder: an agent id. Default: the project's agent."
         },
-        "text": { "type": "string", "minLength": 1 },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
         "wait": {
           "type": "integer",
           "minimum": 0,
@@ -90,7 +159,10 @@
       "required": ["text"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": false, "destructiveHint": true }
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    }
   },
   {
     "name": "wait",
@@ -98,13 +170,22 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chat": { "type": "string" },
-        "seconds": { "type": "integer", "minimum": 1, "maximum": 200, "description": "Default 45." }
+        "chat": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Default 45."
+        }
       },
       "required": ["chat"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": true }
+    "annotations": {
+      "readOnlyHint": true
+    }
   },
   {
     "name": "answer",
@@ -112,30 +193,52 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chat": { "type": "string" },
-        "request": { "type": "string", "description": "The request's id." },
-        "option": { "type": "string", "description": "One of the request's option ids." },
+        "chat": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string",
+          "description": "The request's id."
+        },
+        "option": {
+          "type": "string",
+          "description": "One of the request's option ids."
+        },
         "text": {
           "type": "string",
           "description": "The answer in words, or a choice word for word. Several questions: one line each."
         },
-        "wait": { "type": "integer", "minimum": 0, "maximum": 200 }
+        "wait": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        }
       },
       "required": ["chat", "request"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": false, "destructiveHint": true }
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    }
   },
   {
     "name": "stop",
     "description": "Stop the turn a chat's agent is working on. The chat stays.",
     "inputSchema": {
       "type": "object",
-      "properties": { "chat": { "type": "string" } },
+      "properties": {
+        "chat": {
+          "type": "string"
+        }
+      },
       "required": ["chat"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": false, "destructiveHint": false }
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
   },
   {
     "name": "set",
@@ -144,22 +247,42 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chat": { "type": "string" },
-        "model": { "type": "string" },
-        "thinking": { "type": "string" },
-        "access": { "type": "string", "enum": ["ask", "auto_edit", "full_auto"] },
-        "title": { "type": "string", "maxLength": 200 },
+        "chat": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "thinking": {
+          "type": "string"
+        },
+        "access": {
+          "type": "string",
+          "enum": ["ask", "auto_edit", "full_auto"]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
         "agent": {
           "type": "string",
           "description": "Hand the chat to this agent. Returns the chat id to use from then on."
         },
-        "archived": { "type": "boolean" },
-        "start": { "type": "boolean", "description": "Start a stopped chat's agent." }
+        "archived": {
+          "type": "boolean"
+        },
+        "start": {
+          "type": "boolean",
+          "description": "Start a stopped chat's agent."
+        }
       },
       "required": ["chat"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": false, "destructiveHint": false }
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
   },
   {
     "name": "changes",
@@ -168,13 +291,19 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chat": { "type": "string" },
-        "path": { "type": "string" }
+        "chat": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
       },
       "required": ["chat"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": true }
+    "annotations": {
+      "readOnlyHint": true
+    }
   },
   {
     "name": "memory",
@@ -183,13 +312,21 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": { "type": "string", "description": "A project id from projects." },
-        "markdown": { "type": "string" }
+        "project": {
+          "type": "string",
+          "description": "A project id from projects."
+        },
+        "markdown": {
+          "type": "string"
+        }
       },
       "required": ["project"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": false, "destructiveHint": true }
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    }
   },
   {
     "name": "new_project",
@@ -198,12 +335,20 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "path": { "type": "string", "description": "The folder's full path." },
-        "name": { "type": "string" }
+        "path": {
+          "type": "string",
+          "description": "The folder's full path."
+        },
+        "name": {
+          "type": "string"
+        }
       },
       "required": ["path"],
       "additionalProperties": false
     },
-    "annotations": { "readOnlyHint": false, "destructiveHint": false }
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
   }
 ]

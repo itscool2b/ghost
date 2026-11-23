@@ -127,7 +127,32 @@ struct Stored {
     host_key: String,
     devices: Vec<Device>,
     bots: Vec<Bot>,
+    /// Tasks bots started (`task`), newest last: what their review needs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tasks: Vec<Task>,
 }
+
+/// A task a bot link started: its chat, where its work is, and its review.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Task {
+    /// The bot link that started it; set by the service.
+    pub bot: String,
+    /// The chat doing the work.
+    pub builder: String,
+    pub folder_id: String,
+    pub goal: String,
+    pub branch: Option<String>,
+    pub path: Option<String>,
+    pub base: Option<String>,
+    /// The agent that reviews the work when it is done; none, no review.
+    pub review_agent: Option<String>,
+    /// The review's chat, once it started.
+    pub reviewer: Option<String>,
+    pub created_at: i64,
+}
+
+/// How many tasks are kept; the oldest goes first.
+const MAX_TASKS: usize = 40;
 
 /// A pairing link's secret half, to be shown once.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,6 +211,7 @@ impl Registry {
                     host_key: crypto::encode(&key),
                     devices: Vec::new(),
                     bots: Vec::new(),
+                    tasks: Vec::new(),
                 }
             }
             Err(error) => return Err(RegistryError::Read(error.to_string())),
@@ -608,6 +634,58 @@ impl Registry {
         self.bots().iter().any(|bot| bot.callback.is_some())
     }
 
+    /// Keeps a task a bot link of the open workspace started.
+    pub fn add_task(&mut self, task: Task) {
+        if !self.bots().iter().any(|bot| bot.id == task.bot) {
+            return;
+        }
+        self.stored
+            .tasks
+            .retain(|kept| kept.builder != task.builder);
+        self.stored.tasks.push(task);
+        let extra = self.stored.tasks.len().saturating_sub(MAX_TASKS);
+        self.stored.tasks.drain(..extra);
+        let _ = self.save();
+    }
+
+    /// The task `chat` works on or reviews, of a bot link of the open workspace.
+    pub fn task_of(&self, chat: &str) -> Option<Task> {
+        let bots: Vec<&str> = self.bots().iter().map(|bot| bot.id.as_str()).collect();
+        self.stored
+            .tasks
+            .iter()
+            .rev()
+            .find(|task| {
+                bots.contains(&task.bot.as_str())
+                    && (task.builder == chat || task.reviewer.as_deref() == Some(chat))
+            })
+            .cloned()
+    }
+
+    /// Notes the review chat of the task `builder` works on.
+    pub fn set_reviewer(&mut self, builder: &str, reviewer: &str) {
+        if let Some(task) = self
+            .stored
+            .tasks
+            .iter_mut()
+            .rev()
+            .find(|task| task.builder == builder)
+        {
+            task.reviewer = Some(reviewer.to_owned());
+            let _ = self.save();
+        }
+    }
+
+    /// Whether a task of the open workspace still waits for its review to start.
+    pub fn reviews_pending(&self) -> bool {
+        let bots: Vec<&str> = self.bots().iter().map(|bot| bot.id.as_str()).collect();
+        self.stored.tasks.iter().any(|task| {
+            bots.contains(&task.bot.as_str())
+                && task.review_agent.is_some()
+                && task.reviewer.is_none()
+        })
+    }
+
     /// Notes that a call of the open workspace's bot link `id` was answered with an error.
     pub fn bot_failed(&mut self, id: &str) {
         let scope = self.scope.clone();
@@ -692,6 +770,54 @@ mod tests {
 
     /// What a link may do is chosen when it is made, and the parts that only mean something
     /// together are made to fit: a read-only link approves nothing and has no full control.
+    /// A task is kept for its review, found by either of its chats, and only for a link of the
+    /// open workspace.
+    #[test]
+    fn a_task_is_kept_for_its_review() {
+        let folder = tempfile::tempdir().expect("folder");
+        let mut registry = Registry::load(&folder.path().join("remote.json")).expect("load");
+        registry.set_scope("local");
+        let bot = registry
+            .add_bot("Grok", crate::bot::Rights::CHATS, 1)
+            .expect("bot");
+        let task = |bot: &str, builder: &str| Task {
+            bot: bot.to_owned(),
+            builder: builder.to_owned(),
+            folder_id: "f1".into(),
+            goal: "Fix it".into(),
+            branch: Some("aura/fix-it".into()),
+            path: Some("/work/wt".into()),
+            base: Some("abc".into()),
+            review_agent: Some("codex".into()),
+            reviewer: None,
+            created_at: 1,
+        };
+        registry.add_task(task("nobody", "c0"));
+        assert!(
+            registry.task_of("c0").is_none(),
+            "not a link of this workspace"
+        );
+        assert!(!registry.reviews_pending());
+        registry.add_task(task(&bot.id, "c1"));
+        assert!(registry.reviews_pending());
+        assert_eq!(registry.task_of("c1").expect("task").builder, "c1");
+        registry.set_reviewer("c1", "c2");
+        assert!(!registry.reviews_pending());
+        assert_eq!(registry.task_of("c2").expect("task").builder, "c1");
+        let mut again = Registry::load(&folder.path().join("remote.json")).expect("load");
+        again.set_scope("local");
+        assert_eq!(
+            again.task_of("c2").expect("task").reviewer.as_deref(),
+            Some("c2")
+        );
+        again.set_scope("other");
+        assert!(again.task_of("c1").is_none(), "another workspace's");
+        for n in 0..MAX_TASKS + 3 {
+            registry.add_task(task(&bot.id, &format!("x{n}")));
+        }
+        assert!(registry.task_of("c1").is_none(), "the oldest go");
+    }
+
     #[test]
     fn a_links_rights_are_kept_and_made_coherent() {
         let folder = tempfile::tempdir().expect("folder");

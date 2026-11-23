@@ -135,8 +135,8 @@ test("reports health and hides everything else", async () => {
   assert.deepEqual(await health.json(), {
     ok: true,
     protocol: 1,
-    tools: 8,
-    full_tools: 12,
+    tools: 9,
+    full_tools: 13,
     second_tools: 7,
     second_full_tools: 11,
     first_tools: 8,
@@ -784,10 +784,19 @@ test("lists the current tools to a bot whose computer answers them", async () =>
     latest.map((tool) => tool.name),
     ["inbox", ...few.map((tool) => tool.name)],
   );
+  // A copy that answers set 4 (and one newer than this relay) is also shown task, before send.
   const latestAll = await tools(newest);
+  const withTask = (names) => {
+    const at = names.indexOf("send");
+    return [...names.slice(0, at), "task", ...names.slice(at)];
+  };
   assert.deepEqual(
     latestAll.map((tool) => tool.name),
-    ["inbox", ...all.map((tool) => tool.name)],
+    withTask(["inbox", ...all.map((tool) => tool.name)]),
+  );
+  assert.match(
+    (await ask(newest, { method: "initialize", params: {} })).result.instructions,
+    /call task once/,
   );
   for (const tool of [...latestAll, ...all]) assert.equal("since" in tool, false, tool.name);
   assert.match(
@@ -822,7 +831,7 @@ test("lists the current tools to a bot whose computer answers them", async () =>
   assert.ok(size(few) < 3500, String(size(few)));
   assert.ok(size(all) < 5600, String(size(all)));
   assert.ok(size(latest) < 3900, String(size(latest)));
-  assert.ok(size(latestAll) < 6000, String(size(latestAll)));
+  assert.ok(size(latestAll) < 7300, String(size(latestAll)));
 
   const hello = await ask(chats, { method: "initialize", params: {} });
   assert.match(hello.result.instructions, /one send/);

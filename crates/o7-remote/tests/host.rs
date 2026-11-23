@@ -60,6 +60,11 @@ struct App {
     status: Mutex<Option<SessionStatus>>,
     /// A question c1 waits on (request q1), when a test sets one.
     question: Mutex<Option<o7_protocol::UiPrompt>>,
+    /// Keep the chats `create` makes, list them and serve their history: a task's test.
+    keeps: std::sync::atomic::AtomicBool,
+    made: Mutex<Vec<(String, SessionStatus)>>,
+    /// Codex is ready too: a task's test, for its review.
+    second_agent: std::sync::atomic::AtomicBool,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -222,6 +227,17 @@ impl Backend for Bound {
             self.app.create(folder_id, agent_id).await
         })
     }
+    fn create_task_chat<'a>(
+        &'a self,
+        folder_id: &'a str,
+        agent_id: Option<&'a str>,
+        title: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::TaskChat, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.create_task_chat(folder_id, agent_id, title).await
+        })
+    }
 }
 
 impl Backend for App {
@@ -253,12 +269,30 @@ impl Backend for App {
                     }))
                     .expect("project"),
                 ],
-                chats: vec![chat("c1", status)],
-                agents: vec![RemoteAgent {
+                chats: std::iter::once(chat("c1", status))
+                    .chain(
+                        self.made
+                            .lock()
+                            .expect("made")
+                            .iter()
+                            .map(|(id, status)| chat(id, *status)),
+                    )
+                    .collect(),
+                agents: std::iter::once(RemoteAgent {
                     id: "claude-code".into(),
                     name: "Claude Code".into(),
                     available: true,
-                }],
+                })
+                .chain(
+                    self.second_agent
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                        .then(|| RemoteAgent {
+                            id: "codex".into(),
+                            name: "Codex".into(),
+                            available: true,
+                        }),
+                )
+                .collect(),
                 default_agent: Some("claude-code".into()),
             })
         })
@@ -330,6 +364,18 @@ impl Backend for App {
         _before_seq: u32,
     ) -> BoxFuture<'a, Result<HistoryPage, BackendError>> {
         Box::pin(async move {
+            if self
+                .made
+                .lock()
+                .expect("made")
+                .iter()
+                .any(|(id, _)| id == chat_id)
+            {
+                return Ok(page(
+                    chat_id,
+                    vec![said(1, &format!("Finished the work in {chat_id}."))],
+                ));
+            }
             if chat_id != "c1" {
                 return Err(missing());
             }
@@ -479,7 +525,34 @@ impl Backend for App {
                 .lock()
                 .expect("answered")
                 .push(format!("create {folder_id} {agent_id:?}"));
-            Ok(chat("c2", SessionStatus::Starting))
+            if !self.keeps.load(std::sync::atomic::Ordering::Relaxed) {
+                return Ok(chat("c2", SessionStatus::Starting));
+            }
+            let mut made = self.made.lock().expect("made");
+            let id = format!("c{}", made.len() + 2);
+            made.push((id.clone(), SessionStatus::Starting));
+            Ok(chat(&id, SessionStatus::Starting))
+        })
+    }
+
+    fn create_task_chat<'a>(
+        &'a self,
+        folder_id: &'a str,
+        agent_id: Option<&'a str>,
+        title: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::TaskChat, BackendError>> {
+        Box::pin(async move {
+            let chat = self.create(folder_id, agent_id).await?;
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("worktree {title}"));
+            Ok(o7_remote::TaskChat {
+                chat,
+                branch: Some("aura/fix-the-login-form".into()),
+                path: Some("/work/app-worktrees/fix".into()),
+                base: Some("abc123".into()),
+            })
         })
     }
 }
@@ -719,6 +792,32 @@ async fn rig() -> Rig {
 }
 
 impl App {
+    /// A chat `create` made changes state, and everything watching is told.
+    fn made_becomes(&self, id: &str, status: SessionStatus) {
+        for (made, now) in self.made.lock().expect("made").iter_mut() {
+            if made == id {
+                *now = status;
+            }
+        }
+        let update = ChatStatusUpdate {
+            chat_id: id.into(),
+            status,
+            needs_attention: false,
+            title: None,
+            updated_at: 3,
+        };
+        let watching: Vec<Statuses> = self
+            .statuses
+            .lock()
+            .expect("statuses")
+            .values()
+            .cloned()
+            .collect();
+        for statuses in watching {
+            statuses(&update);
+        }
+    }
+
     /// The one chat changes state, and everything watching it is told.
     fn becomes(&self, status: SessionStatus) {
         *self.status.lock().expect("status") = Some(status);
@@ -1613,6 +1712,190 @@ async fn what_was_accepted_for_one_workspace_is_never_served_another() {
     assert!(rig.app.frames.lock().expect("frames").is_empty());
 }
 
+/// The owner's plan, 23 November 2026: a bot hands o7 a whole task in one call and ends its turn.
+/// o7 makes the task's chat on its own branch and briefs it; when the work is done it starts a
+/// review by a second agent, and the bot is told once, when the review is done too.
+#[tokio::test]
+async fn a_task_is_built_then_reviewed_and_its_bot_told_once() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    rig.app.second_agent.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let made = rig.service.create_bot("Grok Bot", APPROVING).expect("bot");
+    relay.next().await;
+    let (bot, token) = made
+        .url
+        .rsplit_once('/')
+        .and_then(|(_, reference)| reference.split_once('.'))
+        .map(|(bot, token)| (bot.to_owned(), token.to_owned()))
+        .expect("id.token");
+    let place = o7_remote::Callback {
+        kind: o7_remote::CallbackKind::Webhook,
+        url: "https://assistant.example/hook".into(),
+        channel: None,
+        to: None,
+    };
+    assert!(matches!(
+        rig.service.set_bot_callback(&bot, Some(place)),
+        Ok(true)
+    ));
+    for _ in 0..200 {
+        if rig
+            .app
+            .statuses
+            .lock()
+            .expect("statuses")
+            .contains_key("auracode-remote-callbacks")
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    relay
+        .send(format!(
+            "b{}",
+            json!({ "rid": "t1", "bot": bot, "token": token, "tool": "task", "args": { "goal": "Fix the login form\nIt rejects valid emails." } })
+        ))
+        .await;
+    let answer: Value =
+        serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer")).expect("json");
+    assert_eq!(answer["error"], false, "{answer}");
+    let text = answer["text"].as_str().expect("text");
+    assert!(
+        text.starts_with("Started task c2 in app with Claude Code, on its own branch aura/fix-the-login-form. When the work is done, Codex reviews it in a chat of its own."),
+        "{text}"
+    );
+    // The task's chat was made in a worktree named for the goal, and briefed.
+    let answered = rig.app.answered.lock().expect("answered").clone();
+    assert!(
+        answered.contains(&"worktree Fix the login form".to_owned()),
+        "{answered:?}"
+    );
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert_eq!(sent[0].0, "c2");
+    assert!(
+        sent[0]
+            .1
+            .starts_with("Fix the login form\nIt rejects valid emails.\n\n---\n"),
+        "{}",
+        sent[0].1
+    );
+    assert!(
+        sent[0].1.contains("new branch `aura/fix-the-login-form`"),
+        "{}",
+        sent[0].1
+    );
+    assert!(
+        sent[0].1.contains("Commit your work on this branch"),
+        "{}",
+        sent[0].1
+    );
+
+    // The work is done: the review starts, by Codex, in the project folder, and nobody is told.
+    let told = || rig.told.lock().expect("told").clone();
+    rig.app.made_becomes("c2", SessionStatus::Running);
+    rig.app.made_becomes("c2", SessionStatus::Ready);
+    for _ in 0..100 {
+        if rig.app.sent.lock().expect("sent").len() == 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert_eq!(sent.len(), 2, "{sent:?}");
+    assert_eq!(sent[1].0, "c3");
+    assert!(
+        sent[1]
+            .1
+            .starts_with("Review the work just done for a task, without changing any file."),
+        "{}",
+        sent[1].1
+    );
+    assert!(
+        sent[1]
+            .1
+            .contains("git -C \"/work/app-worktrees/fix\" diff abc123"),
+        "{}",
+        sent[1].1
+    );
+    assert!(
+        rig.app
+            .answered
+            .lock()
+            .expect("answered")
+            .contains(&"create f1 Some(\"codex\")".to_owned())
+    );
+    assert!(
+        told().is_empty(),
+        "not told until the review is done: {:?}",
+        told()
+    );
+
+    // The review is done: told once, of both.
+    rig.app.made_becomes("c3", SessionStatus::Running);
+    rig.app.made_becomes("c3", SessionStatus::Ready);
+    for _ in 0..100 {
+        if !told().is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let heard = told();
+    assert_eq!(heard.len(), 1, "{heard:?}");
+    assert_eq!(heard[0].chat_id, "c3");
+    assert!(
+        heard[0].text.starts_with("o7: task chat c2 (titled \"Fix the login form\", in project \"app\", agent \"Claude Code\") is done and was reviewed by \"Claude Code\" in chat c3."),
+        "{}",
+        heard[0].text
+    );
+    assert!(
+        heard[0].text.contains(
+            "The working agent's last words (its own, not o7's): \"Finished the work in c2.\""
+        ),
+        "{}",
+        heard[0].text
+    );
+    assert!(
+        heard[0].text.contains(
+            "The review's last words (the reviewer's own, not o7's): \"Finished the work in c3.\""
+        ),
+        "{}",
+        heard[0].text
+    );
+
+    // A task without review, or with review off: told when the work is done, as any chat.
+    relay
+        .send(format!(
+            "b{}",
+            json!({ "rid": "t2", "bot": bot, "token": token, "tool": "task", "args": { "goal": "Tidy the README", "review": false } })
+        ))
+        .await;
+    let answer: Value =
+        serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer")).expect("json");
+    assert!(
+        !answer["text"]
+            .as_str()
+            .expect("text")
+            .contains("reviews it"),
+        "{answer}"
+    );
+    rig.app.made_becomes("c4", SessionStatus::Running);
+    rig.app.made_becomes("c4", SessionStatus::Ready);
+    for _ in 0..100 {
+        if told().len() == 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(told().len(), 2, "{:?}", told());
+    assert_eq!(told()[1].chat_id, "c4");
+    assert_eq!(
+        rig.app.sent.lock().expect("sent").len(),
+        3,
+        "no review was started"
+    );
+}
+
 /// What a link may do is checked on the computer on every call, whatever the relay let through
 /// (owner's plan, 23 November 2026): a read-only link reads; a link not allowed to approve may
 /// decline and answer questions but never approve; full access needs its own right.
@@ -1642,7 +1925,7 @@ async fn a_links_rights_are_checked_on_the_computer() {
         serde_json::from_str(relay.next().await.strip_prefix('l').expect("links")).expect("json");
     assert_eq!(
         listed,
-        json!([{ "id": reader.0, "hash": crypto::hash(&reader.1), "full": false, "read": true, "v": 3 }]),
+        json!([{ "id": reader.0, "hash": crypto::hash(&reader.1), "full": false, "read": true, "v": 4 }]),
         "a read-only link is listed as one, and never as full"
     );
     let plain = address(
@@ -1862,8 +2145,8 @@ async fn full_control_is_a_links_own_level_and_the_computer_enforces_it() {
     assert_eq!(
         listed,
         json!([
-            { "id": chats.0, "hash": crypto::hash(&chats.1), "full": false, "v": 3 },
-            { "id": full.0, "hash": crypto::hash(&full.1), "full": true, "v": 3 },
+            { "id": chats.0, "hash": crypto::hash(&chats.1), "full": false, "v": 4 },
+            { "id": full.0, "hash": crypto::hash(&full.1), "full": true, "v": 4 },
         ])
     );
     let status = rig.service.status();
@@ -2059,7 +2342,7 @@ async fn a_linked_bot_calls_tools_with_its_token() {
         listed,
         format!(
             "l{}",
-            json!([{ "id": bot, "hash": crypto::hash(token), "full": false, "v": 3 }])
+            json!([{ "id": bot, "hash": crypto::hash(token), "full": false, "v": 4 }])
         )
     );
     assert!(

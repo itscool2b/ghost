@@ -134,7 +134,7 @@ pub use lean::{CHAT_TOOLS as LEAN_CHAT_TOOLS, FULL_TOOLS as LEAN_FULL_TOOLS};
 
 /// The set of tools this copy of the app answers, which it tells the relay with its bot links.
 /// A relay that knows the number lists that set; one that does not lists the first.
-pub const TOOLS_VERSION: u32 = 3;
+pub const TOOLS_VERSION: u32 = 4;
 
 fn chat_tool(tool: &str) -> bool {
     CHAT_TOOLS.contains(&tool) || lean::CHAT_TOOLS.contains(&tool)
@@ -189,6 +189,9 @@ pub struct Answer {
     /// The call started the chat, sent to it or answered it: the link is told about that chat
     /// from now on.
     pub acted: bool,
+    /// The call started a task (`task`): the service keeps it, to start its review when the
+    /// work is done.
+    pub task: Option<crate::registry::Task>,
 }
 
 impl Answer {
@@ -198,6 +201,7 @@ impl Answer {
             error: false,
             chat: None,
             acted: false,
+            task: None,
         }
     }
 
@@ -207,6 +211,7 @@ impl Answer {
             error: true,
             chat: None,
             acted: false,
+            task: None,
         }
     }
 

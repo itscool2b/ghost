@@ -54,30 +54,46 @@ function listed(tools: readonly Tool[], wide: boolean, version = 2): Listed[] {
 
 /**
  * The sets of tools. A copy of the app answers the set it was built with and says which in its
- * bot links (`v`): the latest (3), the one before it (2: the same tools without `inbox`), or,
- * from a copy older than both, the first one. A bot is shown the set its computer answers, so
- * the relay and the app can be updated apart.
+ * bot links (`v`): the first one (a copy older than the number), or 2 and up, which list the
+ * current tools a copy that old answers (a tool's `since`). A bot is shown the set its computer
+ * answers, so the relay and the app can be updated apart. A copy newer than this relay is shown
+ * the newest set the relay knows.
  */
-const SETS = {
-  first: {
-    chat: listed(FIRST_TOOLS as unknown as readonly Tool[], false),
-    full: listed(FIRST_TOOLS as unknown as readonly Tool[], true),
-    instructions:
-      "o7 runs coding agents (Claude Code, Codex and others) on a person's computer. These tools reach the chats on that computer while o7 is open there with remote access on. Start with list_chats. After send_message or start_chat, call wait_for_chat until the agent finishes or asks for something, and answer waiting requests with respond_to_request. Agents there can edit files and run commands, so send only what the person asked for.",
-  },
-  current: {
-    chat: listed(TOOLS as unknown as readonly Tool[], false),
-    full: listed(TOOLS as unknown as readonly Tool[], true),
-    instructions:
-      "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, so do not read a chat you just heard from, and do not ask more often than wait does. Agents edit files and run commands, so send only what the person asked for.",
-  },
-  latest: {
-    chat: listed(TOOLS as unknown as readonly Tool[], false, 3),
-    full: listed(TOOLS as unknown as readonly Tool[], true, 3),
-    instructions:
-      "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
-  },
-} as const;
+const FIRST = {
+  chat: listed(FIRST_TOOLS as unknown as readonly Tool[], false),
+  full: listed(FIRST_TOOLS as unknown as readonly Tool[], true),
+  instructions:
+    "o7 runs coding agents (Claude Code, Codex and others) on a person's computer. These tools reach the chats on that computer while o7 is open there with remote access on. Start with list_chats. After send_message or start_chat, call wait_for_chat until the agent finishes or asks for something, and answer waiting requests with respond_to_request. Agents there can edit files and run commands, so send only what the person asked for.",
+};
+/** What each set's bot is told first, by the set's number. */
+const INSTRUCTIONS: Record<number, string> = {
+  2: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, so do not read a chat you just heard from, and do not ask more often than wait does. Agents edit files and run commands, so send only what the person asked for.",
+  3: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
+  4: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so hand over only what the person asked for.",
+};
+/** The newest set this relay knows. */
+const NEWEST_TOOLS = 4;
+interface ToolSet {
+  readonly chat: Listed[];
+  readonly full: Listed[];
+  readonly instructions: string;
+}
+const SETS = new Map<number, ToolSet>();
+/** The set a link of version `v` is shown. */
+function setFor(v: number): ToolSet {
+  if (v < 2) return FIRST;
+  const version = Math.min(Math.floor(v), NEWEST_TOOLS);
+  const kept = SETS.get(version);
+  if (kept) return kept;
+  const made: ToolSet = {
+    chat: listed(TOOLS as unknown as readonly Tool[], false, version),
+    full: listed(TOOLS as unknown as readonly Tool[], true, version),
+    instructions: INSTRUCTIONS[version] ?? INSTRUCTIONS[NEWEST_TOOLS] ?? "",
+  };
+  SETS.set(version, made);
+  return made;
+}
+
 /**
  * The tools a read-only link is shown: those that only read (`readOnlyHint`). The computer
  * refuses anything else from such a link whatever is listed; this keeps the list honest.
@@ -90,7 +106,7 @@ function readOnly(tools: readonly Listed[]): Listed[] {
 const READ_INSTRUCTIONS =
   "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; this link reads its chats while o7 is open there, and cannot send, answer or change anything. inbox says what needs the person in one call; read and wait return what a chat did.";
 
-/** The number a copy of the app sends for the second set, and for the latest. */
+/** The numbers links from before `versions` were kept are known by. */
 const CURRENT_TOOLS = 2;
 const LATEST_TOOLS = 3;
 
@@ -233,12 +249,12 @@ export default {
       return json(200, {
         ok: true,
         protocol: 1,
-        tools: SETS.latest.chat.length,
-        full_tools: SETS.latest.full.length,
-        second_tools: SETS.current.chat.length,
-        second_full_tools: SETS.current.full.length,
-        first_tools: SETS.first.chat.length,
-        first_full_tools: SETS.first.full.length,
+        tools: setFor(NEWEST_TOOLS).chat.length,
+        full_tools: setFor(NEWEST_TOOLS).full.length,
+        second_tools: setFor(2).chat.length,
+        second_full_tools: setFor(2).full.length,
+        first_tools: FIRST.chat.length,
+        first_full_tools: FIRST.full.length,
       });
     if (!hostId || !HOST_ID.test(hostId)) return notFound();
     const origin = request.headers.get("Origin");
@@ -563,6 +579,7 @@ export class Room extends DurableObject<Env> {
     const current: string[] = [];
     const latest: string[] = [];
     const read: string[] = [];
+    const versions: Record<string, number> = {};
     if (Array.isArray(body))
       for (const entry of body.slice(0, MAX_BOTS)) {
         const {
@@ -591,9 +608,10 @@ export class Room extends DurableObject<Env> {
           // A copy newer than this relay answers at least the latest set this relay knows.
           if (typeof v === "number" && v >= CURRENT_TOOLS) current.push(id);
           if (typeof v === "number" && v >= LATEST_TOOLS) latest.push(id);
+          versions[id] = typeof v === "number" && Number.isFinite(v) ? v : 1;
         }
       }
-    await this.ctx.storage.put({ bots, full, current, latest, read });
+    await this.ctx.storage.put({ bots, full, current, latest, read, versions });
   }
 
   override async webSocketClose(socket: WebSocket, code: number, reason: string) {
@@ -657,11 +675,15 @@ export class Room extends DurableObject<Env> {
       return json(400, rpcError(null, -32600, "Invalid request"), CORS);
     const wide = ((await this.ctx.storage.get<string[]>("full")) ?? []).includes(id);
     const reading = ((await this.ctx.storage.get<string[]>("read")) ?? []).includes(id);
-    const set = ((await this.ctx.storage.get<string[]>("latest")) ?? []).includes(id)
-      ? SETS.latest
-      : ((await this.ctx.storage.get<string[]>("current")) ?? []).includes(id)
-        ? SETS.current
-        : SETS.first;
+    // A link's set by its number; one kept before numbers were stored, by the lists then kept.
+    const version =
+      (await this.ctx.storage.get<Record<string, number>>("versions"))?.[id] ??
+      (((await this.ctx.storage.get<string[]>("latest")) ?? []).includes(id)
+        ? 3
+        : ((await this.ctx.storage.get<string[]>("current")) ?? []).includes(id)
+          ? 2
+          : 1);
+    const set = setFor(version);
     const replies: unknown[] = [];
     for (const message of messages) {
       const reply = await this.#rpc(
