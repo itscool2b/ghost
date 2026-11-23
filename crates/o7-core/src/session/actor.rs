@@ -482,6 +482,9 @@ struct LiveDriver {
     /// ...or the idle grace: the agent reported work in progress with no prompt of o7's
     /// open for `idle_grace` without reporting idle. Cleared by the next prompt or idle report.
     idle_assumed: bool,
+    /// Work of its own the agent left running in the background (`DriverEvent::BackgroundWork`).
+    /// While there is any, the agent is not idle for eviction, whatever it says of itself.
+    background: u32,
     native_scope: NativeSessionScope,
     stop: Stop,
     spawn_id: Option<String>,
@@ -4397,6 +4400,7 @@ The person continues this conversation here, in your terminal. Reply only that y
             ready: false,
             run_idle: None,
             idle_assumed: false,
+            background: 0,
             native_scope,
             stop: Stop::None,
             spawn_id: None,
@@ -4733,7 +4737,9 @@ The person continues this conversation here, in your terminal. Reply only that y
     fn answer_open_cards(&mut self) {
         let cards: Vec<OpenCard> = self.normalizer.cards().to_vec();
         for card in cards {
-            if let Decision::AutoAllow { option_id } = decide(&self.autonomy_state, self.planning_freely(), &card.request) {
+            if let Decision::AutoAllow { option_id } =
+                decide(&self.autonomy_state, self.planning_freely(), &card.request)
+            {
                 self.auto_answer(&card.request, option_id, card.tag.as_deref());
             }
         }
@@ -5304,6 +5310,11 @@ The person continues this conversation here, in your terminal. Reply only that y
                         driver.idle_assumed = false;
                         self.idle_wait = None;
                     }
+                }
+            }
+            DriverEvent::BackgroundWork { open } => {
+                if let Some(driver) = &mut self.driver {
+                    driver.background = open;
                 }
             }
             DriverEvent::Ready(info) => self.on_ready(info),
@@ -6038,12 +6049,10 @@ The person continues this conversation here, in your terminal. Reply only that y
         }
         for event in events {
             let decision = match &event {
-                O7Event::PermissionRequested(request) => {
-                    Some((
-                        request.clone(),
-                        decide(&self.autonomy_state, self.planning_freely(), request),
-                    ))
-                }
+                O7Event::PermissionRequested(request) => Some((
+                    request.clone(),
+                    decide(&self.autonomy_state, self.planning_freely(), request),
+                )),
                 _ => None,
             };
             self.push_normalized(event, tag.clone());
@@ -6586,7 +6595,11 @@ The person continues this conversation here, in your terminal. Reply only that y
             && at <= now
         {
             self.idle_deadline = None;
-            tracing::info!(chat_id = %self.chat_id, "stopping an idle agent nobody views");
+            tracing::info!(
+                chat_id = %self.chat_id,
+                background = self.works_in_background(),
+                "stopping an idle agent nobody views"
+            );
             self.stop();
         }
         if let Some(wait) = self.idle_wait
@@ -6631,21 +6644,16 @@ The person continues this conversation here, in your terminal. Reply only that y
     /// sooner to make room for another chat's start. An agent that only counts as idle after the
     /// idle grace still works, so it is never stopped.
     fn idles(&self) -> bool {
-        self.status == SessionStatus::Ready
-            && self.turn.is_none()
-            && self.subscribers.is_empty()
-            && !self.normalizer.has_open_requests()
-            && !self.queue.first().is_some_and(|row| !row.held)
-            && !self.quitting
-            && self.terminal.is_none()
-            && self
-                .driver
-                .as_ref()
-                .is_none_or(|driver| driver.run_idle != Some(false))
+        self.subscribers.is_empty() && self.idles_but_shown()
     }
 
     /// Idle but for an open view: a change that rewrites the folder may stop it, losing nothing.
     fn idles_but_shown(&self) -> bool {
+        self.quiet() && !self.works_in_background()
+    }
+
+    /// Nothing of o7's is open with the agent: no turn, no request, nothing waiting to go.
+    fn quiet(&self) -> bool {
         self.status == SessionStatus::Ready
             && self.turn.is_none()
             && !self.normalizer.has_open_requests()
@@ -6658,12 +6666,29 @@ The person continues this conversation here, in your terminal. Reply only that y
                 .is_none_or(|driver| driver.run_idle != Some(false))
     }
 
+    /// The agent left work of its own running (a command in the background, an agent it started).
+    /// It may call itself idle meanwhile, since it would take a prompt; stopping it would end that
+    /// work and whatever it meant to do when the work finished.
+    fn works_in_background(&self) -> bool {
+        self.driver
+            .as_ref()
+            .is_some_and(|driver| driver.background > 0)
+    }
+
     /// Idle eviction: idle long enough, by [`Self::idles`]. The live-agent table learns what the
     /// agent does whenever that changes, so a start at the limit can stop the one idle longest.
+    /// An agent kept from idling only by its background work stops after the much longer
+    /// `background_eviction`, so work someone forgot does not hold it for good.
     fn update_idle(&mut self) {
         let idle = self.idles();
-        self.idle_deadline =
-            idle.then(|| self.last_activity + self.shared.deps.limits.idle_eviction);
+        let limits = &self.shared.deps.limits;
+        self.idle_deadline = if idle {
+            Some(self.last_activity + limits.idle_eviction)
+        } else if self.subscribers.is_empty() && self.quiet() {
+            Some(self.last_activity + limits.background_eviction)
+        } else {
+            None
+        };
         let now = if idle {
             Reported::Idle(self.last_activity)
         } else if self.terminal.is_some() && self.terminal_import.is_some() {
@@ -6682,7 +6707,12 @@ The person continues this conversation here, in your terminal. Reply only that y
             Reported::Stopping
         } else if self.normalizer.has_open_requests() {
             Reported::Waiting
-        } else if self.status == SessionStatus::Ready && !self.subscribers.is_empty() {
+        } else if self.status == SessionStatus::Ready
+            && !self.subscribers.is_empty()
+            && !self.works_in_background()
+        {
+            // With work in the background it is not "idle but for a view": stopping it for a
+            // change to the folder would end that work, so it counts as working.
             Reported::Shown(self.last_activity)
         } else {
             Reported::Working
@@ -7954,8 +7984,7 @@ pub(crate) fn plan_edit_refusal(
         return Some("Only a plan waiting for approval takes edits.");
     }
     let accepts = request.options.iter().any(|option| {
-        option.option_id == option_id
-            && option.kind == o7_protocol::PermissionOptionKind::AllowOnce
+        option.option_id == option_id && option.kind == o7_protocol::PermissionOptionKind::AllowOnce
     });
     if !accepts {
         return Some("An edited plan can only be accepted, not declined.");

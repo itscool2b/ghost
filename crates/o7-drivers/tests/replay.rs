@@ -92,6 +92,7 @@ mod replay {
             let allowed = match event {
                 DriverEvent::Status(_)
                 | DriverEvent::RunState { .. }
+                | DriverEvent::BackgroundWork { .. }
                 | DriverEvent::Options(_)
                 | DriverEvent::Commands(_)
                 | DriverEvent::Title(_)

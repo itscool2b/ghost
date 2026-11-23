@@ -1252,6 +1252,54 @@ async fn idle_eviction() {
     );
 }
 
+/// An agent that left work running in the background is not stopped as idle, though it calls
+/// itself idle and nobody views it: stopping it would end that work and what the agent meant to
+/// do when it finished (owner, 22 November 2026: chats left for another "just crash. stop
+/// working"). Once the work has ended, the idle time runs as for any agent.
+#[tokio::test(start_paused = true)]
+async fn background_work_keeps_an_unviewed_agent_alive() {
+    let (driver, handle) = ScriptedDriver::new(vec![
+        Step::Emit(DriverEvent::RunState { idle: true }),
+        ready_step("n1"),
+    ]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    h.status(&chat.id, SessionStatus::Ready).await;
+    handle.emit(DriverEvent::BackgroundWork { open: 1 });
+    tokio::time::sleep(Duration::from_secs(3 * 60 * 60)).await;
+    assert_eq!(
+        h.statuses.last(&chat.id).map(|update| update.status),
+        Some(SessionStatus::Ready),
+        "three hours unviewed with a command in the background"
+    );
+    handle.emit(DriverEvent::BackgroundWork { open: 0 });
+    tokio::time::sleep(Duration::from_secs(9 * 60)).await;
+    assert_eq!(
+        h.statuses.last(&chat.id).map(|update| update.status),
+        Some(SessionStatus::Ready)
+    );
+    tokio::time::sleep(Duration::from_secs(2 * 60)).await;
+    h.status(&chat.id, SessionStatus::Stopped).await;
+}
+
+/// Background work someone forgot (a server left running) does not hold an agent for good: after
+/// a day with nothing from it and nobody viewing, it stops.
+#[tokio::test(start_paused = true)]
+async fn forgotten_background_work_does_not_hold_an_agent_for_good() {
+    let (driver, handle) = ScriptedDriver::new(vec![ready_step("n1")]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    h.status(&chat.id, SessionStatus::Ready).await;
+    handle.emit(DriverEvent::BackgroundWork { open: 2 });
+    tokio::time::sleep(Duration::from_secs(23 * 60 * 60)).await;
+    assert_eq!(
+        h.statuses.last(&chat.id).map(|update| update.status),
+        Some(SessionStatus::Ready)
+    );
+    tokio::time::sleep(Duration::from_secs(2 * 60 * 60)).await;
+    h.status(&chat.id, SessionStatus::Stopped).await;
+}
+
 /// S21: a viewer keeps an idle agent alive.
 #[tokio::test(start_paused = true)]
 async fn a_viewer_keeps_an_idle_agent_alive() {

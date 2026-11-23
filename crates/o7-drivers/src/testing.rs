@@ -622,6 +622,7 @@ fn in_turn(event: DriverEvent, turn_id: String) -> DriverEvent {
         },
         untagged @ (DriverEvent::Status(_)
         | DriverEvent::RunState { .. }
+        | DriverEvent::BackgroundWork { .. }
         | DriverEvent::Ready(_)
         | DriverEvent::NativeSessionId(_)
         | DriverEvent::PermissionWithdrawn { .. }

@@ -206,18 +206,23 @@ pub struct ManagerLimits {
     pub max_prompt_bytes: usize,
     /// A `Ready` agent nobody views, with nothing open or queued, stops after this long.
     pub idle_eviction: Duration,
+    /// The same agent with work of its own left running in the background (a build, a server, an
+    /// agent it started) is not idle: stopping it ends that work. It stops only after this much
+    /// longer quiet, so a server someone forgot does not hold an agent for good.
+    pub background_eviction: Duration,
     pub subscribers_per_chat: usize,
     pub subscribers_per_owner: usize,
 }
 
 impl ManagerLimits {
-    /// 16 live agents, 20 queued prompts, 1 MiB per prompt, 10 minutes idle, 4 views per chat, 16
-    /// per webview.
+    /// 16 live agents, 20 queued prompts, 1 MiB per prompt, 10 minutes idle (a day with work in
+    /// the background), 4 views per chat, 16 per webview.
     pub const STANDARD: ManagerLimits = ManagerLimits {
         max_live_agents: 16,
         max_queue: 20,
         max_prompt_bytes: 1024 * 1024,
         idle_eviction: Duration::from_secs(10 * 60),
+        background_eviction: Duration::from_secs(24 * 60 * 60),
         subscribers_per_chat: 4,
         subscribers_per_owner: 16,
     };
