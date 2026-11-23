@@ -359,6 +359,16 @@ pub fn remote_create_bot(
         .map_err(refused)
 }
 
+/// This program's path, for an assistant on this computer that starts o7's helper
+/// (`--o7-bot-helper`) to reach its door without the relay.
+#[tauri::command]
+#[specta::specta]
+pub fn remote_local_program() -> Result<String, AppError> {
+    std::env::current_exe()
+        .map(|program| program.display().to_string())
+        .map_err(|error| AppError::new(AppErrorCode::StorageUnavailable, error.to_string()))
+}
+
 /// Makes an automation: an address that starts a task in `project` (one of the open
 /// workspace's) with `instruction`, from what is sent to it, which its agent is given as data.
 /// The address is returned only here.

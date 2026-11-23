@@ -23,6 +23,7 @@ mod agent_tokens;
 pub mod appearance;
 pub mod bindings;
 pub mod boot;
+pub mod bot_helper;
 pub mod browser;
 pub mod catalog_refresh;
 pub mod changes_commands;

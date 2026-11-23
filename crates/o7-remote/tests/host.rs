@@ -2553,6 +2553,132 @@ async fn things_sent_at_once_to_an_automation_cannot_pass_its_limit_together() {
     assert_eq!((started, held), (3, 2));
 }
 
+/// The door on this computer answers a bot link as the relay's calls are answered: its rights
+/// for the listing, its calls under its level, and nothing for a wrong token, an automation's
+/// address or while remote access is off. It writes its port beside remote.json, on loopback.
+#[tokio::test]
+async fn the_door_on_this_computer_answers_a_link_as_the_relay_does() {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let rig = rig().await;
+    let _relay = online(&rig).await;
+    let chats = rig
+        .service
+        .create_bot("Hermes", o7_remote::bot::Rights::CHATS)
+        .expect("bot");
+    let hook = rig
+        .service
+        .create_automation("CI", "p1", "Fix it.")
+        .expect("automation");
+    let file = rig.path.with_file_name("door.json");
+    let mut door = None;
+    for _ in 0..100 {
+        if let Ok(bytes) = std::fs::read(&file) {
+            door = serde_json::from_slice::<Value>(&bytes).ok();
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let door = door.expect("door.json");
+    let port = door["port"].as_u64().expect("port");
+    let key = o7_remote::crypto::decode::<32>(door["key"].as_str().expect("key")).expect("a key");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&file).expect("file").permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "door.json is the account's own");
+    }
+    let ask = async |request: Value| -> Value {
+        let stream = tokio::net::TcpStream::connect(("127.0.0.1", port as u16))
+            .await
+            .expect("door");
+        let (read, mut write) = stream.into_split();
+        let mut read = BufReader::new(read);
+        // The door proves it holds this run's key before the token is sent.
+        let challenge = [7_u8; 16];
+        write
+            .write_all(
+                format!(
+                    "{}\n",
+                    json!({ "op": "hello", "challenge": o7_remote::crypto::encode(&challenge) })
+                )
+                .as_bytes(),
+            )
+            .await
+            .expect("hello");
+        let mut proof = String::new();
+        read.read_line(&mut proof).await.expect("proof");
+        let proof: Value = serde_json::from_str(&proof).expect("json");
+        assert!(o7_remote::crypto::door_proven(
+            &key,
+            &challenge,
+            proof["proof"].as_str().expect("proof")
+        ));
+        assert!(!o7_remote::crypto::door_proven(
+            &[1_u8; 32],
+            &challenge,
+            proof["proof"].as_str().expect("proof")
+        ));
+        write
+            .write_all(format!("{request}\n").as_bytes())
+            .await
+            .expect("sent");
+        let mut line = String::new();
+        read.read_line(&mut line).await.expect("answer");
+        serde_json::from_str(&line).expect("json")
+    };
+
+    let rights = ask(json!({ "link": chats.url, "op": "rights" })).await;
+    assert_eq!(rights["ok"], true, "{rights}");
+    assert_eq!(rights["full"], false);
+    assert_eq!(rights["v"], o7_remote::bot::TOOLS_VERSION);
+    let listed = ask(json!({ "link": chats.url, "op": "call", "tool": "chats", "args": {} })).await;
+    assert_eq!(listed["error"], false, "{listed}");
+    assert!(
+        listed["text"].as_str().expect("text").contains("c1"),
+        "{listed}"
+    );
+    let above = ask(
+        json!({ "link": chats.url, "op": "call", "tool": "memory", "args": { "project": "p1" } }),
+    )
+    .await;
+    assert_eq!(
+        above["error"], true,
+        "the link's level holds here too: {above}"
+    );
+
+    let wrong = format!("{}A", chats.url.trim_end_matches(|c: char| c != '.'));
+    let refused = ask(json!({ "link": wrong, "op": "rights" })).await;
+    assert_eq!(refused["ok"], false);
+    let refused = ask(json!({ "link": wrong, "op": "call", "tool": "chats", "args": {} })).await;
+    assert_eq!(refused["error"], true);
+    let automation =
+        ask(json!({ "link": hook.url, "op": "call", "tool": "trigger", "args": { "text": "x" } }))
+            .await;
+    assert_eq!(
+        automation["text"],
+        "An automation's address cannot be used here."
+    );
+
+    rig.service.set_enabled(false).expect("off");
+    let off = ask(json!({ "link": chats.url, "op": "call", "tool": "chats", "args": {} })).await;
+    assert_eq!(off["error"], true);
+    assert!(
+        off["text"]
+            .as_str()
+            .expect("text")
+            .starts_with("Remote access is off in o7.")
+    );
+    let used = rig
+        .service
+        .status()
+        .bots
+        .into_iter()
+        .find(|bot| bot.name == "Hermes")
+        .expect("listed")
+        .calls;
+    assert_eq!(used, 2, "the listing is not a call; the two calls are");
+}
+
 /// What a link may do is checked on the computer on every call, whatever the relay let through
 /// (owner's plan, 23 November 2026): a read-only link reads; a link not allowed to approve may
 /// decline and answer questions but never approve; full access needs its own right.

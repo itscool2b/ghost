@@ -122,6 +122,7 @@ export function remoteFixture(): RemoteApi {
       return { ...loginStart };
     },
     projects: async () => projects,
+    localProgram: async () => "C:\\Users\\you\\AppData\\Local\\o7\\o7.exe",
     createAutomation: async (name, project, instruction) => {
       calls.push(`create-automation:${name}:${project}`);
       if (!instruction.trim()) throw new Error("Say what its agent should do with what is sent.");

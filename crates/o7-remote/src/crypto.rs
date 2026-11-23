@@ -40,6 +40,19 @@ pub fn random<const N: usize>() -> Result<[u8; N], CryptoError> {
 }
 
 /// Unpadded base64url, the encoding of every id, key and sealed message on the wire.
+/// The door's proof that it holds this run's key (`door.json`): HMAC-SHA256 under the
+/// challenge, of the key (HKDF's extract step), in base64url. Whoever answers a challenge with
+/// it read the key, which only o7 and its person's account can.
+pub fn door_proof(key: &[u8], challenge: &[u8]) -> String {
+    let (proof, _) = Hkdf::<Sha256>::extract(Some(challenge), key);
+    encode(&proof)
+}
+
+/// Whether `proof` answers `challenge` under `key`, compared in constant time.
+pub fn door_proven(key: &[u8], challenge: &[u8], proof: &str) -> bool {
+    same(&door_proof(key, challenge), proof)
+}
+
 pub fn encode(bytes: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }

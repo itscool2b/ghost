@@ -272,6 +272,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::remote::remote_remove_device,
             crate::remote::remote_create_bot,
             crate::remote::remote_create_automation,
+            crate::remote::remote_local_program,
             crate::remote::remote_remove_bot,
             crate::remote::remote_renew_bot,
             crate::remote::remote_set_bot_callback,

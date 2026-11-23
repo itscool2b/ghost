@@ -924,6 +924,17 @@ impl Registry {
 
     /// Whether `token` is the bot `id`'s, and that bot was linked in the open workspace and has
     /// not expired. Notes the use.
+    /// What link `id` may do, when `token` is its token and it still works in the open
+    /// workspace; none otherwise. Nothing is counted: a listing, not a call.
+    pub fn check_bot(&self, id: &str, token: &str, now: i64) -> Option<crate::bot::Rights> {
+        let hash = crypto::hash(token);
+        self.bots()
+            .into_iter()
+            .find(|bot| crypto::same(&bot.id, id))
+            .filter(|bot| crypto::same(&bot.token_hash, &hash) && !expired(bot, now))
+            .map(crate::bot::Rights::of)
+    }
+
     pub fn verify_bot(&mut self, id: &str, token: &str, now: i64) -> bool {
         let hash = crypto::hash(token);
         let scope = self.scope.clone();
