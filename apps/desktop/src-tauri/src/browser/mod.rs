@@ -1649,6 +1649,40 @@ impl o7_core::browser_service::BrowserBridge for AgentBridge {
     }
 }
 
+/// What `chat_id`'s browser tab shows now, taken as the agent's screenshot is, for a bot that
+/// asked to look (`crate::remote`): the image's bytes, or why there are none, said for a bot.
+pub(crate) async fn picture(app: &AppHandle, chat_id: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine as _;
+    use tauri::Manager as _;
+    let browser = app
+        .try_state::<Arc<Browser>>()
+        .map(|browser| Arc::clone(&browser))
+        .ok_or_else(|| "The browser is not available in this run.".to_owned())?;
+    let reply = agent::call(
+        &browser,
+        chat_id,
+        "browser_screenshot",
+        &serde_json::json!({}),
+    )
+    .await;
+    if reply.error {
+        // Words meant for an agent, which has the browser's tools; a bot has not.
+        let empty = reply.text.starts_with("No page is open")
+            || reply.text.starts_with("The tab in front has no page");
+        return Err(if empty {
+            "This chat's browser shows no page.".to_owned()
+        } else {
+            reply.text
+        });
+    }
+    let (_, data) = reply
+        .image
+        .ok_or_else(|| "The browser gave no picture.".to_owned())?;
+    base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(|error| error.to_string())
+}
+
 /// Starts the browser during setup, on the main thread: what this system allows, the service,
 /// and the active profile.
 pub fn setup(app: &AppHandle) {

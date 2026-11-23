@@ -30,6 +30,36 @@ use crate::{
 pub const REMOTE_CHANGED: &str = "auracode-remote-changed";
 /// History pages a browser asks for after the first: small enough to seal into one message.
 const PAGE_BYTES: u32 = 256 * 1024;
+/// The longer side of a picture a bot is shown, and its JPEG quality: small enough for the
+/// relay's messages (2 MiB) and a bot's own limits, large enough to read a page.
+const PICTURE_SIDE: u32 = 1600;
+const PICTURE_QUALITY: u8 = 75;
+/// The most a picture may take on the wire, in base64.
+const PICTURE_BYTES: usize = 1536 * 1024;
+
+/// `bytes` (a PNG or a JPEG) as a JPEG no larger than [`PICTURE_SIDE`] on its longer side.
+fn shrink(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let picture = image::load_from_memory(bytes)
+        .map_err(|error| format!("The picture could not be read: {error}"))?;
+    let picture = if picture.width().max(picture.height()) > PICTURE_SIDE {
+        picture.resize(
+            PICTURE_SIDE,
+            PICTURE_SIDE,
+            image::imageops::FilterType::Triangle,
+        )
+    } else {
+        picture
+    };
+    let mut out = Vec::new();
+    picture
+        .to_rgb8()
+        .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+            &mut out,
+            PICTURE_QUALITY,
+        ))
+        .map_err(|error| format!("The picture could not be made: {error}"))?;
+    Ok(out)
+}
 
 /// The relay and the website it belongs to. Release builds reach only o7's own; a
 /// development build may name a relay on this machine. The site was auracode.si until
@@ -1169,6 +1199,39 @@ impl Backend for AppBackend {
 
     /// A chat's branch and what is not committed in its folder, and its agent's usage as last
     /// reported. A part that cannot be read is left out, never guessed.
+    /// The chat's browser tab or emulator as a JPEG, only while this backend's profile is the
+    /// open one. The chat is one of its own: the tool found it in the overview.
+    fn picture<'a>(
+        &'a self,
+        chat_id: &'a str,
+        of: o7_remote::PictureOf,
+    ) -> BoxFuture<'a, Result<o7_remote::Picture, BackendError>> {
+        use base64::Engine as _;
+        Box::pin(async move {
+            drop(self.sessions().map_err(failed)?);
+            let taken = match of {
+                o7_remote::PictureOf::Browser => crate::browser::picture(&self.app, chat_id).await,
+                o7_remote::PictureOf::Device => crate::mobile::picture(&self.app, chat_id).await,
+            }
+            .map_err(|message| BackendError::new("unavailable", message))?;
+            let jpeg = tokio::task::spawn_blocking(move || shrink(&taken))
+                .await
+                .map_err(|error| BackendError::new("failed", error.to_string()))?
+                .map_err(|message| BackendError::new("failed", message))?;
+            let data = base64::engine::general_purpose::STANDARD.encode(jpeg);
+            if data.len() > PICTURE_BYTES {
+                return Err(BackendError::new(
+                    "too_large",
+                    "The picture is too large to send.",
+                ));
+            }
+            Ok(o7_remote::Picture {
+                mime: "image/jpeg".into(),
+                data,
+            })
+        })
+    }
+
     fn facts<'a>(
         &'a self,
         chat_id: &'a str,
@@ -1206,6 +1269,37 @@ impl Backend for AppBackend {
 #[cfg(test)]
 mod tests {
     use super::on_this_computer;
+
+    /// A bot is shown a JPEG whose longer side is at most 1600 pixels; a smaller picture keeps
+    /// its size, and bytes that are no picture are refused.
+    #[test]
+    fn a_picture_for_a_bot_is_a_jpeg_no_larger_than_its_side() {
+        let encoded = |width: u32, height: u32| {
+            let mut png = Vec::new();
+            image::RgbImage::from_pixel(width, height, image::Rgb([200, 30, 30]))
+                .write_with_encoder(image::codecs::png::PngEncoder::new(&mut png))
+                .expect("png");
+            png
+        };
+        let size = |jpeg: &[u8]| {
+            let back = image::load_from_memory_with_format(jpeg, image::ImageFormat::Jpeg)
+                .expect("a jpeg");
+            (back.width(), back.height())
+        };
+        assert_eq!(
+            size(&super::shrink(&encoded(3200, 1000)).expect("wide")),
+            (1600, 500)
+        );
+        assert_eq!(
+            size(&super::shrink(&encoded(1080, 2400)).expect("tall")),
+            (720, 1600)
+        );
+        assert_eq!(
+            size(&super::shrink(&encoded(400, 300)).expect("small")),
+            (400, 300)
+        );
+        assert!(super::shrink(b"not a picture").is_err());
+    }
 
     #[test]
     fn a_project_folder_is_a_full_path_on_this_computers_own_drives() {

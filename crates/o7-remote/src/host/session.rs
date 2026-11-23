@@ -15,10 +15,21 @@ pub(super) fn refusal(reason: Refusal) -> String {
     serde_json::to_string(&Refused { reason }).unwrap_or_default()
 }
 
-pub(super) fn bot_answer(rid: &str, text: &str, error: bool) -> String {
+pub(super) fn bot_answer(
+    rid: &str,
+    text: &str,
+    error: bool,
+    image: Option<&crate::backend::Picture>,
+) -> String {
     format!(
         "b{}",
-        serde_json::to_string(&BotAnswer { rid, text, error }).unwrap_or_default()
+        serde_json::to_string(&BotAnswer {
+            rid,
+            text,
+            error,
+            image
+        })
+        .unwrap_or_default()
     )
 }
 

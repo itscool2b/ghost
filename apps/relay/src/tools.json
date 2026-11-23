@@ -306,6 +306,29 @@
     }
   },
   {
+    "name": "look",
+    "full": true,
+    "since": 5,
+    "description": "A picture of what a chat's browser tab (with of device, its emulator) shows now: the work as the person would see it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "chat": {
+          "type": "string"
+        },
+        "of": {
+          "type": "string",
+          "enum": ["browser", "device"]
+        }
+      },
+      "required": ["chat"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "memory",
     "full": true,
     "description": "Read a project's memory, the notes each of its chats starts with. With markdown, replace all of it (4 KiB at most).",

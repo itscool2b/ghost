@@ -152,6 +152,20 @@ pub enum Outcome {
     },
 }
 
+/// What a bot may see a picture of (`look`): a chat's browser tab, or its emulator's screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PictureOf {
+    Browser,
+    Device,
+}
+
+/// A picture for a bot, as MCP sends one: its type and its bytes in base64.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Picture {
+    pub mime: String,
+    pub data: String,
+}
+
 /// A chat made for a task: in a Git worktree of its own where the folder is a repository.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaskChat {
@@ -260,6 +274,20 @@ pub trait Backend: Send + Sync + 'static {
                 path: None,
                 base: None,
             })
+        })
+    }
+    /// What `chat_id`'s browser tab or device shows now, for a full-control link (`look`). The
+    /// chat is one of this workspace's: the caller found it in [`Backend::overview`].
+    fn picture<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _of: PictureOf,
+    ) -> BoxFuture<'a, Result<Picture, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "Pictures are not available on this computer.",
+            ))
         })
     }
     /// What `chat_id` stands on (its agent is `agent_id`). A backend that cannot say says nothing.

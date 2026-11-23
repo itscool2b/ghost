@@ -1071,7 +1071,7 @@ export function BotDialog({
                 [
                   "full",
                   "Full control",
-                  "Also what you do in this window: make a project from a folder on this computer, choose a chat's model, thinking and access, start a stopped agent, hand a chat to another agent, rename and archive chats, read a turn's file changes, and read and write project memory. It has no tool for Settings, sign-in, installing software or deleting data.",
+                  "Also what you do in this window: make a project from a folder on this computer, choose a chat's model, thinking and access, start a stopped agent, hand a chat to another agent, rename and archive chats, read a turn's file changes, see a chat's browser or emulator as a picture, and read and write project memory. It has no tool for Settings, sign-in, installing software or deleting data.",
                 ],
               ] as const
             ).map(([value, title, words]) => (

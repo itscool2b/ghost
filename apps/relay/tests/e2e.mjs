@@ -395,6 +395,32 @@ async function browserFlow(engine, launcher, host, first, shots) {
 }
 
 /** A bot, speaking MCP over HTTP to the address the desktop printed. */
+/** A full-control link is listed look and gets the picture the computer took, as MCP shows one. */
+async function lookFlow(address) {
+  const url = address.replace(SITE, `http://127.0.0.1:${RELAY_PORT}`);
+  let id = 0;
+  const rpc = async (method, params) => {
+    id += 1;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+    });
+    assert.equal(response.status, 200, `${method}: ${response.status}`);
+    return (await response.json()).result;
+  };
+  const tools = (await rpc("tools/list", {})).tools.map((tool) => tool.name);
+  assert.ok(tools.includes("look"), tools.join(", "));
+  const looked = await rpc("tools/call", { name: "look", arguments: { chat: "c1" } });
+  assert.equal(looked.isError, false, JSON.stringify(looked));
+  assert.deepEqual(
+    looked.content.map((part) => part.type),
+    ["text", "image"],
+  );
+  assert.equal(looked.content[1].mimeType, "image/png");
+  assert.equal(Buffer.from(looked.content[1].data, "base64").subarray(1, 4).toString(), "PNG");
+}
+
 async function botFlow(address) {
   const url = address.replace(SITE, `http://127.0.0.1:${RELAY_PORT}`);
   let id = 0;
@@ -557,8 +583,9 @@ async function withHost(work) {
   try {
     const first = await host.line("PAIR");
     const bot = await host.line("BOT");
+    const fullBot = await host.line("FULLBOT");
     assert.match(first, /^http:\/\/localhost:1437\/remote#[\w-]{22}\.[\w-]{11}\.[\w-]{43}$/);
-    await work(host, first, bot);
+    await work(host, first, bot, fullBot);
   } finally {
     host.child.stdin.end();
     host.child.kill();
@@ -567,9 +594,11 @@ async function withHost(work) {
 }
 
 try {
-  await withHost(async (_host, _first, bot) => {
+  await withHost(async (_host, _first, bot, fullBot) => {
     await botFlow(bot);
     console.log("bot: MCP tools drove a chat through the relay");
+    await lookFlow(fullBot);
+    console.log("bot: a full-control link was shown a chat's page as a picture");
   });
   for (const engine of values.engines.split(",")) {
     await withHost(async (host, first) => {

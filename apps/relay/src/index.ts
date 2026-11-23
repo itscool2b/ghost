@@ -70,9 +70,10 @@ const INSTRUCTIONS: Record<number, string> = {
   2: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, so do not read a chat you just heard from, and do not ask more often than wait does. Agents edit files and run commands, so send only what the person asked for.",
   3: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
   4: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so hand over only what the person asked for.",
+  5: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
 };
 /** The newest set this relay knows. */
-const NEWEST_TOOLS = 4;
+const NEWEST_TOOLS = 5;
 interface ToolSet {
   readonly chat: Listed[];
   readonly full: Listed[];
@@ -323,6 +324,22 @@ type ClientAttachment = Extract<Attachment, { role: "client" }>;
 interface BotReply {
   readonly text: string;
   readonly error: boolean;
+  /** A picture that goes with the text (`look`). */
+  readonly image?: { readonly mime: "image/png" | "image/jpeg"; readonly data: string };
+}
+
+/** The largest picture an answer may carry, in base64: the desktop sends at most this. */
+const PICTURE_BYTES = 1536 * 1024;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** The picture the desktop sent with an answer, when it is one MCP can carry: a PNG or a JPEG. */
+function picture(value: unknown): BotReply["image"] {
+  if (value === null || typeof value !== "object") return undefined;
+  const { mime, data } = value as { mime?: unknown; data?: unknown };
+  if (mime !== "image/png" && mime !== "image/jpeg") return undefined;
+  if (typeof data !== "string" || data.length === 0 || data.length > PICTURE_BYTES)
+    return undefined;
+  return BASE64.test(data) ? { mime, data } : undefined;
 }
 
 interface RpcMessage {
@@ -574,11 +591,12 @@ export class Room extends DurableObject<Env> {
     }
     if (kind === "l") return this.#saveBots(body);
     if (kind === "b") {
-      const reply = body as { rid?: unknown; text?: unknown; error?: unknown };
+      const reply = body as { rid?: unknown; text?: unknown; error?: unknown; image?: unknown };
       if (typeof reply.rid !== "string") return;
       this.#calls.get(reply.rid)?.({
         text: typeof reply.text === "string" ? reply.text : "",
         error: reply.error === true,
+        image: picture(reply.image),
       });
       return;
     }
@@ -770,8 +788,15 @@ export class Room extends DurableObject<Env> {
         if (args === null || typeof args !== "object" || Array.isArray(args))
           return rpcError(id, -32602, "Tool arguments must be an object");
         const reply = await this.#call({ bot, token, tool: name, args }, cancelKey(bot, id));
+        // Only look shows a picture, and only a full-control link is listed look.
+        const shown = name === "look" ? reply.image : undefined;
         return rpcResult(id, {
-          content: [{ type: "text", text: reply.text }],
+          content: shown
+            ? [
+                { type: "text", text: reply.text },
+                { type: "image", data: shown.data, mimeType: shown.mime },
+              ]
+            : [{ type: "text", text: reply.text }],
           isError: reply.error,
         });
       }

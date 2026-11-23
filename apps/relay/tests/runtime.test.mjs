@@ -136,7 +136,7 @@ test("reports health and hides everything else", async () => {
     ok: true,
     protocol: 1,
     tools: 9,
-    full_tools: 13,
+    full_tools: 14,
     second_tools: 7,
     second_full_tools: 11,
     first_tools: 8,
@@ -724,10 +724,12 @@ test("serves a bot's MCP calls through the desktop", async () => {
 test("lists the current tools to a bot whose computer answers them", async () => {
   const hostKey = id(32);
   const hostId = idOf(hostKey);
-  const [chats, wide, older, odd, newer, newest, reader] = [0, 1, 2, 3, 4, 5, 6].map(() => ({
-    id: id(8),
-    token: id(32),
-  }));
+  const [chats, wide, older, odd, newer, newest, reader, four] = [0, 1, 2, 3, 4, 5, 6, 7].map(
+    () => ({
+      id: id(8),
+      token: id(32),
+    }),
+  );
   const desk = await host(hostId, hostKey);
   desk.send(
     `l${JSON.stringify([
@@ -738,7 +740,8 @@ test("lists the current tools to a bot whose computer answers them", async () =>
       { id: odd.id, hash: hash(odd.token), full: true, v: "2" },
       // The latest set, and a copy of the app newer than this relay: the latest it knows.
       { id: newer.id, hash: hash(newer.token), full: false, v: 3 },
-      { id: newest.id, hash: hash(newest.token), full: true, v: 4 },
+      { id: newest.id, hash: hash(newest.token), full: true, v: 6 },
+      { id: four.id, hash: hash(four.token), full: true, v: 4 },
       // A read-only link: shown what reads, even if it also claims full control.
       { id: reader.id, hash: hash(reader.token), full: true, read: true, v: 3 },
     ])}`,
@@ -788,15 +791,24 @@ test("lists the current tools to a bot whose computer answers them", async () =>
     latest.map((tool) => tool.name),
     ["inbox", ...few.map((tool) => tool.name)],
   );
-  // A copy that answers set 4 (and one newer than this relay) is also shown task, before send.
+  // A copy that answers set 4 is also shown task, before send; one that answers set 5 (and one
+  // newer than this relay) is shown look too, after changes, with full control.
   const latestAll = await tools(newest);
   const withTask = (names) => {
     const at = names.indexOf("send");
     return [...names.slice(0, at), "task", ...names.slice(at)];
   };
+  const withLook = (names) => {
+    const at = names.indexOf("changes") + 1;
+    return [...names.slice(0, at), "look", ...names.slice(at)];
+  };
+  assert.deepEqual(
+    (await tools(four)).map((tool) => tool.name),
+    withTask(["inbox", ...all.map((tool) => tool.name)]),
+  );
   assert.deepEqual(
     latestAll.map((tool) => tool.name),
-    withTask(["inbox", ...all.map((tool) => tool.name)]),
+    withLook(withTask(["inbox", ...all.map((tool) => tool.name)])),
   );
   assert.match(
     (await ask(newest, { method: "initialize", params: {} })).result.instructions,
@@ -835,7 +847,7 @@ test("lists the current tools to a bot whose computer answers them", async () =>
   assert.ok(size(few) < 3500, String(size(few)));
   assert.ok(size(all) < 5600, String(size(all)));
   assert.ok(size(latest) < 3900, String(size(latest)));
-  assert.ok(size(latestAll) < 7300, String(size(latestAll)));
+  assert.ok(size(latestAll) < 7500, String(size(latestAll)));
 
   const hello = await ask(chats, { method: "initialize", params: {} });
   assert.match(hello.result.instructions, /one send/);
@@ -875,6 +887,35 @@ test("lists the current tools to a bot whose computer answers them", async () =>
     content: [{ type: "text", text: "The turn finished." }],
     isError: false,
   });
+
+  // look's picture goes to the bot as MCP shows one; anything that is not a PNG or a JPEG in
+  // base64, or a picture with any other tool's answer, does not.
+  const looked = async (link, name, image) => {
+    const asking = ask(link, { method: "tools/call", params: { name, arguments: { chat: "c1" } } });
+    const asked = JSON.parse((await desk.message()).slice(1));
+    desk.send(
+      `b${JSON.stringify({ rid: asked.rid, text: "Chat c1's browser tab.", error: false, image })}`,
+    );
+    return (await asking).result.content;
+  };
+  const png = { mime: "image/png", data: "iVBORw0KGgo=" };
+  assert.deepEqual(await looked(newest, "look", png), [
+    { type: "text", text: "Chat c1's browser tab." },
+    { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
+  ]);
+  for (const bad of [
+    { mime: "text/html", data: "PGgxPg==" },
+    { mime: "image/png", data: "not base64!" },
+    { mime: "image/svg+xml", data: "PHN2Zz4=" },
+    "iVBORw0KGgo=",
+  ])
+    assert.equal((await looked(newest, "look", bad)).length, 1, JSON.stringify(bad));
+  assert.equal((await looked(newest, "read", png)).length, 1, "only look shows a picture");
+  const notListed = await ask(chats, {
+    method: "tools/call",
+    params: { name: "look", arguments: { chat: "c1" } },
+  });
+  assert.equal(notListed.error.code, -32602, "a link without full control has no look");
   desk.close();
 });
 

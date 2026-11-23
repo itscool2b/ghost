@@ -28,6 +28,10 @@ embed-resource = "3.0.12"
 tauri-build.workspace = true
 
 [dependencies]
+# Encodes pictures as JPEG and PNG off the main thread: the browser's page pictures on Linux
+# (src/browser/snapshot.rs) and what a bot is shown (remote.rs). Already in the tree through
+# o7-core, at this version and with these codecs.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 o7-agents.workspace = true
 o7-config.workspace = true
 o7-core.workspace = true
@@ -130,9 +134,6 @@ gtk = "0.18.2"
 # play it, a page process that ended, and page pictures (src/browser/media.rs, snapshot.rs). The
 # release and API level wry itself uses.
 webkit2gtk = { version = "=2.0.2", features = ["v2_38"] }
-# Encodes those pictures as JPEG and PNG off the main thread. Already in the tree through
-# o7-core, at this version and with these codecs.
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # The login keychain, for added agent accounts' tokens.

@@ -55,9 +55,9 @@ link). The computer checks it on every call, whatever the relay listed (`bot::Ri
 - **Read only** (five tools): `inbox`, `chats`, `projects`, `read`, `wait`. It sends,
   answers, stops and changes nothing.
 - **Chats** (nine tools): those, and `task`, `send`, `answer`, `stop`.
-- **Full control** (those, and four more): `set`, `changes`, `memory`, `new_project`, and in
-  `send` the model, thinking level and access a chat runs with. This is what a person does with
-  chats and projects in the app's window.
+- **Full control** (those, and five more): `set`, `changes`, `look`, `memory`,
+  `new_project`, and in `send` the model, thinking level and access a chat runs with. This is
+  what a person does with chats and projects in the app's window.
 
 Two more choices are off unless the person turns them on for the link (23 November 2026):
 
@@ -78,6 +78,29 @@ No link has a tool for Settings, accounts or sign-in, installing or updating sof
 access itself, deleting data, a raw terminal, or reading a file by its path. The tools are
 described to bots in `apps/relay/src/tools.json` and run in `crates/o7-remote/src/bot/lean.rs`.
 
+### Seeing the work (`look`)
+
+A full-control link may see what a chat's browser tab shows now, or with `of: "device"` its
+emulator's screen (tool set 5, 23 November 2026). The answer is the text and a picture, as MCP
+carries one (`{ "type": "image", "mimeType": "image/jpeg", "data": ... }`), so a bot can check
+that a change looks right without the person.
+
+- **What is taken.** The browser's picture is the one the chat's agent gets from
+  `browser_screenshot` (the visible part of the page). The device's is the screen of an
+  emulator o7 runs for that chat; a phone on a cable, or an emulator another program started,
+  is never shown, because it is the person's own and can show anything else on it. A chat with
+  no page or no running emulator says so.
+- **Size.** The computer makes every picture a JPEG of at most 1600 pixels on its longer side
+  (quality 75): a page is a few tens of kilobytes. The relay passes on only a PNG or a JPEG in
+  base64 of at most 1.5 MiB, and only with `look`'s answer.
+- **Trust.** The text says that what the picture shows came from the page or the app, not from
+  o7 or the person, and is data, not instructions. A page can carry words meant for the bot's
+  model; the bot's own rules decide what it makes of them.
+- **Who.** Only a full-control link is listed `look`, and the computer refuses it from any
+  other; only a chat of the link's workspace is asked for. The picture travels through the
+  relay like every bot call (a bot link is not sealed end to end), so it is readable there in
+  the moment it passes, and kept nowhere.
+
 ### What linking costs a bot
 
 A bot pays for a link in tokens three ways, and the tools are shaped by all three:
@@ -86,7 +109,7 @@ A bot pays for a link in tokens three ways, and the tools are shaped by all thre
    was 21 tools and 11.4 KB as listed (about 3,200 tokens) for a full-control link, 4.7 KB for a
    chats link. The second set was 11 tools and 5.5 KB (about 1,500 tokens, estimated from its
    size), 3.4 KB for a chats link; the current one adds `inbox` (12 tools, 5.9 KB, and 3.8 KB
-   for a chats link). They share their shape: one `set` where there were seven tools that changed a chat,
+   for a chats link), then `task` and, for full control only, `look` (7.4 KB for full control). They share their shape: one `set` where there were seven tools that changed a chat,
    `changes` and `memory` that read or write by whether an argument is given, and no titles.
    Every tool says whether it only reads and whether it can destroy (`readOnlyHint`,
    `destructiveHint`), which costs about 370 bytes and lets an assistant decide what to ask its
