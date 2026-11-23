@@ -46,6 +46,7 @@ pub mod instructions_commands;
 pub mod integrity;
 pub mod launch;
 pub mod launch_cache;
+pub mod login_start;
 pub mod memory_commands;
 pub mod mobile;
 pub mod native_shell;
@@ -129,6 +130,10 @@ pub fn run() {
                     state.quit.confirm_ahead();
                 }
                 app.exit(0);
+                return;
+            }
+            // Another start in the background (a sign-in while o7 runs) leaves the window be.
+            if login_start::in_background(&args) {
                 return;
             }
             window::focus_main(app);
@@ -279,6 +284,12 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     #[cfg(not(unix))]
     drop(quit);
 
+    // Opened at sign-in (login_start): the window stays hidden until the tray icon, the Dock or
+    // another launch opens it, and its page knows it is not seen.
+    if login_start::in_background(&args) && smoke.is_none() {
+        shown.claim();
+        window::set_webview_visible(app.handle(), false);
+    }
     let handle = app.handle().clone();
     tauri::async_runtime::spawn(window::show_after(
         window::READY_FALLBACK,

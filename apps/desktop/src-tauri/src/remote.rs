@@ -80,6 +80,7 @@ pub(crate) fn setup(app: &tauri::AppHandle, runtime: &tokio::runtime::Handle) {
         }),
         changed: Arc::new(move || {
             if let Some(service) = notify.try_state::<Service>() {
+                crate::native_shell::keep_reachable(&notify, service.wants_awake());
                 let _ = notify.emit(REMOTE_CHANGED, service.status());
             }
         }),
@@ -105,7 +106,20 @@ pub(crate) fn setup(app: &tauri::AppHandle, runtime: &tokio::runtime::Handle) {
     };
     match Service::start(config, runtime) {
         Ok(service) => {
+            crate::native_shell::keep_reachable(app, service.wants_awake());
             app.manage(service);
+            // A link that expires unused changes nothing else, so the hold is looked at again
+            // now and then.
+            let app = app.clone();
+            runtime.spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+                    let Some(service) = app.try_state::<Service>() else {
+                        return;
+                    };
+                    crate::native_shell::keep_reachable(&app, service.wants_awake());
+                }
+            });
         }
         // Settings shows why; nothing else depends on remote access.
         Err(error) => {
@@ -175,6 +189,17 @@ pub fn remote_status(app: tauri::AppHandle) -> Result<RemoteStatus, AppError> {
 pub fn remote_set_enabled(app: tauri::AppHandle, enabled: bool) -> Result<RemoteStatus, AppError> {
     let service = service(&app)?;
     service.set_enabled(enabled).map_err(refused)?;
+    Ok(service.status())
+}
+
+/// Keeps the computer awake for remote access, or stops: it does not sleep on its own while
+/// remote access is on and a paired device or a bot link can reach it. The screen still turns
+/// off.
+#[tauri::command]
+#[specta::specta]
+pub fn remote_set_keep_awake(app: tauri::AppHandle, on: bool) -> Result<RemoteStatus, AppError> {
+    let service = service(&app)?;
+    service.set_keep_awake(on).map_err(refused)?;
     Ok(service.status())
 }
 

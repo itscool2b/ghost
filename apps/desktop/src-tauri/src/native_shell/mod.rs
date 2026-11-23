@@ -47,6 +47,8 @@ struct Switches {
     keep_awake: AtomicBool,
     keep_in_tray: AtomicBool,
     working: AtomicBool,
+    /// Remote access asks to keep the computer awake (Settings > Remote access), work or not.
+    reachable: AtomicBool,
 }
 
 impl Default for Switches {
@@ -58,6 +60,7 @@ impl Default for Switches {
             keep_awake: AtomicBool::new(general.keep_awake),
             keep_in_tray: AtomicBool::new(general.close_to_tray),
             working: AtomicBool::new(false),
+            reachable: AtomicBool::new(false),
         }
     }
 }
@@ -91,12 +94,20 @@ impl NativeShell {
         self.sync_power();
     }
 
+    /// Holds off idle sleep for remote access while `on`, whether or not a chat works.
+    fn set_reachable(&self, on: bool) {
+        self.switches.reachable.store(on, Ordering::Release);
+        self.sync_power();
+    }
+
     fn sync_power(&self) {
         #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
         if let Some(power) = lock(&self.power).as_ref() {
+            let switches = &self.switches;
             power.set(
-                self.switches.working.load(Ordering::Acquire)
-                    && self.switches.keep_awake.load(Ordering::Acquire),
+                (switches.working.load(Ordering::Acquire)
+                    && switches.keep_awake.load(Ordering::Acquire))
+                    || switches.reachable.load(Ordering::Acquire),
             );
         }
     }
@@ -262,6 +273,14 @@ pub fn setup(app: &tauri::AppHandle) {
 pub fn apply_preferences(app: &tauri::AppHandle, general: &GeneralPreferences) {
     if let Some(shell) = app.try_state::<Arc<NativeShell>>() {
         shell.apply_preferences(general);
+    }
+}
+
+/// Keeps the computer awake for remote access while `on` (`o7_remote::Service::wants_awake`),
+/// or stops. Without a shell (smoke launches) there is nothing to hold.
+pub fn keep_reachable(app: &tauri::AppHandle, on: bool) {
+    if let Some(shell) = app.try_state::<Arc<NativeShell>>() {
+        shell.set_reachable(on);
     }
 }
 
@@ -696,6 +715,23 @@ mod switch_tests {
         shell.apply_preferences(&GeneralPreferences::default());
         assert_eq!(next(), "hold", "turning it on during work holds it now");
         shell.set_working(false);
+        assert_eq!(next(), "release");
+
+        // Remote access keeps it awake with no work at all, and even with the work switch off;
+        // the work ending leaves that hold alone.
+        shell.apply_preferences(&GeneralPreferences {
+            keep_awake: false,
+            ..GeneralPreferences::default()
+        });
+        shell.set_reachable(true);
+        assert_eq!(next(), "hold", "remote access holds it");
+        shell.set_working(true);
+        shell.set_working(false);
+        assert!(
+            events.recv_timeout(Duration::from_millis(200)).is_err(),
+            "work ending does not release what remote access holds"
+        );
+        shell.set_reachable(false);
         assert_eq!(next(), "release");
     }
 }

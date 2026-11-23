@@ -385,6 +385,9 @@ pub struct LaunchOptions {
     /// one (a second dev instance, a portable install), or this is a development build, whose
     /// default folder is its own.
     pub own_data_dir: bool,
+    /// `O7_DATA_DIR` names a data folder: a start at sign-in, which cannot pass it, would open
+    /// the usual one instead (`login_start`).
+    pub names_data_dir: bool,
     /// `None` when `O7_STRESS` is unset, blank (like `O7_DATA_DIR`, an exported but
     /// empty variable must not change behaviour), or an explicit off (`0`, `false`, `no`, `off`).
     pub stress: Option<Result<StressConfig, StressConfigError>>,
@@ -438,6 +441,7 @@ impl LaunchOptions {
             smoke,
             no_glass: env_flag(text(NO_GLASS_ENV).as_deref()),
             own_data_dir: development || names_data_dir,
+            names_data_dir,
             stress: text(STRESS_ENV)
                 .filter(|value| !value.trim().is_empty() && !is_falsy(value.trim()))
                 .map(|value| parse_stress_config(&value)),

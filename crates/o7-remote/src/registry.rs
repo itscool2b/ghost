@@ -130,6 +130,10 @@ struct Stored {
     /// Tasks bots started (`task`), newest last: what their review needs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tasks: Vec<Task>,
+    /// Hold off the computer's idle sleep while remote access is on and something can reach it
+    /// (Settings > Remote access). Off unless the person turns it on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    keep_awake: bool,
 }
 
 /// A task a bot link started: its chat, where its work is, and its review.
@@ -212,6 +216,7 @@ impl Registry {
                     devices: Vec::new(),
                     bots: Vec::new(),
                     tasks: Vec::new(),
+                    keep_awake: false,
                 }
             }
             Err(error) => return Err(RegistryError::Read(error.to_string())),
@@ -324,6 +329,28 @@ impl Registry {
             self.save()?;
         }
         Ok(())
+    }
+
+    /// Whether the person asked to keep the computer awake for remote access.
+    pub fn keep_awake(&self) -> bool {
+        self.stored.keep_awake
+    }
+
+    pub fn set_keep_awake(&mut self, on: bool) -> Result<(), RegistryError> {
+        if self.stored.keep_awake != on {
+            self.stored.keep_awake = on;
+            self.save()?;
+        }
+        Ok(())
+    }
+
+    /// Whether to hold off idle sleep now: the person asked for it, remote access is on, and a
+    /// paired device or a link that has not expired can reach the open workspace. With nothing
+    /// that could reach it, staying awake would only use power.
+    pub fn wants_awake(&self, now: i64) -> bool {
+        self.stored.enabled
+            && self.stored.keep_awake
+            && (!self.devices().is_empty() || self.bots().iter().any(|bot| !expired(bot, now)))
     }
 
     /// A new pairing link. It replaces the one before it: only the newest link opens.
@@ -767,6 +794,46 @@ fn name_of(name: &str, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Kept awake only when asked, with remote access on, and while a link that has not expired
+    /// (or a paired device) can reach the open workspace. The choice is kept across restarts, and
+    /// a file from before it reads as off.
+    #[test]
+    fn the_computer_is_kept_awake_only_while_something_can_reach_it() {
+        let folder = tempfile::tempdir().expect("folder");
+        let path = folder.path().join("remote.json");
+        let mut registry = Registry::load(&path).expect("load");
+        registry.set_scope("local");
+        registry.set_enabled(true).expect("on");
+        assert!(!registry.keep_awake(), "off unless asked");
+        let bot = registry
+            .add_bot("Grok", crate::bot::Rights::CHATS, 1)
+            .expect("bot");
+        assert!(!registry.wants_awake(2), "not asked");
+        let saved = std::fs::read_to_string(&path).expect("saved");
+        assert!(!saved.contains("keep_awake"), "nothing written while off");
+        registry.set_keep_awake(true).expect("keep awake");
+        assert!(registry.wants_awake(2));
+        assert!(
+            !registry.wants_awake(1 + BOT_IDLE_EXPIRY_MS + 1),
+            "the only link expired"
+        );
+        let mut again = Registry::load(&path).expect("load");
+        again.set_scope("local");
+        assert!(again.keep_awake() && again.wants_awake(2), "kept");
+        again.set_scope("other");
+        assert!(
+            !again.wants_awake(2),
+            "another workspace's link reaches nothing here"
+        );
+        registry.set_enabled(false).expect("off");
+        assert!(!registry.wants_awake(2), "remote access is off");
+        registry.set_enabled(true).expect("on");
+        assert!(registry.remove_bot(&bot.id).expect("remove"));
+        assert!(!registry.wants_awake(2), "nothing can reach it");
+        registry.set_keep_awake(false).expect("off");
+        assert!(!Registry::load(&path).expect("load").keep_awake());
+    }
 
     /// What a link may do is chosen when it is made, and the parts that only mean something
     /// together are made to fit: a read-only link approves nothing and has no full control.

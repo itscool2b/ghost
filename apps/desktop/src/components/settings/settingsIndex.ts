@@ -172,6 +172,16 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
     title: "Remote access",
     words: "phone mobile browser relay connect away sessions",
   },
+  {
+    page: "remote",
+    title: "Open at sign-in",
+    words: "start login launch startup boot restart background tray remote",
+  },
+  {
+    page: "remote",
+    title: "Keep this computer awake",
+    words: "sleep power idle awake reachable remote",
+  },
   { page: "remote", title: "Pair a device", words: "phone qr code link scan remote" },
   { page: "remote", title: "Devices", words: "paired phone browser remove unpair remote" },
   { page: "remote", title: "Link a bot", words: "grok bot mcp connector assistant remote" },

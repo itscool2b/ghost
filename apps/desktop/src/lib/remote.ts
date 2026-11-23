@@ -1,5 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
-import { commands, type RemoteBotLink, type RemotePairing, type RemoteStatus } from "../bindings";
+import {
+  commands,
+  type LoginStart,
+  type RemoteBotLink,
+  type RemotePairing,
+  type RemoteStatus,
+} from "../bindings";
 import { inTauri, settle } from "./ipc";
 
 /**
@@ -9,6 +15,11 @@ import { inTauri, settle } from "./ipc";
 export interface RemoteApi {
   readonly status: () => Promise<RemoteStatus>;
   readonly setEnabled: (enabled: boolean) => Promise<RemoteStatus>;
+  /** The computer does not sleep on its own while something can reach it. */
+  readonly setKeepAwake: (on: boolean) => Promise<RemoteStatus>;
+  /** Whether this copy of o7 opens, in the background, when the person signs in. */
+  readonly loginStart: () => Promise<LoginStart>;
+  readonly setLoginStart: (on: boolean) => Promise<LoginStart>;
   /** Opens a pairing link, good once and for ten minutes. It replaces the one before it. */
   readonly pair: () => Promise<RemotePairing>;
   readonly cancelPairing: () => Promise<RemoteStatus>;
@@ -62,6 +73,9 @@ export interface BotCallbackInput {
 export const remoteApi: RemoteApi = {
   status: () => settle(commands.remoteStatus()),
   setEnabled: (enabled) => settle(commands.remoteSetEnabled(enabled)),
+  setKeepAwake: (on) => settle(commands.remoteSetKeepAwake(on)),
+  loginStart: () => commands.loginStartStatus(),
+  setLoginStart: (on) => settle(commands.loginStartSet(on)),
   pair: () => settle(commands.remotePair()),
   cancelPairing: () => settle(commands.remoteCancelPairing()),
   removeDevice: (id) => settle(commands.remoteRemoveDevice(id)),

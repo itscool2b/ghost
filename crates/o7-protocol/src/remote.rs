@@ -17,6 +17,9 @@ pub struct RemoteStatus {
     pub bots: Vec<RemoteBot>,
     /// A pairing link is open: its address is not repeated here, only when it stops opening.
     pub pairing_expires_at: Option<Millis>,
+    /// The computer does not sleep on its own while remote access is on and a paired device or a
+    /// bot link can reach it. Off unless the person turns it on.
+    pub keep_awake: bool,
 }
 
 /// This computer's connection to the relay.

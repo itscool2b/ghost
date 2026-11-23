@@ -1,4 +1,4 @@
-import type { RemoteStatus } from "../bindings";
+import type { LoginStart, RemoteStatus } from "../bindings";
 import type { RemoteApi } from "../lib/remote";
 
 /**
@@ -44,7 +44,9 @@ export function remoteFixture(): RemoteApi {
         ]
       : [],
     pairing_expires_at: null,
+    keep_awake: false,
   };
+  let loginStart: LoginStart = { on: false, unavailable: null };
   const publish = (next: RemoteStatus): RemoteStatus => {
     status = next;
     for (const listener of listeners) listener(structuredClone(status));
@@ -87,6 +89,16 @@ export function remoteFixture(): RemoteApi {
         link: enabled ? { state: "online" } : { state: "off" },
         pairing_expires_at: enabled ? status.pairing_expires_at : null,
       });
+    },
+    setKeepAwake: async (on) => {
+      calls.push(`keep-awake:${on}`);
+      return publish({ ...status, keep_awake: on });
+    },
+    loginStart: async () => ({ ...loginStart }),
+    setLoginStart: async (on) => {
+      calls.push(`login-start:${on}`);
+      loginStart = { ...loginStart, on };
+      return { ...loginStart };
     },
     pair: async () => {
       calls.push("pair");

@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-23
 
+- o7 can open when you sign in to your computer, in the background, and keep the computer awake while your phone or a bot can reach it. Both are off until you turn them on in Settings > Remote access. When the computer is away, your bot is told so plainly, with when it was last connected. ([#191](https://github.com/itscool2b/o7/pull/191))
 - Your assistant can hand o7 a whole task in one go. It gives the goal, and o7 starts an agent on its own branch, tells it to plan, build, test and commit, then has a second agent review the work. Your assistant hears once, when it is all done. What it reads about a chat now also says the branch, what is not committed yet, and how much of the agent's usage is left. ([#190](https://github.com/itscool2b/o7/pull/190))
 - A linked assistant that may not answer agents can no longer switch a chat to allow edits on its own. ([#188](https://github.com/itscool2b/o7/pull/188))
 - You choose exactly what a linked assistant may do. A new bot link can be read only, chats, or full control, and two things are now off unless you turn them on: answering what an agent asks, and switching a chat to full access. Without the first, a bot can only decline, and you answer in o7 or on your phone. Each link has Renew for a new address, and a link unused for 90 days stops working until renewed. ([#187](https://github.com/itscool2b/o7/pull/187))

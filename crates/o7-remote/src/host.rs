@@ -212,6 +212,7 @@ impl Service {
                 })
                 .collect(),
             pairing_expires_at: registry.pairing(now()).map(|pairing| pairing.expires_at),
+            keep_awake: registry.keep_awake(),
         }
     }
 
@@ -227,6 +228,19 @@ impl Service {
         }
         self.refresh();
         Ok(())
+    }
+
+    /// Keeps the computer awake for remote access, or stops. The app holds off idle sleep while
+    /// [`Service::wants_awake`] says so.
+    pub fn set_keep_awake(&self, on: bool) -> Result<(), RegistryError> {
+        lock(&self.shared.registry).set_keep_awake(on)?;
+        (self.shared.config.changed)();
+        Ok(())
+    }
+
+    /// Whether to hold off idle sleep now ([`crate::registry::Registry::wants_awake`]).
+    pub fn wants_awake(&self) -> bool {
+        lock(&self.shared.registry).wants_awake(now())
     }
 
     /// Opens a new pairing link, closing the one before it.

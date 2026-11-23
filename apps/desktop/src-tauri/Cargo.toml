@@ -94,6 +94,9 @@ windows-version = "0.1.7"
 # back and forward state, crashes, saved sign-ins): the releases wry itself uses.
 webview2-com = "=0.39.1"
 windows = { version = "=0.62.2", features = ["Win32_Foundation"] }
+# Opening o7 at sign-in (login_start.rs): the current user's Run key. Already in the tree through
+# hyper-util, at this version.
+windows-registry = "=0.6.1"
 # The data cleanup mode (uninstall.rs): its dialogs, attaching to a terminal, waiting for the app
 # to exit; the window caption's colours (window.rs); and how much room a disk has, before the
 # larger dictation model is fetched unasked (dictation/larger.rs). Raw bindings, already in the

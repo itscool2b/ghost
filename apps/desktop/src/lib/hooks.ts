@@ -15,6 +15,19 @@ import {
   StickToBottom,
 } from "./stick";
 
+const followVisibility = (changed: () => void): (() => void) => {
+  if (typeof document === "undefined") return () => {};
+  document.addEventListener("visibilitychange", changed);
+  return () => document.removeEventListener("visibilitychange", changed);
+};
+const pageShown = (): boolean =>
+  typeof document === "undefined" || document.visibilityState !== "hidden";
+
+/** Whether the window is on screen. A start at sign-in keeps it hidden until it is opened. */
+export function usePageVisible(): boolean {
+  return useSyncExternalStore(followVisibility, pageShown, () => true);
+}
+
 /** The store's current snapshot; re-renders on every frame the stream applies. */
 export function useStream(store: StreamStore): StreamSnapshot {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);

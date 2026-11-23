@@ -689,7 +689,8 @@ test("serves a bot's MCP calls through the desktop", async () => {
   assert.equal(preflight.status, 204);
   assert.match(preflight.headers.get("access-control-allow-headers"), /Mcp-Protocol-Version/);
 
-  // A call waiting when the desktop leaves, and any call after, says the computer is away.
+  // A call waiting when the desktop leaves cannot know whether it was done; any call after did
+  // nothing, and says when the computer was last connected.
   const waiting = mcp(hostId, reference, {
     jsonrpc: "2.0",
     id: 10,
@@ -700,7 +701,7 @@ test("serves a bot's MCP calls through the desktop", async () => {
   desk.close();
   const dropped = await (await waiting).json();
   assert.equal(dropped.result.isError, true);
-  assert.match(dropped.result.content[0].text, /not reachable/);
+  assert.match(dropped.result.content[0].text, /^The computer went away during this call/);
   const away = await (
     await mcp(hostId, reference, {
       jsonrpc: "2.0",
@@ -709,7 +710,10 @@ test("serves a bot's MCP calls through the desktop", async () => {
       params: { name: "list_chats" },
     })
   ).json();
-  assert.match(away.result.content[0].text, /not reachable/);
+  assert.match(
+    away.result.content[0].text,
+    /^Nothing was done: the computer is not reachable\. .* It was last connected less than a minute ago\. Tell your person/,
+  );
   // Listing tools still works, so a bot can be connected while the computer is off.
   assert.equal(
     (await mcp(hostId, reference, { jsonrpc: "2.0", id: 12, method: "tools/list" })).status,

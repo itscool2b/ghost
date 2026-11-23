@@ -295,6 +295,27 @@ export async function checkRemote(browser, url, out, engine) {
       .click();
     await page.getByRole("heading", { level: 1, name: "Remote access" }).waitFor();
 
+    // Staying reachable: both off until chosen. Opening at sign-in is the system's own record,
+    // keeping awake the service's; each switch says what it now is.
+    const loginStart = page.getByRole("switch", { name: "Open at sign-in" });
+    const awake = page.getByRole("switch", { name: "Keep this computer awake" });
+    assert.equal(await loginStart.isChecked(), false);
+    assert.equal(await awake.isChecked(), false);
+    const turnedOn = (id) =>
+      page.waitForFunction(
+        (testId) => document.querySelector(`[data-testid="${testId}"]`)?.checked,
+        id,
+      );
+    await loginStart.click();
+    await turnedOn("remote-login-start");
+    await awake.click();
+    await turnedOn("remote-keep-awake");
+    assert.deepEqual(await calls(), ["login-start:true", "keep-awake:true"]);
+    await page.getByText("The screen still turns off.", { exact: false }).waitFor();
+    await awake.click();
+    await page.waitForFunction(() => window.remoteFixture.calls().at(-1) === "keep-awake:false");
+    assert.equal(await awake.isChecked(), false);
+
     // From off, creating a bot link is what turns remote access on.
     await page.goto(`${url}/?preview=settings&page=remote`);
     await page.getByRole("button", { name: "Link a bot", exact: true }).click();

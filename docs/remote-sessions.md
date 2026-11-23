@@ -304,8 +304,8 @@ it.
 
 ### What the relay stores and limits
 
-Per computer: a mark that it has an owner, the hashes of its bot tokens, and which of those
-links have full control. No D1, R2, KV or secrets. A room no computer has connected to for
+Per computer: a mark that it has an owner, when it was last connected, the hashes of its bot
+tokens, and what each link may do (read only, full control) and which tool set it was made for. No D1, R2, KV or secrets. A room no computer has connected to for
 thirty days forgets all of it; the computer sends its bot links again whenever it connects.
 
 - A computer's id is the first sixteen bytes of a SHA-256 over a fixed label and its key
@@ -368,6 +368,32 @@ System from Settings > Appearance), the page checks the id against the themes it
 it with the paired device, so the next visit is themed before the computer answers. A copy of
 the app that sends no `look` gets the default theme. The theme's name is all it says about the
 computer, and it reaches only a browser that already proved a key.
+
+### Staying reachable while nobody is at the computer
+
+A phone or a bot reaches this computer only while o7 runs there with remote access on and the
+computer is awake. Two switches in Settings > Remote access help, both off until the person turns
+them on (23 November 2026):
+
+- **Open at sign-in** starts o7 when the person signs in, in the background: the window stays
+  hidden, and no chat's agent starts, until the tray icon, the Dock or another launch opens it.
+  The system's own record is the only one, so the switch shows what is there: the value under
+  Windows' `Run` key (and its switch in Startup apps), a launch agent in
+  `~/Library/LaunchAgents` on macOS, an autostart entry in `~/.config/autostart` on Linux (the
+  AppImage's own path for an AppImage). An entry that opens another copy of o7 is not this
+  one's. A development build keeps an entry of its own, and a copy started with `O7_DATA_DIR`
+  cannot have one, because the start would open the usual data folder (`login_start.rs`).
+- **Keep this computer awake** holds off idle sleep while remote access is on and a paired
+  device, or a bot link that has not expired, can reach the open workspace. The screen still
+  turns off, and closing a laptop or choosing Sleep still sleeps it. It is the hold o7 already
+  takes while an agent works (`native_shell/power.rs`); the choice is kept in `remote.json`
+  (`keep_awake`).
+
+When the computer is away anyway, a bot's call says so plainly and that nothing was done, with
+when the computer was last connected ("It was last connected 3 hours ago"); the relay keeps that
+time (`seen`) and forgets it with the rest of the room. A call that was with the computer when it
+went says instead that it is not known whether it was done, and to read the chat once the
+computer is back.
 
 ## Operations a browser can ask for
 
@@ -435,8 +461,7 @@ Security, from the review of 10 November 2026 (each is a known limit, not a surp
 - **A code both sides confirm.** Pairing needs a tap on the phone now, but the computer does not
   confirm which browser it paired. Whoever opens the link first within its ten minutes is the
   device; Settings shows the new device at once and Remove ends it.
-- **A bot link that is sealed end to end**, and one that expires when idle: the first would need
-  the bot to run a program of ours.
+- **A bot link that is sealed end to end**: it would need the bot to run a program of ours.
 - **The relay on an origin of its own.** It answers under `o7.codes`, the page's origin.
 - **The address before the move.** Until 19 November 2026 the site was auracode.si. A copy of the
   app from before the move connects to the relay there and makes pairing links to its `/remote`,
