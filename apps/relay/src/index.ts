@@ -177,8 +177,25 @@ const HEARD_NOTE_MS = 5_000;
 const BOT_CALL_MS = 250_000;
 
 const MCP_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const OFFLINE =
-  "The computer is not reachable: o7 is closed there, remote access is off, or it is offline. Ask its owner to open o7 and try again.";
+/** How long ago `ms` was, in words a bot can pass on. */
+function ago(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "less than a minute ago";
+  if (minutes < 60) return minutes === 1 ? "a minute ago" : `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return hours === 1 ? "an hour ago" : `${hours} hours ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+/** A call that found no computer to go to: nothing happened. `seen` is when it was last there. */
+function offline(seen: number | undefined): string {
+  const when = seen === undefined ? "" : ` It was last connected ${ago(Date.now() - seen)}.`;
+  return `Nothing was done: the computer is not reachable. It is asleep or offline, o7 is closed there, or remote access is off.${when} Tell your person; it answers again once o7 runs there with remote access on.`;
+}
+
+/** The computer went away while a call was with it, so whether it happened is not known. */
+const WENT_AWAY =
+  "The computer went away during this call, so it is not known whether it was done. Once it is back, read the chat before trying again.";
 
 const HEADERS = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const CORS = {
@@ -390,10 +407,11 @@ export class Room extends DurableObject<Env> {
     // A socket from before this was counted has no time at all: it is left alone.
     if (noted === undefined && pinged === undefined) return host;
     const silent = Number(this.env.HOST_SILENT_MS) || HOST_SILENT_MS;
-    if (Date.now() - Math.max(noted ?? 0, pinged ?? 0, this.#heard) <= silent) return host;
+    const heard = Math.max(noted ?? 0, pinged ?? 0, this.#heard);
+    if (Date.now() - heard <= silent) return host;
     host.serializeAttachment({ role: "host", silent: true } satisfies Attachment);
     end(host, 4004, "silent");
-    this.#hostGone(host, asking);
+    this.#hostGone(host, asking, heard);
     return null;
   }
 
@@ -638,8 +656,8 @@ export class Room extends DurableObject<Env> {
     this.#hostGone(socket);
   }
 
-  /** The desktop's socket `socket` closed or went silent. */
-  #hostGone(socket: WebSocket, except?: WebSocket) {
+  /** The desktop's socket `socket` closed or went silent; it was last heard `heard`. */
+  #hostGone(socket: WebSocket, except?: WebSocket, heard = Date.now()) {
     // A replaced host socket closes after its successor opened: the desktop is still here.
     const successor = this.ctx
       .getWebSockets("host")
@@ -647,8 +665,10 @@ export class Room extends DurableObject<Env> {
     if (successor) return;
     // The desktop is gone: if it stays gone, what the room stored for it goes too.
     void this.ctx.storage.setAlarm(Date.now() + IDLE_ROOM_MS);
+    // When it was last here, for a bot told it is away. Gone with the room.
+    void this.ctx.storage.put("seen", heard);
     for (const client of this.#clients()) if (client !== except) client.send("h0");
-    for (const finish of [...this.#calls.values()]) finish({ text: OFFLINE, error: true });
+    for (const finish of [...this.#calls.values()]) finish({ text: WENT_AWAY, error: true });
   }
 
   async #mcp(request: Request, reference: string): Promise<Response> {
@@ -766,7 +786,10 @@ export class Room extends DurableObject<Env> {
     cancel: string,
   ): Promise<BotReply> {
     const host = this.#host();
-    if (!host) return Promise.resolve({ text: OFFLINE, error: true });
+    if (!host)
+      return this.ctx.storage
+        .get<number>("seen")
+        .then((seen) => ({ text: offline(seen), error: true }));
     if (this.#calls.size >= MAX_BOT_CALLS)
       return Promise.resolve({
         text: "Too many calls are waiting on this computer. Wait for one to finish.",
@@ -789,7 +812,7 @@ export class Room extends DurableObject<Env> {
       try {
         host.send(`b${JSON.stringify({ rid, ...request })}`);
       } catch {
-        finish({ text: OFFLINE, error: true });
+        finish({ text: offline(Date.now()), error: true });
       }
     });
   }

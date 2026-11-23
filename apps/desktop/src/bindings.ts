@@ -431,6 +431,15 @@ export const commands = {
 	 *  links stay saved, and work again when it is back on.
 	 */
 	remoteSetEnabled: (enabled: boolean) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_set_enabled", { enabled })),
+	/**
+	 *  Keeps the computer awake for remote access, or stops: it does not sleep on its own while
+	 *  remote access is on and a paired device or a bot link can reach it. The screen still turns
+	 *  off.
+	 */
+	remoteSetKeepAwake: (on: boolean) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_set_keep_awake", { on })),
+	loginStartStatus: () => __TAURI_INVOKE<LoginStart>("login_start_status"),
+	/**  Opens this copy of o7 at sign-in, in the background, or stops. */
+	loginStartSet: (on: boolean) => typedError<LoginStart, AppError>(__TAURI_INVOKE("login_start_set", { on })),
 	/**  Opens a pairing link, good once and for ten minutes. It replaces the link before it. */
 	remotePair: () => typedError<RemotePairing, AppError>(__TAURI_INVOKE("remote_pair")),
 	remoteCancelPairing: () => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_cancel_pairing")),
@@ -2885,6 +2894,13 @@ export type LoadedPlugin = {
 	version: string | null,
 };
 
+/**  Whether this copy of o7 opens when the person signs in, for Settings. */
+export type LoginStart = {
+	on: boolean,
+	/**  Why it cannot be switched in this copy, when it cannot. */
+	unavailable: string | null,
+};
+
 export type ManagedWorktree = {
 	id: string,
 	chat_id: string,
@@ -3653,6 +3669,11 @@ export type RemoteStatus = {
 	bots: RemoteBot[],
 	/**  A pairing link is open: its address is not repeated here, only when it stops opening. */
 	pairing_expires_at: number | null,
+	/**
+	 *  The computer does not sleep on its own while remote access is on and a paired device or a
+	 *  bot link can reach it. Off unless the person turns it on.
+	 */
+	keep_awake: boolean,
 };
 
 export type RemoteTold = {

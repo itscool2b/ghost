@@ -1,8 +1,9 @@
 import { BOTS, type BotId, BotMark, botNamed } from "@o7/ui/graphite";
-import { Bot, Monitor, MonitorSmartphone, Smartphone } from "lucide-react";
+import { Bot, Coffee, LogIn, Monitor, MonitorSmartphone, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
 import type {
+  LoginStart,
   RemoteBot,
   RemoteBotLink,
   RemoteDevice,
@@ -45,9 +46,17 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   /** A link's new address, shown once after renewing it. */
   const [renewed, setRenewed] = useState<RemoteBotLink | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /** Whether o7 opens at sign-in: the system's own record, read when the page opens. */
+  const [loginStart, setLoginStart] = useState<LoginStart | null>(null);
 
   useEffect(() => {
     let live = true;
+    api.loginStart().then(
+      (value) => {
+        if (live) setLoginStart(value);
+      },
+      () => {},
+    );
     api.status().then(
       (value) => {
         if (live) setStatus(value);
@@ -135,6 +144,38 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
             disabled={status === null}
             testId="remote-enabled"
             onChange={(value) => void run(() => api.setEnabled(value))}
+          />
+        </Row>
+        <Row
+          title="Open at sign-in"
+          mark={<LogIn size={18} />}
+          detail={
+            loginStart?.unavailable ??
+            "In the background, so your phone and bots reach this computer after a restart."
+          }
+        >
+          <Switch
+            label="Open at sign-in"
+            checked={loginStart?.on ?? false}
+            disabled={loginStart === null || loginStart.unavailable !== null}
+            testId="remote-login-start"
+            onChange={(value) => {
+              setError(null);
+              api.setLoginStart(value).then(setLoginStart, (failure) => setError(message(failure)));
+            }}
+          />
+        </Row>
+        <Row
+          title="Keep this computer awake"
+          mark={<Coffee size={18} />}
+          detail="It does not sleep on its own while a phone or bot can reach it. The screen still turns off."
+        >
+          <Switch
+            label="Keep this computer awake"
+            checked={status?.keep_awake ?? false}
+            disabled={status === null}
+            testId="remote-keep-awake"
+            onChange={(value) => void run(() => api.setKeepAwake(value))}
           />
         </Row>
       </div>

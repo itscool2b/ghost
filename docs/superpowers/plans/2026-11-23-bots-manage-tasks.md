@@ -11,7 +11,8 @@ The owner's plan of 23 November 2026, from two rounds of research and their own 
 | 1: the loop | First part merged with #182: safer waits (45 by default, 200 at most), the `inbox` tool, and results that say what ran and what still fails, as a third tool set. The call-back followed in #183: a link names its assistant's webhook, and o7 tells it when a chat it acted on finishes, fails or asks. A reading's branch, uncommitted files and usage followed in #190; a pull request link is left out (o7 keeps none for a branch). |
 | 2: managing a whole task | Merged with #190: `task` makes a chat on its own branch, briefs it, and when the work is done has a second agent review it; the bot is told once. The idle stop needs no change: an agent stopped between turns resumes on the next message. |
 | 3: approvals and scope | Merged with #187: read-only links, approving an agent's permission requests and turning on full access as separate rights off by default, renewing a link's address, and expiry after 90 days unused. Approval from o7's own notification is not separate: the person answers in the chat or on the phone page, which already works. |
-| 4 to 8 | Not started. |
+| 5: stay reachable | Merged with #191: opening at sign-in in the background (Windows' Run key, a macOS launch agent, a Linux autostart entry), keeping the computer awake while a phone or a live bot link can reach it, and a bot told plainly that the computer is away, since when, and that nothing was done. The macOS launch agent is untested: no Mac here. |
+| 4, 6 to 8 | Not started. |
 
 Still true of every phase: no real Grok Bot or Muse has been run against the link.
 

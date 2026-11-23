@@ -36,7 +36,7 @@ import { chatInterfaces, terminalSupported } from "../../lib/chatInterface";
 import { composerDraft } from "../../lib/composerDraft";
 import { errorMessage } from "../../lib/errors";
 import { sameFolder } from "../../lib/gitWorkspace";
-import { useMediaQuery } from "../../lib/hooks";
+import { useMediaQuery, usePageVisible } from "../../lib/hooks";
 import { inTauri } from "../../lib/ipc";
 import { devicePanels } from "../../lib/mobile";
 import { editorName } from "../../lib/projectTools";
@@ -626,9 +626,12 @@ export function ChatView({
   // A chat opened with its agent stopped (after a restart, after the idle stop) starts it once the
   // chat has stayed in front for a moment, so Plan, the model and access can be chosen before the
   // first message. Once per opening: an agent the person stops here stays stopped, and clicking
-  // through chats starts none of them. A chat that must first be asked how to continue waits.
+  // through chats starts none of them. A chat that must first be asked how to continue waits, and
+  // so does every chat while the window is hidden (opened at sign-in): nothing starts unseen.
   const warmed = useRef<string | null>(null);
+  const pageVisible = usePageVisible();
   const warmable =
+    pageVisible &&
     active &&
     state.phase === "live" &&
     status === "stopped" &&

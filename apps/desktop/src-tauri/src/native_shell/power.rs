@@ -14,14 +14,14 @@ impl Power {
                 .idle(true)
                 .display(false)
                 .sleep(false)
-                .reason("An o7 agent is working")
+                .reason("An o7 agent is working, or remote access keeps the computer reachable")
                 .app_name("o7")
                 .app_reverse_domain("codes.o7.desktop")
                 .create()
             {
                 Ok(assertion) => Some(assertion),
                 Err(error) => {
-                    tracing::warn!(%error, "could not prevent idle sleep while an agent works");
+                    tracing::warn!(%error, "could not prevent idle sleep");
                     None
                 }
             }
