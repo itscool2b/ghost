@@ -186,6 +186,23 @@ the last forty, so a review still starts after a restart. A reading from the cur
 ends with what the chat stands on: its branch (and whether it is a worktree of its own), how
 many files are changed and not committed, and its agent's usage as last reported.
 
+### Work for tonight
+
+`task` with `when: "tonight"` (tool set 6, 23 November 2026) queues the task instead of starting
+it. Its project and agent are checked when it is queued, so a wrong name is said while the bot
+is listening; the answer names the queued task (`q` and a few letters). Between 1 and 6 in the
+morning on the computer's own clock, while remote access is on, o7 starts the oldest queued task
+of the open workspace exactly as `task` starts one now (its own branch, the brief, a review),
+one at a time (the next waits while the last one or its review works) and at most three a night.
+The point is the person's subscriptions: work that can wait runs on capacity nobody is using.
+
+- `inbox` lists the link's queue, and what could not start in the last day with why (an agent
+  no longer ready, a project gone); a link with a call-back is also told so at once.
+- `task` with `cancel` and the id takes a queued task off. A link may leave ten at a time, and
+  its queue goes with it when it is removed.
+- The queue and the night's starts are kept in `remote.json` (`queued`, `night`), so a restart
+  loses nothing. The computer must be awake: "Keep this computer awake" in Settings helps.
+
 ### Telling a bot when a chat is done (the call-back)
 
 A bot that hands o7 a task used to have two ways to learn how it went: hold a call open, or ask

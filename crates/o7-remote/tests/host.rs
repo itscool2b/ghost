@@ -65,6 +65,8 @@ struct App {
     made: Mutex<Vec<(String, SessionStatus)>>,
     /// Codex is ready too: a task's test, for its review.
     second_agent: std::sync::atomic::AtomicBool,
+    /// The hour on the computer's clock, when a test sets one.
+    hour: Mutex<Option<u8>>,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -361,6 +363,10 @@ impl Backend for App {
             theme: "claude".into(),
             appearance: "dark".into(),
         })
+    }
+
+    fn local_hour(&self) -> Option<u8> {
+        *self.hour.lock().expect("hour")
     }
 
     fn release(&self, owner: &str) {
@@ -2004,6 +2010,177 @@ async fn only_a_full_link_is_shown_a_chats_browser() {
     assert_eq!(asked, ["picture c1 Browser", "picture c1 Device"]);
 }
 
+/// A bot leaves work for tonight: it is queued, listed in inbox and can be taken off; it starts
+/// only at night on the computer's clock, as a task does, one at a time and at most three a
+/// night. One that cannot start stays listed with why, and its bot is told.
+#[tokio::test]
+async fn work_left_for_tonight_starts_at_night_one_at_a_time() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    rig.app.second_agent.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let made = rig
+        .service
+        .create_bot("Grok Bot", o7_remote::bot::Rights::CHATS)
+        .expect("bot");
+    relay.next().await;
+    let (bot, token) = made
+        .url
+        .rsplit_once('/')
+        .and_then(|(_, reference)| reference.split_once('.'))
+        .map(|(bot, token)| (bot.to_owned(), token.to_owned()))
+        .expect("id.token");
+    let place = o7_remote::Callback {
+        kind: o7_remote::CallbackKind::Webhook,
+        url: "https://assistant.example/hook".into(),
+        channel: None,
+        to: None,
+    };
+    assert!(matches!(
+        rig.service.set_bot_callback(&bot, Some(place)),
+        Ok(true)
+    ));
+    let mut call = async |rid: &str, tool: &str, args: Value| -> Value {
+        relay
+            .send(format!(
+                "b{}",
+                json!({ "rid": rid, "bot": bot, "token": token, "tool": tool, "args": args })
+            ))
+            .await;
+        serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer")).expect("json")
+    };
+    let text = |answer: &Value| answer["text"].as_str().expect("text").to_owned();
+
+    // Queued, listed, taken off.
+    let queued = call(
+        "n1",
+        "task",
+        json!({ "goal": "Fix the login form", "when": "tonight" }),
+    )
+    .await;
+    assert_eq!(queued["error"], false, "{queued}");
+    let said = text(&queued);
+    assert!(said.starts_with("Queued for tonight as q"), "{said}");
+    assert!(said.contains("between 1 and 6 in the morning"), "{said}");
+    let first = said["Queued for tonight as ".len()..]
+        .split(':')
+        .next()
+        .expect("id")
+        .to_owned();
+    let inbox = text(&call("n2", "inbox", json!({})).await);
+    assert!(
+        inbox.contains(&format!(
+            "Queued for tonight (1):\n{first} \"Fix the login form\" (app)"
+        )),
+        "{inbox}"
+    );
+    assert_eq!(
+        call("n3", "task", json!({ "cancel": first })).await["error"],
+        false
+    );
+    assert_eq!(
+        call("n4", "task", json!({ "cancel": first })).await["error"],
+        true
+    );
+    assert_eq!(
+        call("n5", "task", json!({ "goal": "Fix it", "when": "later" })).await["error"],
+        true
+    );
+    assert_eq!(
+        call("n6", "task", json!({ "when": "tonight" })).await["error"],
+        true,
+        "no goal"
+    );
+
+    // An agent that is here now but will not be ready tonight; then four that will run.
+    let broken = call(
+        "n7",
+        "task",
+        json!({ "goal": "Broken", "when": "tonight", "agent": "codex" }),
+    )
+    .await;
+    assert_eq!(broken["error"], false, "{broken}");
+    for (rid, goal) in [
+        ("n8", "One"),
+        ("n9", "Two"),
+        ("n10", "Three"),
+        ("n11", "Four"),
+    ] {
+        let queued = call(rid, "task", json!({ "goal": goal, "when": "tonight" })).await;
+        assert_eq!(queued["error"], false, "{queued}");
+    }
+    rig.app.second_agent.store(false, Ordering::Relaxed);
+    let worktrees = || {
+        rig.app
+            .answered
+            .lock()
+            .expect("answered")
+            .iter()
+            .filter_map(|line| line.strip_prefix("worktree ").map(str::to_owned))
+            .collect::<Vec<_>>()
+    };
+
+    // In the day nothing starts.
+    *rig.app.hour.lock().expect("hour") = Some(14);
+    rig.service.later_tick().await;
+    assert!(worktrees().is_empty());
+
+    // At night the oldest is tried first: it cannot start, and its bot is told why.
+    *rig.app.hour.lock().expect("hour") = Some(2);
+    rig.service.later_tick().await;
+    assert!(worktrees().is_empty());
+    let told = rig.told.lock().expect("told").clone();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(
+        told[0]
+            .text
+            .starts_with("o7: the task queued for tonight as q"),
+        "{}",
+        told[0].text
+    );
+    assert!(
+        told[0]
+            .text
+            .contains("(\"Broken\") could not start: No agent \"codex\" is ready here."),
+        "{}",
+        told[0].text
+    );
+
+    // Then one at a time: the next waits while the last one works.
+    rig.service.later_tick().await;
+    assert_eq!(worktrees(), ["One"]);
+    rig.service.later_tick().await;
+    assert_eq!(worktrees(), ["One"], "One is still starting");
+    rig.app.made_becomes("c2", SessionStatus::Running);
+    rig.service.later_tick().await;
+    assert_eq!(worktrees(), ["One"], "One works");
+    rig.app.made_becomes("c2", SessionStatus::Ready);
+    rig.service.later_tick().await;
+    assert_eq!(worktrees(), ["One", "Two"]);
+    rig.app.made_becomes("c3", SessionStatus::Ready);
+    rig.service.later_tick().await;
+    assert_eq!(worktrees(), ["One", "Two", "Three"]);
+    rig.app.made_becomes("c4", SessionStatus::Ready);
+    rig.service.later_tick().await;
+    assert_eq!(worktrees(), ["One", "Two", "Three"], "three a night");
+
+    // Each started as a task does: briefed on its own branch.
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert!(
+        sent.iter()
+            .any(|(chat, text)| chat == "c2" && text.starts_with("One\n\n---\n")),
+        "{sent:?}"
+    );
+    // What is left, and what could not start, are in inbox.
+    let inbox = text(&call("n12", "inbox", json!({})).await);
+    assert!(inbox.contains("Queued for tonight (2):\n"), "{inbox}");
+    assert!(
+        inbox.contains("\"Broken\" (app): could not start: No agent"),
+        "{inbox}"
+    );
+    assert!(inbox.contains("\"Four\" (app)\n"), "{inbox}");
+}
+
 /// What a link may do is checked on the computer on every call, whatever the relay let through
 /// (owner's plan, 23 November 2026): a read-only link reads; a link not allowed to approve may
 /// decline and answer questions but never approve; full access needs its own right.
@@ -2033,7 +2210,7 @@ async fn a_links_rights_are_checked_on_the_computer() {
         serde_json::from_str(relay.next().await.strip_prefix('l').expect("links")).expect("json");
     assert_eq!(
         listed,
-        json!([{ "id": reader.0, "hash": crypto::hash(&reader.1), "full": false, "read": true, "v": 5 }]),
+        json!([{ "id": reader.0, "hash": crypto::hash(&reader.1), "full": false, "read": true, "v": 6 }]),
         "a read-only link is listed as one, and never as full"
     );
     let plain = address(
@@ -2253,8 +2430,8 @@ async fn full_control_is_a_links_own_level_and_the_computer_enforces_it() {
     assert_eq!(
         listed,
         json!([
-            { "id": chats.0, "hash": crypto::hash(&chats.1), "full": false, "v": 5 },
-            { "id": full.0, "hash": crypto::hash(&full.1), "full": true, "v": 5 },
+            { "id": chats.0, "hash": crypto::hash(&chats.1), "full": false, "v": 6 },
+            { "id": full.0, "hash": crypto::hash(&full.1), "full": true, "v": 6 },
         ])
     );
     let status = rig.service.status();
@@ -2450,7 +2627,7 @@ async fn a_linked_bot_calls_tools_with_its_token() {
         listed,
         format!(
             "l{}",
-            json!([{ "id": bot, "hash": crypto::hash(token), "full": false, "v": 5 }])
+            json!([{ "id": bot, "hash": crypto::hash(token), "full": false, "v": 6 }])
         )
     );
     assert!(

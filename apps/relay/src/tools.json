@@ -101,9 +101,19 @@
           "minimum": 0,
           "maximum": 200,
           "description": "Seconds to wait for the work. Default 0: o7 tells you."
+        },
+        "when": {
+          "type": "string",
+          "enum": ["now", "tonight"],
+          "since": 6,
+          "description": "tonight: queue it to start between 1 and 6 in the morning on the computer's clock, on capacity the person is not using; three a night, one at a time."
+        },
+        "cancel": {
+          "type": "string",
+          "since": 6,
+          "description": "A queued task's id (q...): take it off the queue. No goal needed."
         }
       },
-      "required": ["goal"],
       "additionalProperties": false
     },
     "annotations": {

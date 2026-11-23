@@ -814,6 +814,26 @@ test("lists the current tools to a bot whose computer answers them", async () =>
     (await ask(newest, { method: "initialize", params: {} })).result.instructions,
     /call task once/,
   );
+  // Set 6 adds what task takes for tonight; an earlier set is never shown it.
+  const taskOf = (list) =>
+    Object.keys(list.find((tool) => tool.name === "task").inputSchema.properties);
+  assert.deepEqual(taskOf(latestAll), [
+    "goal",
+    "project",
+    "agent",
+    "review",
+    "wait",
+    "when",
+    "cancel",
+  ]);
+  assert.deepEqual(taskOf(await tools(four)), ["goal", "project", "agent", "review", "wait"]);
+  for (const tool of latestAll)
+    for (const [name, argument] of Object.entries(tool.inputSchema.properties))
+      assert.equal("since" in argument, false, `${tool.name}.${name}`);
+  assert.match(
+    (await ask(newest, { method: "initialize", params: {} })).result.instructions,
+    /when tonight/,
+  );
   for (const tool of [...latestAll, ...all]) assert.equal("since" in tool, false, tool.name);
   assert.match(
     (await ask(newer, { method: "initialize", params: {} })).result.instructions,
@@ -847,7 +867,7 @@ test("lists the current tools to a bot whose computer answers them", async () =>
   assert.ok(size(few) < 3500, String(size(few)));
   assert.ok(size(all) < 5600, String(size(all)));
   assert.ok(size(latest) < 3900, String(size(latest)));
-  assert.ok(size(latestAll) < 7500, String(size(latestAll)));
+  assert.ok(size(latestAll) < 7900, String(size(latestAll)));
 
   const hello = await ask(chats, { method: "initialize", params: {} });
   assert.match(hello.result.instructions, /one send/);

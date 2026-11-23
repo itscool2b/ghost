@@ -276,6 +276,11 @@ pub trait Backend: Send + Sync + 'static {
             })
         })
     }
+    /// The hour on the computer's own clock (0 to 23), for the night's queue. A backend that
+    /// cannot say starts nothing at night.
+    fn local_hour(&self) -> Option<u8> {
+        None
+    }
     /// What `chat_id`'s browser tab or device shows now, for a full-control link (`look`). The
     /// chat is one of this workspace's: the caller found it in [`Backend::overview`].
     fn picture<'a>(

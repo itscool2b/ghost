@@ -8,6 +8,8 @@
 
 mod lean;
 
+pub(crate) use lean::{NIGHT_BUDGET, NIGHT_HOURS, start_task};
+
 use std::{sync::Arc, time::Duration};
 
 use o7_protocol::session::ChatSummary;
@@ -134,7 +136,7 @@ pub use lean::{CHAT_TOOLS as LEAN_CHAT_TOOLS, FULL_TOOLS as LEAN_FULL_TOOLS};
 
 /// The set of tools this copy of the app answers, which it tells the relay with its bot links.
 /// A relay that knows the number lists that set; one that does not lists the first.
-pub const TOOLS_VERSION: u32 = 5;
+pub const TOOLS_VERSION: u32 = 6;
 
 fn chat_tool(tool: &str) -> bool {
     CHAT_TOOLS.contains(&tool) || lean::CHAT_TOOLS.contains(&tool)
@@ -374,19 +376,31 @@ fn message(text: &str) -> Result<(), Answer> {
 
 /// Runs one tool call. `owner` is unique to the call: whatever it watches is released at the end.
 /// `full` is the link's level; a tool above it is refused here too, whoever let the call through.
+/// A bot link's own queue of work for tonight, as its calls reach it (`task` with
+/// `when: "tonight"` or `cancel`, and `inbox`). The service keeps it.
+pub trait Later: std::marker::Send + Sync {
+    /// Queues `item` for this link, or says why not.
+    fn queue(&self, item: crate::registry::Queued) -> Result<(), String>;
+    /// Takes this link's queued `id` off; false when it has none such.
+    fn cancel(&self, id: &str) -> bool;
+    /// What this link left for tonight, oldest first.
+    fn queued(&self) -> Vec<crate::registry::Queued>;
+}
+
 pub async fn call(
     backend: &Arc<dyn Backend>,
     owner: &str,
     tool: &str,
     args: &Value,
     rights: Rights,
+    later: &dyn Later,
 ) -> Answer {
     let rights = rights.coherent();
     if known(tool) && !allowed(tool, rights) {
         return Answer::failed(refusal(tool, rights));
     }
     let answer = if lean::CHAT_TOOLS.contains(&tool) || lean::FULL_TOOLS.contains(&tool) {
-        lean::run(backend, owner, tool, args, rights).await
+        lean::run(backend, owner, tool, args, rights, later).await
     } else {
         run(backend, owner, tool, args, rights).await
     };

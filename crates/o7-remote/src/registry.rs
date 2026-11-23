@@ -40,6 +40,8 @@ pub enum RegistryError {
     Random,
     #[error("Open a workspace before pairing a device or linking a bot.")]
     NoWorkspace,
+    #[error("This link has {MAX_QUEUED} tasks queued for tonight already. Take one off first.")]
+    TooManyQueued,
 }
 
 impl From<crypto::CryptoError> for RegistryError {
@@ -134,7 +136,48 @@ struct Stored {
     /// (Settings > Remote access). Off unless the person turns it on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     keep_awake: bool,
+    /// Tasks bots left for tonight (`task` with `when: "tonight"`), oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    queued: Vec<Queued>,
+    /// The tasks started from the queue lately: when, and their chat. The night's budget and
+    /// "one at a time" are read from it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    night: Vec<NightStart>,
 }
+
+/// A task a bot link left for tonight.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Queued {
+    /// `q` and a few letters, what the bot is told and cancels it by.
+    pub id: String,
+    /// The bot link that queued it; set by the service.
+    pub bot: String,
+    pub goal: String,
+    /// The project's id, found when it was queued.
+    pub project: Option<String>,
+    pub agent: Option<String>,
+    pub review: Option<bool>,
+    pub created_at: i64,
+    /// It could not start, and why: kept a day so the bot can read it in `inbox`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed_at: Option<i64>,
+}
+
+/// A task started from the queue.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NightStart {
+    pub at: i64,
+    pub chat: String,
+}
+
+/// The most tasks one link may leave queued.
+pub const MAX_QUEUED: usize = 10;
+/// How long a night lasts, for its budget: a task started this long ago was another night's.
+pub const NIGHT_MS: i64 = 12 * 60 * 60 * 1000;
+/// How long a queued task that could not start stays listed.
+const FAILED_KEPT_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// A task a bot link started: its chat, where its work is, and its review.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -217,6 +260,8 @@ impl Registry {
                     bots: Vec::new(),
                     tasks: Vec::new(),
                     keep_awake: false,
+                    queued: Vec::new(),
+                    night: Vec::new(),
                 }
             }
             Err(error) => return Err(RegistryError::Read(error.to_string())),
@@ -329,6 +374,139 @@ impl Registry {
             self.save()?;
         }
         Ok(())
+    }
+
+    /// Queues `item` for tonight. A link may leave at most [`MAX_QUEUED`].
+    pub fn queue(&mut self, item: Queued) -> Result<(), RegistryError> {
+        let waiting = self
+            .stored
+            .queued
+            .iter()
+            .filter(|queued| queued.bot == item.bot && queued.failed.is_none())
+            .count();
+        if waiting >= MAX_QUEUED {
+            return Err(RegistryError::TooManyQueued);
+        }
+        self.stored.queued.push(item);
+        self.save()
+    }
+
+    /// Takes `bot`'s queued `id` off the queue; false when it has none such.
+    pub fn cancel_queued(&mut self, bot: &str, id: &str) -> bool {
+        let before = self.stored.queued.len();
+        self.stored
+            .queued
+            .retain(|queued| !(queued.bot == bot && queued.id == id));
+        let gone = self.stored.queued.len() < before;
+        if gone {
+            let _ = self.save();
+        }
+        gone
+    }
+
+    /// What `bot` left for tonight, oldest first, with what could not start in the last day.
+    pub fn queued_of(&self, bot: &str, now: i64) -> Vec<Queued> {
+        self.stored
+            .queued
+            .iter()
+            .filter(|queued| queued.bot == bot)
+            .filter(|queued| {
+                queued
+                    .failed_at
+                    .is_none_or(|at| now.saturating_sub(at) <= FAILED_KEPT_MS)
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// The next queued task that may start: the oldest whose link belongs to the open workspace
+    /// and still works. A link that is gone takes its queue with it, and what failed a day ago
+    /// is forgotten.
+    pub fn next_queued(&mut self, now: i64) -> Option<Queued> {
+        let before = self.stored.queued.len();
+        let links: Vec<String> = self.stored.bots.iter().map(|bot| bot.id.clone()).collect();
+        self.stored.queued.retain(|queued| {
+            links.contains(&queued.bot)
+                && queued
+                    .failed_at
+                    .is_none_or(|at| now.saturating_sub(at) <= FAILED_KEPT_MS)
+        });
+        if self.stored.queued.len() < before {
+            let _ = self.save();
+        }
+        let open: Vec<&Bot> = self
+            .bots()
+            .into_iter()
+            .filter(|bot| !expired(bot, now))
+            .collect();
+        self.stored
+            .queued
+            .iter()
+            .find(|queued| queued.failed.is_none() && open.iter().any(|bot| bot.id == queued.bot))
+            .cloned()
+    }
+
+    /// `id` started as `chat`: off the queue, and counted against the night.
+    pub fn started_queued(&mut self, id: &str, chat: &str, now: i64) {
+        self.stored.queued.retain(|queued| queued.id != id);
+        self.stored
+            .night
+            .retain(|start| now.saturating_sub(start.at) <= NIGHT_MS);
+        self.stored.night.push(NightStart {
+            at: now,
+            chat: chat.to_owned(),
+        });
+        let _ = self.save();
+    }
+
+    /// `id` could not start: it stays listed a day, with why, and is not tried again.
+    pub fn failed_queued(&mut self, id: &str, why: &str, now: i64) {
+        for queued in &mut self.stored.queued {
+            if queued.id == id {
+                queued.failed = Some(why.to_owned());
+                queued.failed_at = Some(now);
+            }
+        }
+        let _ = self.save();
+    }
+
+    /// How many tasks started from the queue this night.
+    pub fn started_tonight(&self, now: i64) -> usize {
+        self.stored
+            .night
+            .iter()
+            .filter(|start| now.saturating_sub(start.at) <= NIGHT_MS)
+            .count()
+    }
+
+    /// The chats of this night's tasks and of their reviews: while one works, the next waits.
+    pub fn night_chats(&self, now: i64) -> Vec<String> {
+        let mut chats = Vec::new();
+        for start in &self.stored.night {
+            if now.saturating_sub(start.at) > NIGHT_MS {
+                continue;
+            }
+            chats.push(start.chat.clone());
+            if let Some(reviewer) = self
+                .stored
+                .tasks
+                .iter()
+                .find(|task| task.builder == start.chat)
+                .and_then(|task| task.reviewer.clone())
+            {
+                chats.push(reviewer);
+            }
+        }
+        chats
+    }
+
+    /// A link's name and call-back, when it has one.
+    pub fn callback_of(&self, bot: &str) -> Option<(String, crate::callback::Callback)> {
+        self.stored
+            .bots
+            .iter()
+            .find(|link| link.id == bot)
+            .and_then(|link| Some((link.name.clone(), link.callback.clone()?)))
     }
 
     /// Whether the person asked to keep the computer awake for remote access.
@@ -794,6 +972,96 @@ fn name_of(name: &str, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn queued(id: &str, bot: &str) -> Queued {
+        Queued {
+            id: id.to_owned(),
+            bot: bot.to_owned(),
+            goal: format!("Do {id}"),
+            project: None,
+            agent: None,
+            review: None,
+            created_at: 1,
+            failed: None,
+            failed_at: None,
+        }
+    }
+
+    /// A link's queue: at most ten each, cancelled only by its own link, taken oldest first and
+    /// only for a link of the open workspace, counted against the night once started, kept a
+    /// day with why when it could not start, and gone with its link.
+    #[test]
+    fn work_left_for_tonight_is_queued_started_and_counted() {
+        let folder = tempfile::tempdir().expect("folder");
+        let path = folder.path().join("remote.json");
+        let mut registry = Registry::load(&path).expect("load");
+        registry.set_scope("local");
+        let grok = registry
+            .add_bot("Grok", crate::bot::Rights::CHATS, 1)
+            .expect("bot")
+            .id;
+        let muse = registry
+            .add_bot("Muse", crate::bot::Rights::CHATS, 1)
+            .expect("bot")
+            .id;
+        for n in 0..MAX_QUEUED {
+            registry
+                .queue(queued(&format!("q{n}"), &grok))
+                .expect("queued");
+        }
+        assert!(matches!(
+            registry.queue(queued("q99", &grok)),
+            Err(RegistryError::TooManyQueued)
+        ));
+        registry.queue(queued("m1", &muse)).expect("another link's");
+        assert!(!registry.cancel_queued(&muse, "q0"), "not its own");
+        assert!(registry.cancel_queued(&grok, "q0"));
+        assert_eq!(registry.queued_of(&grok, 2).len(), MAX_QUEUED - 1);
+        assert_eq!(registry.next_queued(2).expect("next").id, "q1");
+
+        registry.started_queued("q1", "c7", 10);
+        assert_eq!(registry.started_tonight(11), 1);
+        assert_eq!(
+            registry.started_tonight(10 + NIGHT_MS + 1),
+            0,
+            "another night"
+        );
+        assert_eq!(registry.night_chats(11), ["c7"]);
+        registry.failed_queued("q2", "No agent \"codex\" is ready here.", 12);
+        assert_eq!(
+            registry.next_queued(13).expect("next").id,
+            "q3",
+            "a failed one is not tried again"
+        );
+        let failed = registry
+            .queued_of(&grok, 13)
+            .into_iter()
+            .find(|queued| queued.id == "q2")
+            .expect("listed");
+        assert_eq!(
+            failed.failed.as_deref(),
+            Some("No agent \"codex\" is ready here.")
+        );
+        assert!(
+            registry
+                .queued_of(&grok, 12 + FAILED_KEPT_MS + 1)
+                .iter()
+                .all(|queued| queued.id != "q2"),
+            "forgotten after a day"
+        );
+
+        let mut again = Registry::load(&path).expect("load");
+        again.set_scope("other");
+        assert!(again.next_queued(13).is_none(), "another workspace's links");
+        again.set_scope("local");
+        assert_eq!(again.next_queued(13).expect("kept").id, "q3");
+        assert!(again.remove_bot(&grok).expect("removed"));
+        assert_eq!(
+            again.next_queued(14).expect("muse's").id,
+            "m1",
+            "gone with its link"
+        );
+    }
 
     /// Kept awake only when asked, with remote access on, and while a link that has not expired
     /// (or a paired device) can reach the open workspace. The choice is kept across restarts, and
