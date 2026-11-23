@@ -27,9 +27,10 @@ export function Statement() {
             on your machine, through their own sign-ins.
           </p>
           <p>
-            Steer them from your phone, or link Grok Bot, Muse, Hermes or OpenClaw and let your own
-            assistant run the work. Chats and history stay on your computer, with nothing to sign up
-            for and nothing to pay.
+            Steer them from your phone, or link Grok Bot, Muse, Hermes or OpenClaw and hand your own
+            assistant whole tasks: each runs on its own branch, gets a second agent's review, and
+            your assistant hears when it is done. Chats and history stay on your computer, with
+            nothing to sign up for and nothing to pay.
           </p>
         </div>
       </div>

@@ -147,6 +147,13 @@ export const TOUR_STOPS: readonly TourStop[] = [
     title: "Settings",
     body: "Themes, agents, voices, a more accurate dictation model, phone access and updates. General has this tour, to take again whenever you like.",
   },
+  {
+    id: "assistants",
+    place: "window",
+    side: "right",
+    title: "Your assistant",
+    body: "Link Grok Bot, Hermes, OpenClaw or Muse in Settings, Remote access. Hand it whole tasks from anywhere: o7 runs each on its own branch, has it reviewed and reports back.",
+  },
 ];
 
 /**

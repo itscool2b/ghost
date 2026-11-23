@@ -42,7 +42,8 @@ export function SidebarFooter({
             data-tour="settings"
             onClick={onSettings}
           >
-            <Settings size={16} aria-hidden="true" />
+            {/* The tour's stop for linking an assistant, which is done in Settings. */}
+            <Settings size={16} aria-hidden="true" data-tour="assistants" />
           </button>
         ) : null}
       </div>

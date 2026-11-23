@@ -22,7 +22,7 @@ const { release } = JSON.parse(
  * `__changelog-….js`.
  */
 test("every built file is one the website Worker accepts", async () => {
-  const served = /\.(?:js|css|json|txt|svg|png|jpe?g|webp|ico|woff2?)$|(?:^|\/)index\.html$/;
+  const served = /\.(?:js|css|json|txt|md|svg|png|jpe?g|webp|ico|woff2?)$|(?:^|\/)index\.html$/;
   const folder = fileURLToPath(root);
   const files = (await readdir(folder, { recursive: true, withFileTypes: true }))
     .filter((entry) => entry.isFile())

@@ -18,6 +18,11 @@ const QUESTIONS: readonly { question: string; answer: string; agents?: boolean }
     agents: true,
   },
   {
+    question: "Can my assistant use o7?",
+    answer:
+      "Yes. Link Grok Bot, Muse, Hermes, OpenClaw or any assistant that takes an MCP server in Settings, Remote access. It hands o7 a goal; o7 runs it on its own branch with your agents, has another agent review it, and tells your assistant when it is done. It can leave work for the night, and o7's skill teaches it the rest: o7.codes/skill.md.",
+  },
+  {
     question: "Does o7 see my agent logins?",
     answer:
       "No. o7 never reads, stores or proxies agent credentials. Each agent signs in through its own flow and keeps its own keys.",
@@ -44,7 +49,7 @@ const CLOSE = 300;
 
 /**
  * Questions as rows between hairlines, as dot.com sets its FAQs: the heading and a quiet link at
- * left, six questions at right with the first answer open, one open at a time; the plus turns into
+ * left, the questions at right with the first answer open, one open at a time; the plus turns into
  * a cross as its answer slides open. Built on <details>, so every answer opens without JavaScript;
  * the script adds the eased open and close and keeps one row open.
  */
