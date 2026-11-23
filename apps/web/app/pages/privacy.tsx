@@ -28,8 +28,8 @@ export default function Privacy() {
           Once a day, when it looks for a newer version, o7 also tells this site that one copy ran,
           with its version, operating system and processor type, and whether it is the first time
           that copy has said so. It sends no identifier and nothing about you or your work, and the
-          site keeps only each day's totals. Turning off the update check in Settings turns this
-          off too.
+          site keeps only each day's totals. Turning off the update check in Settings turns this off
+          too.
         </p>
         <p>
           Dictation runs on your computer: what you say and what it writes never leave it. o7

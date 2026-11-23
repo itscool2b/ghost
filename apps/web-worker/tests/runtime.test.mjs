@@ -266,7 +266,11 @@ test("the former address keeps the remote page and sends every other page to the
 test("a download is counted once a browser asks, and always sent on to its file", async () => {
   const before = await totals();
   const get = (path, init = {}) =>
-    request(path, { redirect: "manual", ...init, headers: { "User-Agent": browser, ...init.headers } });
+    request(path, {
+      redirect: "manual",
+      ...init,
+      headers: { "User-Agent": browser, ...init.headers },
+    });
   const response = await get("/get/v0.1.1748/o7_0.1.1748_x64-setup.exe");
   assert.equal(response.status, 302);
   assert.equal(
@@ -277,7 +281,14 @@ test("a download is counted once a browser asks, and always sent on to its file"
   assert.equal(response.headers.get("set-cookie"), null);
   await get("/get/v0.1.1748/o7_0.1.1748_x64-setup.exe");
   // Robots and HEAD are sent on, not counted.
-  assert.equal((await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", { headers: { "User-Agent": "Googlebot/2.1" } })).status, 302);
+  assert.equal(
+    (
+      await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", {
+        headers: { "User-Agent": "Googlebot/2.1" },
+      })
+    ).status,
+    302,
+  );
   assert.equal((await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", { method: "HEAD" })).status, 302);
   // Anything that is not one of the installers: nothing counted, nowhere to go.
   for (const path of [
@@ -297,7 +308,8 @@ test("a download is counted once a browser asks, and always sent on to its file"
 });
 
 test("a copy counts itself with no identifier and is told when the next day starts", async () => {
-  const ran = (query) => request(`/api/count?${query}`, { headers: { "User-Agent": "o7/0.1.1748" } });
+  const ran = (query) =>
+    request(`/api/count?${query}`, { headers: { "User-Agent": "o7/0.1.1748" } });
   const first = await ran("os=linux&arch=x86_64&version=0.1.1748&first=1");
   assert.equal(first.status, 200);
   assert.equal(first.headers.get("cache-control"), "no-store");
