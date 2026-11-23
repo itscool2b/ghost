@@ -8,9 +8,9 @@
 //!
 //! Contract every driver keeps:
 //!
-//! 1. Before [`DriverEvent::Ready`], only `Status`, `RunState`, `Options`, `Commands`, `Title`, `Autonomy`,
-//!    `AuthRequired`, `Event` with a `Notice` or `UsageUpdated` (untagged), and untagged `Permission`
-//!    and `UiRequest` (an agent may ask during setup). A fatal start problem ends `run` with
+//! 1. Before [`DriverEvent::Ready`], only `Status`, `RunState`, `BackgroundWork`, `Options`, `Commands`,
+//!    `Title`, `Autonomy`, `AuthRequired`, `Event` with a `Notice` or `UsageUpdated` (untagged), and
+//!    untagged `Permission` and `UiRequest` (an agent may ask during setup). A fatal start problem ends `run` with
 //!    [`DriverExit::StartFailed`] (after `AuthRequired` when that is the cause).
 //! 2. Every `Prompt` gets exactly one [`DriverEvent::TurnEnded`] with its turn id, after every event
 //!    tagged with that turn, unless `run` ends first (then the actor ends the turn itself).
@@ -35,6 +35,11 @@
 //!    session also sends the next prompt when the agent reported work in progress, with no prompt
 //!    open, for its idle grace without an idle report, or when the person presses Send now; a
 //!    driver whose agent queues input during such work accepts that prompt.
+//! 10. A driver whose agent says which work of its own it left running (a command in the
+//!     background, an agent it started) emits `BackgroundWork` whenever that count changes. It
+//!     is separate from `RunState`: an agent may report itself idle, ready for the next prompt,
+//!     while such work runs. The session does not stop an agent as idle while the count is above
+//!     zero, since stopping it ends that work and what the agent would have done when it finished.
 //!
 //! Error text crosses raw: a driver holds no session redactor, so it puts stderr tails and the
 //! agent's error text into [`DriverError`] and [`DriverExit::Crashed`] unredacted, and never writes
@@ -304,6 +309,11 @@ pub enum DriverEvent {
     /// waiting for idle separately from `TurnEnded`; emit the initial state before `Ready`.
     RunState {
         idle: bool,
+    },
+    /// How many pieces of its own work the agent left running in the background (rule 10).
+    /// Untagged. A driver that never emits it has none.
+    BackgroundWork {
+        open: u32,
     },
     Ready(ReadyInfo),
     /// After Ready, resolves a resume path to the authoritative native transcript id. The actor

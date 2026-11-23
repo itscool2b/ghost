@@ -411,6 +411,40 @@ async fn background_tasks_report_in_their_turn_and_after_it() {
     h.stop().await;
 }
 
+/// Claude Code says it is idle while a command it left in the background still runs, and lists
+/// such tasks in a frame of their own (shapes from a real session, 22 November 2026).
+#[tokio::test(start_paused = true)]
+async fn background_tasks_are_reported_apart_from_idle() {
+    let mut h = Harness::start().await;
+    h.ready().await;
+    let tasks = |tasks: Value| json!({"type":"system","subtype":"background_tasks_changed","tasks":tasks,"uuid":"u","session_id":"s"});
+    h.send(tasks(
+        json!([{"task_id":"b1","run_id":"r1","task_type":"local_bash","description":"a build"}]),
+    ))
+    .await;
+    assert!(matches!(
+        h.event().await,
+        DriverEvent::BackgroundWork { open: 1 }
+    ));
+    h.send(json!({"type":"system","subtype":"session_state_changed","state":"idle"}))
+        .await;
+    assert!(matches!(
+        h.event().await,
+        DriverEvent::RunState { idle: true }
+    ));
+    // The same list again is no news; the task ending is.
+    h.send(tasks(
+        json!([{"task_id":"b1","run_id":"r1","task_type":"local_bash","description":"a build"}]),
+    ))
+    .await;
+    h.send(tasks(json!([]))).await;
+    assert!(matches!(
+        h.event().await,
+        DriverEvent::BackgroundWork { open: 0 }
+    ));
+    h.stop().await;
+}
+
 #[tokio::test(start_paused = true)]
 async fn result_ends_turn_but_idle_is_a_separate_event() {
     let mut h = Harness::start().await;

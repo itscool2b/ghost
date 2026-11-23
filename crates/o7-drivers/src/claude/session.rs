@@ -419,6 +419,8 @@ struct Session {
     init: Value,
     ready: bool,
     idle: bool,
+    /// Background tasks Claude Code last listed as open (`background_tasks_changed`).
+    background: u32,
     turn: Option<String>,
     model: String,
     observed_model: Option<String>,
@@ -1760,6 +1762,19 @@ impl Session {
             self.outbox
                 .push_back(DriverEvent::RunState { idle: self.idle });
         }
+        // Claude Code reports itself idle while a command it left in the background still runs,
+        // and lists those tasks apart: the session must know, or it stops the agent as idle and
+        // the command, and what Claude would have done when it finished, end with it.
+        if frame["type"] == "system"
+            && frame["subtype"] == "background_tasks_changed"
+            && let Some(tasks) = frame["tasks"].as_array()
+        {
+            let open = u32::try_from(tasks.len()).unwrap_or(u32::MAX);
+            if open != self.background {
+                self.background = open;
+                self.outbox.push_back(DriverEvent::BackgroundWork { open });
+            }
+        }
         if frame["type"] == "system" && frame["subtype"] == "commands_changed" {
             self.command_list = Some(translate::reduce_commands(&frame));
             if self.commands_due.is_none() {
@@ -2043,6 +2058,7 @@ pub(super) async fn run(ctx: DriverContext) -> DriverExit {
         init: Value::Null,
         ready: false,
         idle: false,
+        background: 0,
         turn: None,
         model: "default".into(),
         observed_model: None,
