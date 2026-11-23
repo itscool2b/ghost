@@ -32,8 +32,13 @@ before(() => {
 before(async () => {
   const schema = await readFile(new URL("schema.sql", root), "utf8");
   const db = await runtime.getD1Database("COUNTS");
-  await db.exec(schema.replace(/--.*
-/g, "").replace(/s+/g, " ").trim());
+  // exec takes one statement a line: drop the comments and join the statement's lines.
+  await db.exec(
+    schema
+      .replace(/--.*\n/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 });
 after(async () => runtime?.dispose());
 const totals = async () => {

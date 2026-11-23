@@ -428,14 +428,16 @@ pub fn start_automatic_checks(app: tauri::AppHandle) {
                 // A released stable build adds itself to the site's daily count of copies that
                 // ran (usage_count.rs): never a test source, staging or a smoke launch.
                 let released = updates.source.as_ref().is_some_and(|source| !source.test);
-                if released && !staging() && !state.launch.is_smoke() {
-                    if let Some(dir) = state.data_dir() {
-                        crate::usage_count::count_once_a_day(
-                            dir.to_path_buf(),
-                            app.package_info().version.to_string(),
-                        )
-                        .await;
-                    }
+                if released
+                    && !staging()
+                    && !state.launch.is_smoke()
+                    && let Some(dir) = state.data_dir()
+                {
+                    crate::usage_count::count_once_a_day(
+                        dir.to_path_buf(),
+                        app.package_info().version.to_string(),
+                    )
+                    .await;
                 }
             }
         }
