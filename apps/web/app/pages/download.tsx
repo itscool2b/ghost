@@ -2,6 +2,7 @@ import catalog from "#release-catalog";
 import { counted } from "../counted";
 import { REPOSITORY } from "../repo";
 import { AppTile, Arrow, Page } from "../ui";
+import { versionName, versionWithBuild } from "../version";
 
 export const meta = () => [{ title: "Download o7 · Windows, macOS and Linux" }];
 
@@ -71,7 +72,7 @@ export default function Download() {
       tone="Free, local, no account."
       lead={
         release
-          ? `Version ${release.version} for Windows, macOS and Linux.`
+          ? `Version ${versionName(release.version)} for Windows, macOS and Linux.`
           : "Installers for Windows, macOS and Linux are on the way."
       }
     >
@@ -157,7 +158,7 @@ export default function Download() {
       <div className="prose-sections">
         {release ? (
           <section className="prose prose-section" aria-labelledby="release-notes">
-            <h2 id="release-notes">Release notes · {release.version}</h2>
+            <h2 id="release-notes">Release notes · {versionWithBuild(release.version)}</h2>
             <p className="note">
               <time dateTime={release.pub_date}>{release.pub_date.slice(0, 10)}</time>
             </p>

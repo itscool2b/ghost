@@ -44,9 +44,18 @@ up for every merge, and if u click it updates").
    up in the app: `apps/desktop`, `crates`, `packages/ui`, the lockfiles and toolchain files. A
    merge of the website, docs or tests alone publishes nothing. It can also be started by hand.
    One run at a time; a newer merge waits for the one building.
-2. **The build gets a number**: `0.1.N`, N the number of commits on main. It is higher with every
-   merge and the same for the same commit, so a rerun never makes a second version. The workspace
-   version in `Cargo.toml` stays as it is; `pnpm bundle --app-version` gives the number to Tauri.
+2. **The build gets a number**: `<major>.<minor>.N`. The first two numbers are the version
+   people know o7 by, read from `[workspace.package] version` in `Cargo.toml`; N is the number of
+   commits on main. N is higher with every merge, the same for the same commit (so a rerun never
+   makes a second version), and never starts again, so every build is newer than the last
+   whatever the first two numbers are. `pnpm bundle --app-version` gives the number to Tauri.
+   **What people are shown is the first two numbers** (owner, 23 November 2026: "i want version
+   numbers to make sense ... keep it at the tenths"): "Version 0.1" on the website, "0.1 (build
+   1787)" where two copies must be told apart (the update panel, Settings > About, the release's
+   title). File names, tags, links, checksums and the updater keep all three
+   (`apps/desktop/src/lib/version.ts`, `apps/web/app/version.ts`). To name a new version, raise
+   the first two numbers in `Cargo.toml` (`0.1.0` to `0.2.0`, or `1.0.0`): the next merge that
+   changes the app is published as it.
 3. **Four targets build with their updater signatures** (`pnpm bundle --signed-updater`): the
    universal macOS app and DMG, Windows x64 and ARM64 NSIS installers, and the Linux AppImage, deb
    and rpm. macOS is signed ad hoc. No publisher signs the installers for the operating systems.

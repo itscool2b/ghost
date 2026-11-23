@@ -83,9 +83,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 0.1.N, N the number of commits on main: higher with every merge, and the same for the
-          # same commit however often this runs.
-          version="0.1.$(git rev-list --count HEAD)"
+          # <major>.<minor>.N: the first two numbers are the version people know o7 by, read from
+          # the workspace's Cargo.toml (raise it there to name a new version), and N is the number
+          # of commits on main: higher with every merge, and the same for the same commit however
+          # often this runs. N never starts again, so a build is always newer than the last.
+          named="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\([0-9]*\.[0-9]*\)\.[0-9]*" *$/\1/p' Cargo.toml | head -n 1)"
+          if [ -z "$named" ]; then
+            echo "::error::Cargo.toml has no [workspace.package] version of three numbers."
+            exit 1
+          fi
+          version="$named.$(git rev-list --count HEAD)"
           echo "version=$version" >>"$GITHUB_OUTPUT"
           if gh release view "v$version" --json tagName >/dev/null 2>&1; then
             echo "::notice::v$version is already published; nothing to do."
@@ -287,7 +294,7 @@ jobs:
           # latest.json goes up with the packages: once this release is the newest, it is the
           # manifest every installed copy reads.
           gh release create "v$VERSION" "$payload"/* "$RUNNER_TEMP/stage/latest.json" \
-            --target "$GITHUB_SHA" --title "o7 $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
+            --target "$GITHUB_SHA" --title "o7 ${VERSION%.*} (build ${VERSION##*.})" --notes-file "$RUNNER_TEMP/notes.md" --latest
       - name: Check what installed copies will read
         run: |
           # The address is the one compiled into the app. It must answer with this version's
