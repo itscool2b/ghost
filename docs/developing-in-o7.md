@@ -155,6 +155,24 @@ window; the seen stops are `tour_seen` in the profile's setup preferences
 is the shared `Wing` (`packages/ui`), which the website flies too. On the desktop it flies only in
 setup and the tour ([design/visual-language.md](design/visual-language.md)).
 
+## Version
+
+`VERSION` (three numbers, `major.minor.patch`) is the version o7 is published as. A pull request
+that changes the app (the same paths as a changelog line: `apps/desktop`, `crates`,
+`packages/ui`, the lockfiles and toolchain files) raises it in the same pull request, by how big
+the change is (owner, 23 November 2026):
+
+- **A big feature** raises the minor number and sets the patch to 0: `0.2.4` to `0.3.0`.
+  Something a person would notice and that is worth telling people about: a new capability, a
+  new surface, a change to how a whole flow works.
+- **A small change or a fix** raises the patch: `0.2.4` to `0.2.5`.
+- The major number moves only when the owner says so (`1.0.0`).
+
+A pull request that only touches the website, the docs, the tests or the release tooling leaves
+it alone. `pnpm lint` runs `.github/scripts/check-version.mjs`, which refuses a branch that
+changes the app without raising `VERSION` above main's, and Publish refuses one at merge. Two
+pull requests open at once both raise it: whichever merges second rebases and raises it again.
+
 ## Changelog
 
 The changelog is for the app only (owner, 21 November 2026: "change log is just for the app").

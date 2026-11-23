@@ -1,6 +1,5 @@
 import { ArrowDownToLine } from "lucide-react";
 import { type UpdatesApi, updateBusy, updateOffered, useAppUpdate } from "../../lib/updates";
-import { versionWithBuild } from "../../lib/version";
 import { Popover } from "./Popover";
 
 const MB = 1_048_576;
@@ -33,7 +32,7 @@ export function AppUpdate({
         : phase === "restart_required"
           ? "Restart"
           : "Update";
-  const version = status.version ? `o7 ${versionWithBuild(status.version)}` : "A newer o7";
+  const version = status.version ? `o7 ${status.version}` : "A newer o7";
   return (
     <Popover
       className="app-update"
@@ -50,8 +49,7 @@ export function AppUpdate({
       <div className="app-update-head">
         <h2 className="app-update-title">{version}</h2>
         <p className="app-update-meta">
-          You have{" "}
-          {status.current_version ? versionWithBuild(status.current_version) : "an older version"}
+          You have {status.current_version || "an older version"}
           {status.channel === "staging" ? " · staging" : ""}
         </p>
       </div>

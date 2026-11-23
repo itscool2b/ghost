@@ -44,7 +44,6 @@ import { type RemoteApi, remoteApi } from "../../lib/remote";
 import { type GeneralApi, generalApi, type SetupApi, setupApi } from "../../lib/setup";
 import { type SpeechApi, speechApi } from "../../lib/speech";
 import { type UpdatesApi, updatesApi } from "../../lib/updates";
-import { versionWithBuild } from "../../lib/version";
 import { EMPTY_WORKSPACE, type WorkspaceStore } from "../../lib/workspace";
 import { PluginLibraryScreen } from "../library/PluginLibraryScreen";
 import { UniversalPlugins } from "../library/UniversalPlugins";
@@ -457,7 +456,7 @@ export function SettingsScreen({
                 <h1 ref={heading} tabIndex={-1}>
                   <span className="sr-only">About </span>o7
                 </h1>
-                <p>Version {versionWithBuild(info.app_version)}</p>
+                <p>Version {info.app_version}</p>
               </div>
             </header>
           ) : (

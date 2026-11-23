@@ -44,18 +44,16 @@ up for every merge, and if u click it updates").
    up in the app: `apps/desktop`, `crates`, `packages/ui`, the lockfiles and toolchain files. A
    merge of the website, docs or tests alone publishes nothing. It can also be started by hand.
    One run at a time; a newer merge waits for the one building.
-2. **The build gets a number**: `<major>.<minor>.N`. The first two numbers are the version
-   people know o7 by, read from `[workspace.package] version` in `Cargo.toml`; N is the number of
-   commits on main. N is higher with every merge, the same for the same commit (so a rerun never
-   makes a second version), and never starts again, so every build is newer than the last
-   whatever the first two numbers are. `pnpm bundle --app-version` gives the number to Tauri.
-   **What people are shown is the first two numbers** (owner, 23 November 2026: "i want version
-   numbers to make sense ... keep it at the tenths"): "Version 0.1" on the website, "0.1 (build
-   1787)" where two copies must be told apart (the update panel, Settings > About, the release's
-   title). File names, tags, links, checksums and the updater keep all three
-   (`apps/desktop/src/lib/version.ts`, `apps/web/app/version.ts`). To name a new version, raise
-   the first two numbers in `Cargo.toml` (`0.1.0` to `0.2.0`, or `1.0.0`): the next merge that
-   changes the app is published as it.
+2. **The build is numbered by `VERSION`**, three numbers the pull request that changed the
+   app chose (owner, 23 November 2026): the minor number up for a big feature, the patch for a
+   small change (docs/developing-in-o7.md, "Version"). It must be newer than every published
+   version, or installed copies would never be offered it; the workflow refuses one that is not.
+   A version already published is skipped when nothing in the app changed since it (a rerun, or
+   release tooling alone) and refused when the app did change: raise `VERSION` in a pull request
+   and its merge publishes. `pnpm bundle --app-version` gives the number to Tauri; the workspace
+   version in `Cargo.toml` stays as it is. People see the number as it is, "o7 0.2.1".
+   Until 23 November 2026 the number was `0.1.N`, N the count of commits on main (the last was
+   0.1.1787); the first chosen version, 0.2.0, is newer than all of those.
 3. **Four targets build with their updater signatures** (`pnpm bundle --signed-updater`): the
    universal macOS app and DMG, Windows x64 and ARM64 NSIS installers, and the Linux AppImage, deb
    and rpm. macOS is signed ad hoc. No publisher signs the installers for the operating systems.
@@ -64,7 +62,7 @@ up for every merge, and if u click it updates").
    public key or is bound to another version, and a package built as another version. They write
    `latest.json` (what installed copies read), `downloads.json` (what the download page reads)
    and `SHA256SUMS`.
-5. **The files become the GitHub release `v0.1.N`**, marked the latest. The workflow then fetches
+5. **The files become the GitHub release `v<VERSION>`**, marked the latest. The workflow then fetches
    `releases/latest/download/latest.json`, the address compiled into the app, and requires it to
    be this version's manifest byte for byte.
 6. **The download page follows**: the workflow commits `downloads.json` as
