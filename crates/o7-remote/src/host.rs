@@ -999,8 +999,10 @@ async fn tell_later(
 }
 
 /// Starts the review of a task whose work is done: a chat of the reviewing agent in the project
-/// folder, told to read the task's branch with Git and change nothing. The link that started the
-/// task follows the review from now on, and is told when it is done.
+/// folder, held to what started the task may approve (an automation's always asks: the brief
+/// carries what a service outside sent), told to read the task's branch with Git and change
+/// nothing. The link that started the task follows the review from now on, and is told when it
+/// is done. When the chat cannot be held, nothing is sent to it.
 async fn start_review(
     shared: &Arc<Shared>,
     backend: &Arc<dyn Backend>,
@@ -1010,6 +1012,17 @@ async fn start_review(
         .create(&task.folder_id, task.review_agent.as_deref())
         .await?;
     let id = reviewer.chat.id.clone();
+    let most = {
+        let registry = lock(&shared.registry);
+        if registry.hook_of(&task.bot).is_some() {
+            bot::Most::Ask
+        } else {
+            bot::Most::of(registry.bot_rights(&task.bot))
+        }
+    };
+    bot::hold_access(backend, &id, most)
+        .await
+        .map_err(|answer| BackendError::new("failed", answer.text))?;
     {
         let mut registry = lock(&shared.registry);
         registry.set_reviewer(&task.builder, &id);

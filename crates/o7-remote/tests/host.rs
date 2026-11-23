@@ -2679,6 +2679,82 @@ async fn the_door_on_this_computer_answers_a_link_as_the_relay_does() {
     assert_eq!(used, 2, "the listing is not a call; the two calls are");
 }
 
+/// A task an automation started is reviewed in a chat held to asking first, as its own chat is:
+/// the review's brief carries the task's goal, and with it what a service outside sent.
+#[tokio::test]
+async fn an_automations_review_asks_first_too() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    rig.app.second_agent.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let made = rig
+        .service
+        .create_automation("CI", "p1", "Fix what CI reports.")
+        .expect("automation");
+    relay.next().await;
+    let (bot, token) = made
+        .url
+        .rsplit_once('/')
+        .and_then(|(_, reference)| reference.split_once('.'))
+        .map(|(bot, token)| (bot.to_owned(), token.to_owned()))
+        .expect("id.token");
+    relay
+        .send(format!(
+            "b{}",
+            json!({ "rid": "v1", "bot": bot, "token": token, "tool": "trigger", "args": { "text": "Build failed." } })
+        ))
+        .await;
+    let answer: Value =
+        serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer")).expect("json");
+    assert_eq!(answer["error"], false, "{answer}");
+    for _ in 0..200 {
+        if rig
+            .app
+            .statuses
+            .lock()
+            .expect("statuses")
+            .contains_key("auracode-remote-callbacks")
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    rig.app.made_becomes("c2", SessionStatus::Running);
+    rig.app.made_becomes("c2", SessionStatus::Ready);
+    for _ in 0..100 {
+        if rig
+            .app
+            .sent
+            .lock()
+            .expect("sent")
+            .iter()
+            .any(|(chat, _)| chat == "c3")
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert!(
+        sent.iter()
+            .any(|(chat, text)| chat == "c3" && text.starts_with("Review the work just done")),
+        "the review started: {sent:?}"
+    );
+    // The project's default here is full access: the review's chat was held to asking first.
+    assert!(
+        rig.app
+            .acted
+            .lock()
+            .expect("acted")
+            .iter()
+            .any(|action| matches!(
+                action,
+                Action::SetAccess { chat_id, access } if chat_id == "c3" && access == "ask"
+            )),
+        "the review asks first"
+    );
+}
+
 /// What a link may do is checked on the computer on every call, whatever the relay let through
 /// (owner's plan, 23 November 2026): a read-only link reads; a link not allowed to approve may
 /// decline and answer questions but never approve; full access needs its own right.
