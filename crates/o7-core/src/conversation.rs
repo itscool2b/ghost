@@ -287,6 +287,53 @@ fn work(turns: &[&ContextTurn], folder: &str) -> String {
     value
 }
 
+/// What a secret in a command line becomes in a handoff.
+const HIDDEN: &str = "<SECRET>";
+
+/// A command line with the values of secret-looking flags and variables hidden: `--token X`,
+/// `--password=X`, `-p X` is left (too common), `API_KEY=X`, `GITHUB_TOKEN=X`. Token shapes and
+/// the agents' own credentials are the session redactor's (`o7_process` log redaction); this
+/// catches what a command names only by its flag or variable.
+pub(crate) fn hide_secret_flags(command: &str) -> String {
+    const NAMES: [&str; 6] = ["token", "password", "passwd", "secret", "apikey", "credential"];
+    let secret_name = |name: &str| {
+        let plain: String = name
+            .trim_start_matches('-')
+            .chars()
+            .filter(|c| *c != '-' && *c != '_')
+            .collect::<String>()
+            .to_ascii_lowercase();
+        !plain.is_empty() && NAMES.iter().any(|word| plain.ends_with(word))
+    };
+    let mut out = Vec::new();
+    let mut hide_next = false;
+    for word in command.split(' ') {
+        if hide_next && !word.is_empty() {
+            out.push(HIDDEN.to_owned());
+            hide_next = false;
+            continue;
+        }
+        match word.split_once('=') {
+            // --token=X, API_KEY=X (a flag or an assignment, never a URL's query).
+            Some((name, value))
+                if !value.is_empty()
+                    && !name.contains('/')
+                    && !name.contains(':')
+                    && (name.starts_with('-')
+                        || name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+                    && secret_name(name) =>
+            {
+                out.push(format!("{name}={HIDDEN}"));
+            }
+            _ => {
+                hide_next = word.starts_with("--") && secret_name(word);
+                out.push(word.to_owned());
+            }
+        }
+    }
+    out.join(" ")
+}
+
 pub(crate) fn handoff(
     turns: &[ContextTurn],
     since_ordinal: Option<u32>,
@@ -571,6 +618,43 @@ mod tests {
         assert!(!context.contains("| step 9\n") && context.contains("| step 10\n"));
         assert!(context.contains("[turn 1] running | cat <<'EOF' > a.txt …\n"));
         assert!(context.len() <= HANDOFF_BYTES);
+    }
+
+    #[test]
+    fn secret_flags_and_variables_in_a_command_are_hidden() {
+        // Built here, so no realistic-looking secret sits in the source.
+        let value = format!("{}{}", "plain", "value42");
+        let hidden = |command: String| hide_secret_flags(&command);
+        assert_eq!(
+            hidden(format!("deploy --token {value} --env prod")),
+            "deploy --token <SECRET> --env prod"
+        );
+        assert_eq!(
+            hidden(format!("login --password={value}")),
+            "login --password=<SECRET>"
+        );
+        assert_eq!(
+            hidden(format!("GITHUB_TOKEN={value} gh pr list")),
+            "GITHUB_TOKEN=<SECRET> gh pr list"
+        );
+        assert_eq!(
+            hidden(format!("tool --api-key {value}")),
+            "tool --api-key <SECRET>"
+        );
+        assert_eq!(
+            hidden(format!("export OPENAI_API_KEY={value}")),
+            "export OPENAI_API_KEY=<SECRET>"
+        );
+        // Ordinary commands are untouched, URLs with query strings too.
+        for plain in [
+            "cargo test -p o7-core --lib conversation",
+            "git log --format=%H -1",
+            "curl https://example.test/?token=abc",
+            "npm run build -- --no-auth src/",
+            "pnpm --filter @o7/web build",
+        ] {
+            assert_eq!(hide_secret_flags(plain), plain);
+        }
     }
 
     #[test]

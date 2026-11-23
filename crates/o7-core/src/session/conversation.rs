@@ -141,9 +141,24 @@ impl SessionManager {
         {
             return Err(invalid("The continuation identifier is invalid."));
         }
-        let snapshot = self
+        let mut snapshot = self
             .conversation_snapshot(chat_id, selected, target.clone(), include_selected)
             .await?;
+        // Commands and their output go to another agent, maybe another vendor: the agents' own
+        // credentials, token shapes and secret-named flags and variables are hidden first.
+        let redactor = self.deps().redactor.clone();
+        for run in snapshot
+            .turns
+            .iter_mut()
+            .flat_map(|turn| turn.commands.iter_mut())
+        {
+            run.command =
+                crate::conversation::hide_secret_flags(&redactor.redact_text(&run.command));
+            run.output = redactor.redact_text(&run.output).into_owned();
+            if let Some(cwd) = &mut run.cwd {
+                *cwd = redactor.redact_text(cwd).into_owned();
+            }
+        }
         let continue_here = matches!(action, ContinuationAction::ContinueHere);
         if continue_here && !snapshot.remote_history {
             return Err(invalid(
