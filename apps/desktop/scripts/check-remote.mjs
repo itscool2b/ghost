@@ -151,7 +151,7 @@ export async function checkRemote(browser, url, out, engine) {
     assert.equal(await levels.getByRole("radio", { name: /^Chats/ }).isChecked(), true);
     // Approving and full access are off unless chosen, and full access is full control's alone.
     const approvals = bot.getByRole("group", { name: "What it may approve" });
-    const approving = approvals.getByRole("checkbox", { name: /^What agents ask permission for/ });
+    const approving = approvals.getByRole("checkbox", { name: /^Answer what agents ask/ });
     const fullAccess = approvals.getByRole("checkbox", { name: /^Full access in a chat/ });
     assert.equal(await approving.isChecked(), false);
     assert.equal(await fullAccess.isDisabled(), true);
@@ -182,7 +182,7 @@ export async function checkRemote(browser, url, out, engine) {
     assert.equal((await calls()).at(-1), "create-bot:Research bot:full:approve");
     // The link's level is a chip beside its name; whether it was used is the line under it.
     const linked = page.locator(".settings-row", { hasText: "Research bot" });
-    assert.equal(await linked.locator(".g-chip").textContent(), "Full control · approves");
+    assert.equal(await linked.locator(".g-chip").textContent(), "Full control · answers agents");
     // A new address replaces the old one, shown once with the assistant's steps.
     await page.getByRole("button", { name: "Renew, Research bot" }).click();
     const renewal = page.getByRole("dialog", { name: "A new address for Research bot" });

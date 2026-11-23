@@ -58,9 +58,10 @@ pub struct Rights {
     pub full: bool,
     /// Reads only: nothing that sends, answers, stops or changes.
     pub read_only: bool,
-    /// May answer what an agent asks permission for. Without it a bot may still decline, and
-    /// answer an agent's questions: the model that reads what agents write must not be the one
-    /// that approves what they do, unless the link's owner chose so.
+    /// May answer what an agent asks: a permission request or a question. Without it a bot may
+    /// only decline: the model that reads what agents write must not be the one that approves
+    /// what they do, unless the link's owner chose so. It also sets an access level other than
+    /// `ask`, which approves on the person's behalf.
     pub approve: bool,
     /// May set a chat's access to full access (`full_auto`).
     pub full_access: bool,
@@ -121,7 +122,7 @@ pub const READ_TOOLS: [&str; 9] = [
 /// What a read-only link is told when it asks for more.
 pub const READ_ONLY: &str = "This link only reads. Its owner can create one that may send messages in o7: Settings, Remote access.";
 /// What a link that may not approve is told when it tries to.
-pub const NO_APPROVAL: &str = "This link may not approve what an agent asks permission for: its person approves it, in o7 or on their phone. You may decline it (answer with no option), or tell your person it waits.";
+pub const NO_APPROVAL: &str = "This link may not answer what an agent asks (a permission or a question) or loosen a chat's access: its person does, in o7 or on their phone. You may decline what it asks (answer with neither option nor text), or tell your person it waits.";
 /// What a link that may not turn on full access is told when it tries to.
 pub const NO_FULL_ACCESS: &str = "This link may not turn on full access (full_auto). Use ask or auto_edit, or ask your person to change it in o7.";
 

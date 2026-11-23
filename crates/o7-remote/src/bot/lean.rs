@@ -449,9 +449,13 @@ async fn answer(
                 "Give option (a permission request's option id) or text (a question's answer), not both.",
             ));
         }
-        // An option is an approval or a refusal of what the agent asked to do. Only a link whose
-        // owner let it approve may give one; any link may decline (no option).
-        (Some(_), None) if !rights.approve => return Err(Answer::failed(NO_APPROVAL)),
+        // Any answer to what an agent asks may approve something: a permission's option, a yes,
+        // a choice or words that say go ahead, however they are spelled. So only a link whose
+        // owner let it answer gives one (the automated security review of #187 and #188 found
+        // every word list could be dodged); any link may decline, with neither.
+        (Some(_), None) | (None, Some(_)) if !rights.approve => {
+            return Err(Answer::failed(NO_APPROVAL));
+        }
         (Some(option), None) => {
             backend
                 .permission(&args.chat, &args.request, Some(option))
@@ -470,14 +474,6 @@ async fn answer(
                 ));
             };
             let reply = in_words(&request.prompt, text.trim())?;
-            // A yes to "go ahead?", an "Allow" picked from a list or a typed "proceed" approves
-            // as surely as a permission's option does (the automated security review, 23 November
-            // 2026), and agents ask for go-aheads every way they can. So a link that may not
-            // approve fails closed: no answer of it may read as one. A no, and the answers to an
-            // agent's questions, it may give.
-            if !rights.approve && goes_ahead(&request.prompt, &reply) {
-                return Err(Answer::failed(NO_APPROVAL));
-            }
             backend
                 .answer(&args.chat, &args.request, Some(reply))
                 .await?;
@@ -504,76 +500,6 @@ async fn answer(
             Err(_) => format!("{said} Call wait for the result."),
         },
     ))
-}
-
-/// The words that decline: the only answers a link without the approve right gives to a prompt
-/// that guards an action.
-const DECLINE: [&str; 12] = [
-    "no", "n", "nope", "deny", "denied", "reject", "rejected", "cancel", "decline", "abort",
-    "stop", "skip",
-];
-
-/// The words that open a go-ahead, for the answers to an agent's questions.
-const GO_AHEAD: [&str; 24] = [
-    "yes", "y", "yeah", "yep", "sure", "ok", "okay", "allow", "allowed", "approve", "approved",
-    "accept", "accepted", "proceed", "continue", "confirm", "go", "run", "execute", "apply",
-    "grant", "trust", "do", "agree",
-];
-
-/// The first word of `words`, lower case, past any leading marks, digits and spaces ("**Yes**",
-/// "1. Allow", "- proceed").
-fn first_word(words: &str) -> String {
-    words
-        .chars()
-        .skip_while(|c| !c.is_alphabetic())
-        .take_while(|c| c.is_alphanumeric())
-        .collect::<String>()
-        .to_lowercase()
-}
-
-fn declines(words: &str) -> bool {
-    DECLINE.contains(&first_word(words).as_str())
-}
-
-/// Whether `words` read as a go-ahead. Words with no letters at all are taken as one: they
-/// cannot be read, so they are not given.
-fn reads_as_go_ahead(words: &str) -> bool {
-    let first = first_word(words);
-    first.is_empty() || GO_AHEAD.contains(&first.as_str())
-}
-
-/// Whether answering `prompt` with `answer` may approve something, which a link without the
-/// approve right may not do. It fails closed: a prompt that guards an action (a confirmation, a
-/// choice from a list, a line to type) may only be declined; an agent's questions may be
-/// answered, but not with a choice or words that read as a go-ahead; anything else is refused.
-fn goes_ahead(prompt: &UiPrompt, answer: &UiAnswer) -> bool {
-    match (prompt, answer) {
-        (_, UiAnswer::Confirm { yes }) => *yes,
-        (UiPrompt::Select { options, .. }, UiAnswer::Select { index }) => options
-            .get(*index as usize)
-            .is_none_or(|option| !declines(option)),
-        (UiPrompt::Input { .. }, UiAnswer::Input { text }) => !declines(text),
-        (UiPrompt::Questions { questions, .. }, UiAnswer::Questions { answers }) => {
-            answers.iter().any(|answer| {
-                let Some(question) = questions
-                    .iter()
-                    .find(|question| question.id == answer.question_id)
-                else {
-                    return true;
-                };
-                answer.text.as_deref().is_some_and(reads_as_go_ahead)
-                    || answer.selected.iter().any(|index| {
-                        question
-                            .options
-                            .get(*index as usize)
-                            .is_none_or(|option| reads_as_go_ahead(&option.label))
-                    })
-            })
-        }
-        // Anything else (a form, an answer that does not fit its prompt) is not given without the
-        // right: failing closed costs a bot one message to its person.
-        _ => true,
-    }
 }
 
 /// A question's answer from a bot's words: the choice they name, or the words themselves where
@@ -1085,104 +1011,6 @@ mod tests {
             multi_select: false,
             allow_free_text: free,
         }
-    }
-
-    /// A link that may not approve can give no answer that reads as a go-ahead: a yes, an
-    /// "Allow" picked from a list or a typed "proceed". Its other answers go through.
-    #[test]
-    fn an_answer_that_reads_as_a_go_ahead_is_an_approval() {
-        let confirm = UiPrompt::Confirm {
-            message: "Delete it?".into(),
-        };
-        assert!(goes_ahead(&confirm, &UiAnswer::Confirm { yes: true }));
-        assert!(!goes_ahead(&confirm, &UiAnswer::Confirm { yes: false }));
-        // A choice from a list guards an action: only a decline is given.
-        let select = UiPrompt::Select {
-            message: "Run npm install?".into(),
-            options: vec!["Allow once".into(), "Deny".into(), "Postgres".into()],
-        };
-        assert!(goes_ahead(&select, &UiAnswer::Select { index: 0 }));
-        assert!(
-            !goes_ahead(&select, &UiAnswer::Select { index: 1 }),
-            "a decline"
-        );
-        assert!(
-            goes_ahead(&select, &UiAnswer::Select { index: 2 }),
-            "not a decline, so not given"
-        );
-        assert!(
-            goes_ahead(&select, &UiAnswer::Select { index: 9 }),
-            "fails closed"
-        );
-        // So does a line to type.
-        let input = UiPrompt::Input {
-            message: "Type yes to continue".into(),
-            placeholder: None,
-        };
-        for words in [
-            "yes",
-            "Proceed with it",
-            "OK.",
-            "use Postgres",
-            "**yes**",
-            "!!!",
-        ] {
-            assert!(
-                goes_ahead(&input, &UiAnswer::Input { text: words.into() }),
-                "{words}"
-            );
-        }
-        for words in ["no", "No, stop.", "cancel", "- deny"] {
-            assert!(
-                !goes_ahead(&input, &UiAnswer::Input { text: words.into() }),
-                "{words}"
-            );
-        }
-        // An agent's questions are answered, but not with a go-ahead, read past leading marks.
-        let questions = UiPrompt::Questions {
-            message: String::new(),
-            questions: vec![question("db", &["Postgres", "Approve the migration"], true)],
-        };
-        let picked = |selected: Vec<u32>, text: Option<&str>| UiAnswer::Questions {
-            answers: vec![UiQuestionAnswer {
-                question_id: "db".into(),
-                selected,
-                text: text.map(str::to_owned),
-            }],
-        };
-        assert!(!goes_ahead(&questions, &picked(vec![0], None)));
-        assert!(goes_ahead(&questions, &picked(vec![1], None)));
-        assert!(!goes_ahead(
-            &questions,
-            &picked(vec![], Some("SQLite please"))
-        ));
-        for words in [
-            "yes do it",
-            "**Yes**",
-            "1. Allow it",
-            "- proceed",
-            "\u{2705} go",
-            "!!!",
-            "42",
-        ] {
-            assert!(
-                goes_ahead(&questions, &picked(vec![], Some(words))),
-                "{words}"
-            );
-        }
-        // An answer to a question it was not asked fails closed.
-        assert!(goes_ahead(
-            &questions,
-            &UiAnswer::Questions {
-                answers: vec![UiQuestionAnswer {
-                    question_id: "other".into(),
-                    selected: vec![],
-                    text: Some("SQLite".into()),
-                }],
-            }
-        ));
-        // A form is not given either.
-        assert!(goes_ahead(&input, &UiAnswer::Questions { answers: vec![] }));
     }
 
     #[test]
