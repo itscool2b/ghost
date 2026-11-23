@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine;
-use o7_devices::manager::{Config, DEFAULT_RUNNING, Manager, MobileStatus};
+use o7_devices::manager::{Config, DEFAULT_RUNNING, DeviceKind, Manager, MobileStatus};
 use o7_devices::scrcpy::{Touch, key};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse};
@@ -56,7 +56,8 @@ impl Watches {
     fn stop(&self, chat_id: &str, id: Option<u32>) {
         let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
         let current = running.get(chat_id).map(|(current, _)| *current);
-        if current.is_some() && id.is_none_or(|id| Some(id) == current)
+        if current.is_some()
+            && id.is_none_or(|id| Some(id) == current)
             && let Some((_, task)) = running.remove(chat_id)
         {
             task.abort();
@@ -121,6 +122,33 @@ pub struct MobileToolCheck {
     pub error: bool,
 }
 
+/// What `chat_id`'s emulator shows now, as a PNG, for a bot that asked to look
+/// (`crate::remote`). Never a phone or another program's emulator: those are the person's own,
+/// with whatever else is on them.
+pub(crate) async fn picture(app: &AppHandle, chat_id: &str) -> Result<Vec<u8>, String> {
+    let manager = app
+        .try_state::<Manager>()
+        .map(|state| state.inner().clone())
+        .ok_or_else(|| "Mobile is not available in this run.".to_owned())?;
+    let status = manager.status();
+    let Some(device) = status.chats.iter().find(|device| device.chat_id == chat_id) else {
+        return Err("This chat has no device.".into());
+    };
+    if device.kind != DeviceKind::Emulator {
+        return Err(
+            "This chat's device is a phone or another program's emulator. o7 sends pictures of its own emulators only."
+                .into(),
+        );
+    }
+    if !device.live {
+        return Err("This chat's emulator is not running.".into());
+    }
+    manager
+        .screenshot(chat_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 /// Agents' calls from o7-core's mobile grants, run on the chat's device.
 struct AgentBridge(Manager);
 
@@ -179,7 +207,10 @@ pub fn setup(app: &AppHandle) {
 /// The active profile's sessions get their bridge to the devices (after setup and a profile
 /// switch).
 pub fn sync(app: &AppHandle) {
-    let Some(manager) = app.try_state::<Manager>().map(|state| state.inner().clone()) else {
+    let Some(manager) = app
+        .try_state::<Manager>()
+        .map(|state| state.inner().clone())
+    else {
         return;
     };
     if let Some(chats) = app
@@ -195,7 +226,10 @@ pub fn sync(app: &AppHandle) {
 /// Settings' switch for Mobile. Off stops every device o7 started.
 pub fn apply_preferences(app: &AppHandle, general: &o7_core::onboarding::GeneralPreferences) {
     sync(app);
-    let Some(manager) = app.try_state::<Manager>().map(|state| state.inner().clone()) else {
+    let Some(manager) = app
+        .try_state::<Manager>()
+        .map(|state| state.inner().clone())
+    else {
         return;
     };
     if manager.enabled() == general.mobile {
@@ -215,7 +249,10 @@ pub fn shutdown(app: &AppHandle) {
     if let Some(watches) = app.try_state::<Watches>() {
         watches.clear();
     }
-    if let Some(manager) = app.try_state::<Manager>().map(|state| state.inner().clone()) {
+    if let Some(manager) = app
+        .try_state::<Manager>()
+        .map(|state| state.inner().clone())
+    {
         tauri::async_runtime::block_on(manager.shutdown());
     }
 }
@@ -353,7 +390,10 @@ mod tests {
         let one = watches.start("chat", first_handle);
         let two = watches.start("chat", second_handle);
         assert_ne!(one, two);
-        assert!(first.await.unwrap_err().is_cancelled(), "a new stream ends the one before");
+        assert!(
+            first.await.unwrap_err().is_cancelled(),
+            "a new stream ends the one before"
+        );
         watches.stop("chat", Some(one));
         tokio::task::yield_now().await;
         assert!(!second.is_finished(), "the stale stop did nothing");
@@ -402,9 +442,7 @@ pub async fn mobile_scroll(
     if !horizontal.is_finite() || !vertical.is_finite() {
         return Err(AppError::invalid_argument("A scroll is a number."));
     }
-    Ok(devices
-        .scroll(&chat_id, x, y, horizontal, vertical)
-        .await?)
+    Ok(devices.scroll(&chat_id, x, y, horizontal, vertical).await?)
 }
 
 #[tauri::command]

@@ -321,6 +321,8 @@ pub struct BotAnswer<'a> {
     pub rid: &'a str,
     pub text: &'a str,
     pub error: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<&'a crate::backend::Picture>,
 }
 
 #[derive(Debug, Serialize)]

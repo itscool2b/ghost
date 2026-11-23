@@ -12,7 +12,8 @@ The owner's plan of 23 November 2026, from two rounds of research and their own 
 | 2: managing a whole task | Merged with #190: `task` makes a chat on its own branch, briefs it, and when the work is done has a second agent review it; the bot is told once. The idle stop needs no change: an agent stopped between turns resumes on the next message. |
 | 3: approvals and scope | Merged with #187: read-only links, approving an agent's permission requests and turning on full access as separate rights off by default, renewing a link's address, and expiry after 90 days unused. Approval from o7's own notification is not separate: the person answers in the chat or on the phone page, which already works. |
 | 5: stay reachable | Merged with #191: opening at sign-in in the background (Windows' Run key, a macOS launch agent, a Linux autostart entry), keeping the computer awake while a phone or a live bot link can reach it, and a bot told plainly that the computer is away, since when, and that nothing was done. The macOS launch agent is untested: no Mac here. |
-| 4, 6 to 8 | Not started. |
+| 6: pictures | Merged with #192: `look` (full control, tool set 5) shows a chat's browser tab, or its own emulator, as a JPEG of at most 1600 pixels; never a phone. Not from screenshots the agent already took (history keeps none), so the picture is taken when asked. |
+| 4, 7, 8 | Not started. |
 
 Still true of every phase: no real Grok Bot or Muse has been run against the link.
 

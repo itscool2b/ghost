@@ -1032,7 +1032,7 @@ impl Serving {
             None
         };
         if let Some(text) = refused {
-            self.outbox.push(bot_answer(&call.rid, text, true));
+            self.outbox.push(bot_answer(&call.rid, text, true, None));
             return;
         }
         self.bot_calls.fetch_add(1, Ordering::Relaxed);
@@ -1047,7 +1047,7 @@ impl Serving {
             let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights).await;
             running.fetch_sub(1, Ordering::Relaxed);
             if let Some(task) = &answer.task {
-                let mut task = task.clone();
+                let mut task = (**task).clone();
                 task.bot = call.bot.clone();
                 task.created_at = now();
                 lock(&shared.registry).add_task(task);
@@ -1136,8 +1136,12 @@ impl Serving {
                 }
             }
             Out::Bot { rid, answer } => {
-                self.outbox
-                    .push(bot_answer(&rid, &answer.text, answer.error));
+                self.outbox.push(bot_answer(
+                    &rid,
+                    &answer.text,
+                    answer.error,
+                    answer.image.as_deref(),
+                ));
             }
         }
     }

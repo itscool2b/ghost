@@ -301,6 +301,9 @@ fn missing() -> BackendError {
     BackendError::new("not_found", "That chat is no longer here.")
 }
 
+/// A PNG of one pixel: what the demo computer's browser shows a full-control bot.
+const DEMO_PICTURE: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
 /// The backend the service drives. It holds the demo behind an `Arc` so a turn can outlive a call.
 struct Shared(Arc<Demo>);
 
@@ -315,6 +318,26 @@ impl Backend for Shared {
         Some(o7_remote::Look {
             theme: "claude".into(),
             appearance: "system".into(),
+        })
+    }
+
+    // A chat's browser shows a page of one pixel; there is no device.
+    fn picture<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        of: o7_remote::PictureOf,
+    ) -> BoxFuture<'a, Result<o7_remote::Picture, BackendError>> {
+        Box::pin(async move {
+            match of {
+                o7_remote::PictureOf::Browser => Ok(o7_remote::Picture {
+                    mime: "image/png".into(),
+                    data: DEMO_PICTURE.into(),
+                }),
+                o7_remote::PictureOf::Device => Err(BackendError::new(
+                    "invalid",
+                    "The demo computer has no device.",
+                )),
+            }
         })
     }
 
@@ -731,6 +754,14 @@ async fn main() {
                     ..o7_remote::bot::Rights::CHATS
                 },
             )
+            .expect("bot")
+            .url
+    );
+    // A full-control link too, for what only such a link has (`look`).
+    println!(
+        "FULLBOT {}",
+        service
+            .create_bot("Demo full bot", o7_remote::bot::Rights::FULL)
             .expect("bot")
             .url
     );
