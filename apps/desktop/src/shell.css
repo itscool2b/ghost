@@ -1994,7 +1994,20 @@ details.setup-install-review[open] > summary::before {
   font-weight: var(--g-weight-medium);
 }
 
-.conversation-context pre {
+/* The handoff laid out (HandoffView): it scrolls on its own, the dialog's actions stay put. */
+.conversation-handoff {
+  max-height: min(380px, 45vh);
+  padding: var(--g-space-12) var(--g-space-16);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.conversation-handoff + pre,
+.conversation-handoff + h3 {
+  border-top: 1px solid var(--g-line);
+}
+
+.conversation-context > pre {
   max-height: 240px;
   margin: 0;
   padding: var(--g-space-12) var(--g-space-16);
@@ -2012,7 +2025,7 @@ details.setup-install-review[open] > summary::before {
   border-top: 1px solid var(--g-line);
 }
 
-.conversation-context p {
+.conversation-context > p {
   margin: 0;
   padding: var(--g-space-12) var(--g-space-16);
   color: var(--g-fg-2);

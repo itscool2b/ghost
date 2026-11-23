@@ -60,6 +60,7 @@ import { Composer } from "./Composer";
 import { ConversationDialog, type ConversationIntent } from "./ConversationDialog";
 import { DebugBundleDialog } from "./DebugBundleDialog";
 import { GitDialog } from "./GitDialog";
+import { HandoffCount, HandoffView } from "./HandoffView";
 import { Header } from "./Header";
 import { PermissionCard } from "./PermissionCard";
 import { Pickers } from "./Pickers";
@@ -1380,14 +1381,19 @@ export function ChatView({
                             {agents?.find((agent) => agent.id === handoff.agent_id)?.name ??
                               handoff.agent_id}
                           </span>
+                          <HandoffCount text={handoff.handoff} />
                           <span className="chat-handoff-preview">Preview</span>
                         </summary>
-                        <pre>
-                          {handoff.handoff ||
-                            (handoff.uses_native_fork
-                              ? "Continue from the saved native fork. No extra context will be added."
-                              : "No extra context will be added.")}
-                        </pre>
+                        <div className="chat-handoff-body">
+                          <HandoffView
+                            text={handoff.handoff}
+                            emptyText={
+                              handoff.uses_native_fork
+                                ? "Continue from the saved native fork. No extra context will be added."
+                                : "No extra context will be added."
+                            }
+                          />
+                        </div>
                       </details>
                     ) : null}
                     {handoffError ? (

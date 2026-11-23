@@ -23,6 +23,7 @@ import type {
   UsageInfo,
   Value,
 } from "../../bindings";
+import { splitHandoff } from "./handoff";
 import { type MemoryContext, splitMemoryContext } from "./memoryContext";
 import { mergeTask, newestTurnKey, type TaskItem, withStep } from "./tasks";
 
@@ -63,7 +64,9 @@ export interface UserItem {
   readonly text: string;
   /** Project memory o7 attached to this message as reference context, when it attached any. */
   readonly memory?: MemoryContext;
-  /** With `memory`: the whole saved message, which later pieces of it are appended to. */
+  /** The handoff this message carried to a new agent, before the person's words. */
+  readonly handoff?: string;
+  /** With `memory` or `handoff`: the whole saved message, which later pieces are appended to. */
   readonly sent?: string;
   readonly steering?: { readonly state: SteeringState; readonly detail: string | null };
 }
@@ -401,13 +404,18 @@ class Draft {
         const previous = this.#get(key);
         const sent =
           (previous?.kind === "user" ? (previous.sent ?? previous.text) : "") + event.text;
-        const { text, memory } = splitMemoryContext(sent);
+        const { text: words, memory } = splitMemoryContext(sent);
+        // A message sent after a change of agent starts with the handoff the agent received.
+        const split = splitHandoff(words);
+        const text = split ? split.text : words;
         this.#place(key, seq, {
           kind: "user",
           key,
           text,
-          // Without attached memory the message is its own whole text.
-          ...(memory ? { memory, sent } : {}),
+          ...(memory ? { memory } : {}),
+          ...(split ? { handoff: split.handoff } : {}),
+          // Without attached memory or a handoff the message is its own whole text.
+          ...(memory || split ? { sent } : {}),
           ...(previous?.kind === "user" && previous.steering
             ? { steering: previous.steering }
             : {}),
