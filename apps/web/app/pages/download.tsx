@@ -1,4 +1,5 @@
 import catalog from "#release-catalog";
+import { counted } from "../counted";
 import { REPOSITORY } from "../repo";
 import { AppTile, Arrow, Page } from "../ui";
 
@@ -115,7 +116,7 @@ export default function Download() {
                   </div>
                 </dl>
                 <div className="download-action">
-                  <a className="btn btn-primary btn-lg" href={download.url}>
+                  <a className="btn btn-primary btn-lg" href={counted(download.url)} rel="nofollow">
                     Download {download.label}
                   </a>
                 </div>

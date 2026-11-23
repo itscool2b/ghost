@@ -2,8 +2,10 @@
 
 This Worker serves the existing `apps/web/build/client` prerender output through a normal Workers
 code deployment. React rendering and `scripts/headers.mjs` remain build-time tooling; routing,
-response policies and body selection run in Rust. It has no Assets binding, API implementation,
-database, object bucket, secret, outbound subrequest or runtime filesystem access.
+response policies and body selection run in Rust. It has no Assets binding, object bucket, secret,
+outbound subrequest or runtime filesystem access. Its one binding is `COUNTS`, the D1 database of the
+site's anonymous download and daily-use counters (`src/count.rs`, `schema.sql`,
+[docs/usage-counts.md](../../docs/usage-counts.md)).
 
 The existing assets-only configuration remains an alternative. Do not deploy both configurations
 to the same website route. This code path does not call the denied Static Assets upload endpoint,

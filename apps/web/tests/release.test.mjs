@@ -8,6 +8,10 @@ import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright";
 
+/** A download button goes through the site's counter (app/counted.ts). */
+const counted = (url) =>
+  url.replace(/^https:\/\/github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download\//, "/get/");
+
 const app = fileURLToPath(new URL("..", import.meta.url));
 const repo = resolve(app, "../..");
 const require = createRequire(import.meta.url);
@@ -92,7 +96,7 @@ try {
     );
   assert.match(html, /&lt;script&gt;not executable&lt;\/script&gt;/);
   for (const download of catalog.release.downloads) {
-    assert.ok(html.includes(`href="${download.url}"`));
+    assert.ok(html.includes(`href="${counted(download.url)}"`));
     assert.ok(html.includes(download.sha256));
   }
   const build = join(app, "build/client");
@@ -140,7 +144,7 @@ try {
             await page
               .getByRole("link", { name: `Download ${download.label}`, exact: true })
               .getAttribute("href"),
-            download.url,
+            counted(download.url),
           );
         }
         assert.equal(

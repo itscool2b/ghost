@@ -5,6 +5,10 @@ import { join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+/** A download button goes through the site's counter (app/counted.ts). */
+const counted = (url) =>
+  url.replace(/^https:\/\/github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download\//, "/get/");
+
 const root = new URL("../build/client/", import.meta.url);
 /** The committed catalog: `{ release: null }` until installers are published, then one release. */
 const { release } = JSON.parse(
@@ -52,7 +56,7 @@ test("public pages are prerendered to follow the system appearance without JavaS
     // Published: every installer is linked beside its checksum, and nothing says otherwise.
     assert.equal(release.downloads.length, 6);
     for (const download of release.downloads) {
-      assert.ok(downloads.includes(`href="${download.url}"`), download.file);
+      assert.ok(downloads.includes(`href="${counted(download.url)}"`), download.file);
       assert.ok(downloads.includes(download.sha256), download.file);
       assert.match(
         download.url,

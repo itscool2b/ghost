@@ -1,5 +1,8 @@
-//! Static website responses only. The site has no API of its own; the remote relay is a separate
-//! Worker on the more-specific `/api/remote/*` route.
+//! Static website responses, and the site's two counters (`count`): downloads at `/get/…` and
+//! copies that ran at `/api/count`. The remote relay is a separate Worker on the more-specific
+//! `/api/remote/*` route.
+
+pub mod count;
 
 /// The site's address.
 pub const SITE: &str = "https://o7.codes";
@@ -168,10 +171,88 @@ mod edge {
     use worker::*;
     include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 
+    use crate::count::{self, Count, Plan};
+
+    /// Adds one to each count. Counting never stands between anyone and a download: without the
+    /// database (a local run) or when it fails, nothing is counted and the answer is the same.
+    async fn add(env: &Env, counts: &[Count]) {
+        let Ok(db) = env.d1("COUNTS") else {
+            return;
+        };
+        let (day, _) = count::eastern_day((Date::now().as_millis() / 1000) as i64);
+        let statements: Vec<_> = counts
+            .iter()
+            .filter_map(|c| {
+                db.prepare(count::ADD_ONE)
+                    .bind(&[
+                        day.as_str().into(),
+                        c.event.into(),
+                        c.platform.into(),
+                        c.version.as_str().into(),
+                    ])
+                    .ok()
+            })
+            .collect();
+        if let Err(error) = db.batch(statements).await {
+            console_error!("count not recorded: {error}");
+        }
+    }
+
+    fn plain(status: u16, body: String, common: &[(&str, &str)]) -> Result<Response> {
+        let headers = Headers::new();
+        for (name, value) in common {
+            headers.set(name, value)?;
+        }
+        headers.set("cache-control", "no-store")?;
+        headers.set("content-type", "text/plain; charset=utf-8")?;
+        Ok(Response::ok(body)?
+            .with_status(status)
+            .with_headers(headers))
+    }
+
+    async fn counting(
+        plan: Plan,
+        request: &Request,
+        env: &Env,
+        common: &[(&str, &str)],
+    ) -> Result<Response> {
+        match plan {
+            Plan::Download { count, location } => {
+                let agent = request.headers().get("User-Agent")?;
+                if request.method() == Method::Get && !count::robot(agent.as_deref()) {
+                    add(env, &[count]).await;
+                }
+                let headers = Headers::new();
+                for (name, value) in common {
+                    headers.set(name, value)?;
+                }
+                headers.set("cache-control", "no-store")?;
+                headers.set("x-robots-tag", "noindex, nofollow")?;
+                headers.set("location", &location)?;
+                Ok(Response::empty()?.with_status(302).with_headers(headers))
+            }
+            Plan::Ran { counts } => {
+                add(env, &counts).await;
+                let (_, left) = count::eastern_day((Date::now().as_millis() / 1000) as i64);
+                plain(200, format!("{left}\n"), common)
+            }
+            Plan::Refused(status) => plain(status, "Not counted\n".into(), common),
+        }
+    }
+
     #[event(fetch)]
-    async fn fetch(request: Request, _env: Env, _context: Context) -> Result<Response> {
+    async fn fetch(request: Request, env: Env, _context: Context) -> Result<Response> {
         let path = request.path();
-        let host = request.url()?.host_str().unwrap_or_default().to_owned();
+        let url = request.url()?;
+        let host = url.host_str().unwrap_or_default().to_owned();
+        let former = crate::FORMER_HOSTS
+            .iter()
+            .any(|former| host.eq_ignore_ascii_case(former));
+        if !former {
+            if let Some(plan) = count::plan(request.method().as_ref(), &path, url.query()) {
+                return counting(plan, &request, &env, COMMON).await;
+            }
+        }
         let conditional = request.headers().get("If-None-Match")?;
         let plan = crate::respond(
             request.method().as_ref(),
