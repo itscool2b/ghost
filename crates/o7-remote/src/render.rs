@@ -524,8 +524,41 @@ pub fn brief_parts(chat: &ChatSummary, items: &[HistoryItem]) -> Brief {
 
 /// What a chat stands on, in a line or two after its reading: its branch and what is not
 /// committed, and its agent's usage as last reported. Nothing where nothing is known.
+/// A pull request in one line: `#12 <address>, open; checks failed: test, lint`.
+pub fn pull_request(pr: &crate::backend::PullRequest) -> String {
+    use crate::backend::PrChecks;
+    let checks = match &pr.checks {
+        PrChecks::None => "no checks".to_owned(),
+        PrChecks::Pending => "checks running".to_owned(),
+        PrChecks::Passed => "checks passed".to_owned(),
+        PrChecks::Failed(names) => format!(
+            "checks failed: {}",
+            names
+                .iter()
+                .take(5)
+                .map(|name| one_line(name, 60))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+    let notes = match pr.notes.len() {
+        0 => String::new(),
+        1 => "; 1 review or comment".to_owned(),
+        n => format!("; {n} reviews and comments"),
+    };
+    format!(
+        "#{} {}, {}; {checks}{notes}",
+        pr.number,
+        one_line(&pr.url, 200),
+        one_line(&pr.state, 20)
+    )
+}
+
 pub fn facts(facts: &crate::backend::ChatFacts) -> String {
     let mut out = String::new();
+    if let Some(pull_request) = &facts.pull_request {
+        out.push_str(&format!("Pull request: {}.\n", one_line(pull_request, 300)));
+    }
     if let Some(branch) = &facts.branch {
         out.push_str(&format!(
             "Branch: {}{}",

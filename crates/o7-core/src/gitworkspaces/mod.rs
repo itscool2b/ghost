@@ -14,6 +14,9 @@ pub(crate) use records::unchanged_since_review;
 #[cfg(test)]
 mod new_chat_tests;
 mod publication;
+mod pull_request;
+
+pub use pull_request::{Checks, Note, PullRequestView};
 mod publish;
 mod records;
 mod recovery;

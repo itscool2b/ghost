@@ -388,6 +388,19 @@ impl SessionManager {
             .map_err(|_| invalid("The push ended unexpectedly. Refresh the Git workspace and check the remote before retrying."))?
     }
 
+    /// The pull request open from `chat_id`'s branch on GitHub, read with GitHub CLI as the
+    /// person is signed in; none when there is none or GitHub CLI cannot say.
+    pub async fn pull_request(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<crate::gitworkspaces::PullRequestView>, SessionError> {
+        let chat = self.git_chat(chat_id).await?;
+        self.worktrees()?
+            .pull_request(&chat.folder)
+            .await
+            .map_err(|error| invalid(error.to_string()))
+    }
+
     pub async fn git_workspace(&self, chat_id: &str) -> Result<GitWorkspace, SessionError> {
         let chat = self.git_chat(chat_id).await?;
         self.worktrees()?

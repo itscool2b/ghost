@@ -203,6 +203,26 @@ The point is the person's subscriptions: work that can wait runs on capacity nob
 - The queue and the night's starts are kept in `remote.json` (`queued`, `night`), so a restart
   loses nothing. The computer must be awake: "Keep this computer awake" in Settings helps.
 
+### A task's pull request
+
+When a task's agent opens a pull request (because the bot asked it to), o7 watches it for the
+link that started the task, if that link has a call-back: every five minutes, for a week, with
+GitHub CLI as the person is signed in (`gh pr view` in the task's own folder; nothing is
+written to GitHub). The bot is told, once each:
+
+- the checks failed (with their names), or passed after that;
+- a new review or comment: its author, and its words only when the author owns the repository,
+  is a member or a collaborator (`authorAssociation`). Anyone can comment on a public
+  repository, so a stranger's words are not passed to the person's assistant; the message says
+  there is one. An automated security review of #194 asked for this, and for the message to end
+  by telling the bot to check with its person before having the agent act on what reviewers
+  wrote;
+- the pull request was merged, or closed. Then it is no longer looked at.
+
+A reading of a chat on a branch of its own also names its pull request ("Pull request: #12
+<address>, open; checks failed: test"), read again at most every two minutes. Without GitHub
+CLI, or signed out, nothing is said. What was last seen is kept in `remote.json` (`prs`).
+
 ### Telling a bot when a chat is done (the call-back)
 
 A bot that hands o7 a task used to have two ways to learn how it went: hold a call open, or ask
