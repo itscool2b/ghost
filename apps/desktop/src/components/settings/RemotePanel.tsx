@@ -510,6 +510,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
       {linking ? (
         <BotDialog
           initial={linking.bot}
+          program={api.localProgram}
           create={async (name, rights) => {
             await ensureOn();
             return api.createBot(name, rights);
@@ -522,6 +523,45 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * For an assistant that runs on this computer (Hermes, OpenClaw): o7's own helper as its MCP
+ * server, started with the link's address, so its calls never leave the computer.
+ */
+function OnThisComputer({
+  address,
+  program,
+}: {
+  readonly address: string;
+  readonly program: () => Promise<string>;
+}) {
+  const [path, setPath] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    program().then(
+      (value) => {
+        if (live) setPath(value);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [program]);
+  if (path === null) return null;
+  return (
+    <details className="settings-more">
+      <summary>If your assistant runs on this computer</summary>
+      <p>
+        It can start o7's helper as a local MCP server instead of using the address above: its calls
+        then stay on this computer and never pass through the relay. Give it this command, with the
+        address in the environment variable O7_LINK.
+      </p>
+      <CopyField value={`"${path}" --o7-bot-helper`} label="Command" />
+      <CopyField value={`O7_LINK=${address}`} label="Environment" />
+    </details>
   );
 }
 
@@ -1214,9 +1254,12 @@ export function BotDialog({
   initial,
   create,
   called,
+  program,
   onClose,
 }: {
   readonly initial: BotChoice;
+  /** This program's path, for an assistant on this computer that starts o7's helper. */
+  readonly program?: () => Promise<string>;
   readonly create: (name: string, rights: BotRights) => Promise<RemoteBotLink>;
   /** Whether the link with this id has made a call yet: the dialog then says it is connected. */
   readonly called?: (id: string) => boolean;
@@ -1265,6 +1308,7 @@ export function BotDialog({
               <li key={step}>{step}</li>
             ))}
           </ol>
+          {program ? <OnThisComputer address={link.url} program={program} /> : null}
           {called ? (
             <p className="remote-note" role="status" data-testid="remote-bot-called">
               {called(link.id)

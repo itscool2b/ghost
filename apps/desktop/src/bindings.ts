@@ -459,6 +459,11 @@ export const commands = {
 	 */
 	remoteCreateAutomation: (name: string, project: string, instruction: string) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_create_automation", { name, project, instruction })),
 	/**
+	 *  This program's path, for an assistant on this computer that starts o7's helper
+	 *  (`--o7-bot-helper`) to reach its door without the relay.
+	 */
+	remoteLocalProgram: () => typedError<string, AppError>(__TAURI_INVOKE("remote_local_program")),
+	/**
 	 *  Removes a bot link. Its address stops working, and the key of its call-back, if it had
 	 *  one, leaves this computer's secure storage.
 	 */

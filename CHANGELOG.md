@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-23
 
+- An assistant that runs on your computer, like Hermes or OpenClaw, can now reach o7 directly, without going through the internet. When you link it, Settings shows the command to give it. ([#197](https://github.com/itscool2b/o7/pull/197))
 - A chat your assistant or an automation starts now asks before changing anything unless the link may approve, even when your projects start chats with full access. ([#196](https://github.com/itscool2b/o7/pull/196))
 - New: automations. Give GitHub, your CI or a monitor an automation's address, and what it sends starts a task in your project with your instruction. The agent treats what was sent as information, never as orders. Find them in Settings > Remote access. ([#195](https://github.com/itscool2b/o7/pull/195))
 - When a task your assistant started opens a pull request, o7 watches it and tells your assistant when its checks fail or pass, when someone reviews or comments, and when it is merged. It passes on what was written only by people of your repository. ([#194](https://github.com/itscool2b/o7/pull/194))

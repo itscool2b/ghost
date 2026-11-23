@@ -23,7 +23,9 @@ sha2 = "0.11.0"
 subtle = "2.6.1"
 tempfile.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+# The door on this computer listens on loopback (`net`, already in the tree through
+# tokio-tungstenite).
+tokio = { workspace = true, features = ["net"] }
 # The parser the app's HTTP client sends with: a call-back address is checked as it is reached.
 url = "2.5.8"
 # Native TLS matches the rest of the desktop.

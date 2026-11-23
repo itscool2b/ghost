@@ -174,6 +174,16 @@ export async function checkRemote(browser, url, out, engine) {
     await bot.getByText("works like a password").waitFor();
     // The dialog says whether the assistant has reached this computer yet.
     await bot.getByText("Waiting for Research bot's first call", { exact: false }).waitFor();
+    // An assistant on this computer can use o7's own helper instead, with the same address.
+    await bot.getByText("If your assistant runs on this computer").click();
+    assert.match(
+      await bot.getByRole("textbox", { name: "Command" }).inputValue(),
+      /^"C:\\Users\\you\\AppData\\Local\\o7\\o7\.exe" --o7-bot-helper$/,
+    );
+    assert.match(
+      await bot.getByRole("textbox", { name: "Environment" }).inputValue(),
+      /^O7_LINK=https:\/\/o7\.codes\/api\/remote\/v1\/mcp\//,
+    );
     await settled(page);
     assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
     await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-bot.png`) });

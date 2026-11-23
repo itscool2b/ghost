@@ -23,8 +23,20 @@ fn main() {
         return;
     }
     // The devices' MCP helper (the Mobile plugin's tools), started by an agent the same way.
-    if std::env::args_os().nth(1).is_some_and(|arg| arg == "--o7-mobile-helper") {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "--o7-mobile-helper")
+    {
         o7_core::mobile_service::run_helper();
+        return;
+    }
+    // o7's bot tools for an assistant on this computer (Hermes, OpenClaw): through the running
+    // app's door on loopback, never the relay (bot_helper.rs).
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "--o7-bot-helper")
+    {
+        o7_desktop::bot_helper::run();
         return;
     }
     // A coordinated project's MCP helper, started by its coordinator's or a worker's agent.

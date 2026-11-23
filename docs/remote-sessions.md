@@ -258,6 +258,29 @@ as webhooks send. No assistant is in between.
   A page cannot send to it (the relay refuses a request with an `Origin`). It expires after 90
   days unused, as a bot link does, and Renew gives it a new address.
 
+### On this computer, without the relay (the door)
+
+An assistant that runs on the same computer as o7 (Hermes, OpenClaw and others) can use o7's own
+helper as a local MCP server instead of the address: `"<o7's program>" --o7-bot-helper`, with
+the bot link's address in the environment variable `O7_LINK` (Settings shows both under "If your
+assistant runs on this computer" when a link is made). Its calls then never leave the computer.
+It works while o7 runs with remote access on, even when the relay cannot be reached.
+
+- **The tools and the rules are the same.** The helper lists the relay's own tool list
+  (`apps/relay/src/tools.json`) filtered as the relay filters it for the link's level and set
+  (a test checks its instructions are the relay's word for word), and each call is answered by
+  the same code as a relay call (`answer_call`): the same token check, rights, refusals, limits
+  and call-backs. An automation's address is not taken there.
+- **The door.** The remote service listens on loopback only, at a random port it writes to
+  `door.json` in o7's data folder with a key new each run (the file is the account's own; mode
+  0600 on Unix), and removes the file when it stops. The helper reads it, challenges the door,
+  and sends the link's token only after the door proves it holds the key (`crypto::door_proof`,
+  an HMAC under the challenge), so a program that took the port while o7 was not running learns
+  nothing (an automated security review of #197 asked for this).
+- **Not done:** OAuth 2.1 for directory listings, and MCP's events and tasks. A bot link's
+  address already is the credential its assistant pastes, every assistant we link takes one,
+  and neither is needed for anything above; they wait until a directory or an assistant asks.
+
 ### Telling a bot when a chat is done (the call-back)
 
 A bot that hands o7 a task used to have two ways to learn how it went: hold a call open, or ask

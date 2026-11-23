@@ -22,6 +22,8 @@ export interface RemoteApi {
   readonly setLoginStart: (on: boolean) => Promise<LoginStart>;
   /** Opens a pairing link, good once and for ten minutes. It replaces the one before it. */
   readonly pair: () => Promise<RemotePairing>;
+  /** This program's path: an assistant on this computer starts it with `--o7-bot-helper`. */
+  readonly localProgram: () => Promise<string>;
   /** The open workspace's projects, for an automation to start its tasks in. */
   readonly projects: () => Promise<readonly RemoteProject[]>;
   /**
@@ -94,6 +96,7 @@ export const remoteApi: RemoteApi = {
   loginStart: () => commands.loginStartStatus(),
   setLoginStart: (on) => settle(commands.loginStartSet(on)),
   pair: () => settle(commands.remotePair()),
+  localProgram: () => settle(commands.remoteLocalProgram()),
   projects: async () =>
     (
       await settle(commands.workspaceSnapshot({ include_archived: false, project_id: null }))

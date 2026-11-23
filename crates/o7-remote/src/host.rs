@@ -124,6 +124,8 @@ struct Shared {
     /// One turn per automation: what is sent to one is checked against its limits and started
     /// before the next thing sent to it is looked at.
     hook_turns: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// Bot calls running, from the relay and the door on this computer together.
+    bot_calls: Arc<AtomicUsize>,
     config: Config,
 }
 
@@ -165,6 +167,7 @@ impl Service {
             told: Mutex::new(HashMap::new()),
             closing: AtomicBool::new(false),
             hook_turns: Mutex::new(HashMap::new()),
+            bot_calls: Arc::new(AtomicUsize::new(0)),
             config,
         });
         let (control, receiver) = unbounded_channel();
@@ -172,6 +175,7 @@ impl Service {
         runtime.spawn(tell(shared.clone()));
         runtime.spawn(tonight(shared.clone()));
         runtime.spawn(pulls(shared.clone()));
+        runtime.spawn(door(shared.clone()));
         Ok(Self { shared, control })
     }
 
@@ -1156,7 +1160,6 @@ async fn serve(
         backend: backend.clone(),
         out,
         connections: HashMap::new(),
-        bot_calls: Arc::new(AtomicUsize::new(0)),
         links: bot_links(shared),
         outbox: Vec::new(),
     };
@@ -1299,7 +1302,6 @@ struct Serving {
     backend: Arc<dyn Backend>,
     out: UnboundedSender<Out>,
     connections: HashMap<String, Connection>,
-    bot_calls: Arc<AtomicUsize>,
     /// The bot links as the relay last heard them.
     links: String,
     outbox: Vec<String>,
@@ -1382,112 +1384,275 @@ impl Serving {
         let Ok(call) = serde_json::from_str::<BotCall>(body) else {
             return;
         };
-        // The token and the workspace it is good for, read together.
-        let (verified, expired, scope, rights, first, hook) = {
-            let mut registry = lock(&self.shared.registry);
-            let unused = registry
-                .bots()
-                .iter()
-                .any(|bot| bot.id == call.bot && bot.last_used_at.is_none());
-            let expired = registry.bot_expired(&call.bot, now());
-            let verified = registry.verify_bot(&call.bot, &call.token, now());
-            (
-                verified,
-                expired,
-                registry.scope().to_owned(),
-                registry.bot_rights(&call.bot),
-                verified && unused,
-                registry.hook_of(&call.bot),
-            )
-        };
-        // A link's first call: Settings, which may still show the link's address, says so.
-        if first {
-            (self.shared.config.changed)();
-        }
-        let refused = if expired {
-            Some(
-                "This bot link expired after 90 days unused. Its owner can renew it in o7: Settings, Remote access.",
-            )
-        } else if !verified {
-            Some("This bot link was removed. Its owner can create a new one in o7.")
-        } else if hook.is_some() && call.tool != "trigger" {
-            // An automation's address starts tasks and does nothing else, whatever reached it.
-            Some("This address starts tasks only.")
-        } else if self.bot_calls.load(Ordering::Relaxed) >= MAX_BOT_CALLS {
-            Some("Too many calls are running. Wait for one to finish.")
-        } else if hook.is_some() {
-            None
-        } else if !bot::known(&call.tool) {
-            Some("There is no such tool.")
-        } else if !bot::allowed(&call.tool, rights) {
-            // Whatever the relay listed or let through: the link's own rights decide, here.
-            Some(bot::refusal(&call.tool, rights))
-        } else {
-            None
-        };
-        if let Some(text) = refused {
-            self.outbox.push(bot_answer(&call.rid, text, true, None));
-            return;
-        }
-        if let Some(hook) = hook {
-            self.bot_calls.fetch_add(1, Ordering::Relaxed);
-            let (backend, out, running, shared) = (
-                self.backend.clone().bound(&scope),
-                self.out.clone(),
-                self.bot_calls.clone(),
-                self.shared.clone(),
-            );
-            tokio::spawn(async move {
-                let answer = trigger(&shared, &backend, &call.bot, &hook, &call.args).await;
-                running.fetch_sub(1, Ordering::Relaxed);
-                if answer.error {
-                    lock(&shared.registry).bot_failed(&call.bot);
-                }
-                let _ = out.send(Out::Bot {
-                    rid: call.rid,
-                    answer,
-                });
-            });
-            return;
-        }
-        self.bot_calls.fetch_add(1, Ordering::Relaxed);
-        let (backend, out, running, shared) = (
-            self.backend.clone().bound(&scope),
-            self.out.clone(),
-            self.bot_calls.clone(),
-            self.shared.clone(),
-        );
+        let (out, shared) = (self.out.clone(), self.shared.clone());
         tokio::spawn(async move {
-            let owner = format!("{WATCHER}-bot:{}", call.rid);
-            let later = LinkLater {
-                shared: shared.clone(),
-                bot: call.bot.clone(),
-            };
-            let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights, &later).await;
-            running.fetch_sub(1, Ordering::Relaxed);
-            if let Some(task) = &answer.task {
-                let mut task = (**task).clone();
-                task.bot = call.bot.clone();
-                task.created_at = now();
-                lock(&shared.registry).add_task(task);
-            }
-            if answer.error {
-                lock(&shared.registry).bot_failed(&call.bot);
-            } else if let Some(chat) = &answer.chat {
-                // The bot has heard how this chat stands, and a chat it acted on is its to hear
-                // about from now on.
-                if answer.acted {
-                    lock(&shared.registry).follow(&call.bot, chat);
-                }
-                lock(&shared.heard).insert((call.bot.clone(), chat.clone()), now());
-            }
-            let _ = out.send(Out::Bot {
-                rid: call.rid,
-                answer,
-            });
+            let rid = call.rid.clone();
+            let answer = answer_call(&shared, call, true).await;
+            let _ = out.send(Out::Bot { rid, answer });
         });
     }
+}
 
+/// One bot call, from the relay or from the door on this computer: the link's token, its
+/// workspace and its rights checked here, whatever let it through, then the tool run and what it
+/// did kept. `automations`: an automation's trigger may come this way (the relay's `/hook/`);
+/// the door takes bot links only.
+async fn answer_call(shared: &Arc<Shared>, call: BotCall, automations: bool) -> bot::Answer {
+    let failed = |text: &str| bot::Answer {
+        text: text.to_owned(),
+        error: true,
+        chat: None,
+        acted: false,
+        task: None,
+        image: None,
+    };
+    // The token and the workspace it is good for, read together.
+    let (verified, expired, scope, rights, first, hook) = {
+        let mut registry = lock(&shared.registry);
+        let unused = registry
+            .bots()
+            .iter()
+            .any(|bot| bot.id == call.bot && bot.last_used_at.is_none());
+        let expired = registry.bot_expired(&call.bot, now());
+        let verified = registry.verify_bot(&call.bot, &call.token, now());
+        (
+            verified,
+            expired,
+            registry.scope().to_owned(),
+            registry.bot_rights(&call.bot),
+            verified && unused,
+            registry.hook_of(&call.bot),
+        )
+    };
+    // A link's first call: Settings, which may still show the link's address, says so.
+    if first {
+        (shared.config.changed)();
+    }
+    let refused = if expired {
+        Some(
+            "This bot link expired after 90 days unused. Its owner can renew it in o7: Settings, Remote access.",
+        )
+    } else if !verified {
+        Some("This bot link was removed. Its owner can create a new one in o7.")
+    } else if hook.is_some() && !automations {
+        Some("An automation's address cannot be used here.")
+    } else if hook.is_some() && call.tool != "trigger" {
+        // An automation's address starts tasks and does nothing else, whatever reached it.
+        Some("This address starts tasks only.")
+    } else if hook.is_none() && !bot::known(&call.tool) {
+        Some("There is no such tool.")
+    } else if hook.is_none() && !bot::allowed(&call.tool, rights) {
+        // Whatever the relay listed or let through: the link's own rights decide, here.
+        Some(bot::refusal(&call.tool, rights))
+    } else {
+        None
+    };
+    if let Some(text) = refused {
+        return failed(text);
+    }
+    // Counted and checked in one step, so calls arriving together cannot pass the limit together.
+    if shared.bot_calls.fetch_add(1, Ordering::AcqRel) >= MAX_BOT_CALLS {
+        shared.bot_calls.fetch_sub(1, Ordering::AcqRel);
+        return failed("Too many calls are running. Wait for one to finish.");
+    }
+    let backend = shared.config.backend.clone().bound(&scope);
+    let answer = if let Some(hook) = hook {
+        let answer = trigger(shared, &backend, &call.bot, &hook, &call.args).await;
+        if answer.error {
+            lock(&shared.registry).bot_failed(&call.bot);
+        }
+        answer
+    } else {
+        let owner = format!("{WATCHER}-bot:{}", call.rid);
+        let later = LinkLater {
+            shared: shared.clone(),
+            bot: call.bot.clone(),
+        };
+        let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights, &later).await;
+        if let Some(task) = &answer.task {
+            let mut task = (**task).clone();
+            task.bot = call.bot.clone();
+            task.created_at = now();
+            lock(&shared.registry).add_task(task);
+        }
+        if answer.error {
+            lock(&shared.registry).bot_failed(&call.bot);
+        } else if let Some(chat) = &answer.chat {
+            // The bot has heard how this chat stands, and a chat it acted on is its to hear
+            // about from now on.
+            if answer.acted {
+                lock(&shared.registry).follow(&call.bot, chat);
+            }
+            lock(&shared.heard).insert((call.bot.clone(), chat.clone()), now());
+        }
+        answer
+    };
+    shared.bot_calls.fetch_sub(1, Ordering::AcqRel);
+    answer
+}
+
+/// The most one request to the door may be: a call's arguments, as the relay takes them.
+const DOOR_REQUEST_BYTES: u64 = 256 * 1024;
+
+/// The door on this computer: o7's bot tools for an assistant that runs here too (Hermes,
+/// OpenClaw), through `o7 --o7-bot-helper`, without the relay. It listens on loopback only, at a
+/// port written to `door.json` beside `remote.json` (readable by its person's account only, and
+/// removed when the service closes), with a key new each run. A connection is first challenged:
+/// the door proves it holds the key ([`crypto::door_proof`]) before the helper sends a token, so
+/// whatever else holds the port when o7 is not running learns nothing. Then one request: a bot
+/// link's address and a tool call, checked and answered exactly as the relay's are, while remote
+/// access is on. An automation's address is not taken here.
+async fn door(shared: Arc<Shared>) {
+    let Ok(listener) = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await else {
+        return;
+    };
+    let (Ok(address), Ok(key)) = (listener.local_addr(), crypto::random::<32>()) else {
+        return;
+    };
+    let file = shared.config.path.with_file_name("door.json");
+    let body = serde_json::json!({ "port": address.port(), "key": crypto::encode(&key) });
+    if write_private(&file, body.to_string().as_bytes()).is_err() {
+        return;
+    }
+    let key = Arc::new(key);
+    while !shared.closing.load(Ordering::Relaxed) {
+        tokio::select! {
+            accepted = listener.accept() => {
+                let Ok((stream, peer)) = accepted else {
+                    continue;
+                };
+                if !peer.ip().is_loopback() {
+                    continue;
+                }
+                tokio::spawn(door_request(shared.clone(), key.clone(), stream));
+            }
+            () = tokio::time::sleep(Duration::from_secs(1)) => {}
+        }
+    }
+    let _ = std::fs::remove_file(&file);
+}
+
+/// What the door is asked: a bot link's address (as o7 shows it, or its last part), and either
+/// `rights` (what the link may do, for listing its tools) or `call` with a tool and arguments.
+#[derive(serde::Deserialize)]
+struct DoorRequest {
+    link: String,
+    op: String,
+    #[serde(default)]
+    tool: String,
+    #[serde(default)]
+    args: serde_json::Value,
+}
+
+async fn door_request(shared: Arc<Shared>, key: Arc<[u8; 32]>, stream: tokio::net::TcpStream) {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+    let (read, mut write) = stream.into_split();
+    let mut reader = BufReader::new(read.take(DOOR_REQUEST_BYTES));
+    let mut next = async || {
+        let mut line = String::new();
+        match tokio::time::timeout(Duration::from_secs(10), reader.read_line(&mut line)).await {
+            Ok(Ok(read)) if read > 0 => Some(line),
+            _ => None,
+        }
+    };
+    // First the challenge: the door proves it is this run's o7 before anything secret is sent.
+    let Some(hello) = next().await else {
+        return;
+    };
+    let challenge = serde_json::from_str::<serde_json::Value>(&hello)
+        .ok()
+        .filter(|hello| hello["op"] == "hello")
+        .and_then(|hello| hello["challenge"].as_str().and_then(crypto::decode::<16>));
+    let Some(challenge) = challenge else {
+        return;
+    };
+    let proof = serde_json::json!({ "proof": crypto::door_proof(&key[..], &challenge) });
+    if write
+        .write_all(format!("{proof}\n").as_bytes())
+        .await
+        .is_err()
+    {
+        return;
+    }
+    let Some(line) = next().await else {
+        return;
+    };
+    let reply = door_answer(&shared, &line).await;
+    let _ = write.write_all(format!("{reply}\n").as_bytes()).await;
+}
+
+/// Writes `bytes` to `file` so that only this account can read it (on Unix: mode 0600; on
+/// Windows the file is in the account's own app data folder).
+fn write_private(file: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    let _ = std::fs::remove_file(file);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    std::io::Write::write_all(&mut options.open(file)?, bytes)
+}
+
+async fn door_answer(shared: &Arc<Shared>, line: &str) -> serde_json::Value {
+    let refused = |text: &str| serde_json::json!({ "ok": false, "error": true, "text": text });
+    let Ok(request) = serde_json::from_str::<DoorRequest>(line) else {
+        return refused("o7 could not read that request.");
+    };
+    if !lock(&shared.registry).enabled() {
+        return refused(
+            "Remote access is off in o7. Its owner can turn it on in Settings, Remote access.",
+        );
+    }
+    let reference = request.link.trim().rsplit('/').next().unwrap_or_default();
+    let Some((bot, token)) = reference.split_once('.') else {
+        return refused(
+            "That is not a bot link's address. Copy it from o7: Settings, Remote access.",
+        );
+    };
+    match request.op.as_str() {
+        "rights" => {
+            let registry = lock(&shared.registry);
+            if registry.hook_of(bot).is_some() {
+                return refused("An automation's address cannot be used here.");
+            }
+            match registry.check_bot(bot, token, now()) {
+                Some(rights) => serde_json::json!({
+                    "ok": true,
+                    "full": rights.full && !rights.read_only,
+                    "read": rights.read_only,
+                    "v": bot::TOOLS_VERSION,
+                }),
+                None => refused(
+                    "This bot link was removed or expired. Its owner can make a new one in o7: Settings, Remote access.",
+                ),
+            }
+        }
+        "call" => {
+            let Ok(rid) = crypto::random::<6>() else {
+                return refused("The system's random source is unavailable.");
+            };
+            let call = BotCall {
+                rid: format!("door-{}", crypto::encode(&rid)),
+                bot: bot.to_owned(),
+                token: token.to_owned(),
+                tool: request.tool,
+                args: request.args,
+            };
+            let answer = answer_call(shared, call, false).await;
+            serde_json::json!({
+                "ok": !answer.error,
+                "error": answer.error,
+                "text": answer.text,
+                "image": answer.image,
+            })
+        }
+        _ => refused("No such request."),
+    }
+}
+
+impl Serving {
     /// Work that finished beside the connection task: seal it in order and send it.
     fn finished(&mut self, done: Out) {
         match done {
