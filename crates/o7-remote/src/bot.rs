@@ -376,6 +376,82 @@ fn message(text: &str) -> Result<(), Answer> {
 
 /// Runs one tool call. `owner` is unique to the call: whatever it watches is released at the end.
 /// `full` is the link's level; a tool above it is refused here too, whoever let the call through.
+/// The most a chat started by a bot's call or an automation may do without asking. A new chat
+/// takes its project's default access, which its person may have set to approve edits or
+/// everything; what started the chat may approve less, and the chat must not do more than it
+/// could approve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Most {
+    /// Ask before every edit and command: a link that may not approve, and every automation,
+    /// whose agent reads what a service outside sent.
+    Ask,
+    /// Edit without asking, ask before commands: a link that may approve but not give full
+    /// access.
+    AutoEdit,
+    /// The project's default, whatever it is: a link that may give full access.
+    Anything,
+}
+
+impl Most {
+    /// What a link's chats may do without asking: no more than the link may approve.
+    pub fn of(rights: Rights) -> Self {
+        let rights = rights.coherent();
+        if !rights.approve {
+            Self::Ask
+        } else if !rights.full_access {
+            Self::AutoEdit
+        } else {
+            Self::Anything
+        }
+    }
+}
+
+/// Holds a chat just made to `most`, before anything is sent to it. Its access is read first
+/// and lowered only when it is above `most`; a backend that cannot say leaves it. When it
+/// cannot be lowered, nothing must be sent: the error says so.
+pub(crate) async fn hold_access(
+    backend: &Arc<dyn Backend>,
+    chat_id: &str,
+    most: Most,
+) -> Result<(), Answer> {
+    let lowered = match most {
+        Most::Anything => return Ok(()),
+        Most::Ask => "ask",
+        Most::AutoEdit => "auto_edit",
+    };
+    // What it is now: lowered only when above; when the backend does not say (a stand-in), left;
+    // when it cannot be read at all, lowered all the same.
+    let above = match backend
+        .act(Action::Options {
+            chat_id: chat_id.to_owned(),
+        })
+        .await
+    {
+        Ok(Outcome::Options(options)) => matches!(
+            (most, options.access_mode.as_deref()),
+            (Most::Ask, Some("auto_edit" | "full_auto")) | (Most::AutoEdit, Some("full_auto"))
+        ),
+        Ok(_) => false,
+        Err(_) => true,
+    };
+    if !above {
+        return Ok(());
+    }
+    backend
+        .act(Action::SetAccess {
+            chat_id: chat_id.to_owned(),
+            access: lowered.into(),
+        })
+        .await
+        .map(|_| ())
+        .map_err(|error| {
+            Answer::failed(format!(
+                "Chat {chat_id} was made, but its access could not be held to {lowered}, so nothing was sent to it: {}",
+                error.message
+            ))
+        })
+}
+
 /// A bot link's own queue of work for tonight, as its calls reach it (`task` with
 /// `when: "tonight"` or `cancel`, and `inbox`). The service keeps it.
 pub trait Later: std::marker::Send + Sync {
@@ -611,6 +687,7 @@ async fn run(
                 .create(&args.folder_id, args.agent_id.as_deref())
                 .await?;
             let id = created.chat.id;
+            hold_access(backend, &id, Most::of(rights)).await?;
             match backend.send(&id, args.text).await {
                 Ok(_) => Ok(Answer::ok(format!(
                     "Started chat {id} with {}. The agent is working on the message; call wait_for_chat with this chat id.",

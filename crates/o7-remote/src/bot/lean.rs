@@ -276,7 +276,7 @@ async fn run_tool(
             ))
         }
         "answer" => answer(backend, owner, arguments(args)?, rights).await,
-        "task" => task(backend, owner, arguments(args)?, later).await,
+        "task" => task(backend, owner, arguments(args)?, later, rights).await,
         "stop" => {
             let args: ChatOnly = arguments(args)?;
             backend.interrupt(&args.chat).await?;
@@ -406,6 +406,7 @@ async fn send(
         }
         (None, Some(folder)) => {
             let created = backend.create(&folder, args.agent.as_deref()).await?;
+            super::hold_access(backend, &created.chat.id, super::Most::of(rights)).await?;
             (created.chat.id, Some(created.chat.agent_name))
         }
         _ => {
@@ -494,6 +495,7 @@ async fn task(
     owner: &str,
     args: TaskArgs,
     later: &dyn super::Later,
+    rights: Rights,
 ) -> Result<Answer, Answer> {
     if let Some(id) = &args.cancel {
         return if later.cancel(id) {
@@ -518,6 +520,7 @@ async fn task(
         args.project.as_deref(),
         args.agent.as_deref(),
         args.review,
+        super::Most::of(rights),
     )
     .await?;
     let mut text = started.text;
@@ -590,14 +593,16 @@ pub(crate) struct Started {
     pub task: crate::registry::Task,
 }
 
-/// Starts a task, now or from the queue at night: a chat on a branch of its own, its brief,
-/// and who reviews it. `project` is a project's name or id, or none.
+/// Starts a task, now or from the queue at night: a chat on a branch of its own, held to
+/// `most` (what started it may approve), its brief, and who reviews it. `project` is a
+/// project's name or id, or none.
 pub(crate) async fn start_task(
     backend: &Arc<dyn Backend>,
     goal: &str,
     project: Option<&str>,
     agent: Option<&str>,
     review: Option<bool>,
+    most: super::Most,
 ) -> Result<Started, Answer> {
     message(goal)?;
     let overview = backend.overview().await?;
@@ -618,6 +623,7 @@ pub(crate) async fn start_task(
     let title: String = render::cut(goal.lines().next().unwrap_or("Task").trim(), 60);
     let made = backend.create_task_chat(&folder.id, agent, &title).await?;
     let chat_id = made.chat.chat.id.clone();
+    super::hold_access(backend, &chat_id, most).await?;
     let builder_agent = made.chat.chat.agent_id.clone();
     // The review: by another agent where one is ready, so a second vendor looks at the work; and
     // only where the work is on a branch of its own, which the reviewer can read with Git.

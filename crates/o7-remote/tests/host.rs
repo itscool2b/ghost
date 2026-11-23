@@ -2387,6 +2387,20 @@ async fn an_automation_starts_a_task_from_what_it_is_sent_and_nothing_else() {
         brief.contains("> > > and this\n>>>"),
         "the fence holds: {brief}"
     );
+    // The project's default here is full access: an automation's task is held to asking first,
+    // before anything is sent to it.
+    assert!(
+        rig.app
+            .acted
+            .lock()
+            .expect("acted")
+            .iter()
+            .any(|action| matches!(
+                action,
+                Action::SetAccess { chat_id, access } if chat_id == "c2" && access == "ask"
+            )),
+        "held to ask"
+    );
 
     // Nothing but a trigger from an automation, and no trigger from a bot link.
     let read = call(&made.url, "a2", "chats", json!({})).await;
