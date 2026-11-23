@@ -25,8 +25,8 @@ import { StillWorking } from "./ChatView";
 import { SendControls, StopButton } from "./Composer";
 import { Header } from "./Header";
 import { downloadNote, InstallationStatus, NewChat } from "./NewChat";
-import { foldedModels, Pickers, shownModelName } from "./Pickers";
-import { QueueEditor, QueueList } from "./QueueList";
+import { currentModelName, foldedModels, Pickers, shownModelName } from "./Pickers";
+import { ownerLabel, QueueEditor, QueueList } from "./QueueList";
 import { SidebarFooter } from "./SidebarFooter";
 import { Transcript } from "./Transcript";
 import { type TurnActions, TurnView } from "./TurnView";
@@ -845,6 +845,60 @@ describe("the pickers", () => {
 });
 
 describe("the queue and the composer's stop button", () => {
+  it("names the agent and model that will run the queued messages", () => {
+    const queue = [{ prompt_id: "p1", preview: "first", held: false, created_at: 1 }];
+    const html = renderToStaticMarkup(
+      <QueueList
+        queue={queue}
+        held={false}
+        onRemove={noop}
+        onSendQueued={noop}
+        owner={{ agentId: "codex", name: "Codex", model: "GPT-6 Astra" }}
+      />,
+    );
+    expect(html).toContain('data-testid="queue-owner"');
+    expect(html).toContain('data-test-agent="codex"');
+    expect(html).toContain("Runs on");
+    expect(html).toContain("Codex · GPT-6 Astra");
+    expect(html).toContain('title="Queued messages run on Codex · GPT-6 Astra"');
+    // Nothing queued, nothing to own: only the held note shows.
+    expect(
+      renderToStaticMarkup(
+        <QueueList
+          queue={[]}
+          held={true}
+          onRemove={noop}
+          onSendQueued={noop}
+          owner={{ agentId: "codex", name: "Codex" }}
+        />,
+      ),
+    ).not.toContain("queue-owner");
+    expect(ownerLabel({ agentId: "claude", name: "Claude Code", model: null })).toBe("Claude Code");
+    expect(ownerLabel({ agentId: "x", name: "Same", model: "Same" })).toBe("Same");
+  });
+
+  it("reads the model the pill names, a choice on its way first", () => {
+    const model = {
+      id: "model",
+      name: "Model",
+      category: "model",
+      kind: {
+        type: "select",
+        current: "a",
+        choices: [
+          { value: "a", name: "Opus 5.5" },
+          { value: "b", name: "Sonnet 5.5" },
+        ],
+      },
+    } as unknown as ConfigOption;
+    expect(currentModelName([model], new Map())).toBe("Opus 5.5");
+    expect(currentModelName([model], new Map([["model", { type: "choice", value: "b" }]]))).toBe(
+      "Sonnet 5.5",
+    );
+    expect(currentModelName([], new Map())).toBeNull();
+    expect(currentModelName(undefined, new Map())).toBeNull();
+  });
+
   it("marks held prompts and offers Send queued for them", () => {
     const html = renderToStaticMarkup(
       <QueueList

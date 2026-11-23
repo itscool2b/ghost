@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-22
 
+- Queued messages say who will run them. The queue over the composer now reads "Runs on" with the agent and model, so after you switch agents or accept a plan to build with another one, you can see that your waiting messages go to the new agent. (PR)
 - A chat no longer dies while its agent waits on background work. When Claude Code left a command running in the background (a build, tests, a server) and you went to another chat, o7 stopped that agent after ten minutes, so the chat never carried on. Now o7 leaves it running until that work is done. ([#174](https://github.com/itscool2b/o7/pull/174))
 - Dictation's better ear now arrives by itself. About a minute after o7 starts, it downloads the larger speech model once (486 MB), so there is nothing to press. You can stop or remove it in Settings > Voice, and o7 will not fetch it again unless you ask. It waits if your disk is nearly full. ([#173](https://github.com/itscool2b/o7/pull/173))
 - Dictation can get a much better ear. Settings > Voice now offers a larger speech model as a one-time 486 MB download. With it, dictation makes about 40% fewer mistakes in our tests, gets programming words right ("WebSocket", "TypeScript", "async await", "a 401"), and understands 24 more European languages. It runs on your computer like the built-in one, and you can remove it again. o7 checks the file before using it, and you can cancel the download and continue it later. ([#172](https://github.com/itscool2b/o7/pull/172))

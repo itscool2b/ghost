@@ -104,6 +104,16 @@ export function shownModelName(option: ConfigOption, choice: ConfigChoice): stri
     : choice.name;
 }
 
+/** The model the pill names for these options, or `null` when the agent lists none. */
+export function currentModelName(
+  options: readonly ConfigOption[] | undefined,
+  saving: ReadonlyMap<string, ConfigValue>,
+): string | null {
+  const model = options?.find((option) => option.category === "model");
+  const choice = model ? shownChoice(model, saving.get(model.id) ?? null) : null;
+  return model && choice ? shownModelName(model, choice) : null;
+}
+
 /** Models listed before "More models": agents list their newest first. */
 const MODEL_ROWS = 5;
 

@@ -62,7 +62,7 @@ import { DebugBundleDialog } from "./DebugBundleDialog";
 import { GitDialog } from "./GitDialog";
 import { Header } from "./Header";
 import { PermissionCard } from "./PermissionCard";
-import { Pickers } from "./Pickers";
+import { currentModelName, Pickers } from "./Pickers";
 import type { PlanApproval } from "./PlanCard";
 import { ProjectToolsDialog } from "./ProjectToolsDialog";
 import { QuestionCard } from "./QuestionCard";
@@ -1100,6 +1100,12 @@ export function ChatView({
   // The session's own word, not the marks: which prompts are held is exact only per snapshot.
   const held = state.session?.queue_held === true;
   const agentName = agent?.name ?? state.chat.agent_name;
+  // Queued messages run on whichever agent the chat has when each starts: name it on the queue.
+  const queueOwner = {
+    agentId: state.chat.agent_id,
+    name: agentName,
+    model: currentModelName(state.lists?.options, state.optionsSaving),
+  };
   // Every real agent can interrupt a turn; until its lists arrive, assume it can.
   const canInterrupt = state.lists?.capabilities?.interrupt !== false;
   const wait = queueWaitView(state.session?.queue_wait, agentName, {
@@ -1473,6 +1479,7 @@ export function ChatView({
                       onLoadText={(promptId) => store.queuedText(promptId)}
                       onEdit={(promptId, text) => store.editQueued(promptId, text)}
                       onMove={(promptId, index) => store.moveQueued(promptId, index)}
+                      owner={queueOwner}
                     />
                     {pendingRequests.length > 0 ? (
                       <section

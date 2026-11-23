@@ -2100,6 +2100,8 @@
   box-shadow:
     inset 0 0 0 1px var(--g-glass-rim),
     var(--g-shadow-layer);
+  /* The head's owner leaves when the segment is narrow. */
+  container-type: inline-size;
 }
 
 .chat-queue-head {
@@ -2149,6 +2151,38 @@
 
 .chat-queue-count {
   color: var(--g-fg-3);
+}
+
+/*
+ * Who runs the queue: "Runs on", the agent's mark and its name with the model, quiet until the
+ * name itself. The reason matters more, so the owner gives way first: its name shortens long
+ * before the reason does, and below 440px it leaves the head to the reason and the buttons (the
+ * model pill just under it still names the agent and model).
+ */
+.chat-queue-owner {
+  display: flex;
+  flex: 0 100 auto;
+  align-items: center;
+  gap: var(--g-space-4);
+  min-width: 0;
+  color: var(--g-fg-3);
+}
+
+.chat-queue-owner-word {
+  flex: none;
+}
+
+.chat-queue-owner-name {
+  overflow: hidden;
+  color: var(--g-fg-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 440px) {
+  .chat-queue-owner {
+    display: none;
+  }
 }
 
 .chat-queue-head-actions {

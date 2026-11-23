@@ -1,3 +1,4 @@
+import { AgentMark } from "@o7/ui/graphite";
 import { ArrowDown, ArrowUp, Pencil, X } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { QueuedPrompt } from "../../bindings";
@@ -6,6 +7,18 @@ import { fitTextarea } from "../../lib/fitTextarea";
 
 /** The row action that keeps focus after a move or an edit re-renders the queue. */
 type RowAction = "edit" | "up" | "down";
+
+/** Who runs the queue (`QueueList`'s head). */
+export interface QueueOwner {
+  readonly agentId: string;
+  readonly name: string;
+  readonly model?: string | null;
+}
+
+/** "Codex · GPT-6 Astra", or the agent alone when the model is unknown or is the agent's name. */
+export function ownerLabel(owner: QueueOwner): string {
+  return owner.model && owner.model !== owner.name ? `${owner.name} · ${owner.model}` : owner.name;
+}
 
 /**
  * The prompts waiting behind the running turn (or the start), as one segment over the composer:
@@ -22,6 +35,11 @@ type RowAction = "edit" | "up" | "down";
  * A row's words can be edited in place (Enter saves, Esc cancels), and Move up and Move down
  * reorder it from the keyboard as well as the pointer: the controls show under the hand and
  * whenever focus is in the row.
+ *
+ * The head also names who runs the queue: the chat's agent and model when its next message
+ * starts. A chat can change agent while messages wait (the agent picker, Accept and build with),
+ * and they then go to the new one, so the name follows the chat, never the agent that was
+ * running when they were typed.
  */
 export function QueueList({
   queue,
@@ -36,6 +54,7 @@ export function QueueList({
   onLoadText,
   onEdit,
   onMove,
+  owner = null,
 }: {
   readonly queue: readonly QueuedPrompt[];
   /** Some queued prompts are held (`SessionInfo.queue_held`). */
@@ -57,6 +76,8 @@ export function QueueList({
   readonly onEdit?: (promptId: string, text: string) => Promise<string | null>;
   /** Moves the prompt to `index` (0 goes next). */
   readonly onMove?: (promptId: string, index: number) => Promise<void>;
+  /** Who runs the queued messages: the chat's agent, and its model when the agent lists one. */
+  readonly owner?: QueueOwner | null;
 }) {
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const list = useRef<HTMLUListElement>(null);
@@ -117,6 +138,18 @@ export function QueueList({
         ) : (
           <span>{count}</span>
         )}
+        {owner && queue.length > 0 ? (
+          <span
+            className="chat-queue-owner"
+            data-testid="queue-owner"
+            data-test-agent={owner.agentId}
+            title={`Queued messages run on ${ownerLabel(owner)}`}
+          >
+            <span className="chat-queue-owner-word">Runs on</span>
+            <AgentMark agent={owner.agentId} size={14} />
+            <span className="chat-queue-owner-name">{ownerLabel(owner)}</span>
+          </span>
+        ) : null}
         <span className="chat-queue-head-actions">
           {action === "send_now" && next !== null && onSendNow ? (
             <button
