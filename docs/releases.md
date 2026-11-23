@@ -1,6 +1,6 @@
 # Windows, macOS and Linux packaging
 
-Two workflows build installers. `Publish` runs on every merge that changes the app and puts a
+Two workflows build installers. `Publish` runs when the owner approves a build and puts a
 version in front of people: see [Published builds and in-app updates](#published-builds-and-in-app-updates).
 `Build` is the manual one below, for trying a branch: its installers are never published and do
 not update themselves. No publisher signs either kind for the operating systems (the owner chose
@@ -34,16 +34,18 @@ preserved, while CI explicitly selects its ad-hoc identity.
 
 ## Published builds and in-app updates
 
-Since 19 November 2026 every merge that changes the app becomes a version people can install, and
-the one every installed copy offers as an update (owner, 18 November 2026: "an update button pops
-up for every merge, and if u click it updates").
+A build is published only when the owner approves one (owner, 23 November 2026: "dont make a
+build unless i approve a build ... money gets wasted"). Merges collect on main in between; the
+approved build puts everything merged since the last one in front of people, and every
+installed copy offers it as an update. (From 19 November 2026 until then every merge that changed
+the app was built and published by itself.)
 
-### How a merge reaches people
+### How main reaches people
 
-1. **A push to main starts `Publish`** (`.github/workflows/publish.yml`) when it touches what ends
-   up in the app: `apps/desktop`, `crates`, `packages/ui`, the lockfiles and toolchain files. A
-   merge of the website, docs or tests alone publishes nothing. It can also be started by hand.
-   One run at a time; a newer merge waits for the one building.
+1. **`Publish` is started by hand** (`.github/workflows/publish.yml`, `gh workflow run publish.yml
+   --ref main`), only after the owner approves a build. A merge starts nothing. One run at a time.
+   It builds main as it is, so `VERSION` is whatever the merged pull requests raised it to: the
+   versions in between are never published, which is fine.
 2. **The build is numbered by `VERSION`**, three numbers the pull request that changed the
    app chose (owner, 23 November 2026): the minor number up for a big feature, the patch for a
    small change (docs/developing-in-o7.md, "Version"). It must be newer than every published
