@@ -421,15 +421,47 @@ export async function verified(model, directory = MODEL_DIR) {
   return (await digest(path)) === model.sha256;
 }
 
-async function fetchModel(model, directory) {
+/** Waits before each try after the first. Hugging Face's edge can answer 502 for minutes. */
+const RETRY_WAITS_MS = [5_000, 15_000, 30_000, 60_000];
+
+/** A server error, a rate limit or a dropped connection may pass; anything else will not. */
+const passing = (status) => status === 408 || status === 429 || status >= 500;
+
+export async function fetchModel(model, directory) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetchOnce(model, directory);
+    } catch (error) {
+      const wait = RETRY_WAITS_MS[attempt];
+      if (wait === undefined || !error.retry) throw error;
+      process.stdout.write(`${error.message}; trying again in ${wait / 1000} s\n`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+}
+
+async function fetchOnce(model, directory) {
   const url = `https://huggingface.co/${model.repo}/resolve/${model.revision}/${model.file}`;
   const partial = join(directory, `${model.file}.partial`);
   // A voice sits in a folder of its own beside the model.
   mkdirSync(dirname(partial), { recursive: true });
   rmSync(partial, { force: true });
-  const response = await fetch(url, { redirect: "follow" });
-  if (!response.ok || !response.body) throw new Error(`${model.file}: HTTP ${response.status}`);
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+  let response;
+  try {
+    response = await fetch(url, { redirect: "follow" });
+  } catch (error) {
+    throw Object.assign(new Error(`${model.file}: ${error.message}`), { retry: true });
+  }
+  if (!response.ok || !response.body)
+    throw Object.assign(new Error(`${model.file}: HTTP ${response.status}`), {
+      retry: passing(response.status),
+    });
+  try {
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+  } catch (error) {
+    rmSync(partial, { force: true });
+    throw Object.assign(new Error(`${model.file}: ${error.message}`), { retry: true });
+  }
   const size = statSync(partial).size;
   const sha256 = await digest(partial);
   if (size !== model.size || sha256 !== model.sha256) {
