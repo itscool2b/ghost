@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { UpdateStatus } from "../../bindings";
 import { errorMessage } from "../../lib/errors";
 import { UPDATE_LABEL, type UpdatesApi, updateBusy } from "../../lib/updates";
+import { versionWithBuild } from "../../lib/version";
 
 /**
  * The Updates row of About: the phase as its label, the version under it, and the one next step
@@ -90,13 +91,14 @@ export function UpdatePanel({ api }: { readonly api: UpdatesApi }) {
           <p>
             {status?.version ? (
               <>
-                Version <span className="settings-mono">{status.version}</span>
+                Version <span className="settings-mono">{versionWithBuild(status.version)}</span>
               </>
             ) : status?.phase === "disabled" ? (
               "This copy does not update itself."
             ) : status?.current_version ? (
               <>
-                You have <span className="settings-mono">{status.current_version}</span>.{" "}
+                You have{" "}
+                <span className="settings-mono">{versionWithBuild(status.current_version)}</span>.{" "}
                 {status.automatic
                   ? "o7 looks for a newer version a few times a day."
                   : "o7 looks for a newer version only when you ask."}

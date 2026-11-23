@@ -3,6 +3,7 @@
 import catalog from "#release-catalog";
 import days from "../changelog-data";
 import { Arrow, Page } from "../ui";
+import { versionName } from "../version";
 
 export const meta = () => [{ title: "Changelog · o7" }];
 
@@ -33,7 +34,7 @@ export default function Changelog() {
       lead={
         <>
           {release
-            ? `Version ${release.version} is available, with its release notes, requirements and checksums on the download page.`
+            ? `Version ${versionName(release.version)} is available, with its release notes, requirements and checksums on the download page.`
             : "No public installer is published yet. Its release notes and checksums will be on the download page."}{" "}
           <a className="text-link" href="/download">
             Download status <Arrow />
