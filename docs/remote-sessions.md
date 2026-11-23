@@ -73,6 +73,9 @@ A bot pays for a link in tokens three ways, and the tools are shaped by all thre
    Every tool says whether it only reads and whether it can destroy (`readOnlyHint`,
    `destructiveHint`), which costs about 370 bytes and lets an assistant decide what to ask its
    person about before calling.
+   A call that has just sent a message or an answer gives the chat up to three seconds to be
+   seen working before it reads it: the computer acknowledges either a moment before the chat's
+   state says so, and a look in that moment once returned "stopped" as a turn's result.
 2. **Round trips.** Every call is another step of the bot's turn, which reads everything it
    holds again. `send` starts a chat or sends to one and waits for the turn, so "start it and
    tell me what happened" is one call where it was three; `answer` answers and waits. A wait
