@@ -312,26 +312,58 @@ impl ChatActor {
     /// for the start, as a model change is, and the start's setup asks for it. Once the agent's
     /// process has its setup (the last moment of a start), a change waits for the agent to be
     /// ready: kept for later instead, it could let a message sent meanwhile run on the access the
-    /// person had just left. A mode waits for a running, idle agent.
+    /// person had just left. The working mode (Plan) is kept the same way, among the modes the
+    /// connection last listed: a chat opened after a restart can be put in Plan before its first
+    /// message. Leaving Plan still takes the person's explicit approval.
     fn keep_control_for_start(
         &mut self,
         change: SessionControlChange,
         reply: oneshot::Sender<Result<SessionLists, SessionError>>,
     ) {
-        let SessionControlChange::Access { value } = change else {
-            let _ = reply.send(Err(SessionError::OptionInvalid(
-                "Change the mode once the agent is running and idle.".into(),
-            )));
-            return;
-        };
         if self.driver.is_some() {
+            let what = match change {
+                SessionControlChange::Access { .. } => "access",
+                SessionControlChange::Workflow { .. } => "mode",
+            };
             let _ = reply.send(Err(SessionError::OptionInvalid(format!(
-                "{} is starting. Choose the access again once it is ready.",
+                "{} is starting. Choose the {what} again once it is ready.",
                 self.agent_label()
             ))));
             return;
         }
         let controls = self.control_lists();
+        let value = match change {
+            SessionControlChange::Access { value } => value,
+            SessionControlChange::Workflow {
+                value,
+                implementation_approved,
+            } => {
+                if !controls.workflow.choices.iter().any(|c| c.value == value) {
+                    let _ = reply.send(Err(SessionError::OptionInvalid(
+                        "Modes load when the agent starts. Choose the mode once it is ready."
+                            .into(),
+                    )));
+                    return;
+                }
+                if value == "execute"
+                    && controls.workflow.effective.as_deref() == Some("plan")
+                    && !implementation_approved
+                {
+                    let _ = reply.send(Err(SessionError::OptionInvalid(
+                        "Approve implementation explicitly before leaving Plan.".into(),
+                    )));
+                    return;
+                }
+                self.controls.version = 1;
+                self.controls.workflow = Some(value);
+                self.persist_controls();
+                self.revision = self.revision.wrapping_add(1);
+                self.info_dirty = true;
+                self.schedule_flush();
+                let _ = reply.send(Ok(self.lists()));
+                return;
+            }
+        };
         let Some(choice) = controls
             .access
             .choices

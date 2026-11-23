@@ -100,6 +100,16 @@ describe("native access and planning", () => {
       expect(html.match(/<button[^>]*disabled/g)).toHaveLength(3);
     }
   });
+  it("takes a mode for the next start while the agent is stopped, and not while it starts", () => {
+    const stopped = render({ status: "stopped" });
+    const modes = (html: string) =>
+      html.slice(html.indexOf('aria-label="Working mode"')).match(/<button[^>]*>/g) ?? [];
+    expect(modes(stopped).some((button) => button.includes("disabled"))).toBe(false);
+    expect(stopped).not.toContain("Change mode once the agent has started.");
+    const starting = render({ status: "starting" });
+    expect(modes(starting).every((button) => button.includes("disabled"))).toBe(true);
+    expect(starting).toContain("Change mode once the agent has started.");
+  });
   it("reports unavailable native planning and offers no fabricated choices", () => {
     const html = render({ lists: lists(1, { capabilities: running }) });
     expect(html).toContain("Native Plan mode is not available on this connection.");

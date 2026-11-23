@@ -91,6 +91,9 @@ const focusComposer = () =>
     )
     ?.focus();
 
+/** How long a stopped chat stays in front before its agent starts: clicking through starts none. */
+export const OPEN_START_DELAY_MS = 1000;
+
 /**
  * One open chat: its store joins the chat when the view mounts and detaches when it unmounts (the
  * parent keys the view by chat, so each chat gets its own store). Esc interrupts the running turn,
@@ -619,6 +622,29 @@ export function ChatView({
       setRecreateNote({ text: errorMessage(error), failed: true });
     }
   }, [transport.git, missingTree, chatId]);
+
+  // A chat opened with its agent stopped (after a restart, after the idle stop) starts it once the
+  // chat has stayed in front for a moment, so Plan, the model and access can be chosen before the
+  // first message. Once per opening: an agent the person stops here stays stopped, and clicking
+  // through chats starts none of them. A chat that must first be asked how to continue waits.
+  const warmed = useRef<string | null>(null);
+  const warmable =
+    active &&
+    state.phase === "live" &&
+    status === "stopped" &&
+    handoffLoaded &&
+    handoff === null &&
+    !canContinueHere &&
+    handoffError === null &&
+    missingTree === null;
+  useEffect(() => {
+    if (!warmable || warmed.current === chatId) return;
+    const timer = window.setTimeout(() => {
+      warmed.current = chatId;
+      void store.warm();
+    }, OPEN_START_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [warmable, chatId, store]);
 
   const startSession = useCallback(
     (fresh: boolean) => {

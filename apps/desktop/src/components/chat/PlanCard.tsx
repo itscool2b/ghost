@@ -30,17 +30,52 @@ export interface PlanApproval {
  * whose input carries the plan, offering both an allow and a reject option. Anything else stays
  * an ordinary permission card.
  */
-export function planApproval(request: PermissionRequest): PlanApproval | null {
+export function planApproval(
+  request: PermissionRequest,
+  fullPlan: string | null = null,
+): PlanApproval | null {
   if (request.kind !== "switch_mode") return null;
-  const input = request.raw_input;
+  const plan = fullPlan ?? planText(request.raw_input);
+  if (plan === null) return null;
+  const accept = request.options.find((option) => option.kind === "allow_once");
+  const decline = request.options.find((option) => option.kind === "reject_once");
+  return accept && decline ? { plan, accept, decline } : null;
+}
+
+/** The plan a mode switch's input carries, when it carries one. */
+function planText(input: unknown): string | null {
   const plan =
     input && typeof input === "object" && !Array.isArray(input) && "plan" in input
       ? input.plan
       : null;
-  if (typeof plan !== "string" || !plan.trim()) return null;
-  const accept = request.options.find((option) => option.kind === "allow_once");
-  const decline = request.options.find((option) => option.kind === "reject_once");
-  return accept && decline ? { plan, accept, decline } : null;
+  return typeof plan === "string" && plan.trim() ? plan : null;
+}
+
+/**
+ * The blob holding a plan too long for its event. A long plan arrives with its input cut to a
+ * preview (session/normalize.rs) and the whole request stored apart; the card reads it from
+ * there, so a long plan is still a plan and not a tool's request.
+ */
+export function longPlanBlob(request: PermissionRequest): string | null {
+  if (request.kind !== "switch_mode" || planText(request.raw_input) !== null) return null;
+  const input = request.raw_input;
+  const cut =
+    input !== null &&
+    typeof input === "object" &&
+    !Array.isArray(input) &&
+    "_auracode_truncated" in input;
+  return cut ? (request.truncated?.blob ?? null) : null;
+}
+
+/** The plan in a stored request (the complete original event, as JSON). */
+export function planFromStored(text: string): string | null {
+  try {
+    const event: unknown = JSON.parse(text);
+    if (event === null || typeof event !== "object" || !("raw_input" in event)) return null;
+    return planText(event.raw_input);
+  } catch {
+    return null;
+  }
 }
 
 /** What the card is doing: showing the plan, taking edits to its text, or taking a note. */

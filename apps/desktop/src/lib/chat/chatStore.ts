@@ -1132,6 +1132,20 @@ export class ChatStore {
     return this.#act(() => this.#transport.start(this.chatId, fresh));
   }
 
+  /**
+   * Starts a stopped chat's agent because the person opened the chat, so its modes and models are
+   * there before the first message. Nobody asked for it, so a refusal (no free slot, the chat is
+   * open in a terminal, its folder is gone) says nothing: sending a message still starts it and
+   * says why not.
+   */
+  async warm(): Promise<void> {
+    try {
+      await this.#transport.start(this.chatId, false);
+    } catch {
+      // Left stopped.
+    }
+  }
+
   stop(): Promise<void> {
     return this.#act(() => this.#transport.stop(this.chatId));
   }
