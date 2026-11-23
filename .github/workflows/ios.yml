@@ -1,0 +1,61 @@
+name: iPhone simulator
+
+# Started by hand only, like every workflow here. It checks the Device pane's iPhone side on a real
+# Mac (docs/mobile.md, "Checking it"): o7-devices' tests, then tests/ios.rs driving a real
+# simulator through the device manager and every agent tool. What it saw is kept as the run's
+# artifact: a transcript of every call, screenshots, and the pane's pictures.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: iPhone simulator (macOS)
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-on-failure: true
+      - name: Show Xcode and its simulator runtimes
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          ls -d /Applications/Xcode*.app
+          xcrun simctl list runtimes
+      - name: Build the test app for the simulator
+        run: bash crates/o7-devices/tests/ios-app/build.sh "$RUNNER_TEMP/ios-app"
+      - name: Test o7-devices
+        run: cargo test --locked -p o7-devices
+      - name: Drive a real iPhone simulator
+        env:
+          O7_IOS_E2E: "1"
+          O7_IOS_E2E_APP: ${{ runner.temp }}/ios-app/HelloO7.app
+          O7_IOS_E2E_OUT: ${{ runner.temp }}/ios-e2e
+        run: cargo test --locked -p o7-devices --test ios -- --nocapture
+      - name: Keep what the simulator showed
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-e2e
+          path: |
+            ${{ runner.temp }}/ios-e2e/*.txt
+            ${{ runner.temp }}/ios-e2e/*.png
+            ${{ runner.temp }}/ios-e2e/*.jpg
+          if-no-files-found: ignore
+          retention-days: 14
