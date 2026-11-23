@@ -218,6 +218,11 @@ pub(crate) fn first_error(output: &str) -> String {
                 "exception",
                 "not found",
                 "cannot find",
+                "could not",
+                "unable to",
+                "no such",
+                "refused",
+                "timed out",
                 "denied",
             ]
             .iter()
