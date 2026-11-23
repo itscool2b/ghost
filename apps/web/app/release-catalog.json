@@ -3,64 +3,64 @@
     "channel": "stable",
     "signed": true,
     "publisher_signed": false,
-    "version": "0.3.0",
-    "pub_date": "2026-11-23T09:50:04-05:00",
-    "notes": "When you link your assistant, o7 now gives it a skill that teaches it how to hand o7 whole tasks, along with a few things to try.\nAn assistant that runs on your computer, like Hermes or OpenClaw, can now reach o7 directly, without going through the internet.\nA chat your assistant or an automation starts now asks before changing anything unless the link may approve, even when your projects start chats with full access.\nNew.\nWhen a task your assistant started opens a pull request, o7 watches it and tells your assistant when its checks fail or pass, when someone reviews or comments, and when it is merged.\nYour assistant can leave work for tonight.\nWith full control, your assistant can now see a picture of a chat's web page or emulator, to check that the work looks right.\no7 can open when you sign in to your computer, in the background, and keep the computer awake while your phone or a bot can reach it.\nAnd 3 more.",
-    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/SHA256SUMS",
+    "version": "0.3.1",
+    "pub_date": "2026-11-23T12:47:30-05:00",
+    "notes": "The second agent that reviews a task now also asks before changing anything unless the link may approve.",
+    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/SHA256SUMS",
     "downloads": [
       {
         "kind": "macos_universal_dmg",
         "label": "macOS · Apple silicon and Intel",
         "requirements": "macOS 13.3 or newer",
-        "file": "o7_0.3.0_universal.dmg",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/o7_0.3.0_universal.dmg",
-        "sha256": "193b5fe690cdfeac2a8dd4e37ec71706f6adea4df7c0a970542ee8d89463cbca",
-        "bytes": 238999105
+        "file": "o7_0.3.1_universal.dmg",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/o7_0.3.1_universal.dmg",
+        "sha256": "cf868fec093459e9839bf78ca451bf8c2a3d78858fe84cf3657001d74bd882fc",
+        "bytes": 239001322
       },
       {
         "kind": "windows_x64_nsis",
         "label": "Windows · x64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "o7_0.3.0_x64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/o7_0.3.0_x64-setup.exe",
-        "sha256": "89f92b394d7db72691a3675184e1b6d19cba1593cd6a489600418c234185cbf5",
-        "bytes": 194181561
+        "file": "o7_0.3.1_x64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/o7_0.3.1_x64-setup.exe",
+        "sha256": "6064134467264c70072ed00c22ff52f8828bef6955ace2007e72de6f61f4eb8e",
+        "bytes": 194167509
       },
       {
         "kind": "windows_arm64_nsis",
         "label": "Windows · ARM64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "o7_0.3.0_arm64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/o7_0.3.0_arm64-setup.exe",
-        "sha256": "385c8f53406c9459481f4526165a784c176e3ff739157e4c6697cdac1c05a2b5",
-        "bytes": 191652665
+        "file": "o7_0.3.1_arm64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/o7_0.3.1_arm64-setup.exe",
+        "sha256": "5fc62ab2a51d07a9c391cc96ec246f2b297f542a9a905cd4360c6d6b5328cf65",
+        "bytes": 191640271
       },
       {
         "kind": "linux_x64_appimage",
         "label": "Linux · AppImage",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7_0.3.0_amd64.AppImage",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/o7_0.3.0_amd64.AppImage",
-        "sha256": "81639b1619a63e1e366893fd15ea8fc24f755cc900e57b7d2ddee99793692f57",
-        "bytes": 290392568
+        "file": "o7_0.3.1_amd64.AppImage",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/o7_0.3.1_amd64.AppImage",
+        "sha256": "84bac738609310306a87407af5b69c33f942a7c3d68f2a7324d3d7885a6b15b0",
+        "bytes": 290400760
       },
       {
         "kind": "linux_x64_deb",
         "label": "Linux · Debian and Ubuntu",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7_0.3.0_amd64.deb",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/o7_0.3.0_amd64.deb",
-        "sha256": "ebface53187768659f9b545aebe9cf8205e1fedc11d4f3c612d8036bb1ac52cd",
-        "bytes": 208649466
+        "file": "o7_0.3.1_amd64.deb",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/o7_0.3.1_amd64.deb",
+        "sha256": "61d94ce26ffe8c591a5908fa28fbffa11ffc84e87d27155ea30190cbd451de11",
+        "bytes": 208647776
       },
       {
         "kind": "linux_x64_rpm",
         "label": "Linux · Fedora and other RPM systems",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7-0.3.0-1.x86_64.rpm",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.0/o7-0.3.0-1.x86_64.rpm",
-        "sha256": "64ee0b40431acbe7cf885e4f0306b7ed72c0b3e1428f90f7520a25c31c5ff049",
-        "bytes": 208660405
+        "file": "o7-0.3.1-1.x86_64.rpm",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.3.1/o7-0.3.1-1.x86_64.rpm",
+        "sha256": "cc61d05a0eec14f0dba0466322c8615285d14c194f684449f4811a2f9b14caef",
+        "bytes": 208658672
       }
     ]
   }
