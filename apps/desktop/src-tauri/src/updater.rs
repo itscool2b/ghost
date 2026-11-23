@@ -408,6 +408,7 @@ fn may_check_quietly(phase: UpdatePhase) -> bool {
 
 /// Looks for a newer version shortly after start and a few times a day, while Settings allows it.
 /// It reads one small public file and sends nothing about this computer but the request itself.
+/// Once a day it also adds this copy to the site's count (`usage_count`), with the same switch.
 pub fn start_automatic_checks(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut wait = FIRST_CHECK;
@@ -424,6 +425,20 @@ pub fn start_automatic_checks(app: tauri::AppHandle) {
             }
             if updates.automatic.load(Ordering::Acquire) {
                 let _ = check(&app, &state, &updates, true).await;
+                // A released stable build adds itself to the site's daily count of copies that
+                // ran (usage_count.rs): never a test source, staging or a smoke launch.
+                let released = updates.source.as_ref().is_some_and(|source| !source.test);
+                if released
+                    && !staging()
+                    && !state.launch.is_smoke()
+                    && let Some(dir) = state.data_dir()
+                {
+                    crate::usage_count::count_once_a_day(
+                        dir.to_path_buf(),
+                        app.package_info().version.to_string(),
+                    )
+                    .await;
+                }
             }
         }
     });

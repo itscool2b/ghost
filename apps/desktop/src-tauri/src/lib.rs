@@ -69,6 +69,7 @@ pub mod terminal;
 pub mod terminal_font;
 pub mod uninstall;
 pub mod updater;
+pub mod usage_count;
 pub mod window;
 pub mod workspace_commands;
 pub mod workspace_removal_commands;

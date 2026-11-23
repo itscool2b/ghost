@@ -1,5 +1,6 @@
 # Normal code deployment, with the public prerender output embedded by Rust at build time.
-# There are no Assets, D1, R2, email, secrets or API bindings in this Worker.
+# The one binding is COUNTS, the D1 database of the site's counters (src/count.rs, schema.sql):
+# no Assets, R2, email, secrets or other API bindings.
 name = "o7-web-local"
 main = "build/index.js"
 compatibility_date = "2026-10-26"
@@ -12,6 +13,12 @@ command = "corepack pnpm --filter @o7/web build && worker-build --release"
 [observability]
 enabled = false
 
+# A local run (wrangler dev) counts into a database on this machine.
+[[d1_databases]]
+binding = "COUNTS"
+database_name = "o7-counts-local"
+database_id = "00000000-0000-0000-0000-000000000000"
+
 [env.production]
 name = "o7-web"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
@@ -23,7 +30,17 @@ routes = [
   { pattern = "auracode.si/*", zone_name = "auracode.si" },
 ]
 
+[[env.production.d1_databases]]
+binding = "COUNTS"
+database_name = "o7-counts"
+database_id = "beaf6cff-cda8-4e44-aaa8-5d46b0188fbb"
+
 [env.preview]
 name = "o7-web-preview"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
 routes = [{ pattern = "preview.o7.codes/*", zone_name = "o7.codes" }]
+
+[[env.preview.d1_databases]]
+binding = "COUNTS"
+database_name = "o7-counts-preview"
+database_id = "a285ac49-31b4-413a-b5a9-9663d878ea63"

@@ -21,6 +21,7 @@ before(() => {
       outboundService() {
         assert.fail("the static Worker must never make an outbound request");
       },
+      d1Databases: { COUNTS: "counts-test" },
     }),
     cf: false,
     host: "127.0.0.1",
@@ -28,7 +29,27 @@ before(() => {
     telemetry: { enabled: false },
   });
 });
+before(async () => {
+  const schema = await readFile(new URL("schema.sql", root), "utf8");
+  const db = await runtime.getD1Database("COUNTS");
+  // exec takes one statement a line: drop the comments and join the statement's lines.
+  await db.exec(
+    schema
+      .replace(/--.*\n/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+});
 after(async () => runtime?.dispose());
+const totals = async () => {
+  const db = await runtime.getD1Database("COUNTS");
+  const { results } = await db
+    .prepare("SELECT event, platform, version, n FROM daily ORDER BY event, platform")
+    .all();
+  return results.map((row) => `${row.event} ${row.platform} ${row.version} ${row.n}`);
+};
+const browser =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36";
 const request = (path, init = {}) =>
   runtime.dispatchFetch(`https://auracode.test${path}`, {
     ...init,
@@ -240,4 +261,70 @@ test("the former address keeps the remote page and sends every other page to the
   assert.equal((await former(asset)).status, 200);
   // The relay's path is never a page, there or anywhere.
   assert.equal((await former("/api/remote/v1/health")).status, 404);
+});
+
+test("a download is counted once a browser asks, and always sent on to its file", async () => {
+  const before = await totals();
+  const get = (path, init = {}) =>
+    request(path, {
+      redirect: "manual",
+      ...init,
+      headers: { "User-Agent": browser, ...init.headers },
+    });
+  const response = await get("/get/v0.1.1748/o7_0.1.1748_x64-setup.exe");
+  assert.equal(response.status, 302);
+  assert.equal(
+    response.headers.get("location"),
+    "https://github.com/itscool2b/o7/releases/download/v0.1.1748/o7_0.1.1748_x64-setup.exe",
+  );
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("set-cookie"), null);
+  await get("/get/v0.1.1748/o7_0.1.1748_x64-setup.exe");
+  // Robots and HEAD are sent on, not counted.
+  assert.equal(
+    (
+      await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", {
+        headers: { "User-Agent": "Googlebot/2.1" },
+      })
+    ).status,
+    302,
+  );
+  assert.equal((await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", { method: "HEAD" })).status, 302);
+  // Anything that is not one of the installers: nothing counted, nowhere to go.
+  for (const path of [
+    "/get/v0.1.1748/latest.json",
+    "/get/v0.1.1747/o7_0.1.1748_x64-setup.exe",
+    "/get/v0.1.1748/o7_0.1.1748_x64-setup.exe%2F..",
+  ]) {
+    const refused = await get(path);
+    assert.ok(refused.status === 404 || refused.status === 400, path);
+    assert.equal(refused.headers.get("location"), null, path);
+  }
+  const after = await totals();
+  assert.deepEqual(
+    after.filter((row) => !before.includes(row)),
+    ["download windows-x64 0.1.1748 2"],
+  );
+});
+
+test("a copy counts itself with no identifier and is told when the next day starts", async () => {
+  const ran = (query) =>
+    request(`/api/count?${query}`, { headers: { "User-Agent": "o7/0.1.1748" } });
+  const first = await ran("os=linux&arch=x86_64&version=0.1.1748&first=1");
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("cache-control"), "no-store");
+  const wait = Number((await first.text()).trim());
+  assert.ok(Number.isInteger(wait) && wait > 0 && wait <= 25 * 3600, String(wait));
+  assert.equal((await ran("os=linux&arch=x86_64&version=0.1.1748&first=0")).status, 200);
+  for (const query of ["os=linux&arch=x86_64", "os=linux&arch=x86_64&version=0.1.1748&id=abc"]) {
+    assert.equal((await ran(query)).status, 400, query);
+  }
+  assert.equal(
+    (await request("/api/count?os=linux&arch=x86_64&version=0.1.1748", { method: "POST" })).status,
+    405,
+  );
+  const rows = (await totals()).filter((row) => row.includes("linux-x64"));
+  assert.deepEqual(rows, ["installed linux-x64 0.1.1748 1", "ran linux-x64 0.1.1748 2"]);
+  // The rest of /api stays nobody's page.
+  assert.equal((await request("/api/counts")).status, 404);
 });

@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium, webkit } from "playwright";
 
+/** A download button goes through the site's counter (app/counted.ts). */
+const counted = (url) =>
+  url.replace(/^https:\/\/github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download\//, "/get/");
+
 // Graphite settles a control's colours over 300ms when its state changes; audit the settled page.
 const settled = (page) =>
   page.waitForFunction(() =>
@@ -338,7 +342,7 @@ try {
             await page
               .getByRole("link", { name: `Download ${download.label}`, exact: true })
               .getAttribute("href"),
-            download.url,
+            counted(download.url),
           );
         assert.equal(await waiting.count(), 0);
         assert.ok(
@@ -457,7 +461,7 @@ try {
             await staticPage
               .getByRole("link", { name: `Download ${download.label}`, exact: true })
               .getAttribute("href"),
-            download.url,
+            counted(download.url),
           );
       // The appearance needs no script: dark under a dark system.
       assert.equal(

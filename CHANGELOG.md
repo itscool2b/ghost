@@ -12,6 +12,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 ## 2026-11-23
 
 - When you switch a chat to another agent, the new agent now gets the real state of the work, not just the conversation. The handoff lists the commands that ran and how each ended, the folder they ran in, and the last command that was still failing with its first error, so the new agent does not have to find the broken test again. You can see exactly what it was sent: before you confirm, while it waits above the message box, and later on the message that carried it, where it opens from one line instead of filling your message. ([#177](https://github.com/itscool2b/o7/pull/177))
+- o7 now says once a day that a copy is running, so we can count how many people use it. When it looks for updates, it also tells o7.codes its version, its system and whether this is its first time. It sends no name, no ID and nothing about your work, and the site keeps only each day's totals. Turning off the update check in Settings turns this off too. ([#175](https://github.com/itscool2b/o7/pull/175))
 
 ## 2026-11-22
 

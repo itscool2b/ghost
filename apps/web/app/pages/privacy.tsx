@@ -25,6 +25,13 @@ export default function Privacy() {
           Settings, and no update is downloaded or installed until you choose Update.
         </p>
         <p>
+          Once a day, when it looks for a newer version, o7 also tells this site that one copy ran,
+          with its version, operating system and processor type, and whether it is the first time
+          that copy has said so. It sends no identifier and nothing about you or your work, and the
+          site keeps only each day's totals. Turning off the update check in Settings turns this off
+          too.
+        </p>
+        <p>
           Dictation runs on your computer: what you say and what it writes never leave it. o7
           downloads a more accurate speech model for it once, shortly after it starts, from Hugging
           Face (486 MB). The request carries nothing about you or your work; Hugging Face sees it as
@@ -53,6 +60,11 @@ export default function Privacy() {
         <p>
           Cloudflare hosts this website and the relay. No advertising analytics are included in this
           website.
+        </p>
+        <p>
+          A download button passes through this site on its way to the file on GitHub, so the site
+          can count downloads. It keeps only how many there were each day, for each system and
+          version: no address, cookie or anything else about who downloaded.
         </p>
         <h2>Your controls</h2>
         <p>
