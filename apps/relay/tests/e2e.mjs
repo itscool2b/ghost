@@ -448,7 +448,7 @@ async function botFlow(address) {
   const listed = (await rpc("tools/list")).tools;
   assert.deepEqual(
     listed.map((entry) => entry.name),
-    ["inbox", "chats", "projects", "read", "send", "wait", "answer", "stop"],
+    ["inbox", "chats", "projects", "read", "task", "send", "wait", "answer", "stop"],
   );
   assert.deepEqual(
     Object.keys(listed.find((entry) => entry.name === "send").inputSchema.properties),

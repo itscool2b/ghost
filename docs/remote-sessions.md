@@ -54,7 +54,7 @@ link). The computer checks it on every call, whatever the relay listed (`bot::Ri
 
 - **Read only** (five tools): `inbox`, `chats`, `projects`, `read`, `wait`. It sends,
   answers, stops and changes nothing.
-- **Chats** (eight tools): those, and `send`, `answer`, `stop`.
+- **Chats** (nine tools): those, and `task`, `send`, `answer`, `stop`.
 - **Full control** (those, and four more): `set`, `changes`, `memory`, `new_project`, and in
   `send` the model, thinking level and access a chat runs with. This is what a person does with
   chats and projects in the app's window.
@@ -135,6 +135,33 @@ of the app answers both, so it also works with a relay from before.
 
 The level limits the bot's own tools. It is not a wall around the computer: a link that sends
 messages directs agents, and agents run commands within the chat's access level.
+
+### A whole task in one call
+
+`task` (set 4, 23 November 2026) is how a bot hands o7 new work, so o7 does the managing and
+the bot only decides. One call with a goal (and optionally a project, an agent, `review` and
+`wait`):
+
+1. **The project** is the one named, else the only one, else the one worked in most recently.
+2. **A chat of its own on a new branch**: a Git worktree of the project's first folder, named
+   from the goal, made as the window's "new chat in a worktree" makes it but without the saved
+   setup (that waits on a terminal nobody watches), so the agent is told the checkout is fresh
+   and installs what it needs. A folder that is not a repository gets an ordinary chat.
+3. **A brief**: the goal, then how to go about it: plan briefly, make the change, run the
+   project's own checks and fix what fails, commit on the branch, push or open a pull request
+   only when asked, and finish with a short summary.
+4. **A review**, on by default: when the work is done, a second ready agent (another vendor's
+   where one is installed) gets a chat in the project folder and is told to read the branch with
+   Git (`git -C <worktree> log/diff <base>`), change nothing, and report what is wrong, most
+   serious first. No review where there is no branch, or no second agent is ready.
+5. **One message**: with a call-back, the bot is told once, when the review is done, with both
+   agents' last words (quoted and named as theirs). Without a review it is told when the work is
+   done. By default `task` returns at once (`wait` 0), so the bot ends its turn.
+
+The service keeps each task (its chats, branch, worktree, base and reviewer) in `remote.json`,
+the last forty, so a review still starts after a restart. A reading from the current tools now
+ends with what the chat stands on: its branch (and whether it is a worktree of its own), how
+many files are changed and not committed, and its agent's usage as last reported.
 
 ### Telling a bot when a chat is done (the call-back)
 

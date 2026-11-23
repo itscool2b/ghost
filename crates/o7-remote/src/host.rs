@@ -413,8 +413,10 @@ async fn tell(shared: Arc<Shared>) {
     while !shared.closing.load(Ordering::Relaxed) {
         let scope = {
             let registry = lock(&shared.registry);
-            (registry.enabled() && registry.any_callback() && !registry.scope().is_empty())
-                .then(|| registry.scope().to_owned())
+            (registry.enabled()
+                && (registry.any_callback() || registry.reviews_pending())
+                && !registry.scope().is_empty())
+            .then(|| registry.scope().to_owned())
         };
         let Some(scope) = scope else {
             tokio::time::sleep(TELL_CHECK).await;
@@ -446,7 +448,7 @@ async fn tell(shared: Arc<Shared>) {
                     let registry = lock(&shared.registry);
                     if shared.closing.load(Ordering::Relaxed)
                         || !registry.enabled()
-                        || !registry.any_callback()
+                        || !(registry.any_callback() || registry.reviews_pending())
                         || registry.scope() != scope
                     {
                         break;
@@ -462,8 +464,18 @@ async fn tell(shared: Arc<Shared>) {
                 (Some(Stage::Busy | Stage::Asking), Stage::Failed) => CallbackEvent::Failed,
                 _ => continue,
             };
-            if lock(&shared.registry).told_of(&update.chat_id).is_empty() {
-                continue;
+            {
+                let registry = lock(&shared.registry);
+                // Told to a link that follows the chat, or a task's work to review.
+                let reviewing = event == CallbackEvent::Finished
+                    && registry.task_of(&update.chat_id).is_some_and(|task| {
+                        task.builder == update.chat_id
+                            && task.review_agent.is_some()
+                            && task.reviewer.is_none()
+                    });
+                if registry.told_of(&update.chat_id).is_empty() && !reviewing {
+                    continue;
+                }
             }
             tokio::spawn(tell_later(
                 shared.clone(),
@@ -499,6 +511,21 @@ async fn tell_later(
     if Stage::of(entry.chat.status, entry.chat.needs_attention) != stage {
         return;
     }
+    // A task's work is done: its review starts, and its bot is told once, when that is done too.
+    let task = lock(&shared.registry).task_of(&chat_id);
+    let mut note = None;
+    if let Some(task) = task.as_ref().filter(|task| {
+        event == CallbackEvent::Finished
+            && task.builder == chat_id
+            && task.review_agent.is_some()
+            && task.reviewer.is_none()
+    }) {
+        match start_review(&shared, &backend, task).await {
+            Ok(()) => return,
+            // The work is told of as it is, with why no review follows.
+            Err(error) => note = Some(format!("The review could not start: {}", error.message)),
+        }
+    }
     let told: Vec<_> = {
         let heard = lock(&shared.heard);
         lock(&shared.registry)
@@ -524,8 +551,30 @@ async fn tell_later(
         .iter()
         .find(|project| project.id == entry.project_id)
         .map_or("no project", |project| project.name.as_str());
+    // The review of a task is done: the bot hears of the work and of the review together.
+    let reviewed = match task.filter(|task| {
+        event == CallbackEvent::Finished && task.reviewer.as_deref() == Some(chat_id.as_str())
+    }) {
+        Some(task) => match backend.history(&task.builder, u32::MAX).await {
+            Ok(work) => overview
+                .chats
+                .iter()
+                .find(|entry| entry.chat.id == task.builder)
+                .map(|builder| (builder.chat.clone(), work.items)),
+            Err(_) => None,
+        },
+        None => None,
+    };
     for (bot_id, bot_name, callback, rights) in told {
-        let text = callback::text(event, &entry.chat, project, &page.items, rights.approve);
+        let mut text = match &reviewed {
+            Some((builder, work)) => {
+                callback::reviewed_text(builder, work, &entry.chat, &page.items, project)
+            }
+            None => callback::text(event, &entry.chat, project, &page.items, rights.approve),
+        };
+        if let Some(note) = &note {
+            text.push_str(&format!("\n{note}"));
+        }
         let Ok(id) = crypto::random::<12>() else {
             continue;
         };
@@ -541,6 +590,27 @@ async fn tell_later(
             at: now(),
         });
     }
+}
+
+/// Starts the review of a task whose work is done: a chat of the reviewing agent in the project
+/// folder, told to read the task's branch with Git and change nothing. The link that started the
+/// task follows the review from now on, and is told when it is done.
+async fn start_review(
+    shared: &Arc<Shared>,
+    backend: &Arc<dyn Backend>,
+    task: &crate::registry::Task,
+) -> Result<(), BackendError> {
+    let reviewer = backend
+        .create(&task.folder_id, task.review_agent.as_deref())
+        .await?;
+    let id = reviewer.chat.id.clone();
+    {
+        let mut registry = lock(&shared.registry);
+        registry.set_reviewer(&task.builder, &id);
+        registry.follow(&task.bot, &id);
+    }
+    backend.send(&id, callback::review_brief(task)).await?;
+    Ok(())
 }
 
 /// A browser's session once it said hello.
@@ -962,6 +1032,12 @@ impl Serving {
             let owner = format!("{WATCHER}-bot:{}", call.rid);
             let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights).await;
             running.fetch_sub(1, Ordering::Relaxed);
+            if let Some(task) = &answer.task {
+                let mut task = task.clone();
+                task.bot = call.bot.clone();
+                task.created_at = now();
+                lock(&shared.registry).add_task(task);
+            }
             if answer.error {
                 lock(&shared.registry).bot_failed(&call.bot);
             } else if let Some(chat) = &answer.chat {

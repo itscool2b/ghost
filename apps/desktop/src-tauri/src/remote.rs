@@ -1086,6 +1086,96 @@ impl Backend for AppBackend {
                 .map_err(|error| failed(error.into()))
         })
     }
+
+    /// A task's chat in a new worktree of the folder, as the window's "new chat in a worktree"
+    /// makes it, without the saved setup (it would wait for a terminal nobody watches): the agent
+    /// is told the checkout is fresh. A folder that is not a repository gets an ordinary chat.
+    fn create_task_chat<'a>(
+        &'a self,
+        folder_id: &'a str,
+        agent_id: Option<&'a str>,
+        title: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::TaskChat, BackendError>> {
+        use o7_protocol::git::{WorktreeChatInput, WorktreeChatPreview};
+        Box::pin(async move {
+            let agent_id = self.agent_for(folder_id, agent_id).await.map_err(failed)?;
+            let sessions = self.sessions().map_err(failed)?;
+            let preview = sessions
+                .worktree_chat_preview(WorktreeChatInput {
+                    folder_id: folder_id.to_owned(),
+                    agent_id: agent_id.clone(),
+                    start_branch: None,
+                    branch: None,
+                    title: Some(title.to_owned()),
+                    bring_changes: false,
+                    run_setup: false,
+                })
+                .await
+                .map_err(|error| failed(error.into()))?;
+            match preview {
+                WorktreeChatPreview::Worktree { plan } => {
+                    let made = sessions
+                        .worktree_chat_apply(&plan.token)
+                        .await
+                        .map_err(|error| failed(error.into()))?;
+                    Ok(o7_remote::TaskChat {
+                        chat: made.chat,
+                        branch: Some(made.worktree.branch),
+                        path: Some(made.worktree.path),
+                        base: Some(made.worktree.base_commit),
+                    })
+                }
+                WorktreeChatPreview::NotGitRepository { .. } => Ok(o7_remote::TaskChat {
+                    chat: sessions
+                        .chat_project_create(ProjectChatCreate {
+                            agent_id,
+                            folder_id: folder_id.to_owned(),
+                            allow_busy_folder: true,
+                        })
+                        .await
+                        .map_err(|error| failed(error.into()))?,
+                    branch: None,
+                    path: None,
+                    base: None,
+                }),
+            }
+        })
+    }
+
+    /// A chat's branch and what is not committed in its folder, and its agent's usage as last
+    /// reported. A part that cannot be read is left out, never guessed.
+    fn facts<'a>(
+        &'a self,
+        chat_id: &'a str,
+        agent_id: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::ChatFacts, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            let git = sessions.git_workspace(chat_id).await.ok();
+            let worktree = sessions
+                .managed_worktrees(chat_id)
+                .await
+                .is_ok_and(|worktrees| worktrees.iter().any(|tree| tree.chat_id == chat_id));
+            let usage = sessions
+                .agent_usage(agent_id)
+                .accounts
+                .first()
+                .map(|account| {
+                    account
+                        .windows
+                        .iter()
+                        .map(|window| (window.label.clone(), window.used_percent))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Ok(o7_remote::ChatFacts {
+                branch: git.as_ref().and_then(|git| git.branch.clone()),
+                worktree,
+                uncommitted: git.as_ref().map(|git| git.files.len()),
+                usage,
+            })
+        })
+    }
 }
 
 #[cfg(test)]
