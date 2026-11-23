@@ -84,6 +84,13 @@ pub struct Bot {
     /// The website whose address the link's token was shown in. Empty as for a device.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub site: String,
+    /// How many tool calls this link has made, and how many of them were answered with an error.
+    /// Kept on this computer only, for its owner to see whether a link is used and works; saved
+    /// with the time of last use, so the last minute's calls may be lost with the app.
+    #[serde(default)]
+    pub calls: u64,
+    #[serde(default)]
+    pub failed: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -417,6 +424,8 @@ impl Registry {
             profile: self.scope.clone(),
             full,
             site: self.site.clone(),
+            calls: 0,
+            failed: 0,
         });
         if let Err(error) = self.save() {
             self.stored.bots.pop();
@@ -441,11 +450,25 @@ impl Registry {
         if !crypto::same(&bot.token_hash, &hash) {
             return false;
         }
+        bot.calls = bot.calls.saturating_add(1);
         if bot.last_used_at.is_none_or(|last| now - last >= 60_000) {
             bot.last_used_at = Some(now);
             let _ = self.save();
         }
         true
+    }
+
+    /// Notes that a call of the open workspace's bot link `id` was answered with an error.
+    pub fn bot_failed(&mut self, id: &str) {
+        let scope = self.scope.clone();
+        if let Some(bot) = self
+            .stored
+            .bots
+            .iter_mut()
+            .find(|bot| crypto::same(&bot.id, id) && !scope.is_empty() && bot.profile == scope)
+        {
+            bot.failed = bot.failed.saturating_add(1);
+        }
     }
 
     /// Whether the open workspace's bot link `id` was made with full control.
@@ -792,8 +815,16 @@ mod tests {
         assert!(!registry.verify_bot(&bot.id, "wrong", 8));
         assert!(!registry.verify_bot("wrong", &bot.token, 8));
         assert_eq!(registry.bots()[0].last_used_at, None);
+        assert_eq!(registry.bots()[0].calls, 0, "a refused call is not the link's");
         assert!(registry.verify_bot(&bot.id, &bot.token, 9));
         assert_eq!(registry.bots()[0].last_used_at, Some(9));
+        assert!(registry.verify_bot(&bot.id, &bot.token, 10));
+        registry.bot_failed(&bot.id);
+        registry.bot_failed("another");
+        assert_eq!(
+            (registry.bots()[0].calls, registry.bots()[0].failed),
+            (2, 1)
+        );
         for _ in 1..MAX_BOTS {
             registry.add_bot("Grok", true, 7).expect("bot");
         }

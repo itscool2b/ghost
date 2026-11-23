@@ -33,6 +33,8 @@ export function remoteFixture(): RemoteApi {
             created_at: Date.now() - 3_600_000,
             last_used_at: null,
             full: false,
+            calls: 0,
+            failed: 0,
           },
         ]
       : [],
@@ -108,7 +110,15 @@ export function remoteFixture(): RemoteApi {
         ...status,
         bots: [
           ...status.bots,
-          { id, name: name.trim() || "Bot", created_at: Date.now(), last_used_at: null, full },
+          {
+            id,
+            name: name.trim() || "Bot",
+            created_at: Date.now(),
+            last_used_at: null,
+            full,
+            calls: 0,
+            failed: 0,
+          },
         ],
       });
       return {

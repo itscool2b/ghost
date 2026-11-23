@@ -31,17 +31,23 @@ its name, then shows one MCP address, once, the way that assistant takes it:
 
 | Assistant | What is copied | Where it goes |
 |---|---|---|
-| Grok Bot | the address | grok.com/connectors > New Connector > Custom, as the MCP server URL |
+| Grok Bot | the address | in the Grok Bot app: Connect apps > Add a custom connector > Remote HTTPS, as the Server URL, then Add plugin |
 | Muse | the address | Muse is asked to add a custom connector, and takes it as the server's URL |
 | Hermes | four lines of YAML (`mcp_servers: o7: url, timeout: 300`) | `~/.hermes/config.yaml`, then `/reload-mcp` |
 | OpenClaw | `openclaw mcp add o7 --url ... --transport streamable-http --timeout 300` | a terminal on the computer OpenClaw runs on |
 | Another | the address | wherever it takes a remote MCP server (streamable HTTP) |
 
 Setup offers the same four on a page of its own (docs/onboarding.md). Hermes' and OpenClaw's
-entries carry a five minute timeout because they give a tool twenty or thirty seconds by default
-and a call may wait for an agent's turn (below). The Hermes and OpenClaw steps come from their
-published documentation and Grok's from xAI's; Muse's come from secondary sources, and none of
+entries set a five minute tool timeout, so a call may wait for an agent's turn (below) whatever
+their defaults are (Hermes documents 300 seconds; OpenClaw's default is not published). The Hermes and OpenClaw steps come from their
+published documentation and Grok Bot's from xAI's (read again on 23 November 2026); Muse's come from secondary sources, and none of
 the four has been tried with the real assistant.
+
+Once the link is made, its dialog says "Waiting for <name>'s first call" and changes to
+"Connected" when that call arrives, so the person knows the assistant reached this computer
+before closing it. Each link's row then shows when it was last used and how many calls it has
+made and how many of them failed. Those counts stay on this computer (`remote.json`); nothing
+about a link's use is sent anywhere.
 
 A link has one of two levels, chosen when it is made and never changed after (a wider link is a
 new link):
@@ -61,9 +67,12 @@ A bot pays for a link in tokens three ways, and the tools are shaped by all thre
 
 1. **The tools' descriptions**, read again on every step of the bot's own turn. The first set
    was 21 tools and 11.4 KB as listed (about 3,200 tokens) for a full-control link, 4.7 KB for a
-   chats link. The current set is 11 tools and 5.1 KB (about 1,400 tokens), 3.2 KB for a chats
-   link: one `set` where there were seven tools that changed a chat, `changes` and `memory` that
-   read or write by whether an argument is given, and no titles.
+   chats link. The current set is 11 tools and 5.5 KB (about 1,500 tokens, estimated from its
+   size), 3.4 KB for a chats link: one `set` where there were seven tools that changed a chat,
+   `changes` and `memory` that read or write by whether an argument is given, and no titles.
+   Every tool says whether it only reads and whether it can destroy (`readOnlyHint`,
+   `destructiveHint`), which costs about 370 bytes and lets an assistant decide what to ask its
+   person about before calling.
 2. **Round trips.** Every call is another step of the bot's turn, which reads everything it
    holds again. `send` starts a chat or sends to one and waits for the turn, so "start it and
    tell me what happened" is one call where it was three; `answer` answers and waits. A wait
@@ -209,6 +218,9 @@ thirty days forgets all of it; the computer sends its bot links again whenever i
 - A wrong or removed bot address is a plain 404. At most eight bot calls wait at once, each for
   at most 250 seconds: a call may wait up to 240 for an agent's turn, so that a long turn costs
   a bot few calls. Only a link's own bot can hold those eight places, and only on its computer.
+  A bot that gives up on a waiting call and says so (`notifications/cancelled` with the call's
+  own id) frees its place at once; the chat carries on, and nothing else can be cancelled that
+  way.
 
 The computer also ends any connection that has not proved a key within twenty seconds, holds at
 most 32 connections, 16 running calls per browser and 8 running bot calls, and stops sending live
@@ -297,6 +309,10 @@ The computer pushes `chat` (a status changed), `frame` (live events of the follo
     also runs a turn through the development build's scripted agent.
 
 ## Not done
+
+What comes next for bots (o7 telling a bot when a chat finishes or needs it, results that carry
+proof, a whole task in one call, approval rules per link) is planned in
+[superpowers/plans/2026-11-23-bots-manage-tasks.md](superpowers/plans/2026-11-23-bots-manage-tasks.md).
 
 Security, from the review of 10 November 2026 (each is a known limit, not a surprise):
 

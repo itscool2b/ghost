@@ -160,8 +160,10 @@ export async function checkRemote(browser, url, out, engine) {
       await address.inputValue(),
       /^https:\/\/o7\.codes\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43}$/,
     );
-    await bot.getByText("grok.com/connectors").waitFor();
+    await bot.getByText("Add a custom connector").waitFor();
     await bot.getByText("works like a password").waitFor();
+    // The dialog says whether the assistant has reached this computer yet.
+    await bot.getByText("Waiting for Research bot's first call", { exact: false }).waitFor();
     await settled(page);
     assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
     await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-bot.png`) });
@@ -195,7 +197,7 @@ export async function checkRemote(browser, url, out, engine) {
       await bot.getByRole("radio", { name: assistant }).check();
       await bot.getByRole("button", { name: "Create link" }).click();
       assert.match(await bot.getByRole("textbox", { name: label }).inputValue(), wanted);
-      assert.equal(await bot.getByText("grok.com/connectors").count(), 0);
+      assert.equal(await bot.getByText("Add a custom connector").count(), 0);
       if (assistant === "Hermes")
         await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-hermes.png`) });
       await bot.getByRole("button", { name: "Done" }).click();

@@ -481,7 +481,7 @@ impl Backend for AppBackend {
                         return Err(BackendError::new(
                             "invalid",
                             format!(
-                                "This chat offers no such {what}. Call chat_options for the list."
+                                "This chat offers no such {what}. Read the chat's options for the list."
                             ),
                         ));
                     }
@@ -584,7 +584,7 @@ impl Backend for AppBackend {
                             .ok_or_else(|| {
                                 BackendError::new(
                                     "invalid",
-                                    "This agent does not offer that access level. Call chat_options.",
+                                    "This agent does not offer that access level. Read the chat's options for its levels.",
                                 )
                             })?;
                         sessions
@@ -644,7 +644,7 @@ impl Backend for AppBackend {
                         .await
                         .map_err(|error| failed(error.into()))?;
                     Ok(Outcome::Done(
-                        "The agent is starting. Call wait_for_chat or send_message.".into(),
+                        "The agent is starting. Wait for the chat, or send it a message.".into(),
                     ))
                 }
                 Action::Changes { chat_id } => {
@@ -681,7 +681,7 @@ impl Backend for AppBackend {
                     if !changes.files.iter().any(|file| file.path == path) {
                         return Err(BackendError::new(
                             "not_found",
-                            "The last turn did not change that file. Call list_changes.",
+                            "The last turn did not change that file. List the changes for its files.",
                         ));
                     }
                     let diff = sessions

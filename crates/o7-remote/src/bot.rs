@@ -317,7 +317,7 @@ fn outcome(outcome: Outcome) -> String {
             if files.len() > 200 {
                 text.push_str(&format!("and {} more.\n", files.len() - 200));
             }
-            text.push_str("Read one with read_change.");
+            text.push_str("Read one by its path.");
             text
         }
         Outcome::Diff {
@@ -657,7 +657,7 @@ fn find<'a>(overview: &'a Overview, chat_id: &str) -> Result<&'a ChatSummary, An
         .iter()
         .map(|entry| &entry.chat)
         .find(|chat| chat.id == chat_id)
-        .ok_or_else(|| Answer::failed("There is no chat with that id. Call list_chats."))
+        .ok_or_else(|| Answer::failed("There is no chat with that id. List the chats for their ids."))
 }
 
 async fn read(backend: &Arc<dyn Backend>, chat_id: &str, turns: usize) -> Result<String, Answer> {

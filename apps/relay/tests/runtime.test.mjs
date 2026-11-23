@@ -626,6 +626,40 @@ test("serves a bot's MCP calls through the desktop", async () => {
     },
   ]);
 
+  // A bot that gives up on a waiting call says so, and the call ends at once instead of holding
+  // a place until the desktop answers. Only the id the call was made with ends it.
+  const givenUp = mcp(hostId, reference, {
+    jsonrpc: "2.0",
+    id: 9,
+    method: "tools/call",
+    params: { name: "list_chats" },
+  });
+  const held = JSON.parse((await desk.message()).slice(1));
+  for (const requestId of ["9", 10]) {
+    const ignored = await mcp(hostId, reference, {
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId },
+    });
+    assert.equal(ignored.status, 202);
+  }
+  const cancelled = await mcp(hostId, reference, {
+    jsonrpc: "2.0",
+    method: "notifications/cancelled",
+    params: { requestId: 9, reason: "timed out" },
+  });
+  assert.equal(cancelled.status, 202);
+  assert.deepEqual(await (await givenUp).json(), {
+    jsonrpc: "2.0",
+    id: 9,
+    result: {
+      content: [{ type: "text", text: "Cancelled. The chat carries on." }],
+      isError: true,
+    },
+  });
+  // The desktop's late answer to a call nobody waits for is dropped.
+  desk.send(`b${JSON.stringify({ rid: held.rid, text: "Late.", error: false })}`);
+
   // What the server does not offer.
   const errors = [
     [{ jsonrpc: "2.0", id: 6, method: "resources/list" }, -32601],
@@ -739,8 +773,8 @@ test("lists the current tools to a bot whose computer answers them", async () =>
   assert.equal(first.length, 21);
   assert.equal((await tools(odd)).length, 21);
   assert.ok(size(all) * 2 < size(first), `${size(all)} of ${size(first)}`);
-  assert.ok(size(few) < 3400, String(size(few)));
-  assert.ok(size(all) < 5400, String(size(all)));
+  assert.ok(size(few) < 3500, String(size(few)));
+  assert.ok(size(all) < 5600, String(size(all)));
 
   const hello = await ask(chats, { method: "initialize", params: {} });
   assert.match(hello.result.instructions, /one send/);

@@ -166,6 +166,8 @@ impl Service {
                     created_at: bot.created_at,
                     last_used_at: bot.last_used_at,
                     full: bot.full,
+                    calls: u32::try_from(bot.calls).unwrap_or(u32::MAX),
+                    failed: u32::try_from(bot.failed).unwrap_or(u32::MAX),
                 })
                 .collect(),
             pairing_expires_at: registry.pairing(now()).map(|pairing| pairing.expires_at),
@@ -627,14 +629,24 @@ impl Serving {
             return;
         };
         // The token and the workspace it is good for, read together.
-        let (verified, scope, full) = {
+        let (verified, scope, full, first) = {
             let mut registry = lock(&self.shared.registry);
+            let unused = registry
+                .bots()
+                .iter()
+                .any(|bot| bot.id == call.bot && bot.last_used_at.is_none());
+            let verified = registry.verify_bot(&call.bot, &call.token, now());
             (
-                registry.verify_bot(&call.bot, &call.token, now()),
+                verified,
                 registry.scope().to_owned(),
                 registry.bot_full(&call.bot),
+                verified && unused,
             )
         };
+        // A link's first call: Settings, which may still show the link's address, says so.
+        if first {
+            (self.shared.config.changed)();
+        }
         let refused = if !verified {
             Some("This bot link was removed. Its owner can create a new one in o7.")
         } else if !bot::known(&call.tool) {
@@ -652,15 +664,19 @@ impl Serving {
             return;
         }
         self.bot_calls.fetch_add(1, Ordering::Relaxed);
-        let (backend, out, running) = (
+        let (backend, out, running, shared) = (
             self.backend.clone().bound(&scope),
             self.out.clone(),
             self.bot_calls.clone(),
+            self.shared.clone(),
         );
         tokio::spawn(async move {
             let owner = format!("{WATCHER}-bot:{}", call.rid);
             let answer = bot::call(&backend, &owner, &call.tool, &call.args, full).await;
             running.fetch_sub(1, Ordering::Relaxed);
+            if answer.error {
+                lock(&shared.registry).bot_failed(&call.bot);
+            }
             let _ = out.send(Out::Bot {
                 rid: call.rid,
                 answer,
