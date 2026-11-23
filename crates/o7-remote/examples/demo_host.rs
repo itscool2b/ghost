@@ -722,7 +722,17 @@ async fn main() {
     println!("PAIR {}", service.pair().expect("pairing").url);
     println!(
         "BOT {}",
-        service.create_bot("Demo bot", false).expect("bot").url
+        service
+            .create_bot(
+                "Demo bot",
+                // It answers the demo agent's request, as the end-to-end test does.
+                o7_remote::bot::Rights {
+                    approve: true,
+                    ..o7_remote::bot::Rights::CHATS
+                },
+            )
+            .expect("bot")
+            .url
     );
     // Each line on standard input asks for a fresh pairing link; its end stops the demo.
     let lines = tokio::task::spawn_blocking(move || {

@@ -11,7 +11,10 @@ use o7_protocol::{SessionStatus, UiAnswer, UiPrompt, UiQuestion, UiQuestionAnswe
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{Answer, MAX_DIFF, MAX_MEMORY, act, arguments, count, find, message};
+use super::{
+    Answer, MAX_DIFF, MAX_MEMORY, NO_APPROVAL, NO_FULL_ACCESS, Rights, act, arguments, count, find,
+    message,
+};
 use crate::{
     backend::{Action, Backend, ChatOptions, Choice, Outcome, Statuses},
     render::{self, Limits, Waiting},
@@ -133,14 +136,16 @@ struct NewProject {
     name: Option<String>,
 }
 
-fn access_level(access: &str) -> Result<(), Answer> {
-    if matches!(access, "ask" | "auto_edit" | "full_auto") {
-        Ok(())
-    } else {
-        Err(Answer::failed(
+fn access_level(access: &str, rights: Rights) -> Result<(), Answer> {
+    if !matches!(access, "ask" | "auto_edit" | "full_auto") {
+        return Err(Answer::failed(
             "access is one of ask, auto_edit and full_auto.",
-        ))
+        ));
     }
+    if access == "full_auto" && !rights.full_access {
+        return Err(Answer::failed(NO_FULL_ACCESS));
+    }
+    Ok(())
 }
 
 /// Runs one of the current tools. `full` is the link's level: the caller has refused a tool
@@ -150,7 +155,7 @@ pub(super) async fn run(
     owner: &str,
     tool: &str,
     args: &Value,
-    full: bool,
+    rights: Rights,
 ) -> Result<Answer, Answer> {
     // Which chat the call is about, where its arguments name one (`send` says so itself: it may
     // make the chat). An answer about a chat tells the link's bot how that chat stands.
@@ -158,7 +163,7 @@ pub(super) async fn run(
         "read" | "wait" | "answer" | "stop" => args.get("chat").and_then(Value::as_str),
         _ => None,
     };
-    let result = run_tool(backend, owner, tool, args, full).await;
+    let result = run_tool(backend, owner, tool, args, rights).await;
     match (chat, result) {
         (Some(chat), Ok(answer)) => Ok(answer.about(chat, tool == "answer")),
         (_, result) => result,
@@ -170,7 +175,7 @@ async fn run_tool(
     owner: &str,
     tool: &str,
     args: &Value,
-    full: bool,
+    rights: Rights,
 ) -> Result<Answer, Answer> {
     match tool {
         "chats" => {
@@ -199,7 +204,7 @@ async fn run_tool(
             };
             Ok(Answer::ok(read(backend, &args.chat, turns, &limits).await?))
         }
-        "send" => send(backend, owner, arguments(args)?, full).await,
+        "send" => send(backend, owner, arguments(args)?, rights).await,
         "wait" => {
             let args: Wait = arguments(args)?;
             let seconds = args.seconds.unwrap_or(WAIT_SENT).clamp(1, WAIT_MAX);
@@ -207,13 +212,13 @@ async fn run_tool(
                 wait(backend, owner, &args.chat, seconds, false).await?,
             ))
         }
-        "answer" => answer(backend, owner, arguments(args)?).await,
+        "answer" => answer(backend, owner, arguments(args)?, rights).await,
         "stop" => {
             let args: ChatOnly = arguments(args)?;
             backend.interrupt(&args.chat).await?;
             Ok(Answer::ok("Stopping the turn."))
         }
-        "set" => set(backend, arguments(args)?).await,
+        "set" => set(backend, arguments(args)?, rights).await,
         "changes" => {
             let args: Changes = arguments(args)?;
             match args.path {
@@ -315,15 +320,15 @@ async fn send(
     backend: &Arc<dyn Backend>,
     owner: &str,
     mut args: Send,
-    full: bool,
+    rights: Rights,
 ) -> Result<Answer, Answer> {
     message(&args.text)?;
     let chooses = args.model.is_some() || args.thinking.is_some() || args.access.is_some();
-    if chooses && !full {
+    if chooses && !rights.full {
         return Err(Answer::failed(FULL_SEND));
     }
     if let Some(access) = &args.access {
-        access_level(access)?;
+        access_level(access, rights)?;
     }
     let (chat_id, started) = match (args.chat.take(), args.folder.take()) {
         (Some(chat), None) => {
@@ -427,13 +432,21 @@ async fn sent(
 
 /// Answers a permission request with one of its options or a question with words, or declines
 /// either, then waits for the turn to go on.
-async fn answer(backend: &Arc<dyn Backend>, owner: &str, args: Reply) -> Result<Answer, Answer> {
+async fn answer(
+    backend: &Arc<dyn Backend>,
+    owner: &str,
+    args: Reply,
+    rights: Rights,
+) -> Result<Answer, Answer> {
     let said = match (args.option, args.text) {
         (Some(_), Some(_)) => {
             return Err(Answer::failed(
                 "Give option (a permission request's option id) or text (a question's answer), not both.",
             ));
         }
+        // An option is an approval or a refusal of what the agent asked to do. Only a link whose
+        // owner let it approve may give one; any link may decline (no option).
+        (Some(_), None) if !rights.approve => return Err(Answer::failed(NO_APPROVAL)),
         (Some(option), None) => {
             backend
                 .permission(&args.chat, &args.request, Some(option))
@@ -452,6 +465,14 @@ async fn answer(backend: &Arc<dyn Backend>, owner: &str, args: Reply) -> Result<
                 ));
             };
             let reply = in_words(&request.prompt, text.trim())?;
+            // A yes to "go ahead?", an "Allow" picked from a list or a typed "proceed" approves
+            // as surely as a permission's option does (the automated security review, 23 November
+            // 2026), and agents ask for go-aheads every way they can. So a link that may not
+            // approve fails closed: no answer of it may read as one. A no, and the answers to an
+            // agent's questions, it may give.
+            if !rights.approve && goes_ahead(&request.prompt, &reply) {
+                return Err(Answer::failed(NO_APPROVAL));
+            }
             backend
                 .answer(&args.chat, &args.request, Some(reply))
                 .await?;
@@ -478,6 +499,52 @@ async fn answer(backend: &Arc<dyn Backend>, owner: &str, args: Reply) -> Result<
             Err(_) => format!("{said} Call wait for the result."),
         },
     ))
+}
+
+/// The words that open a go-ahead: a choice or a reply starting with one of them approves.
+const GO_AHEAD: [&str; 22] = [
+    "yes", "y", "yeah", "yep", "sure", "ok", "okay", "allow", "allowed", "approve", "approved",
+    "accept", "accepted", "proceed", "continue", "confirm", "go", "run", "execute", "apply",
+    "grant", "trust",
+];
+
+/// Whether `words` read as a go-ahead: their first word is one of [`GO_AHEAD`].
+fn reads_as_go_ahead(words: &str) -> bool {
+    let first: String = words
+        .trim()
+        .chars()
+        .take_while(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_lowercase();
+    GO_AHEAD.contains(&first.as_str())
+}
+
+/// Whether answering `prompt` with `answer` approves something: a yes to a confirmation, a chosen
+/// option or a typed reply that reads as a go-ahead, or a form submitted.
+fn goes_ahead(prompt: &UiPrompt, answer: &UiAnswer) -> bool {
+    match (prompt, answer) {
+        (_, UiAnswer::Confirm { yes }) => *yes,
+        (UiPrompt::Select { options, .. }, UiAnswer::Select { index }) => options
+            .get(*index as usize)
+            .is_none_or(|option| reads_as_go_ahead(option)),
+        (_, UiAnswer::Input { text }) => reads_as_go_ahead(text),
+        (UiPrompt::Questions { questions, .. }, UiAnswer::Questions { answers }) => {
+            answers.iter().any(|answer| {
+                let question = questions
+                    .iter()
+                    .find(|question| question.id == answer.question_id);
+                answer.text.as_deref().is_some_and(reads_as_go_ahead)
+                    || answer.selected.iter().any(|index| {
+                        question
+                            .and_then(|question| question.options.get(*index as usize))
+                            .is_none_or(|option| reads_as_go_ahead(&option.label))
+                    })
+            })
+        }
+        // Anything else (a form, an answer that does not fit its prompt) is not given without the
+        // right: failing closed costs a bot one message to its person.
+        _ => true,
+    }
 }
 
 /// A question's answer from a bot's words: the choice they name, or the words themselves where
@@ -572,9 +639,9 @@ fn one_answer(question: &UiQuestion, line: &str) -> Result<UiQuestionAnswer, Ans
 
 /// Changes a chat, one thing after another, and says what each came to. With nothing to change
 /// it lists what the chat offers.
-async fn set(backend: &Arc<dyn Backend>, args: Set) -> Result<Answer, Answer> {
+async fn set(backend: &Arc<dyn Backend>, args: Set, rights: Rights) -> Result<Answer, Answer> {
     if let Some(access) = &args.access {
-        access_level(access)?;
+        access_level(access, rights)?;
     }
     if args
         .title
@@ -989,6 +1056,62 @@ mod tests {
             multi_select: false,
             allow_free_text: free,
         }
+    }
+
+    /// A link that may not approve can give no answer that reads as a go-ahead: a yes, an
+    /// "Allow" picked from a list or a typed "proceed". Its other answers go through.
+    #[test]
+    fn an_answer_that_reads_as_a_go_ahead_is_an_approval() {
+        let confirm = UiPrompt::Confirm {
+            message: "Delete it?".into(),
+        };
+        assert!(goes_ahead(&confirm, &UiAnswer::Confirm { yes: true }));
+        assert!(!goes_ahead(&confirm, &UiAnswer::Confirm { yes: false }));
+        let select = UiPrompt::Select {
+            message: "Run npm install?".into(),
+            options: vec!["Allow once".into(), "Deny".into(), "Postgres".into()],
+        };
+        assert!(goes_ahead(&select, &UiAnswer::Select { index: 0 }));
+        assert!(!goes_ahead(&select, &UiAnswer::Select { index: 1 }));
+        assert!(!goes_ahead(&select, &UiAnswer::Select { index: 2 }));
+        assert!(
+            goes_ahead(&select, &UiAnswer::Select { index: 9 }),
+            "fails closed"
+        );
+        let input = UiPrompt::Input {
+            message: "Type yes to continue".into(),
+            placeholder: None,
+        };
+        for words in ["yes", "Proceed with it", "OK.", "go ahead"] {
+            assert!(
+                goes_ahead(&input, &UiAnswer::Input { text: words.into() }),
+                "{words}"
+            );
+        }
+        for words in ["no", "use Postgres", "stop", "yesterday's branch"] {
+            assert!(
+                !goes_ahead(&input, &UiAnswer::Input { text: words.into() }),
+                "{words}"
+            );
+        }
+        let questions = UiPrompt::Questions {
+            message: String::new(),
+            questions: vec![question("db", &["Postgres", "Approve the migration"], true)],
+        };
+        let picked = |selected: Vec<u32>, text: Option<&str>| UiAnswer::Questions {
+            answers: vec![UiQuestionAnswer {
+                question_id: "db".into(),
+                selected,
+                text: text.map(str::to_owned),
+            }],
+        };
+        assert!(!goes_ahead(&questions, &picked(vec![0], None)));
+        assert!(goes_ahead(&questions, &picked(vec![1], None)));
+        assert!(goes_ahead(&questions, &picked(vec![], Some("yes do it"))));
+        assert!(!goes_ahead(
+            &questions,
+            &picked(vec![], Some("SQLite please"))
+        ));
     }
 
     #[test]

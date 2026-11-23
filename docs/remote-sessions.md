@@ -49,13 +49,31 @@ before closing it. Each link's row then shows when it was last used and how many
 made and how many of them failed. Those counts stay on this computer (`remote.json`); nothing
 about a link's use is sent anywhere.
 
-A link has one of two levels, chosen when it is made and never changed after (a wider link is a
-new link):
+What a link may do is chosen when it is made and never changed after (a wider link is a new
+link). The computer checks it on every call, whatever the relay listed (`bot::Rights`):
 
-- **Chats** (eight tools): `inbox`, `chats`, `projects`, `read`, `send`, `wait`, `answer`, `stop`.
+- **Read only** (five tools): `inbox`, `chats`, `projects`, `read`, `wait`. It sends,
+  answers, stops and changes nothing.
+- **Chats** (eight tools): those, and `send`, `answer`, `stop`.
 - **Full control** (those, and four more): `set`, `changes`, `memory`, `new_project`, and in
   `send` the model, thinking level and access a chat runs with. This is what a person does with
   chats and projects in the app's window.
+
+Two more choices are off unless the person turns them on for the link (23 November 2026):
+
+- **Approve what agents ask permission for.** Without it a bot may decline a permission request
+  and answer an agent's questions, but never approve running a command or editing a file: its
+  person does, in o7 or on their phone, and the call-back says so. It fails closed: no answer of
+  such a link may read as a go-ahead, so a yes to a confirmation, a choice or a typed reply that
+  starts with "yes", "allow", "proceed", "run" and the like, or a submitted form, is refused
+  (`goes_ahead` in `bot/lean.rs`). The bot reads what agents
+  write, and what it reads must not be able to approve what an agent does unless its person
+  chose that.
+- **Full access in a chat** (full control only): switching a chat to `full_auto`.
+
+Links made before then approve nothing until they are made again. A link unused for 90 days
+stops working (a call is told it expired); **Renew** in its row gives it a new address, shown
+once, and the old address stops working at once, with what the link may do unchanged.
 
 No link has a tool for Settings, accounts or sign-in, installing or updating software, remote
 access itself, deleting data, a raw terminal, or reading a file by its path. The tools are
@@ -116,8 +134,8 @@ says which set it answers in its bot links (`v`), a relay lists that one, and an
 which says nothing, is listed the first (`apps/relay/src/tools-first.json`, `bot.rs`). A copy
 of the app answers both, so it also works with a relay from before.
 
-The level limits the bot's own tools. It is not a wall around the computer: at either level a
-bot sends messages to agents and answers their permission requests, and agents run commands.
+The level limits the bot's own tools. It is not a wall around the computer: a link that sends
+messages directs agents, and agents run commands within the chat's access level.
 
 ### Telling a bot when a chat is done (the call-back)
 
@@ -427,6 +445,6 @@ Features:
   ("Telling a bot when a chat is done"). The MCP Events extension would let a bot subscribe
   without its person copying an address and a key; too few assistants take it yet.
 - Notifications on the phone when a chat needs an answer.
-- A read-only level for a device or a bot.
+- A read-only level for a paired device (bot links have one).
 - New chats in a worktree, attachments, images, the queue's controls and the model picker from
   the page (a full-control bot link has the model, thinking and access tools).

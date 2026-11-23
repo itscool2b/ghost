@@ -149,10 +149,20 @@ export async function checkRemote(browser, url, out, engine) {
     // The link's level is chosen here: the chat tools unless full control is asked for.
     const levels = bot.getByRole("group", { name: "What it can do" });
     assert.equal(await levels.getByRole("radio", { name: /^Chats/ }).isChecked(), true);
+    // Approving and full access are off unless chosen, and full access is full control's alone.
+    const approvals = bot.getByRole("group", { name: "What it may approve" });
+    const approving = approvals.getByRole("checkbox", { name: /^What agents ask permission for/ });
+    const fullAccess = approvals.getByRole("checkbox", { name: /^Full access in a chat/ });
+    assert.equal(await approving.isChecked(), false);
+    assert.equal(await fullAccess.isDisabled(), true);
+    await levels.getByRole("radio", { name: /^Read only/ }).check();
+    assert.equal(await approving.isDisabled(), true, "a read-only link approves nothing");
     await levels.getByText("It has no tool for Settings", { exact: false }).waitFor();
     // Neither level is a wall: an agent the bot directs can still run commands.
-    await bot.getByText("the level limits the bot's own tools", { exact: false }).waitFor();
+    await bot.getByText("the choices above limit the bot's own tools", { exact: false }).waitFor();
     await levels.getByRole("radio", { name: /^Full control/ }).check();
+    await approving.check();
+    assert.equal(await fullAccess.isDisabled(), false);
     await name.fill("Research bot");
     await name.press("Enter");
     const address = bot.getByRole("textbox", { name: "Bot address" });
@@ -169,10 +179,20 @@ export async function checkRemote(browser, url, out, engine) {
     await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-bot.png`) });
     await bot.getByRole("button", { name: "Done" }).click();
     await page.getByText("Research bot", { exact: true }).waitFor();
-    assert.equal((await calls()).at(-1), "create-bot:Research bot:full");
+    assert.equal((await calls()).at(-1), "create-bot:Research bot:full:approve");
     // The link's level is a chip beside its name; whether it was used is the line under it.
     const linked = page.locator(".settings-row", { hasText: "Research bot" });
-    assert.equal(await linked.locator(".g-chip").textContent(), "Full control");
+    assert.equal(await linked.locator(".g-chip").textContent(), "Full control · approves");
+    // A new address replaces the old one, shown once with the assistant's steps.
+    await page.getByRole("button", { name: "Renew, Research bot" }).click();
+    const renewal = page.getByRole("dialog", { name: "A new address for Research bot" });
+    await renewal.getByText("The old address stopped working", { exact: false }).waitFor();
+    assert.match(
+      await renewal.getByRole("textbox", { name: "Bot address" }).inputValue(),
+      /\.n{43}$/,
+    );
+    assert.equal((await calls()).at(-1), "renew-bot:bot-1");
+    await renewal.getByRole("button", { name: "Done" }).click();
     await linked.getByText("Not used yet", { exact: true }).waitFor();
     // Where the bot is told when a chat is done: its assistant's address and key, typed once.
     await linked.getByRole("button", { name: "Call back, Research bot" }).click();

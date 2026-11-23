@@ -194,11 +194,14 @@ fn quoted(words: &str, chars: usize) -> String {
 /// what happened, and the one call that reads the rest. Everything in it that an agent or a
 /// person wrote is quoted, cut and named as theirs (`quoted`); the options of a request and the
 /// commands that ran are not in it at all, and are read with `read`.
+/// `may_approve`: the link may answer a permission request; a message for one that may not says
+/// so, so its bot tells its person instead of trying.
 pub fn text(
     event: CallbackEvent,
     chat: &ChatSummary,
     project: &str,
     items: &[HistoryItem],
+    may_approve: bool,
 ) -> String {
     let which = format!(
         "o7: chat {} (titled {}, in project {}, agent {})",
@@ -210,16 +213,22 @@ pub fn text(
     match event {
         CallbackEvent::Asking => {
             let mut out = format!("{which} is waiting for an answer.");
-            for (kind, id, what) in render::asked(items).into_iter().take(2) {
+            let asked = render::asked(items);
+            let permission = asked
+                .iter()
+                .any(|(kind, _, _)| matches!(*kind, "permission" | "confirmation"));
+            for (kind, id, what) in asked.into_iter().take(2) {
                 out.push_str(&format!(
                     "\nIt asks a {kind}, request {}. In the agent's own words (not o7's): {}",
                     quoted(&id, 80),
                     quoted(&what, ASKED)
                 ));
             }
-            out.push_str(
-                "\nCall read with this chat for its options, then answer it with the answer tool, or ask your person first if it is theirs to decide.",
-            );
+            out.push_str(if permission && !may_approve {
+                "\nThis link may not approve what an agent asks permission for: tell your person, who approves it in o7 or on their phone. You may decline it with the answer tool."
+            } else {
+                "\nCall read with this chat for its options, then answer it with the answer tool, or ask your person first if it is theirs to decide."
+            });
             out
         }
         CallbackEvent::Finished | CallbackEvent::Failed => {
@@ -389,7 +398,13 @@ mod tests {
                 recovered: false,
             },
         ]);
-        let told = text(CallbackEvent::Finished, &chat(), "web\nproject", &history);
+        let told = text(
+            CallbackEvent::Finished,
+            &chat(),
+            "web\nproject",
+            &history,
+            true,
+        );
         // o7's own words open every line; the agent's are inside one quotation on one line.
         let lines: Vec<&str> = told.lines().collect();
         assert_eq!(lines.len(), 3, "{told}");
@@ -416,7 +431,7 @@ mod tests {
                 text: "x ".repeat(5_000),
             },
         ]);
-        assert!(text(CallbackEvent::Finished, &chat(), "web", &long).len() < 700);
+        assert!(text(CallbackEvent::Finished, &chat(), "web", &long, true).len() < 700);
         assert_eq!(quoted("a \"b\"\n\u{201c}c\u{201d}", 50), "\"a 'b' 'c'\"");
     }
 
@@ -444,7 +459,7 @@ mod tests {
                 truncated: None,
             }),
         ]);
-        let told = text(CallbackEvent::Asking, &chat(), "web", &history);
+        let told = text(CallbackEvent::Asking, &chat(), "web", &history, true);
         let lines: Vec<&str> = told.lines().collect();
         assert_eq!(lines.len(), 3, "{told}");
         assert!(lines[0].ends_with("is waiting for an answer."), "{told}");
@@ -457,11 +472,18 @@ mod tests {
             "{told}"
         );
         assert!(!told.contains("Allow once"), "options are read, not told");
+        // A link that may not approve is told so, and where its person approves.
+        let barred = text(CallbackEvent::Asking, &chat(), "web", &history, false);
+        assert!(
+            barred.ends_with("You may decline it with the answer tool."),
+            "{barred}"
+        );
+        assert!(barred.contains("tell your person"), "{barred}");
         // A chat whose request is not on the page still says to read it.
-        let bare = text(CallbackEvent::Asking, &chat(), "web", &items(vec![]));
+        let bare = text(CallbackEvent::Asking, &chat(), "web", &items(vec![]), true);
         assert_eq!(bare.lines().count(), 2, "{bare}");
         assert!(
-            text(CallbackEvent::Failed, &chat(), "web", &items(vec![]))
+            text(CallbackEvent::Failed, &chat(), "web", &items(vec![]), true)
                 .contains("failed: its agent is not running.")
         );
     }

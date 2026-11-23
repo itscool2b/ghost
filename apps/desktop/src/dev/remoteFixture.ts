@@ -33,6 +33,10 @@ export function remoteFixture(): RemoteApi {
             created_at: Date.now() - 3_600_000,
             last_used_at: null,
             full: false,
+            read_only: false,
+            approve: false,
+            full_access: false,
+            expires_at: Date.now() + 90 * 86_400_000,
             calls: 0,
             failed: 0,
             callback: null,
@@ -102,8 +106,11 @@ export function remoteFixture(): RemoteApi {
       calls.push(`remove-device:${id}`);
       return publish({ ...status, devices: status.devices.filter((device) => device.id !== id) });
     },
-    createBot: async (name, full) => {
-      calls.push(`create-bot:${name}${full ? ":full" : ""}`);
+    createBot: async (name, rights) => {
+      const full = rights.level === "full";
+      calls.push(
+        `create-bot:${name}${full ? ":full" : rights.level === "read" ? ":read" : ""}${rights.approve ? ":approve" : ""}${rights.fullAccess ? ":full-access" : ""}`,
+      );
       if (name.trim() === "fail")
         throw new Error("This computer already has 16 bot links. Remove one first.");
       const id = `bot-${status.bots.length + 1}`;
@@ -117,6 +124,10 @@ export function remoteFixture(): RemoteApi {
             created_at: Date.now(),
             last_used_at: null,
             full,
+            read_only: rights.level === "read",
+            approve: rights.level !== "read" && rights.approve,
+            full_access: full && rights.fullAccess,
+            expires_at: Date.now() + 90 * 86_400_000,
             calls: 0,
             failed: 0,
             callback: null,
@@ -127,6 +138,29 @@ export function remoteFixture(): RemoteApi {
         id,
         name: name.trim() || "Bot",
         url: `https://o7.codes/api/remote/v1/mcp/${"h".repeat(22)}/${"b".repeat(11)}.${"t".repeat(43)}`,
+      };
+    },
+    renewBot: async (id) => {
+      calls.push(`renew-bot:${id}`);
+      const bot = status.bots.find((item) => item.id === id);
+      if (!bot) throw new Error("That bot link is gone.");
+      publish({
+        ...status,
+        bots: status.bots.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                last_used_at: null,
+                created_at: Date.now(),
+                expires_at: Date.now() + 90 * 86_400_000,
+              }
+            : item,
+        ),
+      });
+      return {
+        id,
+        name: bot.name,
+        url: `https://o7.codes/api/remote/v1/mcp/${"h".repeat(22)}/${"b".repeat(11)}.${"n".repeat(43)}`,
       };
     },
     removeBot: async (id) => {

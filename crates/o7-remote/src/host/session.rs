@@ -31,7 +31,8 @@ pub(super) fn bot_links(shared: &Shared) -> String {
         .map(|bot| BotLink {
             id: &bot.id,
             hash: &bot.token_hash,
-            full: bot.full,
+            full: bot.full && !bot.read_only,
+            read: bot.read_only,
             v: crate::bot::TOOLS_VERSION,
         })
         .collect();

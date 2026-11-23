@@ -704,10 +704,10 @@ export function Onboarding({
       {linking ? (
         <BotDialog
           initial={linking}
-          create={async (name, full) => {
+          create={async (name, rights) => {
             // Remote access turns on when the link is made, as in Settings.
             if (!(await remote.status()).enabled) await remote.setEnabled(true);
-            const link = await remote.createBot(name, full);
+            const link = await remote.createBot(name, rights);
             setLinks((names) => [...names, link.name]);
             return link;
           }}

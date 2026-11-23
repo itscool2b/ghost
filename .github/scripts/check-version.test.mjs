@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkVersion, inApp, newer, parse } from "./check-version.mjs";
+import { checkVersion, inApp, newer, newestTag, parse } from "./check-version.mjs";
 
 test("a version is three plain numbers", () => {
   assert.deepEqual(parse("0.2.1\n"), [0, 2, 1]);
@@ -35,4 +35,17 @@ test("a branch that changes the app raises the version", () => {
   assert.deepEqual(checkVersion("0.2.4", "0.2.4", ["apps/web/app/x.tsx", "docs/a.md"]), []);
   // Main unreadable (a shallow checkout): the shape only.
   assert.deepEqual(checkVersion("0.2.4", null, null), []);
+});
+
+test("pull requests gather into one release until a build is made", () => {
+  assert.equal(newestTag(["v0.1.1793", "v0.2.0", "v0.1.9", "nightly"]), "0.2.0");
+  assert.equal(newestTag([]), null);
+  // main is already above what was published: a pull request may leave VERSION as it is...
+  assert.deepEqual(checkVersion("0.3.0", "0.3.0", ["crates/a.rs"], "0.2.0"), []);
+  // ...or raise it further, but never lower it.
+  assert.deepEqual(checkVersion("0.4.0", "0.3.0", ["crates/a.rs"], "0.2.0"), []);
+  assert.equal(checkVersion("0.2.9", "0.3.0", ["crates/a.rs"], "0.2.0").length, 1);
+  // main is what was published: the first pull request after it raises VERSION.
+  assert.equal(checkVersion("0.3.0", "0.3.0", ["crates/a.rs"], "0.3.0").length, 1);
+  assert.equal(checkVersion("0.3.0", "0.3.0", ["crates/a.rs"], null).length, 1);
 });

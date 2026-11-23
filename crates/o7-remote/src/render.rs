@@ -424,7 +424,11 @@ pub fn asked(items: &[HistoryItem]) -> Vec<(&'static str, String, String)> {
                 request.title.clone(),
             ),
             Waiting::Question(request) => (
-                "question",
+                if matches!(request.prompt, UiPrompt::Confirm { .. }) {
+                    "confirmation"
+                } else {
+                    "question"
+                },
                 request.request_id.clone(),
                 match &request.prompt {
                     UiPrompt::Confirm { message }

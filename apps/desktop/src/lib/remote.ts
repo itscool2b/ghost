@@ -14,8 +14,9 @@ export interface RemoteApi {
   readonly cancelPairing: () => Promise<RemoteStatus>;
   readonly removeDevice: (id: string) => Promise<RemoteStatus>;
   /** A new bot link. Its address carries the bot's token and is returned only here. */
-  /** `full`: every tool, where a link without it has the chat tools only. */
-  readonly createBot: (name: string, full: boolean) => Promise<RemoteBotLink>;
+  readonly createBot: (name: string, rights: BotRights) => Promise<RemoteBotLink>;
+  /** A new address for a link, shown once; the old one stops working. */
+  readonly renewBot: (id: string) => Promise<RemoteBotLink>;
   readonly removeBot: (id: string) => Promise<RemoteStatus>;
   /**
    * Where a bot link is told that a chat it acted on finished or asks for an answer. The key is
@@ -27,6 +28,23 @@ export interface RemoteApi {
   readonly testBotCallback: (id: string) => Promise<RemoteStatus>;
   /** Calls back whenever the status changed (a device paired, connected or left). */
   readonly subscribe: (changed: (status: RemoteStatus) => void) => () => void;
+}
+
+/**
+ * What a bot link may do, chosen when it is made. `read` reads chats only; `chats` also sends,
+ * answers questions and stops turns; `full` adds the rest of the window's chat and project
+ * controls. Approving an agent's permission requests and turning on full access are separate
+ * choices, off unless chosen.
+ */
+export interface BotRights {
+  readonly level: "read" | "chats" | "full";
+  readonly approve: boolean;
+  readonly fullAccess: boolean;
+}
+
+/** A link's level, as its row names it. */
+export function levelName(bot: { readonly read_only: boolean; readonly full: boolean }): string {
+  return bot.read_only ? "Read only" : bot.full ? "Full control" : "Chats";
 }
 
 /** Which assistant's way of being woken an address is. */
@@ -47,7 +65,16 @@ export const remoteApi: RemoteApi = {
   pair: () => settle(commands.remotePair()),
   cancelPairing: () => settle(commands.remoteCancelPairing()),
   removeDevice: (id) => settle(commands.remoteRemoveDevice(id)),
-  createBot: (name, full) => settle(commands.remoteCreateBot(name, full)),
+  createBot: (name, rights) =>
+    settle(
+      commands.remoteCreateBot(
+        name,
+        rights.level,
+        rights.level !== "read" && rights.approve,
+        rights.level === "full" && rights.fullAccess,
+      ),
+    ),
+  renewBot: (id) => settle(commands.remoteRenewBot(id)),
   removeBot: (id) => settle(commands.remoteRemoveBot(id)),
   setBotCallback: (id, callback) =>
     settle(

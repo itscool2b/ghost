@@ -11,7 +11,9 @@ import type {
 } from "../../bindings";
 import {
   ago,
+  type BotRights,
   type CallbackKind,
+  levelName,
   linkLabel,
   linkTone,
   type RemoteApi,
@@ -40,6 +42,8 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   const [linking, setLinking] = useState<{ readonly bot: BotChoice } | null>(null);
   /** The bot link whose call-back dialog is open, by id: its row follows the status. */
   const [telling, setTelling] = useState<string | null>(null);
+  /** A link's new address, shown once after renewing it. */
+  const [renewed, setRenewed] = useState<RemoteBotLink | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -213,9 +217,19 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                 title={bot.name}
                 setting="Bots"
                 mark={<LinkMark name={bot.name} />}
-                badge={<span className="g-chip">{bot.full ? "Full control" : "Chats"}</span>}
+                badge={
+                  <span className="g-chip">
+                    {levelName(bot)}
+                    {bot.approve ? " · approves" : ""}
+                    {bot.full_access ? " · full access" : ""}
+                  </span>
+                }
                 detail={
-                  bot.last_used_at === null ? (
+                  bot.expires_at <= now ? (
+                    <State tone="off">
+                      Expired after 90 days unused. Renew it to use it again.
+                    </State>
+                  ) : bot.last_used_at === null ? (
                     <State tone="off">Not used yet</State>
                   ) : (
                     <State tone={bot.failed > 0 && bot.failed === bot.calls ? "off" : "green"}>
@@ -235,6 +249,18 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                     onClick={() => setTelling(bot.id)}
                   >
                     {bot.callback ? "Call back: on" : "Call back"}
+                  </button>
+                  <button
+                    className="g-button g-button-ghost g-button-28"
+                    type="button"
+                    aria-label={`Renew, ${bot.name}`}
+                    onClick={() =>
+                      void api
+                        .renewBot(bot.id)
+                        .then(setRenewed, (failure) => setError(message(failure)))
+                    }
+                  >
+                    Renew
                   </button>
                   <button
                     className="g-button g-button-ghost g-button-28"
@@ -304,12 +330,21 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
           onClose={() => setTelling(null)}
         />
       ) : null}
+      {renewed ? (
+        <RenewedDialog
+          link={renewed}
+          onClose={() => {
+            setRenewed(null);
+            void run(() => api.status());
+          }}
+        />
+      ) : null}
       {linking ? (
         <BotDialog
           initial={linking.bot}
-          create={async (name, full) => {
+          create={async (name, rights) => {
             await ensureOn();
-            return api.createBot(name, full);
+            return api.createBot(name, rights);
           }}
           called={(id) => bots.some((bot) => bot.id === id && bot.last_used_at !== null)}
           onClose={() => {
@@ -319,6 +354,39 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * A link's new address after renewing it, shown once with its assistant's steps: the old one
+ * already stopped working.
+ */
+function RenewedDialog({
+  link,
+  onClose,
+}: {
+  readonly link: RemoteBotLink;
+  readonly onClose: () => void;
+}) {
+  const setup = SETUP[botNamed(link.name) ?? "other"];
+  return (
+    <Modal title={`A new address for ${link.name}`} onClose={onClose}>
+      <p className="remote-note">
+        The old address stopped working. Put this one where the old one was; it is shown once and
+        works like a password.
+      </p>
+      <CopyField value={setup.paste(link.url)} label={setup.label} />
+      <ol className="remote-steps">
+        {setup.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      <div className="g-dialog-actions">
+        <button className="g-button g-button-primary" type="button" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -856,7 +924,7 @@ export function BotDialog({
   onClose,
 }: {
   readonly initial: BotChoice;
-  readonly create: (name: string, full: boolean) => Promise<RemoteBotLink>;
+  readonly create: (name: string, rights: BotRights) => Promise<RemoteBotLink>;
   /** Whether the link with this id has made a call yet: the dialog then says it is connected. */
   readonly called?: (id: string) => boolean;
   readonly onClose: () => void;
@@ -866,7 +934,9 @@ export function BotDialog({
     BOTS.find((kind) => kind.id === choice)?.name ?? "My assistant";
   const [name, setName] = useState(() => named(initial));
   // What the link may do is chosen here and is the link's for good: a wider one is a new link.
-  const [full, setFull] = useState(false);
+  const [level, setLevel] = useState<BotRights["level"]>("chats");
+  const [approve, setApprove] = useState(false);
+  const [fullAccess, setFullAccess] = useState(false);
   const [link, setLink] = useState<RemoteBotLink | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -880,7 +950,7 @@ export function BotDialog({
     setBusy(true);
     setError(null);
     try {
-      setLink(await create(name, full));
+      setLink(await create(name, { level, approve, fullAccess }));
     } catch (failure) {
       setError(message(failure));
     } finally {
@@ -945,37 +1015,69 @@ export function BotDialog({
           </fieldset>
           <fieldset className="remote-levels">
             <legend>What it can do</legend>
+            {(
+              [
+                [
+                  "read",
+                  "Read only",
+                  "List and read your chats and projects, and wait for a chat to finish. It sends nothing and changes nothing.",
+                ],
+                [
+                  "chats",
+                  "Chats",
+                  "Also send messages, start chats and tasks, stop turns, and answer what an agent asks you.",
+                ],
+                [
+                  "full",
+                  "Full control",
+                  "Also what you do in this window: make a project from a folder on this computer, choose a chat's model, thinking and access, start a stopped agent, hand a chat to another agent, rename and archive chats, read a turn's file changes, and read and write project memory. It has no tool for Settings, sign-in, installing software or deleting data.",
+                ],
+              ] as const
+            ).map(([value, title, words]) => (
+              <label key={value} className="remote-level">
+                <input
+                  type="radio"
+                  name="remote-bot-level"
+                  checked={level === value}
+                  onChange={() => setLevel(value)}
+                />
+                <span>
+                  <strong>{title}</strong>
+                  <span>{words}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <fieldset className="remote-levels">
+            <legend>What it may approve</legend>
             <label className="remote-level">
               <input
-                type="radio"
-                name="remote-bot-level"
-                checked={!full}
-                onChange={() => setFull(false)}
+                type="checkbox"
+                checked={level !== "read" && approve}
+                disabled={level === "read"}
+                onChange={(event) => setApprove(event.currentTarget.checked)}
               />
               <span>
-                <strong>Chats</strong>
+                <strong>What agents ask permission for</strong>
                 <span>
-                  List and read your chats, send messages, start chats, stop turns and answer what
-                  an agent asks.
+                  Running a command, editing a file. Off, the bot can decline but not approve, and
+                  you approve in o7 or on your phone. The bot reads what agents write, so with this
+                  on, what it reads could talk it into approving.
                 </span>
               </span>
             </label>
             <label className="remote-level">
               <input
-                type="radio"
-                name="remote-bot-level"
-                checked={full}
-                onChange={() => setFull(true)}
+                type="checkbox"
+                checked={level === "full" && fullAccess}
+                disabled={level !== "full"}
+                onChange={(event) => setFullAccess(event.currentTarget.checked)}
               />
               <span>
-                <strong>Full control</strong>
+                <strong>Full access in a chat</strong>
                 <span>
-                  Everything in Chats, and what you do in this window: make a project from any
-                  folder on this computer, choose a chat's model and thinking, set its access level
-                  (full auto included), start a stopped agent, hand a chat to another agent, rename
-                  and archive chats, read a turn's file changes, and read and write project memory,
-                  which every later chat in that project starts with. It has no tool for Settings,
-                  sign-in, installing software or deleting data.
+                  Let it switch a chat to full access, where the agent runs without asking. Full
+                  control only.
                 </span>
               </span>
             </label>
@@ -991,9 +1093,10 @@ export function BotDialog({
             />
           </label>
           <p className="remote-note remote-fine">
-            A linked bot directs your agents, and agents can edit files and run commands. So either
-            level is as much trust as handing someone this computer: the level limits the bot's own
-            tools, not what an agent it directs can do.
+            A bot that can send directs your agents, and agents can edit files and run commands. So
+            it is as much trust as handing someone this computer: the choices above limit the bot's
+            own tools, not what an agent it directs can do. A link unused for 90 days stops working
+            until you renew it.
           </p>
           {error ? (
             <p className="settings-error" role="alert">
