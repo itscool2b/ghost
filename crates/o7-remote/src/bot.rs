@@ -653,6 +653,10 @@ async fn run(
                     "access is one of ask, auto_edit and full_auto.",
                 ));
             }
+            // Any level that asks less than "ask" approves on the person's behalf.
+            if args.access != "ask" && !rights.approve {
+                return Err(Answer::failed(NO_APPROVAL));
+            }
             if args.access == "full_auto" && !rights.full_access {
                 return Err(Answer::failed(NO_FULL_ACCESS));
             }

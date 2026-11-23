@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-23
 
+- A linked assistant that may not approve is held to it more strictly. It can only decline a prompt that guards an action, and it can no longer switch a chat to allow edits on its own. ([#188](https://github.com/itscool2b/o7/pull/188))
 - You choose exactly what a linked assistant may do. A new bot link can be read only, chats, or full control, and two things are now off unless you turn them on: approving what an agent asks permission for, and switching a chat to full access. Without approval a bot can still decline, and you approve in o7 or on your phone. Each link has Renew for a new address, and a link unused for 90 days stops working until renewed. ([#187](https://github.com/itscool2b/o7/pull/187))
 - o7's version numbers now mean something. This is o7 0.2.0: from here a big new feature moves it to 0.3.0, and a small change or a fix to 0.2.1, instead of one long build number. ([#185](https://github.com/itscool2b/o7/pull/185))
 - Version numbers are shorter. o7 now calls itself by two numbers, like 0.1, with the build beside it where it matters ("0.1 (build 1787)" in the update panel and in Settings > About) instead of one long number. ([#184](https://github.com/itscool2b/o7/pull/184))

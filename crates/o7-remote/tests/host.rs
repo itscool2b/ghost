@@ -1785,17 +1785,41 @@ async fn a_links_rights_are_checked_on_the_computer() {
     ] {
         let refused = call(&mut relay, &plain, tool, args).await;
         assert_eq!(refused["error"], true, "{tool}");
-        assert!(text(&refused).contains("full access"), "{tool}: {refused}");
+        // Without the approve right it is refused for that first; with it, for full access.
+        assert!(
+            text(&refused).contains("may not approve") || text(&refused).contains("full access"),
+            "{tool}: {refused}"
+        );
     }
     assert!(rig.app.acted.lock().expect("acted").is_empty());
-    let lowered = call(
+    // Allowing edits approves on the person's behalf too: only "ask" without the approve right.
+    for (tool, args) in [
+        ("set", json!({ "chat": "c1", "access": "auto_edit" })),
+        (
+            "send",
+            json!({ "chat": "c1", "text": "Go", "access": "auto_edit" }),
+        ),
+        (
+            "set_access",
+            json!({ "chat_id": "c1", "access": "auto_edit" }),
+        ),
+    ] {
+        let refused = call(&mut relay, &plain, tool, args).await;
+        assert_eq!(refused["error"], true, "{tool}");
+        assert!(
+            text(&refused).contains("may not approve"),
+            "{tool}: {refused}"
+        );
+    }
+    assert!(rig.app.acted.lock().expect("acted").is_empty());
+    let asking = call(
         &mut relay,
         &plain,
         "set",
-        json!({ "chat": "c1", "access": "auto_edit" }),
+        json!({ "chat": "c1", "access": "ask" }),
     )
     .await;
-    assert_eq!(lowered["error"], false, "{lowered}");
+    assert_eq!(asking["error"], false, "{asking}");
 
     // A new address: the old one is refused at once, and the new one works with the same rights.
     let renewed = rig
