@@ -4,9 +4,9 @@
 //! without the pinned files (apps/desktop/scripts/dictation-models.mjs verifies their SHA-256);
 //! the installer and updater signatures cover them from there, so the app checks only their sizes.
 //!
-//! A larger speech model, Parakeet Ultra, can be fetched once into the data folder (`larger.rs`):
-//! it is too large to ride in the installer. Where it is present at its pinned size, dictation
-//! uses it in place of the built-in one.
+//! A larger speech model, Parakeet Ultra, is fetched once into the data folder (`larger.rs`), by
+//! o7 itself or when the person asks: it is too large to ride in the installer. Where it is
+//! present at its pinned size, dictation uses it in place of the built-in one.
 use super::engine::Engine;
 use super::{DictationModel, Failure, LargerModel, LargerState};
 use std::path::{Path, PathBuf};
@@ -71,8 +71,9 @@ pub fn present(folder: &Path) -> bool {
 
 pub fn status(folder: Option<&Path>, downloads: Option<&Path>) -> DictationModel {
     let ready = larger(downloads).is_some();
+    let installed = folder.is_some_and(present);
     DictationModel {
-        installed: folder.is_some_and(present),
+        installed,
         name: if ready {
             LARGER.name
         } else {
@@ -93,6 +94,9 @@ pub fn status(folder: Option<&Path>, downloads: Option<&Path>) -> DictationModel
             },
             // A person can only be offered it where there is somewhere to keep it.
             available: downloads.is_some(),
+            received: super::larger::received()
+                .map_or(0, |received| u32::try_from(received).unwrap_or(u32::MAX)),
+            automatic: installed && downloads.is_some_and(super::larger::wanted),
         },
     }
 }

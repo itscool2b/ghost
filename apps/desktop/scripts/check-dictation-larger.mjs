@@ -7,6 +7,10 @@
  * fetched. Download shows what has arrived and can be cancelled; what arrived is kept and Continue
  * goes on from it. Once it is here dictation names it as the model in use, and Remove returns to
  * the built-in one. A failure says why. A copy with nowhere to keep a model offers nothing.
+ *
+ * A copy that fetches the model by itself (every release) says so before it starts and offers
+ * Cancel, which is a no it keeps; a download o7 started shows how far it has come, can be
+ * cancelled the same way, and ends with the model in use.
  * Usage: node scripts/check-dictation-larger.mjs [--server URL] [--engines chromium,webkit]
  */
 import assert from "node:assert/strict";
@@ -140,6 +144,49 @@ async function inspect(engine, launcher) {
         .getByText("Parakeet TDT-CTC 110M, built in and ready", { exact: false })
         .waitFor();
       await control.getByRole("button", { name: "Download" }).waitFor();
+
+      // A copy that fetches it by itself says so before it starts, and offers the no.
+      await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
+      await row
+        .getByText("o7 downloads it by itself, once: 486 MB from Hugging Face.", { exact: false })
+        .waitFor();
+      assert.equal(await control.getByRole("button", { name: "Cancel" }).count(), 1);
+      assert.equal(await control.getByRole("button", { name: /Download|Continue/ }).count(), 0);
+      assert.deepEqual(await log(), [], what("the page asks for nothing by being open"));
+      assert.deepEqual(
+        (await new AxeBuilder({ page }).include('[data-setting="Larger model"]').analyze())
+          .violations,
+        [],
+        what("before o7 starts it"),
+      );
+      // o7 starts it: the row shows how far it has come without having asked for it.
+      await page.evaluate(() => window.largerFixture.begin(0.5));
+      await row.getByText("Downloading Parakeet Ultra: 243 of 486 MB.").waitFor();
+      // Cancel stops it and is a no that holds: the row offers it again and promises nothing.
+      await control.getByRole("button", { name: "Cancel" }).click();
+      await control.getByRole("button", { name: "Continue" }).waitFor();
+      await row.getByText("What arrived so far is kept.", { exact: false }).waitFor();
+      assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
+      assert.deepEqual(await log(), ["cancel"]);
+      // A no before it started holds as well.
+      await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
+      await control.getByRole("button", { name: "Cancel" }).click();
+      await control.getByRole("button", { name: "Download" }).waitFor();
+      assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1500)));
+      assert.equal(await control.getByRole("button", { name: "Download" }).count(), 1);
+      // Left alone, o7's own download ends with the model in use.
+      await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
+      await row.getByText("o7 downloads it by itself", { exact: false }).waitFor();
+      await page.evaluate(() => window.largerFixture.begin(0.9));
+      await row.getByText("Downloading Parakeet Ultra: 438 of 486 MB.").waitFor();
+      await page.evaluate(() => window.largerFixture.finish());
+      await row.getByText("Parakeet Ultra is downloaded and in use.", { exact: false }).waitFor();
+      await dictation.getByText("Parakeet Ultra, downloaded and ready", { exact: false }).waitFor();
+      // Remove is a no too: it does not come back by itself.
+      await control.getByRole("button", { name: "Remove" }).click();
+      await control.getByRole("button", { name: "Download" }).waitFor();
+      assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
 
       // Already here when the page opens.
       await page.goto(`${url}/?preview=settings&page=voice&larger=ready`);

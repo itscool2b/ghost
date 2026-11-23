@@ -3578,6 +3578,7 @@ dependencies = [
  "image",
  "keepawake",
  "keyring-core",
+ "libc",
  "o7-agents",
  "o7-config",
  "o7-core",

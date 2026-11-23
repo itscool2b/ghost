@@ -370,12 +370,19 @@ export const commands = {
 	dictationCancel: (id: string) => __TAURI_INVOKE<void>("dictation_cancel", { id }),
 	/**
 	 *  Fetches the larger speech model, once, from its pinned address (`larger.rs`): the page supplies
-	 *  nothing but the wish. Progress arrives on `channel`; the download goes on if the page leaves.
+	 *  nothing but the wish, which also takes back an earlier Cancel or Remove. Progress arrives on
+	 *  `channel`; the download goes on if the page leaves.
 	 */
 	dictationLargerDownload: (channel: Channel<LargerEvent>) => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_download", { channel })),
-	/**  Stops the download. What arrived is kept, and the next download continues from it. */
-	dictationLargerCancel: () => __TAURI_INVOKE<void>("dictation_larger_cancel"),
-	/**  Deletes the larger model; dictation returns to the built-in one. */
+	/**
+	 *  Stops the download, or says no to one o7 has not started yet. What arrived is kept, and the
+	 *  next download continues from it; o7 does not start one by itself again.
+	 */
+	dictationLargerCancel: () => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_cancel")),
+	/**
+	 *  Deletes the larger model; dictation returns to the built-in one, and o7 does not fetch the
+	 *  model by itself again.
+	 */
 	dictationLargerRemove: () => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_remove")),
 	/**  Whether reading aloud can run here, and the voices to choose from. */
 	speechStatus: () => __TAURI_INVOKE<SpeechStatus>("speech_status"),
@@ -2667,6 +2674,13 @@ export type LargerModel = {
 	state: LargerState,
 	/**  Whether this copy can keep a downloaded model at all. */
 	available: boolean,
+	/**
+	 *  Bytes of it here so far, while it downloads: a page that did not start the download
+	 *  shows how far it has come from this.
+	 */
+	received: number,
+	/**  o7 will fetch it by itself: nobody said no and the disk has the room (`larger::wanted`). */
+	automatic: boolean,
 };
 
 export type LargerState = "absent" | "downloading" | "ready";

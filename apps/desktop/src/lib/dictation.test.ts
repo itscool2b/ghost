@@ -28,6 +28,8 @@ function fixture(installed = true, supported = true) {
         bytes: 486280096,
         state: "absent" as const,
         available: true,
+        received: 0,
+        automatic: false,
       },
       supported,
     })),
@@ -242,7 +244,14 @@ describe("local dictation", () => {
       name: "Parakeet",
       bytes: 1,
       supported: true,
-      larger: { name: "Larger", bytes: 2, state: "absent", available: true },
+      larger: {
+        name: "Larger",
+        bytes: 2,
+        state: "absent",
+        available: true,
+        received: 0,
+        automatic: false,
+      },
     });
     await opening;
     expect(f.api.start).not.toHaveBeenCalled();
@@ -305,12 +314,33 @@ describe("dictation draft insertion", () => {
 });
 
 describe("the larger model's row", () => {
-  const model = (state: "absent" | "downloading" | "ready") => ({
+  const model = (
+    state: "absent" | "downloading" | "ready",
+    more: { received?: number; automatic?: boolean } = {},
+  ) => ({
     installed: true,
     name: state === "ready" ? "Parakeet Ultra" : "Parakeet TDT-CTC 110M",
     bytes: 113552320,
     supported: true,
-    larger: { name: "Parakeet Ultra", bytes: 486280096, state, available: true },
+    larger: {
+      name: "Parakeet Ultra",
+      bytes: 486280096,
+      state,
+      available: true,
+      received: 0,
+      automatic: false,
+      ...more,
+    },
+  });
+
+  it("says that o7 fetches it by itself, until the person has said no", () => {
+    const coming = largerDetail(model("absent", { automatic: true }), { state: "idle" });
+    expect(coming).toMatch(/^Parakeet Ultra makes about 40% fewer mistakes/);
+    expect(coming).toContain("o7 downloads it by itself, once: 486 MB from Hugging Face.");
+    // After a no the row offers it and promises nothing.
+    const offer = largerDetail(model("absent"), { state: "idle" });
+    expect(offer).not.toContain("by itself");
+    expect(largerDetail(model("absent"), { state: "idle", kept: true })).not.toContain("by itself");
   });
 
   it("says what it is, what it costs and where it comes from before anything is fetched", () => {
@@ -337,9 +367,9 @@ describe("the larger model's row", () => {
     expect(largerDetail(model("downloading"), { state: "verifying" })).toBe(
       "Checking the download.",
     );
-    // A download another page started: no numbers to show, only that it runs.
-    expect(largerDetail(model("downloading"), { state: "idle" })).toBe(
-      "Downloading Parakeet Ultra.",
+    // A download this page did not start, o7's own included: the core says how far it has come.
+    expect(largerDetail(model("downloading", { received: 243_140_048 }), { state: "idle" })).toBe(
+      "Downloading Parakeet Ultra: 243 of 486 MB.",
     );
   });
 
