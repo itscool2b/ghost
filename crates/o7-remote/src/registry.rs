@@ -815,7 +815,11 @@ mod tests {
         assert!(!registry.verify_bot(&bot.id, "wrong", 8));
         assert!(!registry.verify_bot("wrong", &bot.token, 8));
         assert_eq!(registry.bots()[0].last_used_at, None);
-        assert_eq!(registry.bots()[0].calls, 0, "a refused call is not the link's");
+        assert_eq!(
+            registry.bots()[0].calls,
+            0,
+            "a refused call is not the link's"
+        );
         assert!(registry.verify_bot(&bot.id, &bot.token, 9));
         assert_eq!(registry.bots()[0].last_used_at, Some(9));
         assert!(registry.verify_bot(&bot.id, &bot.token, 10));

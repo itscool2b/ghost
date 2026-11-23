@@ -657,7 +657,9 @@ fn find<'a>(overview: &'a Overview, chat_id: &str) -> Result<&'a ChatSummary, An
         .iter()
         .map(|entry| &entry.chat)
         .find(|chat| chat.id == chat_id)
-        .ok_or_else(|| Answer::failed("There is no chat with that id. List the chats for their ids."))
+        .ok_or_else(|| {
+            Answer::failed("There is no chat with that id. List the chats for their ids.")
+        })
 }
 
 async fn read(backend: &Arc<dyn Backend>, chat_id: &str, turns: usize) -> Result<String, Answer> {
