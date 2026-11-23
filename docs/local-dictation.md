@@ -9,7 +9,9 @@ them install it").
 Larger models were measured on 22 November 2026 (owner: "do hella research on the best voice to
 text model and change it"). The best of them, Parakeet Ultra, makes about 40% fewer errors and
 hears 24 more languages. It is too large to ship inside the app, so it is a one-time download
-from Settings > Voice: [The larger model](#the-larger-model). [Why the built-in model is
+that o7 makes by itself shortly after it starts (owner, 22 November 2026, asked whether it should
+be one click or automatic: "Automatically pls"), and that Settings > Voice shows and can refuse:
+[The larger model](#the-larger-model). [Why the built-in model is
 small](#why-the-built-in-model-is-small) has the comparison and the reason.
 
 ## Using it
@@ -38,20 +40,45 @@ word fade, caret pulse or waveform slide.
 
 ## The larger model
 
-Settings > Voice > Larger model offers Parakeet Ultra: what it is, that it is a 486 MB download
-from Hugging Face, and Download. While it arrives the row counts the megabytes and offers Cancel;
-what arrived is kept, and Continue goes on from it. Once it is here dictation uses it in the
-built-in model's place, from the next recording on, and the Dictation row names it and its
-languages; Remove deletes it and returns to the built-in model. Nothing is fetched until the
-person presses Download, and dictation works without it.
+o7 fetches Parakeet Ultra by itself: a first look one minute after it starts, then one every
+quarter of an hour for as long as the model is wanted and not here, so a computer that was
+offline gets it once it is not. It is a 486 MB download from Hugging Face, made once; a download
+that was cut short continues from what arrived. Dictation works without it, on the built-in
+model, and uses the larger one from the next recording after it arrives.
+
+Settings > Voice > Larger model is where a person sees this and says no. Before o7 has started,
+the row says what the model is and that o7 downloads it by itself, with Cancel. While it arrives
+the row counts the megabytes, with Cancel. Once it is here the Dictation row names it and its
+languages, and the row offers Remove, which deletes it and returns to the built-in model.
+
+Cancel and Remove are a no that o7 keeps: it writes an empty file, `larger-model.declined`,
+beside the model, and never starts the download by itself while that file is there. The row then
+offers Download (Continue, where part of the model was kept), which takes the no back.
+
+o7 does not start the download by itself:
+
+- after a no, as above;
+- onto a disk that would be left with less than 2 GiB free (it looks again each quarter of an
+  hour, and the row offers Download meanwhile, which the person may still press);
+- on a processor dictation cannot run on, or in a copy missing its built-in models;
+- again in the same run, after a download whose file was not the pinned one or that the disk
+  would not take (a failed connection is tried again; a wrong file is not fetched over and over);
+- in a development build, where each scratch data folder would fetch its own copy
+  (`O7_DICTATION_AUTOMATIC=1` turns it on there to test it; `=0` turns it off in any build);
+- in a smoke launch.
+
+It does not know whether a connection is metered: a computer tethered to a phone fetches the
+486 MB unless the person cancels it. That is the cost of fetching without being asked, and the
+owner's choice.
 
 Who may do what, and how that is held (`src-tauri/src/dictation/larger.rs`):
 
-- Only the app's own page starts, cancels or removes the download (`dictation_larger_download`,
-  `dictation_larger_cancel`, `dictation_larger_remove`), and the page supplies nothing: the
+- The app itself starts the download (`dictation::commands::start_automatic`), or its own page
+  does (`dictation_larger_download`); only that page cancels or removes it
+  (`dictation_larger_cancel`, `dictation_larger_remove`). Neither supplies anything: the
   address, the size and the SHA-256 are constants of the build (`dictation::model::LARGER`,
   pinned to a Hugging Face revision). Agents, linked assistants and remote sessions have no tool
-  for it.
+  for it, and cannot take a person's no back.
 - The connection is HTTPS only and follows a redirect only to `huggingface.co`, its subdomains or
   `*.hf.co`, on the default port, with no credentials in the address.
 - The file is written as `<name>.partial` in `models/dictation` under the data folder (shared by
@@ -59,8 +86,8 @@ Who may do what, and how that is held (`src-tauri/src/dictation/larger.rs`):
   all of it hashed to the pinned SHA-256; anything else is deleted. A continued download hashes
   what it kept again instead of trusting it. Dictation loads the file only under its final name
   and at its pinned size.
-- One download runs at a time. It goes on if the page that started it leaves, and another page
-  shows that it runs.
+- One download runs at a time, whoever started it. It goes on if the page that started it
+  leaves, and any page shows how far it has come.
 - The file is weights for the speech engine. Nothing in it is run.
 
 Each refusal has a test (`dictation::larger::tests`, `dictation::model::tests`). The notices credit
@@ -71,9 +98,10 @@ the model although the app does not carry it.
 Audio lives only in memory and is zeroed when the recording ends: at most a 12 s capture backlog,
 the phrase in progress (at most 20 s) and the last 30 s of settled phrases. No audio or transcript
 is written to disk or logged; transcribe.cpp's and ggml's native logging is turned off before the
-first model loads. Dictating makes no network request (the one request this feature can make is
-the larger model's download, when the person asks for it, to Hugging Face, and it carries no
-audio and no text), and no account, API key, cloud speech service,
+first model loads. Dictating makes no network request (the one request this feature makes is
+the larger model's download from Hugging Face, once, which o7 starts by itself unless the person
+said no; it carries no audio and no text, and Hugging Face sees it as any download, with the
+computer's network address), and no account, API key, cloud speech service,
 Python or external executable is involved. The finished text becomes a normal draft and follows
 the draft's usual persistence.
 
@@ -126,7 +154,7 @@ was published: with a 486 MB model inside, the macOS package is about 570 MB and
 (`MAX_PACKAGE` in `src-tauri/src/updater.rs`; `o7-release` holds the same line). Those copies
 could never have updated again. And where it did fit (Windows, 519 MB), every update would have
 downloaded the model again, since an update is the whole installer. So the model that ships stays
-small, and the large one arrives once, on request, outside the installer: [The larger
+small, and the large one arrives once, outside the installer: [The larger
 model](#the-larger-model).
 
 A large model also costs about four times as much per pass and holds about half a gigabyte of
@@ -247,7 +275,10 @@ is no longer needed.
   shorter phrases, finishing skips a pass that would be slow or redundant), zeroing, operation
   ownership, the model pins, and the larger model's download (it gets its name only when whole
   and matching, a wrong or oversized file is discarded, a continued download is hashed again,
-  only Hugging Face over HTTPS may send it) (27 tests). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
+  only Hugging Face over HTTPS may send it; and of fetching it unasked: a no holds until Download
+  takes it back, a model already here is not fetched, a disk that would be left short is left
+  alone, a development build fetches nothing, a failed connection is tried again and a wrong
+  file is not) (31 tests). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
   every 16 kHz mono WAV in `O7_DICTATION_FIXTURE_DIR` as the microphone would deliver it, and
   prints the live updates, timing and final text (`-- --ignored --nocapture`).
 - `vitest run src/lib/dictation.test.ts`: the controller (live text, the bounded waveform, finishing,
@@ -259,7 +290,17 @@ is no longer needed.
   as the ghost draws it with the message box pixel for pixel. The fixture never opens a microphone.
 - `node scripts/check-dictation-larger.mjs` (port 1467), Chromium and WebKit, light and dark:
   the offer, the download's progress, Cancel and Continue, the model in use once it arrives,
-  Remove, a failure, a copy with nowhere to keep a model, Settings' search, and axe.
+  Remove, a failure, a copy with nowhere to keep a model, Settings' search, and axe; and for a
+  copy that fetches it by itself: the row saying so before it starts, a download the page did
+  not start counting up, Cancel before and during it as a no that holds, and Remove as one too.
+- Natively, on Windows x64 (debug app with `O7_DICTATION_AUTOMATIC=1`, fresh scratch data
+  folders), 22 November 2026, with nothing pressed: the row said o7 downloads the model by
+  itself, the download began about a minute after launch, the row counted it in, and the
+  Dictation row named Parakeet Ultra (the whole file in about 10 s on this connection). Remove
+  left only `larger-model.declined`, and after a restart nothing was fetched in 85 s. Download
+  took the no back; Cancel at 9 MB wrote it again and kept the partial file. On a second fresh
+  folder, Cancel before the download began: nothing was fetched in 84 s. A third, without the
+  variable: the row offered Download and nothing was fetched in 80 s.
 - Natively, on Windows x64 (debug app, scratch profile), 22 November 2026: the real download
   from Hugging Face through the app's commands was cancelled at 30%, continued from the byte it
   stopped at, verified and put in place (9 s in all on this connection); a second request while it

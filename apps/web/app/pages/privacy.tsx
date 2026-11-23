@@ -9,7 +9,7 @@ export default function Privacy() {
     >
       <article className="prose">
         <p>
-          This notice describes the implemented design as of November 19, 2026. Operator identity,
+          This notice describes the implemented design as of November 22, 2026. Operator identity,
           legal contact details and jurisdiction-specific terms require review before a public
           release.
         </p>
@@ -22,7 +22,14 @@ export default function Privacy() {
           o7 looks for a newer version of itself a few times a day by reading one public file from
           the project's releases on GitHub. The request carries nothing about you or your work;
           GitHub sees it as any download, with your network address. You can turn this off in
-          Settings, and nothing is downloaded or installed until you choose Update.
+          Settings, and no update is downloaded or installed until you choose Update.
+        </p>
+        <p>
+          Dictation runs on your computer: what you say and what it writes never leave it. o7
+          downloads a more accurate speech model for it once, shortly after it starts, from Hugging
+          Face (486 MB). The request carries nothing about you or your work; Hugging Face sees it as
+          any download, with your network address. Cancel or remove it in Settings and o7 does not
+          fetch it again.
         </p>
         <p>
           Your chosen agents run through their own harnesses and authentication. Their providers

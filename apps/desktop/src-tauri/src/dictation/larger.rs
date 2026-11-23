@@ -175,7 +175,16 @@ pub async fn attempt(folder: PathBuf) -> Attempt {
     if !enabled() || !super::audio::cpu_supported() || model::larger(Some(&folder)).is_some() {
         return Attempt::Done;
     }
-    if downloading() || !wanted(&folder) {
+    if downloading() {
+        return Attempt::Later;
+    }
+    let free = free_space(&folder);
+    if !open_to(&folder, free) {
+        tracing::debug!(
+            declined = declined(&folder),
+            ?free,
+            "the larger dictation model is not fetched by itself for now"
+        );
         return Attempt::Later;
     }
     let (ended, end) = tokio::sync::oneshot::channel();
