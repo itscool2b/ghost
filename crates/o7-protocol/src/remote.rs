@@ -15,6 +15,9 @@ pub struct RemoteStatus {
     pub host_name: String,
     pub devices: Vec<RemoteDevice>,
     pub bots: Vec<RemoteBot>,
+    /// Addresses that start a task from what is sent to them, in one project with one
+    /// instruction.
+    pub automations: Vec<RemoteAutomation>,
     /// A pairing link is open: its address is not repeated here, only when it stops opening.
     pub pairing_expires_at: Option<Millis>,
     /// The computer does not sleep on its own while remote access is on and a paired device or a
@@ -97,6 +100,25 @@ pub struct RemoteTold {
 pub struct RemotePairing {
     pub url: String,
     pub expires_at: Millis,
+}
+
+/// An automation, as Settings lists it. Its address is shown once, when it is made or renewed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RemoteAutomation {
+    pub id: String,
+    pub name: String,
+    /// The project its tasks start in.
+    pub project: String,
+    pub instruction: String,
+    pub created_at: Millis,
+    pub last_used_at: Option<Millis>,
+    /// When it stops working unless it is used before then (90 days idle).
+    pub expires_at: Millis,
+    /// What was sent to it, and how much of that was refused.
+    pub calls: u32,
+    pub failed: u32,
+    /// Why what was last sent could not start, until one starts again.
+    pub last_error: Option<String>,
 }
 
 /// A new bot link, shown once: the MCP address a bot connects to. It carries the bot's token.

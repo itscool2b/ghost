@@ -153,6 +153,8 @@ const HOST_MESSAGE_BYTES = 2 * 1024 * 1024;
 const CLIENT_MESSAGES_PER_WINDOW = 240;
 const WINDOW_MS = 10_000;
 const MCP_BODY_BYTES = 256 * 1024;
+/** The most an automation is sent at once: a webhook's whole payload, as most send them. */
+const HOOK_BODY_BYTES = 64 * 1024;
 /**
  * Until the desktop accepts it, a browser's socket has shown no key: it gets the handshake's few
  * small messages and nothing more, so knowing a computer's id sends that computer next to nothing.
@@ -290,6 +292,9 @@ export default {
       if (!known) return json(403, { error: "forbidden" });
     } else if (kind === "mcp") {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    } else if (kind === "hook") {
+      // A service's webhook, never a page: no browser is let in.
+      if (origin !== null) return json(403, { error: "forbidden" });
     } else {
       return notFound();
     }
@@ -409,6 +414,7 @@ export class Room extends DurableObject<Env> {
     if (kind === "host") return this.#acceptHost(request);
     if (kind === "client") return this.#acceptClient(request);
     if (kind === "mcp") return this.#mcp(request, reference ?? "");
+    if (kind === "hook") return this.#hook(request, reference ?? "");
     return notFound();
   }
 
@@ -616,6 +622,7 @@ export class Room extends DurableObject<Env> {
     const current: string[] = [];
     const latest: string[] = [];
     const read: string[] = [];
+    const hooks: string[] = [];
     const versions: Record<string, number> = {};
     if (Array.isArray(body))
       for (const entry of body.slice(0, MAX_BOTS)) {
@@ -625,12 +632,14 @@ export class Room extends DurableObject<Env> {
           full: wide,
           read: reading,
           v,
+          hook,
         } = (entry ?? {}) as {
           id?: unknown;
           hash?: unknown;
           full?: unknown;
           read?: unknown;
           v?: unknown;
+          hook?: unknown;
         };
         if (
           typeof id === "string" &&
@@ -639,8 +648,10 @@ export class Room extends DurableObject<Env> {
           SECRET.test(hash)
         ) {
           bots[id] = hash;
+          // An automation's address takes what is sent to it, and is no MCP server.
+          if (hook === true) hooks.push(id);
           // A read-only link is never shown more, whatever else it says.
-          if (reading === true) read.push(id);
+          else if (reading === true) read.push(id);
           else if (wide === true) full.push(id);
           // A copy newer than this relay answers at least the latest set this relay knows.
           if (typeof v === "number" && v >= CURRENT_TOOLS) current.push(id);
@@ -648,7 +659,7 @@ export class Room extends DurableObject<Env> {
           versions[id] = typeof v === "number" && Number.isFinite(v) ? v : 1;
         }
       }
-    await this.ctx.storage.put({ bots, full, current, latest, read, versions });
+    await this.ctx.storage.put({ bots, full, current, latest, read, hooks, versions });
   }
 
   override async webSocketClose(socket: WebSocket, code: number, reason: string) {
@@ -698,6 +709,8 @@ export class Room extends DurableObject<Env> {
     const known = BOT_ID.test(id) && Object.hasOwn(bots, id) ? bots[id] : undefined;
     // A wrong or removed link does not exist; nothing here invites a sign-in flow.
     if (!known || !SECRET.test(token) || !same(known, await sha256(token))) return notFound(CORS);
+    // An automation's address is no MCP server.
+    if (((await this.ctx.storage.get<string[]>("hooks")) ?? []).includes(id)) return notFound(CORS);
     if (request.method !== "POST")
       return json(405, { error: "method_not_allowed" }, { ...CORS, Allow: "POST, OPTIONS" });
     const text = await request.text();
@@ -804,6 +817,36 @@ export class Room extends DurableObject<Env> {
       default:
         return rpcError(id, -32601, "Method not found");
     }
+  }
+
+  /**
+   * What a service sends an automation (a webhook): checked as a bot's address is, then handed
+   * to the computer whole, as text, which starts a task with it. 202 when it started; 503 when
+   * the computer is away (a sender that retries gets it there later); 409 when the computer
+   * would not start it (too many of its tasks still work, or a day's twenty started).
+   */
+  async #hook(request: Request, reference: string): Promise<Response> {
+    const [id = "", inPath = ""] = reference.split(".");
+    const token =
+      inPath || (/^Bearer (.+)$/.exec(request.headers.get("Authorization") ?? "")?.[1] ?? "");
+    const bots = (await this.ctx.storage.get<Record<string, string>>("bots")) ?? {};
+    const known = BOT_ID.test(id) && Object.hasOwn(bots, id) ? bots[id] : undefined;
+    if (!known || !SECRET.test(token) || !same(known, await sha256(token))) return notFound();
+    if (!((await this.ctx.storage.get<string[]>("hooks")) ?? []).includes(id)) return notFound();
+    if (request.method !== "POST")
+      return json(405, { error: "method_not_allowed" }, { Allow: "POST" });
+    const text = await request.text();
+    if (text.length > HOOK_BODY_BYTES) return json(413, { error: "too_large" });
+    if (!text.trim()) return json(400, { ok: false, text: "Nothing was sent." });
+    if (!this.#host()) {
+      const seen = await this.ctx.storage.get<number>("seen");
+      return json(503, { ok: false, text: offline(seen) });
+    }
+    const reply = await this.#call(
+      { bot: id, token, tool: "trigger", args: { text } },
+      cancelKey(id, randomId(6)),
+    );
+    return json(reply.error ? 409 : 202, { ok: !reply.error, text: reply.text });
   }
 
   /** One tool call, answered by the desktop. */

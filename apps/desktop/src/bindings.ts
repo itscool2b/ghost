@@ -453,6 +453,12 @@ export const commands = {
 	 */
 	remoteCreateBot: (name: string, level: string, approve: boolean, fullAccess: boolean) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_create_bot", { name, level, approve, fullAccess })),
 	/**
+	 *  Makes an automation: an address that starts a task in `project` (one of the open
+	 *  workspace's) with `instruction`, from what is sent to it, which its agent is given as data.
+	 *  The address is returned only here.
+	 */
+	remoteCreateAutomation: (name: string, project: string, instruction: string) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_create_automation", { name, project, instruction })),
+	/**
 	 *  Removes a bot link. Its address stops working, and the key of its call-back, if it had
 	 *  one, leaves this computer's secure storage.
 	 */
@@ -3591,6 +3597,24 @@ export type QueuedPrompt = {
 	created_at: number,
 };
 
+/**  An automation, as Settings lists it. Its address is shown once, when it is made or renewed. */
+export type RemoteAutomation = {
+	id: string,
+	name: string,
+	/**  The project its tasks start in. */
+	project: string,
+	instruction: string,
+	created_at: number,
+	last_used_at: number | null,
+	/**  When it stops working unless it is used before then (90 days idle). */
+	expires_at: number,
+	/**  What was sent to it, and how much of that was refused. */
+	calls: number,
+	failed: number,
+	/**  Why what was last sent could not start, until one starts again. */
+	last_error: string | null,
+};
+
 export type RemoteBot = {
 	id: string,
 	name: string,
@@ -3667,6 +3691,11 @@ export type RemoteStatus = {
 	host_name: string,
 	devices: RemoteDevice[],
 	bots: RemoteBot[],
+	/**
+	 *  Addresses that start a task from what is sent to them, in one project with one
+	 *  instruction.
+	 */
+	automations: RemoteAutomation[],
 	/**  A pairing link is open: its address is not repeated here, only when it stops opening. */
 	pairing_expires_at: number | null,
 	/**

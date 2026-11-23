@@ -359,6 +359,41 @@ pub fn remote_create_bot(
         .map_err(refused)
 }
 
+/// Makes an automation: an address that starts a task in `project` (one of the open
+/// workspace's) with `instruction`, from what is sent to it, which its agent is given as data.
+/// The address is returned only here.
+#[tauri::command]
+#[specta::specta]
+pub async fn remote_create_automation(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    project: String,
+    instruction: String,
+) -> Result<RemoteBotLink, AppError> {
+    if instruction.trim().is_empty() {
+        return Err(AppError::invalid_argument(
+            "Say what its agent should do with what is sent.",
+        ));
+    }
+    let service = service(&app)?;
+    let snapshot = state
+        .sessions()?
+        .workspace_snapshot(WorkspaceFilter {
+            include_archived: false,
+            project_id: None,
+        })
+        .await?;
+    if !snapshot.projects.iter().any(|known| known.id == project) {
+        return Err(AppError::invalid_argument(
+            "Choose one of this workspace's projects.",
+        ));
+    }
+    service
+        .create_automation(&name, &project, &instruction)
+        .map_err(refused)
+}
+
 /// A new address for a bot link, shown once: the old one stops working at once, and a link that
 /// expired unused works again. What the link may do stays.
 #[tauri::command]

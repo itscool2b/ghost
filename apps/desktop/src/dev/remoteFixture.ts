@@ -45,7 +45,28 @@ export function remoteFixture(): RemoteApi {
       : [],
     pairing_expires_at: null,
     keep_awake: false,
+    automations: on
+      ? [
+          {
+            id: "auto-ci",
+            name: "CI failures",
+            project: "project-web",
+            instruction:
+              "Fix what the failed check reports, run the tests and commit on the branch.",
+            created_at: Date.now() - 86_400_000 * 2,
+            last_used_at: Date.now() - 3_600_000 * 5,
+            expires_at: Date.now() + 85 * 86_400_000,
+            calls: 4,
+            failed: 0,
+            last_error: null,
+          },
+        ]
+      : [],
   };
+  const projects = [
+    { id: "project-web", name: "web" },
+    { id: "project-api", name: "api" },
+  ];
   let loginStart: LoginStart = { on: false, unavailable: null };
   const publish = (next: RemoteStatus): RemoteStatus => {
     status = next;
@@ -99,6 +120,35 @@ export function remoteFixture(): RemoteApi {
       calls.push(`login-start:${on}`);
       loginStart = { ...loginStart, on };
       return { ...loginStart };
+    },
+    projects: async () => projects,
+    createAutomation: async (name, project, instruction) => {
+      calls.push(`create-automation:${name}:${project}`);
+      if (!instruction.trim()) throw new Error("Say what its agent should do with what is sent.");
+      const id = `auto-${status.automations.length + 1}`;
+      publish({
+        ...status,
+        automations: [
+          ...status.automations,
+          {
+            id,
+            name: name.trim() || "Automation",
+            project,
+            instruction,
+            created_at: Date.now(),
+            last_used_at: null,
+            expires_at: Date.now() + 90 * 86_400_000,
+            calls: 0,
+            failed: 0,
+            last_error: null,
+          },
+        ],
+      });
+      return {
+        id,
+        name: name.trim() || "Automation",
+        url: `https://o7.codes/api/remote/v1/hook/${"h".repeat(22)}/${"a".repeat(11)}.${"t".repeat(43)}`,
+      };
     },
     pair: async () => {
       calls.push("pair");
@@ -154,6 +204,13 @@ export function remoteFixture(): RemoteApi {
     },
     renewBot: async (id) => {
       calls.push(`renew-bot:${id}`);
+      const automation = status.automations.find((item) => item.id === id);
+      if (automation)
+        return {
+          id,
+          name: automation.name,
+          url: `https://o7.codes/api/remote/v1/hook/${"h".repeat(22)}/${"a".repeat(11)}.${"n".repeat(43)}`,
+        };
       const bot = status.bots.find((item) => item.id === id);
       if (!bot) throw new Error("That bot link is gone.");
       publish({
@@ -177,7 +234,11 @@ export function remoteFixture(): RemoteApi {
     },
     removeBot: async (id) => {
       calls.push(`remove-bot:${id}`);
-      return publish({ ...status, bots: status.bots.filter((bot) => bot.id !== id) });
+      return publish({
+        ...status,
+        bots: status.bots.filter((bot) => bot.id !== id),
+        automations: status.automations.filter((automation) => automation.id !== id),
+      });
     },
     setBotCallback: async (id, callback) => {
       calls.push(`set-callback:${id}:${callback.kind}:${callback.key === null ? "kept" : "key"}`);

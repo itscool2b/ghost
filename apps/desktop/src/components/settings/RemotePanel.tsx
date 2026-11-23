@@ -1,9 +1,10 @@
 import { BOTS, type BotId, BotMark, botNamed } from "@o7/ui/graphite";
-import { Bot, Coffee, LogIn, Monitor, MonitorSmartphone, Smartphone } from "lucide-react";
+import { Bot, Coffee, LogIn, Monitor, MonitorSmartphone, Smartphone, Webhook } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
 import type {
   LoginStart,
+  RemoteAutomation,
   RemoteBot,
   RemoteBotLink,
   RemoteDevice,
@@ -18,6 +19,7 @@ import {
   linkLabel,
   linkTone,
   type RemoteApi,
+  type RemoteProject,
   remaining,
   remoteApi,
 } from "../../lib/remote";
@@ -48,12 +50,24 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   const [now, setNow] = useState(() => Date.now());
   /** Whether o7 opens at sign-in: the system's own record, read when the page opens. */
   const [loginStart, setLoginStart] = useState<LoginStart | null>(null);
+  /** The workspace's projects, for an automation's; read when the page opens. */
+  const [projects, setProjects] = useState<readonly RemoteProject[]>([]);
+  /** The new automation dialog is open. */
+  const [automating, setAutomating] = useState(false);
+  /** An automation's new address, shown once after renewing it. */
+  const [readdressed, setReaddressed] = useState<RemoteBotLink | null>(null);
 
   useEffect(() => {
     let live = true;
     api.loginStart().then(
       (value) => {
         if (live) setLoginStart(value);
+      },
+      () => {},
+    );
+    api.projects().then(
+      (value) => {
+        if (live) setProjects(value);
       },
       () => {},
     );
@@ -117,6 +131,9 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   const enabled = status?.enabled ?? false;
   const devices = status?.devices ?? [];
   const bots = status?.bots ?? [];
+  const automations = status?.automations ?? [];
+  const projectName = (id: string) =>
+    projects.find((project) => project.id === id)?.name ?? "a project that is gone";
   const paired = pairing
     ? (status?.devices.find((device) => !before.includes(device.id)) ?? null)
     : null;
@@ -343,6 +360,85 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
           </div>
         )}
       </section>
+      <section className="settings-section" aria-labelledby="settings-remote-automations">
+        <div className="settings-heading" data-setting="New automation">
+          <h2 id="settings-remote-automations">Automations</h2>
+          <button
+            className="g-button g-button-outline g-button-28"
+            type="button"
+            data-testid="remote-new-automation"
+            disabled={status === null}
+            onClick={() => {
+              setError(null);
+              setAutomating(true);
+            }}
+          >
+            New automation
+          </button>
+        </div>
+        <p className="settings-lead">
+          Start a task from outside o7: a failed build, a new issue, an alert. A service sends to
+          the automation's address, and an agent gets your instruction with what was sent, as data
+          it does not obey.
+        </p>
+        {automations.length ? (
+          <div className="settings-group">
+            {automations.map((automation: RemoteAutomation) => (
+              <Row
+                key={automation.id}
+                title={automation.name}
+                setting="Automations"
+                mark={<Webhook size={18} />}
+                detail={
+                  automation.expires_at <= now ? (
+                    <State tone="off">
+                      Expired after 90 days unused. Renew it to use it again.
+                    </State>
+                  ) : automation.last_error ? (
+                    <State tone="red">Could not start the last task: {automation.last_error}</State>
+                  ) : (
+                    <State tone={automation.last_used_at === null ? "off" : "green"}>
+                      In {projectName(automation.project)}
+                      {automation.last_used_at === null
+                        ? ". Not used yet"
+                        : `. Last used ${ago(automation.last_used_at, now)}${usage(automation)}`}
+                    </State>
+                  )
+                }
+              >
+                <div className="remote-row-actions">
+                  <button
+                    className="g-button g-button-ghost g-button-28"
+                    type="button"
+                    aria-label={`Renew, ${automation.name}`}
+                    onClick={() =>
+                      void api
+                        .renewBot(automation.id)
+                        .then(setReaddressed, (failure) => setError(message(failure)))
+                    }
+                  >
+                    Renew
+                  </button>
+                  <button
+                    className="g-button g-button-ghost g-button-28"
+                    type="button"
+                    aria-label={`Remove ${automation.name}`}
+                    onClick={() => void run(() => api.removeBot(automation.id))}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </Row>
+            ))}
+          </div>
+        ) : (
+          <p className="settings-empty" data-setting="Automations">
+            <strong>No automations</strong>
+            Make one for a webhook from GitHub, your CI or a monitor.
+          </p>
+        )}
+      </section>
+
       <details className="settings-more">
         <summary>What the relay can see</summary>
         <p>
@@ -380,6 +476,37 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
           }}
         />
       ) : null}
+      {automating ? (
+        <AutomationDialog
+          projects={projects}
+          create={async (name, project, instruction) => {
+            await ensureOn();
+            return api.createAutomation(name, project, instruction);
+          }}
+          onClose={() => {
+            setAutomating(false);
+            void run(() => api.status());
+          }}
+        />
+      ) : null}
+      {readdressed ? (
+        <Modal title={`A new address for ${readdressed.name}`} onClose={() => setReaddressed(null)}>
+          <p className="remote-note">
+            The old address stopped working. Put this one where the old one was; it is shown once
+            and works like a password.
+          </p>
+          <CopyField value={readdressed.url} label="Automation address" />
+          <div className="g-dialog-actions">
+            <button
+              className="g-button g-button-primary"
+              type="button"
+              onClick={() => setReaddressed(null)}
+            >
+              Done
+            </button>
+          </div>
+        </Modal>
+      ) : null}
       {linking ? (
         <BotDialog
           initial={linking.bot}
@@ -395,6 +522,131 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * Makes an automation: a name, the project its tasks start in and what its agent does with what
+ * is sent; then its address, shown once, with how a service sends to it.
+ */
+export function AutomationDialog({
+  projects,
+  create,
+  onClose,
+}: {
+  readonly projects: readonly RemoteProject[];
+  readonly create: (name: string, project: string, instruction: string) => Promise<RemoteBotLink>;
+  readonly onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [project, setProject] = useState(projects[0]?.id ?? "");
+  const [instruction, setInstruction] = useState("");
+  const [link, setLink] = useState<RemoteBotLink | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fields = useId();
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setLink(await create(name, project, instruction));
+    } catch (failure) {
+      setError(message(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="New automation" onClose={onClose}>
+      {link ? (
+        <>
+          <p className="remote-note">
+            This is {link.name}'s address. It is shown once and works like a password: whoever has
+            it can start tasks in this project. Removing the automation here stops it.
+          </p>
+          <CopyField value={link.url} label="Automation address" />
+          <ol className="remote-steps">
+            <li>
+              Give the address to the service as its webhook. In GitHub: the repository's Settings,
+              Webhooks, Add webhook, with this as the Payload URL and the events you choose.
+            </li>
+            <li>Or send to it yourself: curl --data-binary @event.json followed by the address.</li>
+            <li>
+              Each thing sent starts a task on a branch of its own, at most three at once and twenty
+              a day. Its agent asks before changing anything, as any chat's does.
+            </li>
+          </ol>
+          <div className="g-dialog-actions">
+            <button className="g-button g-button-primary" type="button" onClick={onClose}>
+              Done
+            </button>
+          </div>
+        </>
+      ) : (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <label className="settings-field" htmlFor={`${fields}-name`}>
+            <span>Name</span>
+            <input
+              id={`${fields}-name`}
+              className="g-input"
+              value={name}
+              maxLength={48}
+              placeholder="CI failures"
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </label>
+          <label className="settings-field" htmlFor={`${fields}-project`}>
+            <span>Project</span>
+            <select
+              id={`${fields}-project`}
+              className="g-select"
+              value={project}
+              onChange={(event) => setProject(event.currentTarget.value)}
+            >
+              {projects.map((choice) => (
+                <option key={choice.id} value={choice.id}>
+                  {choice.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="settings-field" htmlFor={`${fields}-instruction`}>
+            <span>What its agent does with what is sent</span>
+            <textarea
+              id={`${fields}-instruction`}
+              className="g-textarea"
+              rows={4}
+              maxLength={4000}
+              value={instruction}
+              placeholder="Fix what the failed check reports, run the tests and commit on the branch."
+              onChange={(event) => setInstruction(event.currentTarget.value)}
+            />
+          </label>
+          {error ? (
+            <p className="settings-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="g-dialog-actions">
+            <button className="g-button" type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="g-button g-button-primary"
+              type="submit"
+              disabled={busy || !project || !instruction.trim()}
+            >
+              Create automation
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }
 

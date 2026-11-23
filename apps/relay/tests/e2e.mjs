@@ -584,6 +584,7 @@ async function withHost(work) {
     const first = await host.line("PAIR");
     const bot = await host.line("BOT");
     const fullBot = await host.line("FULLBOT");
+    await host.line("HOOK");
     assert.match(first, /^http:\/\/localhost:1437\/remote#[\w-]{22}\.[\w-]{11}\.[\w-]{43}$/);
     await work(host, first, bot, fullBot);
   } finally {

@@ -339,6 +339,10 @@ pub struct BotLink<'a> {
     /// Which set of tools this copy of the app answers ([`crate::bot::TOOLS_VERSION`]), for the
     /// relay to list that one. A relay from before the number ignores it.
     pub v: u32,
+    /// An automation: its address takes what is sent to it (`/hook/`) and nothing else, and it
+    /// is no MCP server. The computer refuses anything but a trigger from it all the same.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hook: bool,
 }
 
 #[cfg(test)]

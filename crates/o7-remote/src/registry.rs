@@ -115,7 +115,42 @@ pub struct Bot {
     /// about. A link is never told of a chat it did not touch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub following: Vec<String>,
+    /// An automation: this link only starts tasks, in one project with one instruction, from
+    /// what is sent to its address (Settings > Remote access > Automations).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hook: Option<Hook>,
 }
+
+/// What an automation does with what it is sent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Hook {
+    /// The project its tasks start in.
+    pub project: String,
+    /// What its agent is told to do with each thing sent: the person's own words.
+    pub instruction: String,
+    /// The tasks it started in the last day: its own log, which nothing else can push out, so
+    /// the day's limit holds whatever else starts tasks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub starts: Vec<HookStart>,
+    /// Why what was last sent could not start, for its owner in Settings; the sender is told
+    /// only that it could not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+/// A task an automation started.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HookStart {
+    pub at: i64,
+    pub chat: String,
+}
+
+/// The longest instruction an automation keeps, in characters.
+pub const MAX_INSTRUCTION: usize = 4_000;
+/// How many of an automation's tasks may work at once, and start in a day.
+pub const HOOK_RUNNING: usize = 3;
+pub const HOOK_DAILY: usize = 20;
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// How many chats a link is told about at most; the oldest is forgotten first.
 const MAX_FOLLOWING: usize = 40;
@@ -563,6 +598,92 @@ impl Registry {
         let _ = self.save();
     }
 
+    /// A new automation: a link that only starts tasks, in `hook`'s project with its
+    /// instruction, from what is sent to its address.
+    pub fn add_hook(&mut self, name: &str, hook: Hook, now: i64) -> Result<NewBot, RegistryError> {
+        let hook = Hook {
+            project: hook.project,
+            instruction: hook
+                .instruction
+                .trim()
+                .chars()
+                .take(MAX_INSTRUCTION)
+                .collect(),
+            starts: Vec::new(),
+            last_error: None,
+        };
+        let new = self.add_bot(&name_of(name, "Automation"), crate::bot::Rights::CHATS, now)?;
+        if let Some(bot) = self.stored.bots.iter_mut().find(|bot| bot.id == new.id) {
+            bot.hook = Some(hook);
+        }
+        if let Err(error) = self.save() {
+            self.stored.bots.retain(|bot| bot.id != new.id);
+            return Err(error);
+        }
+        Ok(new)
+    }
+
+    /// The open workspace's automation `id`, when it is one.
+    pub fn hook_of(&self, id: &str) -> Option<Hook> {
+        self.bots()
+            .into_iter()
+            .find(|bot| bot.id == id)
+            .and_then(|bot| bot.hook.clone())
+    }
+
+    /// The chats of the tasks automation `id` started in the last day, from its own log: how
+    /// many started, and which may still work.
+    pub fn hook_chats(&self, id: &str, now: i64) -> Vec<String> {
+        self.stored
+            .bots
+            .iter()
+            .find(|bot| bot.id == id)
+            .and_then(|bot| bot.hook.as_ref())
+            .map(|hook| {
+                hook.starts
+                    .iter()
+                    .filter(|start| now.saturating_sub(start.at) <= DAY_MS)
+                    .map(|start| start.chat.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Automation `id` started a task in `chat`: logged against its day, and its last error
+    /// cleared.
+    pub fn hook_started(&mut self, id: &str, chat: &str, now: i64) {
+        if let Some(hook) = self
+            .stored
+            .bots
+            .iter_mut()
+            .find(|bot| bot.id == id)
+            .and_then(|bot| bot.hook.as_mut())
+        {
+            hook.starts
+                .retain(|start| now.saturating_sub(start.at) <= DAY_MS);
+            hook.starts.push(HookStart {
+                at: now,
+                chat: chat.to_owned(),
+            });
+            hook.last_error = None;
+        }
+        let _ = self.save();
+    }
+
+    /// What was sent to automation `id` could not start, and why.
+    pub fn hook_failed(&mut self, id: &str, why: &str) {
+        if let Some(hook) = self
+            .stored
+            .bots
+            .iter_mut()
+            .find(|bot| bot.id == id)
+            .and_then(|bot| bot.hook.as_mut())
+        {
+            hook.last_error = Some(why.chars().take(300).collect());
+        }
+        let _ = self.save();
+    }
+
     /// A link's name and call-back, when it has one.
     pub fn callback_of(&self, bot: &str) -> Option<(String, crate::callback::Callback)> {
         self.stored
@@ -756,6 +877,7 @@ impl Registry {
             failed: 0,
             callback: None,
             following: Vec::new(),
+            hook: None,
         });
         if let Err(error) = self.save() {
             self.stored.bots.pop();
@@ -1048,6 +1170,89 @@ mod tests {
             failed: None,
             failed_at: None,
         }
+    }
+
+    /// An automation is a link that remembers its project and instruction, cut to length, and
+    /// counts the tasks it started in the last day.
+    #[test]
+    fn an_automation_keeps_its_project_and_instruction() {
+        let folder = tempfile::tempdir().expect("folder");
+        let path = folder.path().join("remote.json");
+        let mut registry = Registry::load(&path).expect("load");
+        registry.set_scope("local");
+        let hook = registry
+            .add_hook(
+                "",
+                Hook {
+                    project: "p1".into(),
+                    instruction: format!("  Fix what CI reports.{}", "x".repeat(MAX_INSTRUCTION)),
+                    starts: Vec::new(),
+                    last_error: None,
+                },
+                1,
+            )
+            .expect("hook");
+        let link = registry
+            .add_bot("Grok", crate::bot::Rights::CHATS, 1)
+            .expect("bot");
+        let again = Registry::load(&path).expect("load");
+        let mut again = again;
+        again.set_scope("local");
+        let kept = again.hook_of(&hook.id).expect("kept");
+        assert_eq!(kept.project, "p1");
+        assert!(kept.instruction.starts_with("Fix what CI reports."));
+        assert_eq!(kept.instruction.chars().count(), MAX_INSTRUCTION);
+        assert_eq!(
+            again
+                .bots()
+                .iter()
+                .find(|bot| bot.id == hook.id)
+                .expect("named")
+                .name,
+            "Automation"
+        );
+        assert!(
+            again.hook_of(&link.id).is_none(),
+            "a bot link is no automation"
+        );
+        again.set_scope("other");
+        assert!(again.hook_of(&hook.id).is_none(), "another workspace's");
+        registry.hook_started(&hook.id, "c5", 10);
+        assert_eq!(registry.hook_chats(&hook.id, 11), ["c5"]);
+        assert!(
+            registry.hook_chats(&hook.id, 10 + DAY_MS + 1).is_empty(),
+            "a day later"
+        );
+        // Its log is its own: tasks pushed out of the shared list do not empty it.
+        for n in 0..MAX_TASKS + 5 {
+            registry.add_task(Task {
+                bot: link.id.clone(),
+                builder: format!("x{n}"),
+                folder_id: "f1".into(),
+                goal: "Other".into(),
+                branch: None,
+                path: None,
+                base: None,
+                review_agent: None,
+                reviewer: None,
+                created_at: 11,
+            });
+        }
+        assert_eq!(registry.hook_chats(&hook.id, 12), ["c5"]);
+        registry.hook_failed(&hook.id, "There is no project \"p1\".");
+        let failed = Registry::load(&path).expect("load");
+        let mut failed = failed;
+        failed.set_scope("local");
+        assert_eq!(
+            failed
+                .bots()
+                .iter()
+                .find(|bot| bot.id == hook.id)
+                .and_then(|bot| bot.hook.as_ref())
+                .and_then(|hook| hook.last_error.clone())
+                .as_deref(),
+            Some("There is no project \"p1\".")
+        );
     }
 
     /// A link's queue: at most ten each, cancelled only by its own link, taken oldest first and

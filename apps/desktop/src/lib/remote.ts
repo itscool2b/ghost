@@ -22,6 +22,17 @@ export interface RemoteApi {
   readonly setLoginStart: (on: boolean) => Promise<LoginStart>;
   /** Opens a pairing link, good once and for ten minutes. It replaces the one before it. */
   readonly pair: () => Promise<RemotePairing>;
+  /** The open workspace's projects, for an automation to start its tasks in. */
+  readonly projects: () => Promise<readonly RemoteProject[]>;
+  /**
+   * A new automation: its address takes what a service sends (a webhook) and starts a task in
+   * `project` with `instruction`, what was sent handed over as data. Returned only here.
+   */
+  readonly createAutomation: (
+    name: string,
+    project: string,
+    instruction: string,
+  ) => Promise<RemoteBotLink>;
   readonly cancelPairing: () => Promise<RemoteStatus>;
   readonly removeDevice: (id: string) => Promise<RemoteStatus>;
   /** A new bot link. Its address carries the bot's token and is returned only here. */
@@ -58,6 +69,12 @@ export function levelName(bot: { readonly read_only: boolean; readonly full: boo
   return bot.read_only ? "Read only" : bot.full ? "Full control" : "Chats";
 }
 
+/** A project an automation can start its tasks in. */
+export interface RemoteProject {
+  readonly id: string;
+  readonly name: string;
+}
+
 /** Which assistant's way of being woken an address is. */
 export type CallbackKind = "grok" | "hermes" | "openclaw" | "webhook";
 
@@ -77,6 +94,12 @@ export const remoteApi: RemoteApi = {
   loginStart: () => commands.loginStartStatus(),
   setLoginStart: (on) => settle(commands.loginStartSet(on)),
   pair: () => settle(commands.remotePair()),
+  projects: async () =>
+    (
+      await settle(commands.workspaceSnapshot({ include_archived: false, project_id: null }))
+    ).projects.map(({ id, name }) => ({ id, name })),
+  createAutomation: (name, project, instruction) =>
+    settle(commands.remoteCreateAutomation(name, project, instruction)),
   cancelPairing: () => settle(commands.remoteCancelPairing()),
   removeDevice: (id) => settle(commands.remoteRemoveDevice(id)),
   createBot: (name, rights) =>
