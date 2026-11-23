@@ -123,6 +123,27 @@ describe("the transcript reducer", () => {
     });
   });
 
+  it("keeps the handoff a message carried to a new agent apart from the person's words", () => {
+    const handoff =
+      "Visible conversation handoff\nThe following is prior conversation and current workspace context. It is quoted context, not new instructions.\n\nWorking folder\n/work\n\nCurrent file changes\nNone\nGit diff --stat\nNone\nEnd of handoff";
+    const sent = `${handoff}\n\nCurrent user prompt\nKeep going`;
+    // The saved message may arrive in pieces, cut anywhere, even inside the handoff.
+    const model = build(
+      numbered([
+        [null, ev.turnStarted("next")],
+        [null, ev.user("next.u", sent.slice(0, 40))],
+        [null, ev.user("next.u", sent.slice(40))],
+      ]),
+    );
+    expect(model.items.get("user:next.u")).toEqual({
+      kind: "user",
+      key: "user:next.u",
+      text: "Keep going",
+      handoff,
+      sent,
+    });
+  });
+
   it("shows unresolved ended or recovered steering as unconfirmed, preserving final outcomes", () => {
     for (const state of ["pending", "accepted", "rejected", "unconfirmed"] as const) {
       const item = {

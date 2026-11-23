@@ -11,7 +11,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 use super::{AgentSessionRow, ChatRecord, rows};
-use crate::conversation::{ContextTurn, cut};
+use crate::conversation::{CommandRun, ContextTurn, cut};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct PendingContinuation {
@@ -216,8 +216,12 @@ pub(crate) fn execute(
             let mut turns = Vec::new();
             let mut bytes = 0;
             let mut truncated = ids.len() > 200;
-            for id in ids.into_iter().take(200) {
-                let turn = read_turn(conn, &chat_id, &id)?;
+            for (index, id) in ids.into_iter().take(200).enumerate() {
+                let mut turn = read_turn(conn, &chat_id, &id)?;
+                // The handoff lists the newest commands, so only the newest turns' are read.
+                if index < COMMAND_TURNS {
+                    turn.commands = read_commands(conn, &chat_id, &id)?;
+                }
                 bytes += turn.prompt.len() + turn.answer.len();
                 if bytes > 4 * 1024 * 1024 {
                     truncated = true;
@@ -255,6 +259,61 @@ fn next_seq(conn: &Connection, chat: &str) -> rusqlite::Result<u32> {
         [chat],
         |row| row.get(0),
     )
+}
+
+/// How many of the newest turns the handoff reads commands from.
+const COMMAND_TURNS: usize = 20;
+/// The most of one turn's tool events read for its commands.
+const COMMAND_EVENT_BYTES: usize = 4 * 1024 * 1024;
+
+/// The shell commands a turn ran, in the order they started: its tool calls folded with their
+/// updates. A row that is not JSON (a salvaged one) is skipped, never the turn.
+fn read_commands(
+    conn: &Connection,
+    chat_id: &str,
+    turn_id: &str,
+) -> rusqlite::Result<Vec<CommandRun>> {
+    let mut calls: Vec<o7_protocol::ToolCall> = Vec::new();
+    let mut bytes = 0;
+    let mut statement = conn.prepare_cached(
+        "SELECT payload FROM events WHERE chat_id=?1 AND turn_id=?2          AND kind IN ('tool_call','tool_update') ORDER BY seq",
+    )?;
+    let mut rows = statement.query(params![chat_id, turn_id])?;
+    while let Some(row) = rows.next()? {
+        let payload: String = row.get(0)?;
+        bytes += payload.len();
+        if bytes > COMMAND_EVENT_BYTES {
+            break;
+        }
+        match serde_json::from_str::<O7Event>(&payload) {
+            Ok(O7Event::ToolCall(call)) => {
+                match calls
+                    .iter_mut()
+                    .find(|known| known.tool_call_id == call.tool_call_id)
+                {
+                    Some(known) => *known = call,
+                    None => calls.push(call),
+                }
+            }
+            Ok(O7Event::ToolUpdate(update)) => {
+                match calls
+                    .iter()
+                    .position(|known| known.tool_call_id == update.tool_call_id)
+                {
+                    Some(index) => {
+                        let known = calls.remove(index);
+                        calls.insert(index, super::compact::apply_update(known, update));
+                    }
+                    None => {
+                        let call = super::compact::default_tool(&update.tool_call_id);
+                        calls.push(super::compact::apply_update(call, update));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(calls.iter().filter_map(CommandRun::of).collect())
 }
 
 fn read_turn(conn: &Connection, chat_id: &str, turn_id: &str) -> rusqlite::Result<ContextTurn> {
@@ -350,6 +409,7 @@ fn read_turn(conn: &Connection, chat_id: &str, turn_id: &str) -> rusqlite::Resul
         prompt,
         parts,
         answer,
+        commands: Vec::new(),
     })
 }
 
