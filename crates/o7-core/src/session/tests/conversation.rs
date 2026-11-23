@@ -866,7 +866,7 @@ async fn a_handoff_carries_the_failing_command_and_its_error_with_secrets_hidden
         info.capabilities.resume = true;
     }
     let tool = |event| Step::EmitInTurn(DriverEvent::Event { turn: None, event });
-    let driver = ScriptedDriver::new(vec![
+    let (driver, _handle) = ScriptedDriver::new(vec![
         ready,
         Step::Expect(CommandMatch::Prompt),
         tool(O7Event::ToolCall(o7_protocol::ToolCall {
