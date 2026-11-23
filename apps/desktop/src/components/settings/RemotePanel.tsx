@@ -2,8 +2,22 @@ import { BOTS, type BotId, BotMark, botNamed } from "@o7/ui/graphite";
 import { Bot, Monitor, MonitorSmartphone, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
-import type { RemoteBotLink, RemoteDevice, RemotePairing, RemoteStatus } from "../../bindings";
-import { ago, linkLabel, linkTone, type RemoteApi, remaining, remoteApi } from "../../lib/remote";
+import type {
+  RemoteBot,
+  RemoteBotLink,
+  RemoteDevice,
+  RemotePairing,
+  RemoteStatus,
+} from "../../bindings";
+import {
+  ago,
+  type CallbackKind,
+  linkLabel,
+  linkTone,
+  type RemoteApi,
+  remaining,
+  remoteApi,
+} from "../../lib/remote";
 import { Modal } from "../chat/Modal";
 import { Row, State, Switch } from "./SettingsRow";
 import "./remote.css";
@@ -24,6 +38,8 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   const [before, setBefore] = useState<readonly string[]>([]);
   /** The link dialog, opened for one assistant or with none chosen yet. */
   const [linking, setLinking] = useState<{ readonly bot: BotChoice } | null>(null);
+  /** The bot link whose call-back dialog is open, by id: its row follows the status. */
+  const [telling, setTelling] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -186,7 +202,8 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         </div>
         <p className="settings-lead">
           Hand your assistant a goal from wherever you are. It starts your coding agents here,
-          answers what they ask and brings back the result.
+          answers what they ask and brings back the result. With a call back, o7 tells it when the
+          work is done.
         </p>
         {bots.length ? (
           <div className="settings-group">
@@ -204,18 +221,30 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                     <State tone={bot.failed > 0 && bot.failed === bot.calls ? "off" : "green"}>
                       Last used {ago(bot.last_used_at, now)}
                       {usage(bot)}
+                      {told(bot)}
                     </State>
                   )
                 }
               >
-                <button
-                  className="g-button g-button-ghost g-button-28"
-                  type="button"
-                  aria-label={`Remove ${bot.name}`}
-                  onClick={() => void run(() => api.removeBot(bot.id))}
-                >
-                  Remove
-                </button>
+                <div className="remote-row-actions">
+                  <button
+                    className="g-button g-button-ghost g-button-28"
+                    type="button"
+                    data-testid="remote-bot-callback"
+                    aria-label={`${bot.callback ? "Call back: on" : "Call back"}, ${bot.name}`}
+                    onClick={() => setTelling(bot.id)}
+                  >
+                    {bot.callback ? "Call back: on" : "Call back"}
+                  </button>
+                  <button
+                    className="g-button g-button-ghost g-button-28"
+                    type="button"
+                    aria-label={`Remove ${bot.name}`}
+                    onClick={() => void run(() => api.removeBot(bot.id))}
+                  >
+                    Remove
+                  </button>
+                </div>
               </Row>
             ))}
           </div>
@@ -267,6 +296,14 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
           }}
         />
       ) : null}
+      {telling && bots.some((bot) => bot.id === telling) ? (
+        <CallbackDialog
+          bot={bots.find((bot) => bot.id === telling) as RemoteBot}
+          api={api}
+          onStatus={setStatus}
+          onClose={() => setTelling(null)}
+        />
+      ) : null}
       {linking ? (
         <BotDialog
           initial={linking.bot}
@@ -290,6 +327,14 @@ export function usage(bot: { readonly calls: number; readonly failed: number }):
   if (bot.calls === 0) return "";
   const calls = `${bot.calls} ${bot.calls === 1 ? "call" : "calls"}`;
   return bot.failed === 0 ? ` · ${calls}` : ` · ${calls}, ${bot.failed} failed`;
+}
+
+/** A link's call-back, after its use: where it is told, or that the last message failed. */
+export function told(bot: Pick<RemoteBot, "callback">): string {
+  if (!bot.callback) return "";
+  return bot.callback.last && !bot.callback.last.ok
+    ? " · call back failed"
+    : ` · tells ${bot.callback.address.replace(/^https?:\/\//, "")}`;
 }
 
 /** Whether a paired browser's name reads as a phone or tablet: its row wears that glyph. */
@@ -504,6 +549,297 @@ function PairingDialog({
             read and steer this computer's chats, so keep it to yourself.
           </p>
         </>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * How each assistant is woken from outside, in its own words (their documentation, read
+ * 23 November 2026): where its address and key come from. `message` is the field of what o7
+ * sends that holds the text.
+ */
+const CALLBACK: Readonly<
+  Record<
+    CallbackKind,
+    {
+      readonly name: string;
+      readonly address: string;
+      readonly key: string;
+      readonly steps: readonly string[];
+    }
+  >
+> = {
+  grok: {
+    name: "Grok Bot",
+    address: "The routine's POST to address",
+    key: "The routine's key",
+    steps: [
+      "Ask your Bot to make a routine with a webhook trigger and this instruction: “This is a message from o7 about one of my coding chats. Read it, act on it with your o7 tools, and tell me only what I need to know.”",
+      "Open the routine on desktop: click the Bot's name above the chat, then Details. Its Webhook section shows POST to and key.",
+      "Paste both here. Each message starts a run of that routine, which spends your Bot's usage.",
+    ],
+  },
+  hermes: {
+    name: "Hermes",
+    address: "The route's address, such as http://127.0.0.1:8644/webhooks/o7",
+    key: "The route's secret",
+    steps: [
+      "Turn the webhook platform on (WEBHOOK_ENABLED=true in ~/.hermes/.env, or hermes gateway setup).",
+      'Run: hermes webhook subscribe o7 --deliver telegram --deliver-chat-id <your chat> --deliver-only --mirror-to-session --prompt "{message}"',
+      "It prints the address; the secret is under o7 in ~/.hermes/webhook_subscriptions.json. Paste both here. Hermes sends you the message without spending a model turn.",
+    ],
+  },
+  openclaw: {
+    name: "OpenClaw",
+    address: "Your Gateway's address ending /hooks/agent",
+    key: "hooks.token",
+    steps: [
+      "In OpenClaw's config, set hooks.enabled to true and hooks.token to a long random value of its own.",
+      "The address is your Gateway's, ending /hooks/agent: http://127.0.0.1:18789/hooks/agent on this computer.",
+      "To have its answer sent to you, name the channel and who to send to. Without them the answer stays in OpenClaw.",
+    ],
+  },
+  webhook: {
+    name: "Another",
+    address: "An https address that takes Standard Webhooks",
+    key: "Its signing secret",
+    steps: [
+      "o7 posts a small JSON message with the text in message, and signs it with the key: webhook-id, webhook-timestamp and webhook-signature.",
+    ],
+  },
+};
+
+const KINDS: readonly CallbackKind[] = ["grok", "hermes", "openclaw", "webhook"];
+
+/** The assistant a link's name names, as a call-back kind; Muse and others have no way in yet. */
+const kindOf = (name: string): CallbackKind => {
+  const bot = botNamed(name);
+  return bot === "grok" || bot === "hermes" || bot === "openclaw" ? bot : "webhook";
+};
+
+/**
+ * Where a bot link is told that a chat it acted on finished, failed or asks for an answer, so
+ * its assistant can hand o7 a task and stop, instead of holding a call open or asking again.
+ * The key is typed here and kept in this computer's secure storage; it is never shown again.
+ */
+export function CallbackDialog({
+  bot,
+  api,
+  onStatus,
+  onClose,
+}: {
+  readonly bot: RemoteBot;
+  readonly api: Pick<RemoteApi, "setBotCallback" | "clearBotCallback" | "testBotCallback">;
+  readonly onStatus: (status: RemoteStatus) => void;
+  readonly onClose: () => void;
+}) {
+  const set = bot.callback;
+  const [kind, setKind] = useState<CallbackKind>(
+    () => (KINDS.find((known) => known === set?.kind) ?? kindOf(bot.name)) as CallbackKind,
+  );
+  const [url, setUrl] = useState("");
+  const [key, setKey] = useState("");
+  const [channel, setChannel] = useState(set?.channel ?? "");
+  const [to, setTo] = useState(set?.to ?? "");
+  const [busy, setBusy] = useState<"save" | "test" | "remove" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  // An address that is kept is not shown again (its path can be a secret) and not asked for
+  // again: the dialog is then its state and what can be done with it.
+  const [editing, setEditing] = useState(!set);
+  const fields = useId();
+  const words = CALLBACK[kind];
+  const act = async (what: "save" | "test" | "remove", action: () => Promise<RemoteStatus>) => {
+    setBusy(what);
+    setError(null);
+    try {
+      onStatus(await action());
+      if (what === "save") {
+        setSaved(true);
+        setEditing(false);
+        setKey("");
+        setUrl("");
+      }
+      if (what === "remove") onClose();
+    } catch (failure) {
+      setError(message(failure));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const failure = error ? (
+    <p className="settings-error" role="alert">
+      {error}
+    </p>
+  ) : null;
+  return (
+    <Modal title={`Tell ${bot.name} when a chat is done`} size="md" onClose={onClose}>
+      <p className="remote-note">
+        When a chat this bot started or answered finishes, fails or asks for an answer, o7 sends its
+        assistant one short message, so the bot can hand o7 a task and stop instead of waiting on
+        it. o7 sends only to the address you give here, and only about chats this bot acted on.
+      </p>
+      {set && !editing ? (
+        <>
+          <p className="remote-result" role="status" data-testid="remote-callback-state">
+            {set.last
+              ? set.last.ok
+                ? `${CALLBACK[kind].name} is told at ${set.address}. The last message was delivered ${ago(set.last.at, Date.now())}.`
+                : `${CALLBACK[kind].name} is told at ${set.address}. The last message was not delivered: ${set.last.detail}`
+              : `${CALLBACK[kind].name} is told at ${set.address}.${saved ? " Send a test to check it." : ""}`}
+          </p>
+          {failure}
+          <div className="g-dialog-actions">
+            <button
+              className="g-button g-button-ghost"
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void act("remove", () => api.clearBotCallback(bot.id))}
+            >
+              Stop telling it
+            </button>
+            <button
+              className="g-button"
+              type="button"
+              disabled={busy !== null}
+              onClick={() => setEditing(true)}
+            >
+              Change
+            </button>
+            <button
+              className="g-button"
+              type="button"
+              data-testid="remote-callback-test"
+              disabled={busy !== null}
+              onClick={() => void act("test", () => api.testBotCallback(bot.id))}
+            >
+              {busy === "test" ? "Sending…" : "Send a test"}
+            </button>
+            <button className="g-button g-button-primary" type="button" onClick={onClose}>
+              Done
+            </button>
+          </div>
+        </>
+      ) : (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void act("save", () =>
+              api.setBotCallback(bot.id, {
+                kind,
+                url: url.trim(),
+                key: key.trim() === "" ? null : key.trim(),
+                channel: kind === "openclaw" && channel.trim() ? channel.trim() : null,
+                to: kind === "openclaw" && to.trim() ? to.trim() : null,
+              }),
+            );
+          }}
+        >
+          <fieldset className="remote-kinds">
+            <legend>Its assistant</legend>
+            {KINDS.map((choice) => (
+              <label key={choice} className="remote-kind">
+                <input
+                  type="radio"
+                  name="remote-callback-kind"
+                  checked={kind === choice}
+                  onChange={() => setKind(choice)}
+                />
+                {choice === "webhook" ? (
+                  <span className="remote-kind-glyph" aria-hidden="true">
+                    <Bot size={18} />
+                  </span>
+                ) : (
+                  <BotMark bot={choice} size={28} />
+                )}
+                <span>{CALLBACK[choice].name}</span>
+              </label>
+            ))}
+          </fieldset>
+          <ol className="remote-steps">
+            {words.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <label className="settings-field" htmlFor={`${fields}-url`}>
+            <span>Address</span>
+            <input
+              id={`${fields}-url`}
+              className="g-input"
+              value={url}
+              maxLength={2048}
+              placeholder={words.address}
+              autoComplete="off"
+              spellCheck={false}
+              required
+              onChange={(event) => setUrl(event.currentTarget.value)}
+            />
+          </label>
+          <label className="settings-field" htmlFor={`${fields}-key`}>
+            <span>Key</span>
+            <input
+              id={`${fields}-key`}
+              className="g-input"
+              type="password"
+              value={key}
+              maxLength={1024}
+              placeholder={set ? "Kept on this computer. Type one to replace it." : words.key}
+              autoComplete="off"
+              required={!set}
+              onChange={(event) => setKey(event.currentTarget.value)}
+            />
+          </label>
+          {kind === "openclaw" ? (
+            <>
+              <label className="settings-field" htmlFor={`${fields}-channel`}>
+                <span>Channel</span>
+                <input
+                  id={`${fields}-channel`}
+                  className="g-input"
+                  value={channel}
+                  maxLength={200}
+                  placeholder="telegram"
+                  onChange={(event) => setChannel(event.currentTarget.value)}
+                />
+              </label>
+              <label className="settings-field" htmlFor={`${fields}-to`}>
+                <span>Send to</span>
+                <input
+                  id={`${fields}-to`}
+                  className="g-input"
+                  value={to}
+                  maxLength={200}
+                  placeholder="Your chat's id on that channel"
+                  onChange={(event) => setTo(event.currentTarget.value)}
+                />
+              </label>
+            </>
+          ) : null}
+          <p className="remote-note remote-fine">
+            The key stays in this computer's secure storage and is not shown again. What o7 sends
+            names the chat and quotes a line of the agent's last words, so the address learns that
+            much about your work.
+          </p>
+          {failure}
+          <div className="g-dialog-actions">
+            <button
+              className="g-button"
+              type="button"
+              onClick={() => (set ? setEditing(false) : onClose())}
+            >
+              Cancel
+            </button>
+            <button
+              className="g-button g-button-primary"
+              type="submit"
+              data-testid="remote-callback-save"
+              disabled={busy !== null || url.trim() === ""}
+            >
+              {busy === "save" ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </form>
       )}
     </Modal>
   );

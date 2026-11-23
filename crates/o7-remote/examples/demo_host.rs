@@ -713,6 +713,7 @@ async fn main() {
             profile: "demo".into(),
             backend: Arc::new(Shared(demo)),
             changed: Arc::new(|| {}),
+            deliver: Arc::new(|_| {}),
         },
         &tokio::runtime::Handle::current(),
     )

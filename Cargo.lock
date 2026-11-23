@@ -3742,6 +3742,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+ "url",
  "zeroize",
 ]
 

@@ -91,7 +91,19 @@ pub struct Bot {
     pub calls: u64,
     #[serde(default)]
     pub failed: u64,
+    /// Where this link's bot is told that a chat it acted on finished or asks for an answer
+    /// (`crate::callback`). The key its address takes is in the computer's secure storage,
+    /// never here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub callback: Option<crate::callback::Callback>,
+    /// The chats this link started, sent to or answered, newest last: the ones it is told
+    /// about. A link is never told of a chat it did not touch.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub following: Vec<String>,
 }
+
+/// How many chats a link is told about at most; the oldest is forgotten first.
+const MAX_FOLLOWING: usize = 40;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct Stored {
@@ -426,6 +438,8 @@ impl Registry {
             site: self.site.clone(),
             calls: 0,
             failed: 0,
+            callback: None,
+            following: Vec::new(),
         });
         if let Err(error) = self.save() {
             self.stored.bots.pop();
@@ -456,6 +470,70 @@ impl Registry {
             let _ = self.save();
         }
         true
+    }
+
+    /// Sets or clears where the open workspace's bot link `id` is told. `false`: no such link.
+    pub fn set_bot_callback(
+        &mut self,
+        id: &str,
+        callback: Option<crate::callback::Callback>,
+    ) -> Result<bool, RegistryError> {
+        let scope = self.scope.clone();
+        let Some(index) = self
+            .stored
+            .bots
+            .iter()
+            .position(|bot| bot.id == id && !scope.is_empty() && bot.profile == scope)
+        else {
+            return Ok(false);
+        };
+        let before = self.stored.bots[index].callback.clone();
+        self.stored.bots[index].callback = callback;
+        if let Err(error) = self.save() {
+            self.stored.bots[index].callback = before;
+            return Err(error);
+        }
+        Ok(true)
+    }
+
+    /// Notes that the open workspace's bot link `id` acted on `chat`: it is told about that
+    /// chat from now on. Saved, so a restart in the middle of a task does not lose it.
+    pub fn follow(&mut self, id: &str, chat: &str) {
+        let scope = self.scope.clone();
+        let Some(bot) = self
+            .stored
+            .bots
+            .iter_mut()
+            .find(|bot| bot.id == id && !scope.is_empty() && bot.profile == scope)
+        else {
+            return;
+        };
+        if bot.following.last().is_some_and(|last| last == chat) {
+            return;
+        }
+        bot.following.retain(|followed| followed != chat);
+        bot.following.push(chat.to_owned());
+        let extra = bot.following.len().saturating_sub(MAX_FOLLOWING);
+        bot.following.drain(..extra);
+        let _ = self.save();
+    }
+
+    /// The open workspace's bot links that are told about `chat`: each one's id, name and where.
+    pub fn told_of(&self, chat: &str) -> Vec<(String, String, crate::callback::Callback)> {
+        self.bots()
+            .into_iter()
+            .filter(|bot| bot.following.iter().any(|followed| followed == chat))
+            .filter_map(|bot| {
+                bot.callback
+                    .clone()
+                    .map(|callback| (bot.id.clone(), bot.name.clone(), callback))
+            })
+            .collect()
+    }
+
+    /// Whether any link of the open workspace is told anything.
+    pub fn any_callback(&self) -> bool {
+        self.bots().iter().any(|bot| bot.callback.is_some())
     }
 
     /// Notes that a call of the open workspace's bot link `id` was answered with an error.
@@ -829,6 +907,41 @@ mod tests {
             (registry.bots()[0].calls, registry.bots()[0].failed),
             (2, 1)
         );
+        // A link is told only about chats it acted on, and only once it names where.
+        let place = crate::callback::Callback {
+            kind: crate::callback::CallbackKind::Webhook,
+            url: "https://example.com/hook".into(),
+            channel: None,
+            to: None,
+        };
+        registry.follow(&bot.id, "c1");
+        registry.follow("another", "c1");
+        assert!(registry.told_of("c1").is_empty(), "no address yet");
+        assert!(!registry.any_callback());
+        assert!(matches!(
+            registry.set_bot_callback("another", Some(place.clone())),
+            Ok(false)
+        ));
+        assert!(matches!(
+            registry.set_bot_callback(&bot.id, Some(place.clone())),
+            Ok(true)
+        ));
+        assert!(registry.any_callback());
+        assert_eq!(
+            registry.told_of("c1"),
+            [(bot.id.clone(), "Bot".to_owned(), place)]
+        );
+        assert!(registry.told_of("c2").is_empty(), "a chat it never touched");
+        for n in 0..MAX_FOLLOWING + 5 {
+            registry.follow(&bot.id, &format!("x{n}"));
+        }
+        assert_eq!(registry.bots()[0].following.len(), MAX_FOLLOWING);
+        assert!(
+            registry.told_of("c1").is_empty(),
+            "the oldest are forgotten"
+        );
+        assert!(matches!(registry.set_bot_callback(&bot.id, None), Ok(true)));
+        assert!(!registry.any_callback());
         for _ in 1..MAX_BOTS {
             registry.add_bot("Grok", true, 7).expect("bot");
         }

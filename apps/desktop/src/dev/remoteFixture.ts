@@ -35,6 +35,7 @@ export function remoteFixture(): RemoteApi {
             full: false,
             calls: 0,
             failed: 0,
+            callback: null,
           },
         ]
       : [],
@@ -118,6 +119,7 @@ export function remoteFixture(): RemoteApi {
             full,
             calls: 0,
             failed: 0,
+            callback: null,
           },
         ],
       });
@@ -130,6 +132,52 @@ export function remoteFixture(): RemoteApi {
     removeBot: async (id) => {
       calls.push(`remove-bot:${id}`);
       return publish({ ...status, bots: status.bots.filter((bot) => bot.id !== id) });
+    },
+    setBotCallback: async (id, callback) => {
+      calls.push(`set-callback:${id}:${callback.kind}:${callback.key === null ? "kept" : "key"}`);
+      if (!/^https:\/\/|^http:\/\/(127\.0\.0\.1|localhost)/.test(callback.url))
+        throw new Error("The address starts with https://.");
+      return publish({
+        ...status,
+        bots: status.bots.map((bot) =>
+          bot.id === id
+            ? {
+                ...bot,
+                callback: {
+                  kind: callback.kind,
+                  address: new URL(callback.url).origin,
+                  channel: callback.channel,
+                  to: callback.to,
+                  last: null,
+                },
+              }
+            : bot,
+        ),
+      });
+    },
+    clearBotCallback: async (id) => {
+      calls.push(`clear-callback:${id}`);
+      return publish({
+        ...status,
+        bots: status.bots.map((bot) => (bot.id === id ? { ...bot, callback: null } : bot)),
+      });
+    },
+    testBotCallback: async (id) => {
+      calls.push(`test-callback:${id}`);
+      return publish({
+        ...status,
+        bots: status.bots.map((bot) =>
+          bot.id === id && bot.callback
+            ? {
+                ...bot,
+                callback: {
+                  ...bot.callback,
+                  last: { at: Date.now(), ok: true, detail: "Delivered." },
+                },
+              }
+            : bot,
+        ),
+      });
     },
     subscribe: (changed) => {
       listeners.add(changed);

@@ -54,6 +54,31 @@ pub struct RemoteBot {
     /// computer only.
     pub calls: u32,
     pub failed: u32,
+    /// Where the link's bot is told that a chat it acted on finished or asks for an answer.
+    pub callback: Option<RemoteBotCallback>,
+}
+
+/// A bot link's call-back as Settings shows it. The key its address takes is never here, and
+/// the address is shown without its path, which for some assistants is a secret too.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RemoteBotCallback {
+    /// `grok`, `hermes`, `openclaw` or `webhook`.
+    pub kind: String,
+    /// The address's scheme and host.
+    pub address: String,
+    /// OpenClaw only: where its answer is delivered.
+    pub channel: Option<String>,
+    pub to: Option<String>,
+    /// How the last message sent there went, since the app started.
+    pub last: Option<RemoteTold>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RemoteTold {
+    pub at: Millis,
+    pub ok: bool,
+    /// In words, without the address or the key.
+    pub detail: String,
 }
 
 /// A pairing link, shown once: whoever opens it first within its time becomes a device.

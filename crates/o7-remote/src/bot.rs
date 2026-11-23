@@ -94,6 +94,12 @@ const WAIT_MAX: u64 = 45;
 pub struct Answer {
     pub text: String,
     pub error: bool,
+    /// The chat the call was about, when it was about one: the link's bot has now been told
+    /// how that chat stands, so it is not told again of the same state (`crate::callback`).
+    pub chat: Option<String>,
+    /// The call started the chat, sent to it or answered it: the link is told about that chat
+    /// from now on.
+    pub acted: bool,
 }
 
 impl Answer {
@@ -101,6 +107,8 @@ impl Answer {
         Self {
             text: text.into(),
             error: false,
+            chat: None,
+            acted: false,
         }
     }
 
@@ -108,7 +116,16 @@ impl Answer {
         Self {
             text: text.into(),
             error: true,
+            chat: None,
+            acted: false,
         }
+    }
+
+    /// The same answer, as one about `chat`.
+    fn about(mut self, chat: &str, acted: bool) -> Self {
+        self.chat = Some(chat.to_owned());
+        self.acted = acted;
+        self
     }
 }
 
