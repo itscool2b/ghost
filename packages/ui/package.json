@@ -13,6 +13,7 @@
     "./fonts.css": "./src/fonts.css",
     "./desktop-fonts.css": "./src/desktop-fonts.css",
     "./graphite": "./src/graphite/index.ts",
+    "./bot-mark": "./src/graphite/BotMark.tsx",
     "./graphite.css": "./src/graphite/graphite.css",
     "./graphite-tokens.css": "./src/graphite/tokens.css",
     "./themes.css": "./src/graphite/themes.css",

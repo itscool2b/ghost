@@ -88,7 +88,8 @@ Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
   artwork's height). viewBox unchanged. The site turns it 45 degrees, and so does o7.
 - This is Nous Research's logomark for Hermes Agent. The repository's other marks
   (https://github.com/NousResearch/hermes-agent/tree/main/assets, the figure on `nous-girl-*.svg`
-  and `icon-master*.svg`) are detailed illustrations that do not read under 32px. The wing reads
+  and `icon-master*.svg`) are detailed illustrations that do not read under 24px; the Hermes bot
+  wears its app icon at 28px and up (Assistants linked as bots, below). The wing reads
   as a wing from 24px; at 14 and 16px it is a small blue stroke, the smallest it can be drawn.
   The file is about 51 KB because the engraving is traced to pixel steps.
 - Used at the owner's direction; the owner is handling permissions with the vendor. Nous
@@ -192,9 +193,34 @@ Settings' Remote access page, setup and the website name four assistants that ca
 o7 as bots (`BotMark`, `packages/ui/src/graphite/bots.ts`). Used at the owner's direction
 (2026-11-21), only to say which assistant a link is for; no endorsement or partnership is implied.
 
-- **Grok Bot** wears the Grok mark and **Hermes** the Nous Research wing, both recorded above.
-- **Muse** wears Meta's mark, recorded under Model makers: it is the mark of the company that
-  makes it. Check it against Muse's own mark before a public release.
+Since 2026-11-23 each wears its own logo, at the owner's direction ("Replace all the logos with
+the actual logos of the bots"; the owner is handling permissions with the vendors). Before, Grok
+Bot wore the Grok mark, Hermes the wing and Muse Meta's mark. Grok Bot, Muse and Hermes are shown
+as their app icons: the icon is the whole tile, its corners masked by the tile's as a launcher
+masks them, with a hairline just outside it and nothing drawn over it. They are stored in
+`packages/ui/src/graphite/bot-logos/` unaltered (bytes as retrieved) and loaded as files of their
+own when shown. `BotMark` has its own entry (`@o7/ui/bot-mark`), so the website, which shows no
+assistant's logo, does not carry them. Retrieved 2026-11-23; hashes are SHA-256 of the file as
+stored.
+
+- **Grok Bot** is `grok-bot.png` (256 by 256), the app icon the Grok Bot desktop app for Windows
+  draws (version 1.2.3, by SpaceXAI): `dist/renderer/assets/app-icon-B8tEBssC.png` in its
+  `resources/app.asar`, the same artwork as its program icon.
+  `43dae095b901722c366e9c8d2680fcd63a3130723ff74fefec73c8c48a2854ce`. xAI's guidelines:
+  https://x.ai/legal/brand-guidelines.
+- **Muse** is `muse.png` (256 by 256), the icon of "Muse from Meta" (Meta Platforms, Inc.) on its
+  App Store listing (https://apps.apple.com/us/app/muse-from-meta/id6760173601), at the size Apple's image service
+  serves:
+  https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/80/26/47/80264783-e41c-97e5-f1ea-bc92f321b0fa/HatchAppIconPublic-0-0-1x_U007epad-0-1-0-sRGB-0-85-220.png/256x256bb.png.
+  `e6691f80d3e375672ef2d6f9f8026089fdda6f917e3d2538f77ec3c3c67c242f`. Meta's guidelines:
+  https://www.facebook.com/brand/resources/meta/company-brand.
+- **Hermes** is `hermes.svg`, the master of the Hermes Agent app icon, `assets/icon-master.svg` in
+  https://github.com/NousResearch/hermes-agent at commit `4ea79443bc8e7349adb1f6516a3da3fae8225cd6`
+  (https://raw.githubusercontent.com/NousResearch/hermes-agent/4ea79443bc8e7349adb1f6516a3da3fae8225cd6/assets/icon-master.svg).
+  `6c4968c1a46f104559684826ed8061fad6052711ff0af9c6b36a6ce674536684`. Shown as an image, so its
+  inline style and clip stay as published. Nous Research's terms:
+  https://portal.nousresearch.com/terms (12.1). The Hermes coding agent keeps the wing above: the
+  figure does not read at the agent tile's 14 and 16px.
 - **OpenClaw** is `packages/ui/src/graphite/bot-logos/openclaw.svg`: the mark its own app draws,
   `dist/control-ui/favicon.svg` in the `openclaw` package 2026.9.2
   (https://unpkg.com/openclaw@2026.9.2/dist/control-ui/favicon.svg, retrieved 2026-11-21, SHA-256

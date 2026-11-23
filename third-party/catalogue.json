@@ -22,7 +22,7 @@
     "crates/o7-protocol/Cargo.toml": "3720ac6f79dd101b8a27fac38958fa4ff9a0449760e7ff61a5674c6f6c20c57e",
     "crates/o7-release/Cargo.toml": "9baf0d5a93fd7a3cf66c587421c1d2fcedb532f76655a00be723aad1334aab90",
     "crates/o7-remote/Cargo.toml": "66c3d60389b24aaf3877109956d8811c3ad49132bf53e2377208df56130c4f1a",
-    "packages/ui/package.json": "64333cf2b2abcd796fcdf3b5630762705fc92117db7cde2270133e8b50a4f71e",
+    "packages/ui/package.json": "a476ae07074377a1724a14569a3432823388d063ab08d1cfde63e5cb1cb493c2",
     "pnpm-lock.yaml": "94743a07ce95296d0a9fba8dbbf75a41c089ee7b78bbdbe097076994dd34a2dd",
     "third-party/models.json": "b947dabe6328cbe3787b60da7cbca0b4796fd113989316aaf91a27a5842a7b79",
     "third-party/overrides.json": "2d4bae7744b98a2d1fb5c2d465867d0d4a5c78321fc7c5a048ab116ff168c948"

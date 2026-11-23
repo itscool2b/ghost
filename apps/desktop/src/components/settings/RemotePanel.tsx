@@ -1,4 +1,5 @@
-import { BOTS, type BotId, BotMark, botNamed } from "@o7/ui/graphite";
+import { BotMark } from "@o7/ui/bot-mark";
+import { BOTS, type BotId, botNamed } from "@o7/ui/graphite";
 import { Bot, Coffee, LogIn, Monitor, MonitorSmartphone, Smartphone, Webhook } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";

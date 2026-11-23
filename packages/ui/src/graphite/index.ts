@@ -8,7 +8,8 @@ export { createFrameClock, type FrameClock, type FrameHost, frameClock } from ".
 export { AgentLogo, type AgentLogoProps, LogoSymbol, logoViewBox } from "./AgentLogo";
 export { AgentMark, type AgentMarkProps, agentCode, logoSide } from "./AgentMark";
 export { AGENT_LOGOS, type AgentLogo as AgentLogoData, agentLogo } from "./agentLogos";
-export { BotMark, type BotMarkProps } from "./BotMark";
+// BotMark has an entry of its own, @o7/ui/bot-mark: its app icons are files, and the website,
+// which imports this one, must not carry them.
 export { BOTS, type BotId, type BotKind, botNamed } from "./bots";
 export { CopyButton, type CopyButtonProps } from "./CopyButton";
 export { Keycap, type KeycapProps } from "./Keycap";

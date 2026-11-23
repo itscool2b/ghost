@@ -718,6 +718,17 @@
   background-color: var(--g-brand-plate);
 }
 
+/*
+ * An assistant's app icon is the whole tile (BotMark), masked by its corners as a launcher masks
+ * it. A hairline just outside keeps a white icon's edge on a light surface and a black one's on a
+ * dark, without drawing over the icon.
+ */
+.g-agent-mark:where([data-app-icon]) {
+  background-color: transparent;
+  box-shadow: none;
+  outline: 1px solid var(--g-line);
+}
+
 .g-agent-mark-glyph {
   display: block;
   padding-top: 0.06em;
