@@ -50,6 +50,81 @@ pub const FULL_TOOLS: [&str; 13] = [
     "write_memory",
 ];
 
+/// What a bot link may do, chosen when it is made and kept with it (`crate::registry::Bot`).
+/// The computer checks it on every call, whatever the relay listed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Rights {
+    /// Every tool, where a link without it has the chat tools only.
+    pub full: bool,
+    /// Reads only: nothing that sends, answers, stops or changes.
+    pub read_only: bool,
+    /// May answer what an agent asks permission for. Without it a bot may still decline, and
+    /// answer an agent's questions: the model that reads what agents write must not be the one
+    /// that approves what they do, unless the link's owner chose so.
+    pub approve: bool,
+    /// May set a chat's access to full access (`full_auto`).
+    pub full_access: bool,
+}
+
+impl Rights {
+    /// A chats link that approves nothing: what a new link is unless its owner chooses more.
+    pub const CHATS: Self = Self {
+        full: false,
+        read_only: false,
+        approve: false,
+        full_access: false,
+    };
+    /// Full control, approving nothing and never turning on full access.
+    pub const FULL: Self = Self {
+        full: true,
+        ..Self::CHATS
+    };
+
+    pub fn of(bot: &crate::registry::Bot) -> Self {
+        Self {
+            full: bot.full,
+            read_only: bot.read_only,
+            approve: bot.approve,
+            full_access: bot.full_access,
+        }
+        .coherent()
+    }
+
+    /// The parts that only mean something together, made to fit: a read-only link has no more
+    /// than reading, and full access is a choice only full control has.
+    pub fn coherent(self) -> Self {
+        if self.read_only {
+            return Self {
+                read_only: true,
+                ..Self::default()
+            };
+        }
+        Self {
+            full_access: self.full_access && self.full,
+            ..self
+        }
+    }
+}
+
+/// The tools a read-only link has, in both sets.
+pub const READ_TOOLS: [&str; 9] = [
+    "inbox",
+    "chats",
+    "projects",
+    "read",
+    "wait",
+    "list_chats",
+    "list_projects",
+    "read_chat",
+    "wait_for_chat",
+];
+/// What a read-only link is told when it asks for more.
+pub const READ_ONLY: &str = "This link only reads. Its owner can create one that may send messages in o7: Settings, Remote access.";
+/// What a link that may not approve is told when it tries to.
+pub const NO_APPROVAL: &str = "This link may not approve what an agent asks permission for: its person approves it, in o7 or on their phone. You may decline it (answer with no option), or tell your person it waits.";
+/// What a link that may not turn on full access is told when it tries to.
+pub const NO_FULL_ACCESS: &str = "This link may not turn on full access (full_auto). Use ask or auto_edit, or ask your person to change it in o7.";
+
 /// What a link without full control is told when it asks for more.
 pub const NOT_ALLOWED: &str = "This link has the chat tools only. Its owner can create a full control link in o7: Settings, Remote access.";
 
@@ -73,9 +148,22 @@ pub fn known(tool: &str) -> bool {
     chat_tool(tool) || full_tool(tool)
 }
 
-/// Whether a link of this level may call `tool`.
-pub fn allowed(tool: &str, full: bool) -> bool {
-    chat_tool(tool) || (full && full_tool(tool))
+/// Whether a link with `rights` may call `tool` at all. What a call asks for (an approval, full
+/// access) is checked in the call.
+pub fn allowed(tool: &str, rights: Rights) -> bool {
+    if rights.read_only {
+        return READ_TOOLS.contains(&tool);
+    }
+    chat_tool(tool) || (rights.full && full_tool(tool))
+}
+
+/// Why a link with `rights` may not call `tool`, in words for its bot.
+pub fn refusal(tool: &str, rights: Rights) -> &'static str {
+    if rights.read_only && known(tool) {
+        READ_ONLY
+    } else {
+        NOT_ALLOWED
+    }
 }
 
 /// The longest project memory a bot may write, in bytes: the app's own limit for the brief, which
@@ -281,15 +369,16 @@ pub async fn call(
     owner: &str,
     tool: &str,
     args: &Value,
-    full: bool,
+    rights: Rights,
 ) -> Answer {
-    if known(tool) && !allowed(tool, full) {
-        return Answer::failed(NOT_ALLOWED);
+    let rights = rights.coherent();
+    if known(tool) && !allowed(tool, rights) {
+        return Answer::failed(refusal(tool, rights));
     }
     let answer = if lean::CHAT_TOOLS.contains(&tool) || lean::FULL_TOOLS.contains(&tool) {
-        lean::run(backend, owner, tool, args, full).await
+        lean::run(backend, owner, tool, args, rights).await
     } else {
-        run(backend, owner, tool, args).await
+        run(backend, owner, tool, args, rights).await
     };
     match answer {
         Ok(answer) | Err(answer) => answer,
@@ -419,6 +508,7 @@ async fn run(
     owner: &str,
     tool: &str,
     args: &Value,
+    rights: Rights,
 ) -> Result<Answer, Answer> {
     match tool {
         "list_chats" => {
@@ -457,6 +547,7 @@ async fn run(
         "respond_to_request" => {
             let args: Respond = arguments(args)?;
             match args.option_id {
+                Some(_) if !rights.approve => Err(Answer::failed(NO_APPROVAL)),
                 Some(option) => {
                     backend
                         .permission(&args.chat_id, &args.request_id, Some(option))
@@ -561,6 +652,9 @@ async fn run(
                 return Err(Answer::failed(
                     "access is one of ask, auto_edit and full_auto.",
                 ));
+            }
+            if args.access == "full_auto" && !rights.full_access {
+                return Err(Answer::failed(NO_FULL_ACCESS));
             }
             act(
                 backend,

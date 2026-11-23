@@ -720,7 +720,7 @@ test("serves a bot's MCP calls through the desktop", async () => {
 test("lists the current tools to a bot whose computer answers them", async () => {
   const hostKey = id(32);
   const hostId = idOf(hostKey);
-  const [chats, wide, older, odd, newer, newest] = [0, 1, 2, 3, 4, 5].map(() => ({
+  const [chats, wide, older, odd, newer, newest, reader] = [0, 1, 2, 3, 4, 5, 6].map(() => ({
     id: id(8),
     token: id(32),
   }));
@@ -735,6 +735,8 @@ test("lists the current tools to a bot whose computer answers them", async () =>
       // The latest set, and a copy of the app newer than this relay: the latest it knows.
       { id: newer.id, hash: hash(newer.token), full: false, v: 3 },
       { id: newest.id, hash: hash(newest.token), full: true, v: 4 },
+      // A read-only link: shown what reads, even if it also claims full control.
+      { id: reader.id, hash: hash(reader.token), full: true, read: true, v: 3 },
     ])}`,
   );
   await desk.quiet(100);
@@ -792,6 +794,19 @@ test("lists the current tools to a bot whose computer answers them", async () =>
     (await ask(newer, { method: "initialize", params: {} })).result.instructions,
     /inbox says what needs you/,
   );
+  const reading = await tools(reader);
+  assert.deepEqual(
+    reading.map((tool) => tool.name),
+    ["inbox", "chats", "projects", "read", "wait"],
+  );
+  assert.match(
+    (await ask(reader, { method: "initialize", params: {} })).result.instructions,
+    /cannot send/,
+  );
+  for (const name of ["send", "answer", "stop", "changes", "set"]) {
+    const refused = await ask(reader, { method: "tools/call", params: { name, arguments: {} } });
+    assert.equal(refused.error.code, -32602, name);
+  }
   const refusedInbox = await ask(chats, {
     method: "tools/call",
     params: { name: "inbox", arguments: {} },

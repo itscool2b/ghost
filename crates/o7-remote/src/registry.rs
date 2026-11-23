@@ -81,6 +81,19 @@ pub struct Bot {
     /// link is made and never changed after: a wider link is a new link.
     #[serde(default)]
     pub full: bool,
+    /// Reads only: the chats, the projects and what each chat did, and nothing that sends,
+    /// answers, stops or changes anything. Chosen when the link is made, as `full` is.
+    #[serde(default)]
+    pub read_only: bool,
+    /// May answer what an agent asks permission for (run this command, edit that file). Off
+    /// unless its owner turned it on when making the link: the bot reads what agents write, and
+    /// what it reads must not be able to approve what an agent does (23 November 2026). Without
+    /// it a bot may still decline, and answer an agent's questions.
+    #[serde(default)]
+    pub approve: bool,
+    /// May set a chat's access to full access (`full_auto`). Only with `full`.
+    #[serde(default)]
+    pub full_access: bool,
     /// The website whose address the link's token was shown in. Empty as for a device.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub site: String,
@@ -416,7 +429,13 @@ impl Registry {
         Ok(true)
     }
 
-    pub fn add_bot(&mut self, name: &str, full: bool, now: i64) -> Result<NewBot, RegistryError> {
+    pub fn add_bot(
+        &mut self,
+        name: &str,
+        rights: crate::bot::Rights,
+        now: i64,
+    ) -> Result<NewBot, RegistryError> {
+        let rights = rights.coherent();
         if self.scope.is_empty() {
             return Err(RegistryError::NoWorkspace);
         }
@@ -434,7 +453,10 @@ impl Registry {
             created_at: now,
             last_used_at: None,
             profile: self.scope.clone(),
-            full,
+            full: rights.full,
+            read_only: rights.read_only,
+            approve: rights.approve,
+            full_access: rights.full_access,
             site: self.site.clone(),
             calls: 0,
             failed: 0,
@@ -448,8 +470,44 @@ impl Registry {
         Ok(new)
     }
 
-    /// Whether `token` is the bot `id`'s, and that bot was linked in the open workspace. Notes
-    /// the use.
+    /// Whether the open workspace's bot link `id` has gone unused too long to be accepted.
+    pub fn bot_expired(&self, id: &str, now: i64) -> bool {
+        self.bots()
+            .iter()
+            .any(|bot| crypto::same(&bot.id, id) && expired(bot, now))
+    }
+
+    /// A new address for the open workspace's bot link `id`: a new token, the old one refused
+    /// from now on. Everything else about the link stays, and an expired link is in use again.
+    pub fn renew_bot(&mut self, id: &str, now: i64) -> Result<Option<NewBot>, RegistryError> {
+        let scope = self.scope.clone();
+        let Some(index) = self
+            .stored
+            .bots
+            .iter()
+            .position(|bot| bot.id == id && !scope.is_empty() && bot.profile == scope)
+        else {
+            return Ok(None);
+        };
+        let token = crypto::encode(&crypto::random::<KEY_BYTES>()?);
+        let before = self.stored.bots[index].clone();
+        let bot = &mut self.stored.bots[index];
+        bot.token_hash = crypto::hash(&token);
+        bot.created_at = now;
+        bot.last_used_at = None;
+        bot.site = self.site.clone();
+        if let Err(error) = self.save() {
+            self.stored.bots[index] = before;
+            return Err(error);
+        }
+        Ok(Some(NewBot {
+            id: id.to_owned(),
+            token,
+        }))
+    }
+
+    /// Whether `token` is the bot `id`'s, and that bot was linked in the open workspace and has
+    /// not expired. Notes the use.
     pub fn verify_bot(&mut self, id: &str, token: &str, now: i64) -> bool {
         let hash = crypto::hash(token);
         let scope = self.scope.clone();
@@ -461,7 +519,7 @@ impl Registry {
         else {
             return false;
         };
-        if !crypto::same(&bot.token_hash, &hash) {
+        if !crypto::same(&bot.token_hash, &hash) || expired(bot, now) {
             return false;
         }
         bot.calls = bot.calls.saturating_add(1);
@@ -518,15 +576,29 @@ impl Registry {
         let _ = self.save();
     }
 
-    /// The open workspace's bot links that are told about `chat`: each one's id, name and where.
-    pub fn told_of(&self, chat: &str) -> Vec<(String, String, crate::callback::Callback)> {
+    /// The open workspace's bot links that are told about `chat`: each one's id, name, where,
+    /// and what it may do (the message says whether its bot may approve what is asked).
+    pub fn told_of(
+        &self,
+        chat: &str,
+    ) -> Vec<(
+        String,
+        String,
+        crate::callback::Callback,
+        crate::bot::Rights,
+    )> {
         self.bots()
             .into_iter()
             .filter(|bot| bot.following.iter().any(|followed| followed == chat))
             .filter_map(|bot| {
-                bot.callback
-                    .clone()
-                    .map(|callback| (bot.id.clone(), bot.name.clone(), callback))
+                bot.callback.clone().map(|callback| {
+                    (
+                        bot.id.clone(),
+                        bot.name.clone(),
+                        callback,
+                        crate::bot::Rights::of(bot),
+                    )
+                })
             })
             .collect()
     }
@@ -551,9 +623,21 @@ impl Registry {
 
     /// Whether the open workspace's bot link `id` was made with full control.
     pub fn bot_full(&self, id: &str) -> bool {
+        self.bot_rights(id).full
+    }
+
+    /// What the open workspace's bot link `id` may do; nothing for a link it does not have.
+    pub fn bot_rights(&self, id: &str) -> crate::bot::Rights {
         self.bots()
             .iter()
-            .any(|bot| crypto::same(&bot.id, id) && bot.full)
+            .find(|bot| crypto::same(&bot.id, id))
+            .map_or(
+                crate::bot::Rights {
+                    read_only: true,
+                    ..Default::default()
+                },
+                |bot| crate::bot::Rights::of(bot),
+            )
     }
 
     pub fn remove_bot(&mut self, id: &str) -> Result<bool, RegistryError> {
@@ -571,6 +655,16 @@ impl Registry {
         }
         Ok(true)
     }
+}
+
+/// How long a bot link may go unused before it is refused: its address lives in another
+/// service, so one nobody uses any more should not work for ever. Renewing it gives a new one.
+pub const BOT_IDLE_EXPIRY_MS: i64 = 90 * 24 * 60 * 60 * 1000;
+
+/// Whether `bot` has gone unused (or, never used, unrenewed) for longer than
+/// [`BOT_IDLE_EXPIRY_MS`].
+pub fn expired(bot: &Bot, now: i64) -> bool {
+    now.saturating_sub(bot.last_used_at.unwrap_or(bot.created_at)) > BOT_IDLE_EXPIRY_MS
 }
 
 /// A name a person or a browser supplied, as one short line; `fallback` when nothing is left.
@@ -596,6 +690,112 @@ fn name_of(name: &str, fallback: &str) -> String {
 mod tests {
     use super::*;
 
+    /// What a link may do is chosen when it is made, and the parts that only mean something
+    /// together are made to fit: a read-only link approves nothing and has no full control.
+    #[test]
+    fn a_links_rights_are_kept_and_made_coherent() {
+        let folder = tempfile::tempdir().expect("folder");
+        let mut registry = Registry::load(&folder.path().join("remote.json")).expect("load");
+        registry.set_scope("local");
+        let reader = registry
+            .add_bot(
+                "Reader",
+                crate::bot::Rights {
+                    read_only: true,
+                    full: true,
+                    approve: true,
+                    full_access: true,
+                },
+                1,
+            )
+            .expect("bot");
+        let chats = registry
+            .add_bot(
+                "Chats",
+                crate::bot::Rights {
+                    approve: true,
+                    full_access: true,
+                    ..crate::bot::Rights::CHATS
+                },
+                1,
+            )
+            .expect("bot");
+        let full = registry
+            .add_bot(
+                "Full",
+                crate::bot::Rights {
+                    full_access: true,
+                    ..crate::bot::Rights::FULL
+                },
+                1,
+            )
+            .expect("bot");
+        assert_eq!(
+            registry.bot_rights(&reader.id),
+            crate::bot::Rights {
+                read_only: true,
+                ..Default::default()
+            }
+        );
+        assert_eq!(
+            registry.bot_rights(&chats.id),
+            crate::bot::Rights {
+                approve: true,
+                ..crate::bot::Rights::CHATS
+            },
+            "full access needs full control"
+        );
+        assert_eq!(
+            registry.bot_rights(&full.id),
+            crate::bot::Rights {
+                full_access: true,
+                ..crate::bot::Rights::FULL
+            }
+        );
+        assert!(
+            registry.bot_rights("nobody").read_only,
+            "an unknown link reads nothing more"
+        );
+        // Saved and read back the same.
+        let mut again = Registry::load(&folder.path().join("remote.json")).expect("load");
+        again.set_scope("local");
+        assert_eq!(again.bot_rights(&chats.id), registry.bot_rights(&chats.id));
+    }
+
+    /// A link unused for ninety days is refused; renewing it gives a new address, refuses the
+    /// old one at once, and keeps everything else.
+    #[test]
+    fn an_unused_link_expires_and_a_renewed_one_takes_a_new_address() {
+        let day = 24 * 60 * 60 * 1000;
+        let folder = tempfile::tempdir().expect("folder");
+        let mut registry = Registry::load(&folder.path().join("remote.json")).expect("load");
+        registry.set_scope("local");
+        let bot = registry
+            .add_bot("Grok", crate::bot::Rights::FULL, 0)
+            .expect("bot");
+        assert!(registry.verify_bot(&bot.id, &bot.token, 89 * day));
+        assert!(!registry.bot_expired(&bot.id, 89 * day + 89 * day));
+        assert!(
+            registry.verify_bot(&bot.id, &bot.token, 178 * day),
+            "used within 90 days"
+        );
+        assert!(registry.bot_expired(&bot.id, 178 * day + 91 * day));
+        assert!(!registry.verify_bot(&bot.id, &bot.token, 178 * day + 91 * day));
+        let renewed = registry
+            .renew_bot(&bot.id, 300 * day)
+            .expect("saved")
+            .expect("renewed");
+        assert_eq!(renewed.id, bot.id);
+        assert_ne!(renewed.token, bot.token);
+        assert!(
+            !registry.verify_bot(&bot.id, &bot.token, 300 * day),
+            "the old address"
+        );
+        assert!(registry.verify_bot(&bot.id, &renewed.token, 300 * day));
+        assert!(registry.bot_full(&bot.id), "the rest of the link stays");
+        assert!(registry.renew_bot("nobody", 1).expect("saved").is_none());
+    }
+
     #[test]
     fn a_device_or_bot_reaches_only_the_workspace_it_was_made_in() {
         let folder = tempfile::tempdir().expect("folder");
@@ -607,7 +807,7 @@ mod tests {
             Err(RegistryError::NoWorkspace)
         ));
         assert!(matches!(
-            registry.add_bot("Grok", false, 0),
+            registry.add_bot("Grok", crate::bot::Rights::CHATS, 0),
             Err(RegistryError::NoWorkspace)
         ));
 
@@ -617,7 +817,9 @@ mod tests {
             .pair(&pairing.id, "Phone", 1)
             .expect("pair")
             .expect("device");
-        let bot = registry.add_bot("Grok", false, 1).expect("bot");
+        let bot = registry
+            .add_bot("Grok", crate::bot::Rights::CHATS, 1)
+            .expect("bot");
         let open = registry.start_pairing(2).expect("pairing");
 
         // Another workspace opens: Local's phone, bot and open link are not its own.
@@ -684,7 +886,9 @@ mod tests {
             .pair(&pairing.id, "Phone", 2)
             .expect("pair")
             .expect("device");
-        let bot = registry.add_bot("Bot", true, 3).expect("bot");
+        let bot = registry
+            .add_bot("Bot", crate::bot::Rights::FULL, 3)
+            .expect("bot");
         // Another workspace's records go too: the site is the same for all of them.
         registry.set_scope("other");
         let pairing = registry.start_pairing(4).expect("pairing");
@@ -882,7 +1086,9 @@ mod tests {
         assert!(!registry.remove_device(&first).expect("remove again"));
         assert_eq!(registry.device_key(&first), None);
 
-        let bot = registry.add_bot("", false, 7).expect("bot");
+        let bot = registry
+            .add_bot("", crate::bot::Rights::CHATS, 7)
+            .expect("bot");
         assert_eq!((bot.id.len(), bot.token.len()), (11, 43));
         assert_eq!(registry.bots()[0].name, "Bot");
         assert_ne!(
@@ -929,7 +1135,12 @@ mod tests {
         assert!(registry.any_callback());
         assert_eq!(
             registry.told_of("c1"),
-            [(bot.id.clone(), "Bot".to_owned(), place)]
+            [(
+                bot.id.clone(),
+                "Bot".to_owned(),
+                place,
+                crate::bot::Rights::CHATS
+            )]
         );
         assert!(registry.told_of("c2").is_empty(), "a chat it never touched");
         for n in 0..MAX_FOLLOWING + 5 {
@@ -943,10 +1154,12 @@ mod tests {
         assert!(matches!(registry.set_bot_callback(&bot.id, None), Ok(true)));
         assert!(!registry.any_callback());
         for _ in 1..MAX_BOTS {
-            registry.add_bot("Grok", true, 7).expect("bot");
+            registry
+                .add_bot("Grok", crate::bot::Rights::FULL, 7)
+                .expect("bot");
         }
         assert!(matches!(
-            registry.add_bot("Grok", false, 7),
+            registry.add_bot("Grok", crate::bot::Rights::CHATS, 7),
             Err(RegistryError::TooManyBots)
         ));
 

@@ -436,13 +436,23 @@ export const commands = {
 	remoteCancelPairing: () => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_cancel_pairing")),
 	/**  Removes a paired device. Its open sessions end and its key stops working. */
 	remoteRemoveDevice: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_remove_device", { id })),
-	/**  Creates a bot link. Its address carries the bot's token and is returned only here. */
-	remoteCreateBot: (name: string, full: boolean) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_create_bot", { name, full })),
+	/**
+	 *  Creates a bot link. Its address carries the bot's token and is returned only here. `level`
+	 *  is `read`, `chats` or `full`; `approve` lets its bot answer what an agent asks permission
+	 *  for, and `full_access` lets it turn on full access (full control only). Both are off unless
+	 *  the person chose them.
+	 */
+	remoteCreateBot: (name: string, level: string, approve: boolean, fullAccess: boolean) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_create_bot", { name, level, approve, fullAccess })),
 	/**
 	 *  Removes a bot link. Its address stops working, and the key of its call-back, if it had
 	 *  one, leaves this computer's secure storage.
 	 */
 	remoteRemoveBot: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_remove_bot", { id })),
+	/**
+	 *  A new address for a bot link, shown once: the old one stops working at once, and a link that
+	 *  expired unused works again. What the link may do stays.
+	 */
+	remoteRenewBot: (id: string) => typedError<RemoteBotLink, AppError>(__TAURI_INVOKE("remote_renew_bot", { id })),
 	/**
 	 *  Sets where the bot link `id` is told that a chat it acted on finished or asks for an answer:
 	 *  which assistant the address is, the address, and the key it takes. The key goes to this
@@ -3572,6 +3582,14 @@ export type RemoteBot = {
 	last_used_at: number | null,
 	/**  Made with full control: every tool, where a link without it has the chat tools only. */
 	full: boolean,
+	/**  Reads only: nothing that sends, answers, stops or changes. */
+	read_only: boolean,
+	/**  May approve what an agent asks permission for. */
+	approve: boolean,
+	/**  May turn on full access in a chat. */
+	full_access: boolean,
+	/**  When the link stops working unless it is used before then (90 days after its last use). */
+	expires_at: number,
 	/**
 	 *  Tool calls the link has made, and how many were answered with an error. Counted on this
 	 *  computer only.

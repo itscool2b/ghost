@@ -192,6 +192,11 @@ impl Service {
                     created_at: bot.created_at,
                     last_used_at: bot.last_used_at,
                     full: bot.full,
+                    read_only: bot.read_only,
+                    approve: bot.approve,
+                    full_access: bot.full_access,
+                    expires_at: bot.last_used_at.unwrap_or(bot.created_at)
+                        + crate::registry::BOT_IDLE_EXPIRY_MS,
                     calls: u32::try_from(bot.calls).unwrap_or(u32::MAX),
                     failed: u32::try_from(bot.failed).unwrap_or(u32::MAX),
                     callback: bot.callback.as_ref().map(|callback| RemoteBotCallback {
@@ -254,11 +259,36 @@ impl Service {
         Ok(())
     }
 
-    /// `full`: every tool, where a link without it has the chat tools only.
-    pub fn create_bot(&self, name: &str, full: bool) -> Result<RemoteBotLink, RegistryError> {
+    /// A new bot link that may do what `rights` says (made coherent: `bot::Rights::coherent`).
+    pub fn create_bot(
+        &self,
+        name: &str,
+        rights: bot::Rights,
+    ) -> Result<RemoteBotLink, RegistryError> {
         let mut registry = lock(&self.shared.registry);
-        let new = registry.add_bot(name, full, now())?;
-        let link = RemoteBotLink {
+        let new = registry.add_bot(name, rights, now())?;
+        let link = self.link_of(&registry, new);
+        drop(registry);
+        self.refresh();
+        Ok(link)
+    }
+
+    /// A new address for the open workspace's bot link `id`; the old one stops working at once.
+    /// `None`: no such link here.
+    pub fn renew_bot(&self, id: &str) -> Result<Option<RemoteBotLink>, RegistryError> {
+        let mut registry = lock(&self.shared.registry);
+        let Some(new) = registry.renew_bot(id, now())? else {
+            return Ok(None);
+        };
+        let link = self.link_of(&registry, new);
+        drop(registry);
+        self.refresh();
+        Ok(Some(link))
+    }
+
+    /// A link's address, shown once: the site, this desktop's id, the link's id and its token.
+    fn link_of(&self, registry: &Registry, new: crate::registry::NewBot) -> RemoteBotLink {
+        RemoteBotLink {
             name: registry
                 .bots()
                 .iter()
@@ -272,10 +302,7 @@ impl Service {
                 new.token
             ),
             id: new.id,
-        };
-        drop(registry);
-        self.refresh();
-        Ok(link)
+        }
     }
 
     pub fn remove_bot(&self, id: &str) -> Result<(), RegistryError> {
@@ -477,7 +504,7 @@ async fn tell_later(
         lock(&shared.registry)
             .told_of(&chat_id)
             .into_iter()
-            .filter(|(bot, _, _)| {
+            .filter(|(bot, _, _, _)| {
                 heard
                     .get(&(bot.clone(), chat_id.clone()))
                     // Heard in the same millisecond it settled: told anyway. Twice is harmless;
@@ -497,8 +524,8 @@ async fn tell_later(
         .iter()
         .find(|project| project.id == entry.project_id)
         .map_or("no project", |project| project.name.as_str());
-    let text = callback::text(event, &entry.chat, project, &page.items);
-    for (bot_id, bot_name, callback) in told {
+    for (bot_id, bot_name, callback, rights) in told {
+        let text = callback::text(event, &entry.chat, project, &page.items, rights.approve);
         let Ok(id) = crypto::random::<12>() else {
             continue;
         };
@@ -510,7 +537,7 @@ async fn tell_later(
             id: crypto::encode(&id),
             chat_id: chat_id.clone(),
             title: crate::render::title(&entry.chat),
-            text: text.clone(),
+            text,
             at: now(),
         });
     }
@@ -884,17 +911,19 @@ impl Serving {
             return;
         };
         // The token and the workspace it is good for, read together.
-        let (verified, scope, full, first) = {
+        let (verified, expired, scope, rights, first) = {
             let mut registry = lock(&self.shared.registry);
             let unused = registry
                 .bots()
                 .iter()
                 .any(|bot| bot.id == call.bot && bot.last_used_at.is_none());
+            let expired = registry.bot_expired(&call.bot, now());
             let verified = registry.verify_bot(&call.bot, &call.token, now());
             (
                 verified,
+                expired,
                 registry.scope().to_owned(),
-                registry.bot_full(&call.bot),
+                registry.bot_rights(&call.bot),
                 verified && unused,
             )
         };
@@ -902,13 +931,17 @@ impl Serving {
         if first {
             (self.shared.config.changed)();
         }
-        let refused = if !verified {
+        let refused = if expired {
+            Some(
+                "This bot link expired after 90 days unused. Its owner can renew it in o7: Settings, Remote access.",
+            )
+        } else if !verified {
             Some("This bot link was removed. Its owner can create a new one in o7.")
         } else if !bot::known(&call.tool) {
             Some("There is no such tool.")
-        } else if !bot::allowed(&call.tool, full) {
-            // Whatever the relay listed or let through: the link's own level decides, here.
-            Some(bot::NOT_ALLOWED)
+        } else if !bot::allowed(&call.tool, rights) {
+            // Whatever the relay listed or let through: the link's own rights decide, here.
+            Some(bot::refusal(&call.tool, rights))
         } else if self.bot_calls.load(Ordering::Relaxed) >= MAX_BOT_CALLS {
             Some("Too many calls are running. Wait for one to finish.")
         } else {
@@ -927,7 +960,7 @@ impl Serving {
         );
         tokio::spawn(async move {
             let owner = format!("{WATCHER}-bot:{}", call.rid);
-            let answer = bot::call(&backend, &owner, &call.tool, &call.args, full).await;
+            let answer = bot::call(&backend, &owner, &call.tool, &call.args, rights).await;
             running.fetch_sub(1, Ordering::Relaxed);
             if answer.error {
                 lock(&shared.registry).bot_failed(&call.bot);

@@ -330,6 +330,10 @@ pub struct BotLink<'a> {
     /// Whether the relay may offer this link the full-control tools. The computer checks each
     /// call itself; this only keeps the list a bot is shown honest.
     pub full: bool,
+    /// Whether the relay may offer this link only the tools that read (`readOnlyHint`). The
+    /// computer checks each call itself.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub read: bool,
     /// Which set of tools this copy of the app answers ([`crate::bot::TOOLS_VERSION`]), for the
     /// relay to list that one. A relay from before the number ignores it.
     pub v: u32,

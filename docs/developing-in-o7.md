@@ -169,9 +169,13 @@ the change is (owner, 23 November 2026):
 - The major number moves only when the owner says so (`1.0.0`).
 
 A pull request that only touches the website, the docs, the tests or the release tooling leaves
-it alone. `pnpm lint` runs `.github/scripts/check-version.mjs`, which refuses a branch that
-changes the app without raising `VERSION` above main's, and Publish refuses one at merge. Two
-pull requests open at once both raise it: whichever merges second rebases and raises it again.
+it alone. Builds are made only when the owner approves one, so pull requests gather into one
+release: once main's `VERSION` is above the last published version, a pull request may leave it
+as it is, and raises it further only when it is a bigger change than what was already raised (a
+big feature after only small ones). The published version is what main holds when the build is
+made. `pnpm lint` runs `.github/scripts/check-version.mjs`, which refuses a branch that changes
+the app without a raise where one is due (it reads the published versions from the `v*` tags),
+and Publish refuses one at build time.
 
 ## Changelog
 

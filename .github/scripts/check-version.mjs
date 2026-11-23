@@ -46,10 +46,13 @@ export function inApp(path) {
 }
 
 /**
- * What is wrong with `version`, given main's version and the paths this branch changed (null
- * when main could not be read: only the shape is checked then).
+ * What is wrong with `version`, given main's version, the paths this branch changed (null when
+ * main could not be read: only the shape is checked then), and the newest published version
+ * (null when none is known). Builds are made only when the owner approves one, so several pull
+ * requests gather into one release: once main's VERSION is above the last published one, a pull
+ * request may leave it, or raise it further when it is a bigger change than what was raised.
  */
-export function checkVersion(version, mainVersion, changed) {
+export function checkVersion(version, mainVersion, changed, published = null) {
   const mine = parse(version);
   if (!mine)
     return [
@@ -60,6 +63,9 @@ export function checkVersion(version, mainVersion, changed) {
   if (!main) return [];
   const app = changed.filter(inApp);
   if (app.length === 0 || newer(mine, main)) return [];
+  const gathering =
+    published !== null && parse(published) !== null && newer(main, parse(published));
+  if (gathering && !newer(main, mine)) return [];
   const [major, minor, patch] = main;
   return [
     `This branch changes the app (${app.slice(0, 3).join(", ")}${app.length > 3 ? ", ..." : ""}) but VERSION is not newer than main's ${main.join(".")}. ` +
@@ -70,6 +76,16 @@ export function checkVersion(version, mainVersion, changed) {
 function git(folder, ...args) {
   const run = spawnSync("git", args, { cwd: folder, encoding: "utf8" });
   return run.status === 0 ? run.stdout : null;
+}
+
+/** The newest of `tags` (`v0.2.0` and so on), as a version, or null. */
+export function newestTag(tags) {
+  let best = null;
+  for (const tag of tags) {
+    const version = parse(tag.replace(/^v/u, ""));
+    if (version && (best === null || newer(version, best))) best = version;
+  }
+  return best === null ? null : best.join(".");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
@@ -84,7 +100,10 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     base && !onMain
       ? (git(folder, "diff", "--name-only", base, "HEAD") ?? "").split("\n").filter(Boolean)
       : null;
-  const problems = checkVersion(version, mainVersion, changed);
+  const published = newestTag(
+    (git(folder, "tag", "--list", "v*") ?? "").split("\n").filter(Boolean),
+  );
+  const problems = checkVersion(version, mainVersion, changed, published);
   if (problems.length > 0) {
     console.error(`VERSION needs fixing:\n${problems.map((p) => `  ${p}`).join("\n")}`);
     process.exit(1);

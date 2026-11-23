@@ -208,15 +208,47 @@ pub fn remote_remove_device(app: tauri::AppHandle, id: String) -> Result<RemoteS
     Ok(service.status())
 }
 
-/// Creates a bot link. Its address carries the bot's token and is returned only here.
+/// Creates a bot link. Its address carries the bot's token and is returned only here. `level`
+/// is `read`, `chats` or `full`; `approve` lets its bot answer what an agent asks permission
+/// for, and `full_access` lets it turn on full access (full control only). Both are off unless
+/// the person chose them.
 #[tauri::command]
 #[specta::specta]
 pub fn remote_create_bot(
     app: tauri::AppHandle,
     name: String,
-    full: bool,
+    level: String,
+    approve: bool,
+    full_access: bool,
 ) -> Result<RemoteBotLink, AppError> {
-    service(&app)?.create_bot(&name, full).map_err(refused)
+    let (full, read_only) = match level.as_str() {
+        "read" => (false, true),
+        "chats" => (false, false),
+        "full" => (true, false),
+        _ => return Err(AppError::invalid_argument("Choose what the bot can do.")),
+    };
+    service(&app)?
+        .create_bot(
+            &name,
+            o7_remote::bot::Rights {
+                full,
+                read_only,
+                approve,
+                full_access,
+            },
+        )
+        .map_err(refused)
+}
+
+/// A new address for a bot link, shown once: the old one stops working at once, and a link that
+/// expired unused works again. What the link may do stays.
+#[tauri::command]
+#[specta::specta]
+pub fn remote_renew_bot(app: tauri::AppHandle, id: String) -> Result<RemoteBotLink, AppError> {
+    service(&app)?
+        .renew_bot(&id)
+        .map_err(refused)?
+        .ok_or_else(|| AppError::invalid_argument("That bot link is gone."))
 }
 
 /// Removes a bot link. Its address stops working, and the key of its call-back, if it had

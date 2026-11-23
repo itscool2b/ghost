@@ -78,6 +78,18 @@ const SETS = {
       "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
   },
 } as const;
+/**
+ * The tools a read-only link is shown: those that only read (`readOnlyHint`). The computer
+ * refuses anything else from such a link whatever is listed; this keeps the list honest.
+ */
+function readOnly(tools: readonly Listed[]): Listed[] {
+  return tools.filter(
+    (tool) => (tool.annotations as { readOnlyHint?: unknown } | undefined)?.readOnlyHint === true,
+  );
+}
+const READ_INSTRUCTIONS =
+  "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; this link reads its chats while o7 is open there, and cannot send, answer or change anything. inbox says what needs the person in one call; read and wait return what a chat did.";
+
 /** The number a copy of the app sends for the second set, and for the latest. */
 const CURRENT_TOOLS = 2;
 const LATEST_TOOLS = 3;
@@ -550,17 +562,20 @@ export class Room extends DurableObject<Env> {
     const full: string[] = [];
     const current: string[] = [];
     const latest: string[] = [];
+    const read: string[] = [];
     if (Array.isArray(body))
       for (const entry of body.slice(0, MAX_BOTS)) {
         const {
           id,
           hash,
           full: wide,
+          read: reading,
           v,
         } = (entry ?? {}) as {
           id?: unknown;
           hash?: unknown;
           full?: unknown;
+          read?: unknown;
           v?: unknown;
         };
         if (
@@ -570,13 +585,15 @@ export class Room extends DurableObject<Env> {
           SECRET.test(hash)
         ) {
           bots[id] = hash;
-          if (wide === true) full.push(id);
+          // A read-only link is never shown more, whatever else it says.
+          if (reading === true) read.push(id);
+          else if (wide === true) full.push(id);
           // A copy newer than this relay answers at least the latest set this relay knows.
           if (typeof v === "number" && v >= CURRENT_TOOLS) current.push(id);
           if (typeof v === "number" && v >= LATEST_TOOLS) latest.push(id);
         }
       }
-    await this.ctx.storage.put({ bots, full, current, latest });
+    await this.ctx.storage.put({ bots, full, current, latest, read });
   }
 
   override async webSocketClose(socket: WebSocket, code: number, reason: string) {
@@ -639,6 +656,7 @@ export class Room extends DurableObject<Env> {
     if (messages.length === 0 || messages.length > 16)
       return json(400, rpcError(null, -32600, "Invalid request"), CORS);
     const wide = ((await this.ctx.storage.get<string[]>("full")) ?? []).includes(id);
+    const reading = ((await this.ctx.storage.get<string[]>("read")) ?? []).includes(id);
     const set = ((await this.ctx.storage.get<string[]>("latest")) ?? []).includes(id)
       ? SETS.latest
       : ((await this.ctx.storage.get<string[]>("current")) ?? []).includes(id)
@@ -650,8 +668,8 @@ export class Room extends DurableObject<Env> {
         message,
         id,
         token,
-        wide ? set.full : set.chat,
-        set.instructions,
+        reading ? readOnly(set.chat) : wide ? set.full : set.chat,
+        reading ? READ_INSTRUCTIONS : set.instructions,
       );
       if (reply !== null) replies.push(reply);
     }

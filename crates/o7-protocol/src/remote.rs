@@ -50,6 +50,14 @@ pub struct RemoteBot {
     pub last_used_at: Option<Millis>,
     /// Made with full control: every tool, where a link without it has the chat tools only.
     pub full: bool,
+    /// Reads only: nothing that sends, answers, stops or changes.
+    pub read_only: bool,
+    /// May approve what an agent asks permission for.
+    pub approve: bool,
+    /// May turn on full access in a chat.
+    pub full_access: bool,
+    /// When the link stops working unless it is used before then (90 days after its last use).
+    pub expires_at: Millis,
     /// Tool calls the link has made, and how many were answered with an error. Counted on this
     /// computer only.
     pub calls: u32,

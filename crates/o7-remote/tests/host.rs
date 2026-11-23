@@ -34,6 +34,18 @@ use tokio_tungstenite::{
     },
 };
 
+/// The links these tests make answer what agents ask, as links did before rights were chosen; the
+/// refusals have a test of their own (`a_links_rights_are_checked_on_the_computer`).
+const APPROVING: o7_remote::bot::Rights = o7_remote::bot::Rights {
+    approve: true,
+    ..o7_remote::bot::Rights::CHATS
+};
+const APPROVING_FULL: o7_remote::bot::Rights = o7_remote::bot::Rights {
+    approve: true,
+    full_access: true,
+    ..o7_remote::bot::Rights::FULL
+};
+
 #[derive(Default)]
 struct App {
     frames: Mutex<HashMap<String, Frames>>,
@@ -46,6 +58,8 @@ struct App {
     answered: Mutex<Vec<String>>,
     released: Mutex<Vec<String>>,
     status: Mutex<Option<SessionStatus>>,
+    /// A question c1 waits on (request q1), when a test sets one.
+    question: Mutex<Option<o7_protocol::UiPrompt>>,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -332,7 +346,24 @@ impl Backend for App {
                         },
                     },
                     said(2, "All 12 passed."),
-                ],
+                ]
+                .into_iter()
+                .chain(
+                    self.question
+                        .lock()
+                        .expect("question")
+                        .clone()
+                        .map(|prompt| HistoryItem {
+                            seq: 3,
+                            turn_id: Some("t1".into()),
+                            at: 0,
+                            event: O7Event::UiRequest(o7_protocol::UiRequest {
+                                request_id: "q1".into(),
+                                prompt,
+                            }),
+                        }),
+                )
+                .collect(),
             ))
         })
     }
@@ -719,7 +750,7 @@ impl App {
 async fn a_bot_is_told_when_a_chat_it_acted_on_stops_working() {
     let rig = rig().await;
     let mut relay = online(&rig).await;
-    let made = rig.service.create_bot("Grok Bot", false).expect("bot");
+    let made = rig.service.create_bot("Grok Bot", APPROVING).expect("bot");
     relay.next().await;
     let (bot, token) = made
         .url
@@ -1431,7 +1462,7 @@ async fn a_device_and_a_bot_reach_only_the_workspace_they_were_made_in() {
     let rig = rig().await;
     let mut relay = online(&rig).await;
     let (mut phone, device, key) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
-    let link = rig.service.create_bot("Grok", false).expect("bot");
+    let link = rig.service.create_bot("Grok", APPROVING).expect("bot");
     let listed = relay.next().await;
     assert!(listed.starts_with("l[{"), "{listed}");
     let reference = link.url.rsplit('/').next().expect("reference").to_owned();
@@ -1528,7 +1559,7 @@ async fn what_was_accepted_for_one_workspace_is_never_served_another() {
     let rig = rig().await;
     let mut relay = online(&rig).await;
     let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
-    let link = rig.service.create_bot("Grok", false).expect("bot");
+    let link = rig.service.create_bot("Grok", APPROVING).expect("bot");
     assert!(relay.next().await.starts_with("l[{"));
     let reference = link.url.rsplit('/').next().expect("reference").to_owned();
     let (bot, token) = reference.split_once('.').expect("id.token");
@@ -1582,6 +1613,216 @@ async fn what_was_accepted_for_one_workspace_is_never_served_another() {
     assert!(rig.app.frames.lock().expect("frames").is_empty());
 }
 
+/// What a link may do is checked on the computer on every call, whatever the relay let through
+/// (owner's plan, 23 November 2026): a read-only link reads; a link not allowed to approve may
+/// decline and answer questions but never approve; full access needs its own right.
+#[tokio::test]
+async fn a_links_rights_are_checked_on_the_computer() {
+    use o7_remote::bot::Rights;
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let address = |url: &str| {
+        let reference = url.rsplit('/').next().expect("reference").to_owned();
+        let (bot, token) = reference.split_once('.').expect("id.token");
+        (bot.to_owned(), token.to_owned())
+    };
+    let reader = address(
+        &rig.service
+            .create_bot(
+                "Reader",
+                Rights {
+                    read_only: true,
+                    ..Rights::FULL
+                },
+            )
+            .expect("bot")
+            .url,
+    );
+    let listed: Value =
+        serde_json::from_str(relay.next().await.strip_prefix('l').expect("links")).expect("json");
+    assert_eq!(
+        listed,
+        json!([{ "id": reader.0, "hash": crypto::hash(&reader.1), "full": false, "read": true, "v": 3 }]),
+        "a read-only link is listed as one, and never as full"
+    );
+    let plain = address(
+        &rig.service
+            .create_bot("Plain", Rights::FULL)
+            .expect("bot")
+            .url,
+    );
+    relay.next().await;
+    let status = rig.service.status();
+    assert_eq!(
+        status
+            .bots
+            .iter()
+            .map(|bot| (bot.read_only, bot.full, bot.approve, bot.full_access))
+            .collect::<Vec<_>>(),
+        [(true, false, false, false), (false, true, false, false)]
+    );
+    assert!(status.bots[0].expires_at > status.bots[0].created_at);
+
+    let mut rid = 0;
+    let mut call = async |relay: &mut Relay, link: &(String, String), tool: &str, args: Value| {
+        rid += 1;
+        relay
+            .send(format!(
+                "b{}",
+                json!({ "rid": format!("r{rid}"), "bot": link.0, "token": link.1, "tool": tool, "args": args })
+            ))
+            .await;
+        let answer: Value =
+            serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer"))
+                .expect("json");
+        answer
+    };
+    let text = |answer: &Value| answer["text"].as_str().unwrap_or_default().to_owned();
+
+    // A read-only link reads, and nothing else reaches the app.
+    for (tool, args) in [
+        ("send", json!({ "chat": "c1", "text": "Go" })),
+        ("answer", json!({ "chat": "c1", "request": "p1" })),
+        ("stop", json!({ "chat": "c1" })),
+        ("set", json!({ "chat": "c1", "title": "x" })),
+        ("send_message", json!({ "chat_id": "c1", "text": "Go" })),
+        (
+            "respond_to_request",
+            json!({ "chat_id": "c1", "request_id": "p1" }),
+        ),
+    ] {
+        let refused = call(&mut relay, &reader, tool, args).await;
+        assert_eq!(refused["error"], true, "{tool}");
+        assert!(text(&refused).contains("only reads"), "{tool}: {refused}");
+    }
+    assert!(rig.app.sent.lock().expect("sent").is_empty());
+    assert!(rig.app.answered.lock().expect("answered").is_empty());
+    let read = call(&mut relay, &reader, "chats", json!({})).await;
+    assert_eq!(read["error"], false, "{read}");
+
+    // A link that may not approve: no option, in either set; declining goes through.
+    for (tool, args) in [
+        (
+            "answer",
+            json!({ "chat": "c1", "request": "p1", "option": "allow" }),
+        ),
+        (
+            "respond_to_request",
+            json!({ "chat_id": "c1", "request_id": "p1", "option_id": "allow" }),
+        ),
+    ] {
+        let refused = call(&mut relay, &plain, tool, args).await;
+        assert_eq!(refused["error"], true, "{tool}");
+        assert!(
+            text(&refused).contains("may not approve"),
+            "{tool}: {refused}"
+        );
+    }
+    assert!(rig.app.answered.lock().expect("answered").is_empty());
+    let declined = call(
+        &mut relay,
+        &plain,
+        "answer",
+        json!({ "chat": "c1", "request": "p1", "wait": 0 }),
+    )
+    .await;
+    assert_eq!(declined["error"], false, "{declined}");
+    assert!(text(&declined).starts_with("Declined."), "{declined}");
+
+    // A yes to a confirmation approves too: refused; a no is a decline.
+    *rig.app.question.lock().expect("question") = Some(o7_protocol::UiPrompt::Confirm {
+        message: "Delete the build folder?".into(),
+    });
+    let yes = call(
+        &mut relay,
+        &plain,
+        "answer",
+        json!({ "chat": "c1", "request": "q1", "text": "yes", "wait": 0 }),
+    )
+    .await;
+    assert_eq!(yes["error"], true, "{yes}");
+    assert!(text(&yes).contains("may not approve"), "{yes}");
+    let no = call(
+        &mut relay,
+        &plain,
+        "answer",
+        json!({ "chat": "c1", "request": "q1", "text": "no", "wait": 0 }),
+    )
+    .await;
+    assert_eq!(no["error"], false, "{no}");
+    *rig.app.question.lock().expect("question") = Some(o7_protocol::UiPrompt::Select {
+        message: "Run the migration?".into(),
+        options: vec!["Allow".into(), "Deny".into()],
+    });
+    let allow = call(
+        &mut relay,
+        &plain,
+        "answer",
+        json!({ "chat": "c1", "request": "q1", "text": "Allow", "wait": 0 }),
+    )
+    .await;
+    assert!(text(&allow).contains("may not approve"), "{allow}");
+    let deny = call(
+        &mut relay,
+        &plain,
+        "answer",
+        json!({ "chat": "c1", "request": "q1", "text": "Deny", "wait": 0 }),
+    )
+    .await;
+    assert_eq!(deny["error"], false, "{deny}");
+
+    // Full control without the full-access right: other access levels, never full_auto.
+    for (tool, args) in [
+        (
+            "send",
+            json!({ "chat": "c1", "text": "Go", "access": "full_auto" }),
+        ),
+        ("set", json!({ "chat": "c1", "access": "full_auto" })),
+        (
+            "set_access",
+            json!({ "chat_id": "c1", "access": "full_auto" }),
+        ),
+    ] {
+        let refused = call(&mut relay, &plain, tool, args).await;
+        assert_eq!(refused["error"], true, "{tool}");
+        assert!(text(&refused).contains("full access"), "{tool}: {refused}");
+    }
+    assert!(rig.app.acted.lock().expect("acted").is_empty());
+    let lowered = call(
+        &mut relay,
+        &plain,
+        "set",
+        json!({ "chat": "c1", "access": "auto_edit" }),
+    )
+    .await;
+    assert_eq!(lowered["error"], false, "{lowered}");
+
+    // A new address: the old one is refused at once, and the new one works with the same rights.
+    let renewed = rig
+        .service
+        .renew_bot(&plain.0)
+        .expect("saved")
+        .expect("renewed");
+    relay.next().await;
+    let fresh = address(&renewed.url);
+    assert_eq!(fresh.0, plain.0);
+    let old = call(&mut relay, &plain, "chats", json!({})).await;
+    assert_eq!(old["error"], true);
+    assert!(text(&old).contains("removed"), "{old}");
+    let again = call(
+        &mut relay,
+        &fresh,
+        "answer",
+        json!({ "chat": "c1", "request": "p1", "option": "allow" }),
+    )
+    .await;
+    assert!(
+        text(&again).contains("may not approve"),
+        "the same rights: {again}"
+    );
+    assert!(rig.service.renew_bot("nobody").expect("saved").is_none());
+}
+
 #[tokio::test]
 async fn full_control_is_a_links_own_level_and_the_computer_enforces_it() {
     let rig = rig().await;
@@ -1593,12 +1834,17 @@ async fn full_control_is_a_links_own_level_and_the_computer_enforces_it() {
     };
     let chats = address(
         &rig.service
-            .create_bot("Chats only", false)
+            .create_bot("Chats only", APPROVING)
             .expect("bot")
             .url,
     );
     relay.next().await;
-    let full = address(&rig.service.create_bot("Full", true).expect("bot").url);
+    let full = address(
+        &rig.service
+            .create_bot("Full", APPROVING_FULL)
+            .expect("bot")
+            .url,
+    );
     // The relay is told each link's level, so the list a bot is shown is honest.
     let listed: Value =
         serde_json::from_str(relay.next().await.strip_prefix('l').expect("links")).expect("json");
@@ -1785,7 +2031,7 @@ async fn a_browser_can_forget_the_desktop() {
 async fn a_linked_bot_calls_tools_with_its_token() {
     let rig = rig().await;
     let mut relay = online(&rig).await;
-    let link = rig.service.create_bot("Grok", false).expect("bot");
+    let link = rig.service.create_bot("Grok", APPROVING).expect("bot");
     assert_eq!(link.name, "Grok");
     let reference = link
         .url
@@ -2080,12 +2326,17 @@ async fn the_current_tools_send_and_wait_in_one_call_and_keep_a_links_level() {
     };
     let chats = address(
         &rig.service
-            .create_bot("Chats only", false)
+            .create_bot("Chats only", APPROVING)
             .expect("bot")
             .url,
     );
     relay.next().await;
-    let full = address(&rig.service.create_bot("Full", true).expect("bot").url);
+    let full = address(
+        &rig.service
+            .create_bot("Full", APPROVING_FULL)
+            .expect("bot")
+            .url,
+    );
     relay.next().await;
 
     let mut rid = 0;
