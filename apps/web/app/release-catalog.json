@@ -3,64 +3,64 @@
     "channel": "stable",
     "signed": true,
     "publisher_signed": false,
-    "version": "0.1.1783",
-    "pub_date": "2026-11-23T03:20:46-05:00",
-    "notes": "Linking an assistant works better.",
-    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/SHA256SUMS",
+    "version": "0.1.1787",
+    "pub_date": "2026-11-23T03:46:54-05:00",
+    "notes": "An assistant linked to o7 now gets results it can trust.",
+    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/SHA256SUMS",
     "downloads": [
       {
         "kind": "macos_universal_dmg",
         "label": "macOS · Apple silicon and Intel",
         "requirements": "macOS 13.3 or newer",
-        "file": "o7_0.1.1783_universal.dmg",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/o7_0.1.1783_universal.dmg",
-        "sha256": "9859db880c408db5b567b001e18912513997ab66059ef6d05eb5948b17f61774",
-        "bytes": 238009300
+        "file": "o7_0.1.1787_universal.dmg",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/o7_0.1.1787_universal.dmg",
+        "sha256": "eca4bfa8ad3f1dc30435e44c42bd6f3153ea3fd6b944860fa95e61101a099880",
+        "bytes": 238006136
       },
       {
         "kind": "windows_x64_nsis",
         "label": "Windows · x64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "o7_0.1.1783_x64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/o7_0.1.1783_x64-setup.exe",
-        "sha256": "1c3cc7409a70697d0a18c49d31b542740b24c1b791a8c1792da45c5db6a157a2",
-        "bytes": 193815043
+        "file": "o7_0.1.1787_x64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/o7_0.1.1787_x64-setup.exe",
+        "sha256": "573a655488bcbce3b8e58f80f0a45fca87b77553be1f373d991c6531a7d11522",
+        "bytes": 193839641
       },
       {
         "kind": "windows_arm64_nsis",
         "label": "Windows · ARM64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "o7_0.1.1783_arm64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/o7_0.1.1783_arm64-setup.exe",
-        "sha256": "e07486bbf980de806dade93c71dc31f053115cca509aad68b32fb01a3e0fb7e0",
-        "bytes": 191350662
+        "file": "o7_0.1.1787_arm64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/o7_0.1.1787_arm64-setup.exe",
+        "sha256": "8893c9a4a40a7e4f5200d79cec7c5159b6c23d95010216b6f430b4a9b44e8d96",
+        "bytes": 191444657
       },
       {
         "kind": "linux_x64_appimage",
         "label": "Linux · AppImage",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7_0.1.1783_amd64.AppImage",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/o7_0.1.1783_amd64.AppImage",
-        "sha256": "2452c16eaf502feced55d12be9e0b018e2a2f4e30d6ce6c677fc6d627f755614",
-        "bytes": 289978872
+        "file": "o7_0.1.1787_amd64.AppImage",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/o7_0.1.1787_amd64.AppImage",
+        "sha256": "bd127adfd98480cd4ff2eef8116099cb9023f47689e2c8cd64d9a7c2075ce35b",
+        "bytes": 289966584
       },
       {
         "kind": "linux_x64_deb",
         "label": "Linux · Debian and Ubuntu",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7_0.1.1783_amd64.deb",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/o7_0.1.1783_amd64.deb",
-        "sha256": "5eceb0e36296fa1b0a8c15aee700743bf53fe730b3516b20b805e9ce5fe4efa6",
-        "bytes": 208161774
+        "file": "o7_0.1.1787_amd64.deb",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/o7_0.1.1787_amd64.deb",
+        "sha256": "58af46fca169f0185f57606ebd46f71ee42c38c61059c9ade79fcff3052e5857",
+        "bytes": 208177112
       },
       {
         "kind": "linux_x64_rpm",
         "label": "Linux · Fedora and other RPM systems",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7-0.1.1783-1.x86_64.rpm",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1783/o7-0.1.1783-1.x86_64.rpm",
-        "sha256": "322edbd65b8546125988788995f6ca187d3b13274b9cb9018cce916e9e85e1e3",
-        "bytes": 208180033
+        "file": "o7-0.1.1787-1.x86_64.rpm",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.1.1787/o7-0.1.1787-1.x86_64.rpm",
+        "sha256": "b4186d76a5b8a6eb8cff9e1107980662f941ec7df8398b1f1eef762e089d006f",
+        "bytes": 208188187
       }
     ]
   }
