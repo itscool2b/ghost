@@ -43,17 +43,21 @@ pub fn plan(method: &str, path: &str, query: Option<&str>) -> Option<Plan> {
         if !matches!(method, "GET" | "HEAD") {
             return Some(Plan::Refused(405));
         }
-        return Some(download(rest).map_or(Plan::Refused(404), |(count, location)| {
-            Plan::Download { count, location }
-        }));
+        return Some(
+            download(rest).map_or(Plan::Refused(404), |(count, location)| Plan::Download {
+                count,
+                location,
+            }),
+        );
     }
     if path == "/api/count" {
         if method != "GET" {
             return Some(Plan::Refused(405));
         }
-        return Some(ran(query.unwrap_or_default()).map_or(Plan::Refused(400), |counts| {
-            Plan::Ran { counts }
-        }));
+        return Some(
+            ran(query.unwrap_or_default())
+                .map_or(Plan::Refused(400), |counts| Plan::Ran { counts }),
+        );
     }
     None
 }
@@ -62,7 +66,11 @@ fn download(rest: &str) -> Option<(Count, String)> {
     let (tag, file) = rest.split_once('/')?;
     let (platform, version) = installer(file)?;
     // A release is tagged v<version>; a staging build's packages, staging-v<version>.
-    let tagged = tag.strip_prefix("staging-").unwrap_or(tag).strip_prefix('v') == Some(version);
+    let tagged = tag
+        .strip_prefix("staging-")
+        .unwrap_or(tag)
+        .strip_prefix('v')
+        == Some(version);
     tagged.then(|| {
         (
             Count {
@@ -150,9 +158,16 @@ pub fn robot(user_agent: Option<&str>) -> bool {
         return true;
     };
     agent.trim().is_empty()
-        || ["bot", "crawl", "spider", "slurp", "preview", "facebookexternalhit"]
-            .iter()
-            .any(|word| agent.contains(word))
+        || [
+            "bot",
+            "crawl",
+            "spider",
+            "slurp",
+            "preview",
+            "facebookexternalhit",
+        ]
+        .iter()
+        .any(|word| agent.contains(word))
 }
 
 /// The US Eastern date of a moment (the owner's day), and the seconds from it to the next Eastern
@@ -240,7 +255,8 @@ mod tests {
                 format!("https://github.com/itscool2b/o7/releases/download/v0.1.1748/{file}")
             );
         }
-        let (_, to) = location(plan("HEAD", "/get/staging-v0.2.0/o7_0.2.0_amd64.deb", None)).unwrap();
+        let (_, to) =
+            location(plan("HEAD", "/get/staging-v0.2.0/o7_0.2.0_amd64.deb", None)).unwrap();
         assert_eq!(
             to,
             "https://github.com/itscool2b/o7/releases/download/staging-v0.2.0/o7_0.2.0_amd64.deb"
@@ -327,7 +343,11 @@ mod tests {
         }
         assert_eq!(plan("GET", "/api/count", None), Some(Plan::Refused(400)));
         assert_eq!(
-            plan("POST", "/api/count", Some("os=windows&arch=x86_64&version=0.1.1")),
+            plan(
+                "POST",
+                "/api/count",
+                Some("os=windows&arch=x86_64&version=0.1.1")
+            ),
             Some(Plan::Refused(405))
         );
     }

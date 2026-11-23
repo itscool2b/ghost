@@ -180,7 +180,11 @@ mod tests {
         let seen = seen.lock().unwrap().clone();
         assert_eq!(seen.len(), 2, "{seen:?}");
         assert!(seen[0].starts_with("GET /api/count?os="), "{}", seen[0]);
-        assert!(seen[0].contains("&version=0.1.1748&first=1 "), "{}", seen[0]);
+        assert!(
+            seen[0].contains("&version=0.1.1748&first=1 "),
+            "{}",
+            seen[0]
+        );
         assert!(seen[1].contains("&first=0 "), "{}", seen[1]);
     }
 
@@ -190,6 +194,9 @@ mod tests {
         let file = dir.path().join(FILE);
         let (endpoint, _) = site("<html>maintenance</html>").await;
         assert!(count(&endpoint, &file, "0.1.1748", 1000).await.is_err());
-        assert!(!file.exists(), "tried again at the next check, still as a first");
+        assert!(
+            !file.exists(),
+            "tried again at the next check, still as a first"
+        );
     }
 }
