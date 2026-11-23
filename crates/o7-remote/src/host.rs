@@ -77,6 +77,9 @@ const TELL_AFTER: Duration = Duration::from_secs(2);
 const TELL_CHECK: Duration = Duration::from_secs(5);
 /// How often the queue for tonight is looked at.
 const LATER_CHECK: Duration = Duration::from_secs(60);
+/// How often tasks' pull requests are looked at, and how many in one look.
+const PR_CHECK: Duration = Duration::from_secs(5 * 60);
+const PR_AT_ONCE: usize = 10;
 
 pub struct Config {
     /// `remote.json` in the data folder.
@@ -164,7 +167,14 @@ impl Service {
         runtime.spawn(run(shared.clone(), receiver));
         runtime.spawn(tell(shared.clone()));
         runtime.spawn(tonight(shared.clone()));
+        runtime.spawn(pulls(shared.clone()));
         Ok(Self { shared, control })
+    }
+
+    /// One look at tasks' pull requests, as the service takes every five minutes; for tests.
+    #[doc(hidden)]
+    pub async fn pr_tick(&self) {
+        pr_tick(&self.shared).await;
     }
 
     /// One look at the queue for tonight, as the service takes every minute; for tests.
@@ -547,6 +557,76 @@ async fn later_tick(shared: &Arc<Shared>) {
                     at,
                 });
             }
+        }
+    }
+}
+
+/// Watches tasks' pull requests until the service closes.
+async fn pulls(shared: Arc<Shared>) {
+    while !shared.closing.load(Ordering::Relaxed) {
+        tokio::time::sleep(PR_CHECK).await;
+        pr_tick(&shared).await;
+    }
+}
+
+/// Looks at each watched task's pull request (a task of the open workspace, younger than a week,
+/// whose link has a call-back) and tells its bot what changed: checks that failed or passed, a
+/// new review or comment, a merge or a close. What was seen is kept, so nothing is told twice.
+async fn pr_tick(shared: &Arc<Shared>) {
+    let (watched, scope) = {
+        let registry = lock(&shared.registry);
+        if !registry.enabled() || registry.scope().is_empty() {
+            return;
+        }
+        (registry.watched_tasks(now()), registry.scope().to_owned())
+    };
+    if watched.is_empty() {
+        return;
+    }
+    let backend = shared.config.backend.clone().bound(&scope);
+    let overview = backend.overview().await.ok();
+    for (task, before) in watched.into_iter().take(PR_AT_ONCE) {
+        let Ok(Some(pr)) = backend.pull_request(&task.builder).await else {
+            continue;
+        };
+        let project = overview
+            .as_ref()
+            .and_then(|overview| {
+                overview.projects.iter().find(|project| {
+                    project
+                        .folders
+                        .iter()
+                        .any(|folder| folder.id == task.folder_id)
+                })
+            })
+            .map_or_else(String::new, |project| project.name.clone());
+        let text = callback::pull_request_text(&task.builder, &project, &pr, before.as_ref());
+        let told = {
+            let mut registry = lock(&shared.registry);
+            registry.saw_pr(crate::registry::PrSeen {
+                chat: task.builder.clone(),
+                number: pr.number,
+                url: pr.url.clone(),
+                state: pr.state.clone(),
+                checks: pr.checks.word().into(),
+                notes: pr.notes.len(),
+            });
+            registry.callback_of(&task.bot)
+        };
+        if let (Some(text), Some((bot_name, callback)), Ok(id)) =
+            (text, told, crypto::random::<12>())
+        {
+            (shared.config.deliver)(Delivery {
+                bot_id: task.bot.clone(),
+                bot_name,
+                callback,
+                event: CallbackEvent::PullRequest,
+                id: crypto::encode(&id),
+                chat_id: task.builder.clone(),
+                title: crate::render::cut(task.goal.lines().next().unwrap_or("Task").trim(), 60),
+                text,
+                at: now(),
+            });
         }
     }
 }

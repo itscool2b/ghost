@@ -67,6 +67,8 @@ struct App {
     second_agent: std::sync::atomic::AtomicBool,
     /// The hour on the computer's clock, when a test sets one.
     hour: Mutex<Option<u8>>,
+    /// The pull request every chat's branch has, when a test sets one.
+    pr: Mutex<Option<o7_remote::PullRequest>>,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -251,6 +253,16 @@ impl Backend for Bound {
             self.app.picture(chat_id, of).await
         })
     }
+
+    fn pull_request<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<o7_remote::PullRequest>, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.pull_request(chat_id).await
+        })
+    }
 }
 
 impl Backend for App {
@@ -367,6 +379,19 @@ impl Backend for App {
 
     fn local_hour(&self) -> Option<u8> {
         *self.hour.lock().expect("hour")
+    }
+
+    fn pull_request<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<o7_remote::PullRequest>, BackendError>> {
+        Box::pin(async move {
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("pull request {chat_id}"));
+            Ok(self.pr.lock().expect("pr").clone())
+        })
     }
 
     fn release(&self, owner: &str) {
@@ -2179,6 +2204,118 @@ async fn work_left_for_tonight_starts_at_night_one_at_a_time() {
         "{inbox}"
     );
     assert!(inbox.contains("\"Four\" (app)\n"), "{inbox}");
+}
+
+/// A task's pull request is watched for the link that started it, when that link has a
+/// call-back: its bot is told when the checks fail or pass, of a new review, and of the merge,
+/// once each; after the merge it is no longer looked at.
+#[tokio::test]
+async fn a_tasks_pull_request_is_told_as_it_changes() {
+    use o7_remote::{PrChecks, PrNote, PullRequest};
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let made = rig
+        .service
+        .create_bot("Grok Bot", o7_remote::bot::Rights::CHATS)
+        .expect("bot");
+    relay.next().await;
+    let (bot, token) = made
+        .url
+        .rsplit_once('/')
+        .and_then(|(_, reference)| reference.split_once('.'))
+        .map(|(bot, token)| (bot.to_owned(), token.to_owned()))
+        .expect("id.token");
+    relay
+        .send(format!(
+            "b{}",
+            json!({ "rid": "r1", "bot": bot, "token": token, "tool": "task", "args": { "goal": "Fix the login form", "review": false } })
+        ))
+        .await;
+    let answer: Value =
+        serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer")).expect("json");
+    assert_eq!(answer["error"], false, "{answer}");
+    let looked = || {
+        rig.app
+            .answered
+            .lock()
+            .expect("answered")
+            .iter()
+            .filter(|line| line.starts_with("pull request "))
+            .count()
+    };
+    let pr = |checks: PrChecks, state: &str, notes: Vec<PrNote>| PullRequest {
+        number: 12,
+        url: "https://github.com/o/app/pull/12".into(),
+        state: state.into(),
+        checks,
+        notes,
+    };
+    *rig.app.pr.lock().expect("pr") = Some(pr(PrChecks::Pending, "open", vec![]));
+
+    // Without a call-back nobody would hear it: it is not looked at.
+    rig.service.pr_tick().await;
+    assert_eq!(looked(), 0);
+    let place = o7_remote::Callback {
+        kind: o7_remote::CallbackKind::Webhook,
+        url: "https://assistant.example/hook".into(),
+        channel: None,
+        to: None,
+    };
+    assert!(matches!(
+        rig.service.set_bot_callback(&bot, Some(place)),
+        Ok(true)
+    ));
+    let told = || {
+        rig.told
+            .lock()
+            .expect("told")
+            .iter()
+            .filter(|delivery| delivery.event == o7_remote::CallbackEvent::PullRequest)
+            .map(|delivery| delivery.text.clone())
+            .collect::<Vec<_>>()
+    };
+    rig.service.pr_tick().await;
+    assert_eq!(looked(), 1);
+    assert!(told().is_empty(), "checks running is no news");
+
+    *rig.app.pr.lock().expect("pr") =
+        Some(pr(PrChecks::Failed(vec!["test".into()]), "open", vec![]));
+    rig.service.pr_tick().await;
+    rig.service.pr_tick().await;
+    assert_eq!(told().len(), 1, "told once: {:?}", told());
+    assert!(
+        told()[0].starts_with("o7: the pull request for task chat c2 (#12, https://github.com/o/app/pull/12, in project \"app\") changed.\nIts checks failed: \"test\"."),
+        "{}",
+        told()[0]
+    );
+
+    let review = PrNote {
+        author: "ana".into(),
+        kind: "approved".into(),
+        body: "Good.".into(),
+        trusted: true,
+    };
+    *rig.app.pr.lock().expect("pr") = Some(pr(PrChecks::Passed, "open", vec![review.clone()]));
+    rig.service.pr_tick().await;
+    assert_eq!(told().len(), 2);
+    assert!(
+        told()[1].contains("Its checks passed.\nA new review (approved) by \"ana\""),
+        "{}",
+        told()[1]
+    );
+
+    *rig.app.pr.lock().expect("pr") = Some(pr(PrChecks::Passed, "merged", vec![review]));
+    rig.service.pr_tick().await;
+    assert_eq!(told().len(), 3);
+    assert!(told()[2].contains("\nIt was merged.\n"), "{}", told()[2]);
+    let before = looked();
+    rig.service.pr_tick().await;
+    assert_eq!(
+        looked(),
+        before,
+        "a merged pull request is no longer looked at"
+    );
 }
 
 /// What a link may do is checked on the computer on every call, whatever the relay let through

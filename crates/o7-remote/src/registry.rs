@@ -143,7 +143,27 @@ struct Stored {
     /// "one at a time" are read from it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     night: Vec<NightStart>,
+    /// What was last seen of each task's pull request, by the task's chat.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    prs: Vec<PrSeen>,
 }
+
+/// What a task's watcher last saw of its pull request.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrSeen {
+    /// The task's chat.
+    pub chat: String,
+    pub number: u64,
+    pub url: String,
+    pub state: String,
+    /// [`crate::backend::PrChecks::word`].
+    pub checks: String,
+    /// How many reviews and comments it had.
+    pub notes: usize,
+}
+
+/// How long after a task starts its pull request is watched.
+pub const PR_WATCHED_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
 /// A task a bot link left for tonight.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -262,6 +282,7 @@ impl Registry {
                     keep_awake: false,
                     queued: Vec::new(),
                     night: Vec::new(),
+                    prs: Vec::new(),
                 }
             }
             Err(error) => return Err(RegistryError::Read(error.to_string())),
@@ -498,6 +519,48 @@ impl Registry {
             }
         }
         chats
+    }
+
+    /// The tasks whose pull request is watched: the open workspace's, younger than a week,
+    /// with a branch, started by a link that has a call-back, and not merged or closed. Each
+    /// with what was last seen of it.
+    pub fn watched_tasks(&self, now: i64) -> Vec<(Task, Option<PrSeen>)> {
+        let links: Vec<&Bot> = self
+            .bots()
+            .into_iter()
+            .filter(|bot| bot.callback.is_some() && !expired(bot, now))
+            .collect();
+        self.stored
+            .tasks
+            .iter()
+            .filter(|task| task.branch.is_some())
+            .filter(|task| now.saturating_sub(task.created_at) <= PR_WATCHED_MS)
+            .filter(|task| links.iter().any(|bot| bot.id == task.bot))
+            .map(|task| {
+                let seen = self
+                    .stored
+                    .prs
+                    .iter()
+                    .find(|seen| seen.chat == task.builder)
+                    .cloned();
+                (task.clone(), seen)
+            })
+            .filter(|(_, seen)| {
+                seen.as_ref()
+                    .is_none_or(|seen| !matches!(seen.state.as_str(), "merged" | "closed"))
+            })
+            .collect()
+    }
+
+    /// Keeps what was seen of a task's pull request.
+    pub fn saw_pr(&mut self, seen: PrSeen) {
+        self.stored.prs.retain(|kept| kept.chat != seen.chat);
+        self.stored.prs.push(seen);
+        if self.stored.prs.len() > MAX_TASKS {
+            let extra = self.stored.prs.len() - MAX_TASKS;
+            self.stored.prs.drain(..extra);
+        }
+        let _ = self.save();
     }
 
     /// A link's name and call-back, when it has one.

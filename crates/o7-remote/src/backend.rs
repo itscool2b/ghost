@@ -152,6 +152,52 @@ pub enum Outcome {
     },
 }
 
+/// How a pull request's checks stand, all of them together.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrChecks {
+    None,
+    Pending,
+    Passed,
+    /// The names of those that failed.
+    Failed(Vec<String>),
+}
+
+impl PrChecks {
+    /// One word, as it is kept: `none`, `pending`, `passed` or `failed`.
+    pub fn word(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Pending => "pending",
+            Self::Passed => "passed",
+            Self::Failed(_) => "failed",
+        }
+    }
+}
+
+/// A review or a comment on a pull request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrNote {
+    pub author: String,
+    /// `comment`, or the review's state (`approved`, `changes requested`, `commented`).
+    pub kind: String,
+    pub body: String,
+    /// Written by the repository's owner, a member or a collaborator: only their words are
+    /// passed on, since anyone can comment on a public repository.
+    pub trusted: bool,
+}
+
+/// The pull request open from a chat's branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullRequest {
+    pub number: u64,
+    pub url: String,
+    /// `open`, `merged` or `closed`.
+    pub state: String,
+    pub checks: PrChecks,
+    /// Reviews and comments, oldest first.
+    pub notes: Vec<PrNote>,
+}
+
 /// What a bot may see a picture of (`look`): a chat's browser tab, or its emulator's screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PictureOf {
@@ -181,6 +227,8 @@ pub struct TaskChat {
 /// its agent's usage is gone. Each part is left out where it cannot be read.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChatFacts {
+    /// Its pull request, in words (`#12 <address>, open; checks failed: test`).
+    pub pull_request: Option<String>,
     pub branch: Option<String>,
     /// The chat works in a worktree of its own.
     pub worktree: bool,
@@ -275,6 +323,14 @@ pub trait Backend: Send + Sync + 'static {
                 base: None,
             })
         })
+    }
+    /// The pull request open from `chat_id`'s branch, for a task's watcher. A backend that
+    /// cannot say has none.
+    fn pull_request<'a>(
+        &'a self,
+        _chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<PullRequest>, BackendError>> {
+        Box::pin(async { Ok(None) })
     }
     /// The hour on the computer's own clock (0 to 23), for the night's queue. A backend that
     /// cannot say starts nothing at night.

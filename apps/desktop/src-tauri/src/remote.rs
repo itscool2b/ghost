@@ -37,6 +37,45 @@ const PICTURE_QUALITY: u8 = 75;
 /// The most a picture may take on the wire, in base64.
 const PICTURE_BYTES: usize = 1536 * 1024;
 
+/// A pull request as GitHub CLI read it, as the remote service takes one.
+fn pull_request(view: o7_core::gitworkspaces::PullRequestView) -> o7_remote::PullRequest {
+    use o7_core::gitworkspaces::Checks;
+    o7_remote::PullRequest {
+        number: view.number,
+        url: view.url,
+        state: view.state,
+        checks: match view.checks {
+            Checks::None => o7_remote::PrChecks::None,
+            Checks::Pending => o7_remote::PrChecks::Pending,
+            Checks::Passed => o7_remote::PrChecks::Passed,
+            Checks::Failed(names) => o7_remote::PrChecks::Failed(names),
+        },
+        notes: view
+            .notes
+            .into_iter()
+            .map(|note| o7_remote::PrNote {
+                author: note.author,
+                kind: note.kind,
+                body: note.body,
+                trusted: note.trusted,
+            })
+            .collect(),
+    }
+}
+
+/// How long a reading reuses what GitHub CLI said of a chat's pull request: a bot reads often,
+/// and each look is a call to GitHub.
+const PR_FRESH: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// What GitHub CLI last said of each chat's pull request (in one line), and when, by chat.
+type PrSaid =
+    std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, Option<String>)>>;
+
+fn pr_said() -> &'static PrSaid {
+    static SAID: std::sync::OnceLock<PrSaid> = std::sync::OnceLock::new();
+    SAID.get_or_init(Default::default)
+}
+
 /// The hour on the computer's own clock, 0 to 23, for work bots leave for tonight.
 #[allow(unsafe_code)] // Read-only clock queries; the contract is stated at each call.
 fn local_hour() -> Option<u8> {
@@ -1228,6 +1267,22 @@ impl Backend for AppBackend {
         local_hour()
     }
 
+    /// The pull request open from the chat's branch, read with GitHub CLI as the person is
+    /// signed in.
+    fn pull_request<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<o7_remote::PullRequest>, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            let view = sessions
+                .pull_request(chat_id)
+                .await
+                .map_err(|error| failed(error.into()))?;
+            Ok(view.map(pull_request))
+        })
+    }
+
     /// The chat's browser tab or emulator as a JPEG, only while this backend's profile is the
     /// open one. The chat is one of its own: the tool found it in the overview.
     fn picture<'a>(
@@ -1285,8 +1340,40 @@ impl Backend for AppBackend {
                         .collect()
                 })
                 .unwrap_or_default();
+            // A chat on a branch of its own may have a pull request; the main branch has none.
+            let branch = git.as_ref().and_then(|git| git.branch.clone());
+            let own = branch
+                .as_deref()
+                .is_some_and(|branch| !matches!(branch, "main" | "master" | "trunk" | "develop"));
+            let fresh = pr_said()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(chat_id)
+                .filter(|(at, _)| at.elapsed() < PR_FRESH)
+                .map(|(_, said)| said.clone());
+            let pull_request = match (own, fresh) {
+                (false, _) => None,
+                (true, Some(said)) => said,
+                (true, None) => {
+                    let said = sessions
+                        .pull_request(chat_id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|view| o7_remote::render::pull_request(&pull_request(view)));
+                    pr_said()
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(
+                            chat_id.to_owned(),
+                            (std::time::Instant::now(), said.clone()),
+                        );
+                    said
+                }
+            };
             Ok(o7_remote::ChatFacts {
-                branch: git.as_ref().and_then(|git| git.branch.clone()),
+                pull_request,
+                branch,
                 worktree,
                 uncommitted: git.as_ref().map(|git| git.files.len()),
                 usage,
