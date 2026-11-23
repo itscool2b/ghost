@@ -1,8 +1,15 @@
+import { useEffect } from "react";
 import type { PermissionDecision, Value } from "../../bindings";
 import type { RequestState } from "../../lib/chat/chatStore";
 import { permissionResolutionLabel } from "../../lib/chat/present";
 import type { PermissionItem } from "../../lib/chat/transcript";
-import { type PlanApproval, PlanCard, planApproval } from "./PlanCard";
+import {
+  longPlanBlob,
+  type PlanApproval,
+  PlanCard,
+  planApproval,
+  planFromStored,
+} from "./PlanCard";
 
 /** Handing an accepted plan to the chat's Build with (lib/roles.ts). */
 export interface PlanBuild {
@@ -84,7 +91,30 @@ export function PermissionCard({
   readonly planBuild?: PlanBuild;
 } & BlobProps) {
   const { request: ask, resolution } = item;
-  const plan = planApproval(ask);
+  // A long plan's text is stored apart from its event: it is read in before the card is drawn,
+  // page by page, so the plan is never shown as a tool's cut-off input.
+  const planBlob = longPlanBlob(ask);
+  const stored = planBlob === null ? undefined : blobs.get(planBlob);
+  const storedWaiting = planBlob !== null && !stored?.eof && !stored?.loading && !stored?.error;
+  useEffect(() => {
+    if (planBlob !== null && storedWaiting) onLoadBlob(planBlob);
+  }, [planBlob, storedWaiting, onLoadBlob]);
+  const plan = planApproval(ask, stored?.eof ? planFromStored(stored.text) : null);
+  if (plan === null && planBlob !== null && !stored?.eof && !stored?.error)
+    return (
+      <div
+        className="chat-block"
+        data-kind="permission"
+        data-testid="item"
+        data-test-kind="permission"
+        data-test-request-id={ask.request_id}
+        aria-busy="true"
+      >
+        <p className="chat-resolution" data-testid="plan-loading">
+          Loading the plan…
+        </p>
+      </div>
+    );
   if (plan)
     return (
       <PlanCard

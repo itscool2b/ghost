@@ -219,7 +219,10 @@ export function AccessPicker({
               type="button"
               aria-pressed={workflow?.effective === choice.value}
               disabled={
-                status !== "ready" || workflowPending || controlSaving !== null || transitionBlocked
+                !(status === "ready" || waiting) ||
+                workflowPending ||
+                controlSaving !== null ||
+                transitionBlocked
               }
               onClick={(event) => {
                 onSetControl?.({
@@ -253,7 +256,10 @@ export function AccessPicker({
         {status === "running" ? (
           <p className="chat-picker-note">Change mode after the current turn finishes.</p>
         ) : null}
-        {!running && workflow?.choices?.length ? (
+        {waiting && workflow?.choices?.length ? (
+          <p className="chat-picker-note">{APPLIES_AT_START}</p>
+        ) : null}
+        {status === "starting" && workflow?.choices?.length ? (
           <p className="chat-picker-note">Change mode once the agent has started.</p>
         ) : null}
         {transitionBlocked ? (

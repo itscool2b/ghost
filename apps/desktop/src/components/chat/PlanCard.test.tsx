@@ -12,7 +12,7 @@ import {
 } from "../../lib/chat/plan";
 import type { PermissionItem } from "../../lib/chat/transcript";
 import { PermissionCard } from "./PermissionCard";
-import { planApproval } from "./PlanCard";
+import { longPlanBlob, planApproval, planFromStored } from "./PlanCard";
 
 const request = (overrides: Partial<PermissionRequest> = {}): PermissionRequest => ({
   request_id: "exit-plan",
@@ -252,5 +252,62 @@ describe("a plan waiting for review", () => {
     expect(planFeedback("  also cover Codex  ")).toBe(
       "Before implementing, add this to the plan and show me the updated plan:\n\nalso cover Codex",
     );
+  });
+});
+
+describe("a plan too long for its event", () => {
+  const long = `# Long plan\n\n${"1. A step with many words in it\n".repeat(400)}`;
+  const cut = request({
+    raw_input: { _auracode_truncated: true, bytes: long.length, preview: '{"plan":"# Long plan' },
+    truncated: { total_bytes: long.length, blob: "sha-plan" },
+  });
+  const stored = JSON.stringify({
+    type: "permission_requested",
+    ...request({ raw_input: { plan: long } }),
+  });
+  const blob = (text: string, eof: boolean) =>
+    new Map([
+      [
+        "sha-plan",
+        { text, nextOffset: text.length, total: stored.length, eof, loading: !eof, error: null },
+      ],
+    ]);
+  const card = (blobs: ReturnType<typeof blob> | Map<string, never>) =>
+    renderToStaticMarkup(
+      <PermissionCard
+        item={item(cut)}
+        request={undefined}
+        onRespond={() => {}}
+        agentName="Claude Code"
+        onAddToPlan={async () => {}}
+        blobs={blobs}
+        onLoadBlob={() => {}}
+      />,
+    );
+
+  it("names the stored request it must be read from, and only for a cut plan", () => {
+    expect(longPlanBlob(cut)).toBe("sha-plan");
+    expect(longPlanBlob(request())).toBeNull();
+    expect(longPlanBlob({ ...cut, kind: "execute" })).toBeNull();
+    expect(longPlanBlob({ ...cut, truncated: null })).toBeNull();
+    expect(planFromStored(stored)).toBe(long);
+    expect(planFromStored("{")).toBeNull();
+    expect(planFromStored(JSON.stringify({ raw_input: { command: "ls" } }))).toBeNull();
+  });
+
+  it("waits for the plan instead of showing a tool's cut-off input", () => {
+    for (const html of [card(new Map()), card(blob(stored.slice(0, 100), false))]) {
+      expect(html).toContain("Loading the plan");
+      for (const gone of ["_auracode_truncated", "Allow once", "ExitPlanMode"])
+        expect(html).not.toContain(gone);
+    }
+  });
+
+  it("is the plan card once the stored request is read", () => {
+    const html = card(blob(stored, true));
+    expect(html).toContain('data-kind="plan-approval"');
+    expect(html).toMatch(/<h3[^>]*class="chat-plan-title"[^>]*>Long plan<\/h3>/);
+    expect(html).toContain("400 steps");
+    expect(html).not.toContain("_auracode_truncated");
   });
 });

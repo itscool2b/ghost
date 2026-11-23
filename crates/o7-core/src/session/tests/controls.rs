@@ -529,6 +529,8 @@ type Start = (Autonomy, Option<String>);
 struct Seen {
     starts: Arc<Mutex<Vec<Start>>>,
     commands: Arc<Mutex<Vec<String>>>,
+    /// The working mode each start's setup asked for.
+    workflows: Arc<Mutex<Vec<Option<String>>>>,
 }
 
 /// Starts like Claude Code: it lists a model, native access and workflow, starts on the access
@@ -547,7 +549,7 @@ fn native_access(autonomy: Autonomy) -> &'static str {
     }
 }
 
-fn claude_options(access: &str) -> DriverEvent {
+fn claude_options(access: &str, workflow: &str) -> DriverEvent {
     let model = ConfigOption {
         id: "model".into(),
         name: "Model".into(),
@@ -571,7 +573,7 @@ fn claude_options(access: &str) -> DriverEvent {
                 o7_drivers::controls::choice("bypassPermissions", "Full access"),
             ],
         ),
-        o7_drivers::controls::workflow("execute"),
+        o7_drivers::controls::workflow(workflow),
     ])
 }
 
@@ -591,13 +593,19 @@ impl AgentDriver for ClaudeLike {
                 _ => None,
             };
             lock(&self.seen.starts).push((ctx.setup.autonomy, requested.clone()));
+            let asked = match ctx.setup.desired.get(o7_drivers::controls::WORKFLOW) {
+                Some(ConfigValue::Choice { value }) => Some(value.clone()),
+                _ => None,
+            };
+            lock(&self.seen.workflows).push(asked.clone());
+            let workflow = asked.unwrap_or_else(|| "execute".to_owned());
             let mut access =
                 requested.unwrap_or_else(|| native_access(ctx.setup.autonomy).to_owned());
             let Ok(permit) = self.ready.acquire().await else {
                 return DriverExit::Closed;
             };
             permit.forget();
-            emit(&ctx.events, claude_options(&access)).await;
+            emit(&ctx.events, claude_options(&access, &workflow)).await;
             emit(
                 &ctx.events,
                 DriverEvent::Autonomy(AutonomyState {
@@ -629,13 +637,13 @@ impl AgentDriver for ClaudeLike {
                     } if option_id == o7_drivers::controls::ACCESS => {
                         lock(&self.seen.commands).push(format!("access:{value}"));
                         access = value;
-                        emit(&ctx.events, claude_options(&access)).await;
+                        emit(&ctx.events, claude_options(&access, &workflow)).await;
                         let _ = reply.send(Ok(()));
                     }
                     DriverCommand::SetAutonomy { autonomy, reply } => {
                         access = native_access(autonomy).to_owned();
                         lock(&self.seen.commands).push(format!("level:{access}"));
-                        emit(&ctx.events, claude_options(&access)).await;
+                        emit(&ctx.events, claude_options(&access, &workflow)).await;
                         let _ = reply.send(Ok(AutonomyState {
                             requested: autonomy,
                             native_mode: Some(access.clone()),
@@ -762,18 +770,46 @@ async fn a_reopened_chat_names_its_access_and_keeps_a_change_for_its_next_start(
         .await
         .unwrap();
     assert_eq!(lists.controls.access.effective.as_deref(), Some("default"));
+    // The owner's report, 23 November 2026: a chat opened after a restart could not be put in
+    // Plan until a message had started its agent. The mode is kept for the start as access is.
     assert!(
         rig.manager
             .set_control(
                 &chat.id,
                 SessionControlChange::Workflow {
-                    value: "plan".into(),
+                    value: "review".into(),
                     implementation_approved: false,
                 },
             )
             .await
             .is_err(),
-        "a mode waits for a running agent"
+        "only a mode the connection listed"
+    );
+    let lists = rig
+        .manager
+        .set_control(
+            &chat.id,
+            SessionControlChange::Workflow {
+                value: "plan".into(),
+                implementation_approved: false,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(lists.controls.workflow.effective.as_deref(), Some("plan"));
+    assert_eq!(lists.controls.workflow.requested.as_deref(), Some("plan"));
+    assert!(
+        rig.manager
+            .set_control(
+                &chat.id,
+                SessionControlChange::Workflow {
+                    value: "execute".into(),
+                    implementation_approved: false,
+                },
+            )
+            .await
+            .is_err(),
+        "leaving Plan takes the person's approval, running or not"
     );
     rig.manager.send(&chat.id, "go".into()).await.unwrap();
     eventually("the prompt", || {
@@ -789,6 +825,13 @@ async fn a_reopened_chat_names_its_access_and_keeps_a_change_for_its_next_start(
         ["access:acceptEdits", "prompt with default"],
         "the start applied it; nothing changed it again"
     );
+    assert_eq!(
+        lock(&seen.workflows).last().cloned(),
+        Some(Some("plan".into())),
+        "the start asked for Plan"
+    );
+    let lists = rig.manager.lists(&chat.id).await.unwrap();
+    assert_eq!(lists.controls.workflow.effective.as_deref(), Some("plan"));
     rig.manager.shutdown_all(Duration::from_secs(5)).await;
 }
 
