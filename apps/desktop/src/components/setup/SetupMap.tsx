@@ -1,4 +1,5 @@
-import { AgentMark, BOTS, type BotId, BotMark, Logo } from "@o7/ui/graphite";
+import { BotMark } from "@o7/ui/bot-mark";
+import { AgentMark, BOTS, type BotId, Logo } from "@o7/ui/graphite";
 import { Check, Folder } from "lucide-react";
 import type { AgentEntry } from "../../bindings";
 import "./setup-map.css";

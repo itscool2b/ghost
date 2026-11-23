@@ -21,3 +21,21 @@ declare module "*.svg?raw" {
   const content: string;
   export default content;
 }
+
+// The assistants' app icons (graphite/bot-logos) are files of their own, loaded by address when
+// shown, so they stay out of the scripts.
+declare module "*.png" {
+  const address: string;
+  export default address;
+}
+
+declare module "*.svg?url" {
+  const address: string;
+  export default address;
+}
+
+// Their tests read the icons' bytes as data addresses.
+declare module "*.png?inline" {
+  const address: string;
+  export default address;
+}

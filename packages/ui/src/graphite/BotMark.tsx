@@ -1,9 +1,9 @@
-import { LogoDrawing } from "./AgentLogo";
 import { logoSide } from "./AgentMark";
-import { agentLogo } from "./agentLogos";
+import grokBot from "./bot-logos/grok-bot.png";
+import hermes from "./bot-logos/hermes.svg?url";
+import muse from "./bot-logos/muse.png";
 import openclaw from "./bot-logos/openclaw.svg?raw";
 import { BOTS, type BotId } from "./bots";
-import { MODEL_MAKERS } from "./modelMakers";
 
 export interface BotMarkProps {
   readonly bot: BotId;
@@ -12,28 +12,31 @@ export interface BotMarkProps {
   readonly className?: string;
 }
 
+/**
+ * Each assistant's own app icon, as its app shows it (third-party/brand-marks.md): Grok Bot's from
+ * its desktop app, Muse's from its App Store listing, Hermes' from its repository.
+ */
+const APP_ICONS: Partial<Record<BotId, string>> = { grok: grokBot, muse, hermes };
+
 /** OpenClaw's mark is drawn with a gradient, so it is shown as the image it is published as. */
 const OPENCLAW = `data:image/svg+xml,${encodeURIComponent(openclaw)}`;
 
 /**
- * The mark of an assistant that can be linked as a bot, on the same tile as the agent marks, so
- * a vendor mark keeps its clear space and its own colours in both appearances. Decorative: the
- * assistant's name sits beside it. Grok Bot and Hermes wear the marks already stored for xAI's and
- * Nous Research's coding agents (and their tiles' plates), and Muse wears Meta's.
+ * The logo of an assistant that can be linked as a bot. Decorative: the assistant's name sits
+ * beside it. An app icon is the whole tile, its corners masked by the tile's as a launcher masks
+ * them; OpenClaw's lobster sits on the same tile as the agent marks, with their clear space.
  */
 export function BotMark({ bot, size = 36, className }: BotMarkProps) {
   const box = Math.max(12, Math.min(64, Math.round(size)));
   const name = BOTS.find((kind) => kind.id === bot)?.name ?? "";
-  const logo =
-    bot === "muse" ? MODEL_MAKERS.meta?.logo : bot === "openclaw" ? undefined : agentLogo(bot);
-  const stored = bot === "grok" || bot === "hermes";
+  const icon = APP_ICONS[bot];
+  const side = icon ? box : logoSide(box);
   return (
     <span
       className={["g-agent-mark", "g-model-mark", className].filter(Boolean).join(" ")}
       data-logo=""
       data-bot={bot}
-      data-agent={stored ? bot : undefined}
-      data-state={stored ? "idle" : undefined}
+      data-app-icon={icon ? "" : undefined}
       title={name}
       aria-hidden="true"
       style={{
@@ -42,18 +45,14 @@ export function BotMark({ bot, size = 36, className }: BotMarkProps) {
         borderRadius: `${Math.max(3, Math.round(box * 0.22))}px`,
       }}
     >
-      {logo ? (
-        <LogoDrawing logo={logo} size={logoSide(box)} className="g-agent-mark-logo" />
-      ) : (
-        <img
-          className="g-agent-mark-logo"
-          src={OPENCLAW}
-          alt=""
-          width={logoSide(box)}
-          height={logoSide(box)}
-          draggable={false}
-        />
-      )}
+      <img
+        className="g-agent-mark-logo"
+        src={icon ?? OPENCLAW}
+        alt=""
+        width={side}
+        height={side}
+        draggable={false}
+      />
     </span>
   );
 }

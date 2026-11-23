@@ -12,7 +12,8 @@
       "!crates/o7-drivers/tests/fixtures",
       "!crates/o7-drivers/tests/schemas",
       "!**/pnpm-lock.yaml",
-      "!docs/spikes/**/target"
+      "!docs/spikes/**/target",
+      "!packages/ui/src/graphite/bot-logos/hermes.svg"
     ]
   },
   "formatter": {

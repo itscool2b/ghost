@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-23
 
+- Grok Bot, Muse and Hermes now show their own app icons in Settings > Remote access and in setup. ([#200](https://github.com/itscool2b/o7/pull/200))
 - The second agent that reviews a task now also asks before changing anything unless the link may approve. Before, it could take your project's full access. ([#199](https://github.com/itscool2b/o7/pull/199))
 - When you link your assistant, o7 now gives it a skill that teaches it how to hand o7 whole tasks, along with a few things to try. The tour has a new stop that shows where to link your assistant. ([#198](https://github.com/itscool2b/o7/pull/198))
 - An assistant that runs on your computer, like Hermes or OpenClaw, can now reach o7 directly, without going through the internet. When you link it, Settings shows the command to give it. ([#197](https://github.com/itscool2b/o7/pull/197))

@@ -1,5 +1,6 @@
 import { usePrefersReducedMotion } from "@o7/ui";
-import { BOTS, type BotId, BotMark, botNamed, Keycap, Wing, Wordmark } from "@o7/ui/graphite";
+import { BotMark } from "@o7/ui/bot-mark";
+import { BOTS, type BotId, botNamed, Keycap, Wing, Wordmark } from "@o7/ui/graphite";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowRight, Check, FolderOpen, GitBranch, RefreshCw } from "lucide-react";
 import {
