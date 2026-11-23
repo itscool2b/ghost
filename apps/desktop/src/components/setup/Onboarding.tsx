@@ -469,8 +469,8 @@ export function Onboarding({
                 <>
                   <p className="setup-lead">
                     Link Grok Bot, Muse, Hermes or OpenClaw and hand it a goal from anywhere. It
-                    starts your agents here, answers what they ask and tells you when the work is
-                    done. Settings links one later, too.
+                    starts your agents here, answers what they ask and brings back the result.
+                    Settings links one later, too.
                   </p>
                   <ul className="remote-bot-picks setup-bots">
                     {BOTS.map((bot) => {

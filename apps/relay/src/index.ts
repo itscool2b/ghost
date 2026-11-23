@@ -307,6 +307,12 @@ function same(a: string, b: string): boolean {
 export class Room extends DurableObject<Env> {
   /** Bot calls waiting for the desktop's answer. A waiting call keeps this object awake. */
   readonly #calls = new Map<string, (reply: BotReply) => void>();
+  /**
+   * The calls a bot may cancel: its link and the request's own id, to the call waiting under it.
+   * A bot that gives up on a long wait says so (`notifications/cancelled`); without this its
+   * call held one of the computer's few places until the desktop answered or the time ran out.
+   */
+  readonly #cancellable = new Map<string, string>();
   /** Messages each browser sent in the current window. Lost on hibernation, which only helps. */
   readonly #rates = new Map<string, { since: number; count: number }>();
   /**
@@ -648,8 +654,20 @@ export class Room extends DurableObject<Env> {
     const id = message.id;
     if (typeof message.method !== "string") return null;
     const wantsReply = typeof id === "string" || typeof id === "number";
-    if (!wantsReply) return null;
     const params = (message.params ?? {}) as Record<string, unknown>;
+    if (!wantsReply) {
+      // Only a link's own waiting call is ended, and only by the id that call was made with.
+      const asked = params.requestId;
+      if (
+        message.method === "notifications/cancelled" &&
+        (typeof asked === "string" || typeof asked === "number")
+      ) {
+        const rid = this.#cancellable.get(cancelKey(bot, asked));
+        if (rid !== undefined)
+          this.#calls.get(rid)?.({ text: "Cancelled. The chat carries on.", error: true });
+      }
+      return null;
+    }
     switch (message.method) {
       case "initialize": {
         const asked = params.protocolVersion;
@@ -673,7 +691,7 @@ export class Room extends DurableObject<Env> {
           return rpcError(id, -32602, "Unknown tool");
         if (args === null || typeof args !== "object" || Array.isArray(args))
           return rpcError(id, -32602, "Tool arguments must be an object");
-        const reply = await this.#call({ bot, token, tool: name, args });
+        const reply = await this.#call({ bot, token, tool: name, args }, cancelKey(bot, id));
         return rpcResult(id, {
           content: [{ type: "text", text: reply.text }],
           isError: reply.error,
@@ -685,7 +703,10 @@ export class Room extends DurableObject<Env> {
   }
 
   /** One tool call, answered by the desktop. */
-  #call(request: { bot: string; token: string; tool: string; args: unknown }): Promise<BotReply> {
+  #call(
+    request: { bot: string; token: string; tool: string; args: unknown },
+    cancel: string,
+  ): Promise<BotReply> {
     const host = this.#host();
     if (!host) return Promise.resolve({ text: OFFLINE, error: true });
     if (this.#calls.size >= MAX_BOT_CALLS)
@@ -698,6 +719,7 @@ export class Room extends DurableObject<Env> {
       const finish = (reply: BotReply) => {
         clearTimeout(timer);
         this.#calls.delete(rid);
+        if (this.#cancellable.get(cancel) === rid) this.#cancellable.delete(cancel);
         resolve(reply);
       };
       const timer = setTimeout(
@@ -705,6 +727,7 @@ export class Room extends DurableObject<Env> {
         BOT_CALL_MS,
       );
       this.#calls.set(rid, finish);
+      this.#cancellable.set(cancel, rid);
       try {
         host.send(`b${JSON.stringify({ rid, ...request })}`);
       } catch {
@@ -728,6 +751,11 @@ function end(socket: WebSocket, code: number, reason: string) {
   } catch {
     // Already closed.
   }
+}
+
+/** A waiting call's name for cancelling: ids are a link's own, and a number is not its string. */
+function cancelKey(bot: string, id: string | number) {
+  return `${bot} ${typeof id} ${id}`;
 }
 
 function rpcResult(id: unknown, result: unknown) {

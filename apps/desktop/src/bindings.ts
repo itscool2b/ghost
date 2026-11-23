@@ -3556,6 +3556,12 @@ export type RemoteBot = {
 	last_used_at: number | null,
 	/**  Made with full control: every tool, where a link without it has the chat tools only. */
 	full: boolean,
+	/**
+	 *  Tool calls the link has made, and how many were answered with an error. Counted on this
+	 *  computer only.
+	 */
+	calls: number,
+	failed: number,
 };
 
 /**  A new bot link, shown once: the MCP address a bot connects to. It carries the bot's token. */

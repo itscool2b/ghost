@@ -186,7 +186,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         </div>
         <p className="settings-lead">
           Hand your assistant a goal from wherever you are. It starts your coding agents here,
-          answers what they ask and tells you when the work is done.
+          answers what they ask and brings back the result.
         </p>
         {bots.length ? (
           <div className="settings-group">
@@ -201,7 +201,10 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                   bot.last_used_at === null ? (
                     <State tone="off">Not used yet</State>
                   ) : (
-                    <State tone="green">Last used {ago(bot.last_used_at, now)}</State>
+                    <State tone={bot.failed > 0 && bot.failed === bot.calls ? "off" : "green"}>
+                      Last used {ago(bot.last_used_at, now)}
+                      {usage(bot)}
+                    </State>
                   )
                 }
               >
@@ -271,6 +274,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
             await ensureOn();
             return api.createBot(name, full);
           }}
+          called={(id) => bots.some((bot) => bot.id === id && bot.last_used_at !== null)}
           onClose={() => {
             setLinking(null);
             void run(() => api.status());
@@ -279,6 +283,13 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
       ) : null}
     </>
   );
+}
+
+/** A link's calls so far, after when it was last used: " · 14 calls, 1 failed". */
+export function usage(bot: { readonly calls: number; readonly failed: number }): string {
+  if (bot.calls === 0) return "";
+  const calls = `${bot.calls} ${bot.calls === 1 ? "call" : "calls"}`;
+  return bot.failed === 0 ? ` · ${calls}` : ` · ${calls}, ${bot.failed} failed`;
 }
 
 /** Whether a paired browser's name reads as a phone or tablet: its row wears that glyph. */
@@ -323,9 +334,9 @@ function LinkMark({ name }: { readonly name: string }) {
 
 /**
  * How each assistant takes the address, in its own words. `paste` is what goes on the
- * clipboard: the address alone, or the lines or command that carry it. Hermes and OpenClaw give
- * a tool twenty or thirty seconds unless told otherwise, so theirs set that to five minutes: a
- * bot that may wait longer for a turn asks less often, and each time it asks costs it.
+ * clipboard: the address alone, or the lines or command that carry it. Hermes' and OpenClaw's
+ * set a tool's timeout to five minutes whatever their defaults are: a bot that may wait longer
+ * for a turn asks less often, and each time it asks costs it.
  */
 const SETUP: Readonly<
   Record<
@@ -341,8 +352,8 @@ const SETUP: Readonly<
     label: "Bot address",
     paste: (url) => url,
     steps: [
-      "In Grok, open Connectors (grok.com/connectors), choose New Connector, then Custom.",
-      "Paste this address as the MCP server URL.",
+      "In the Grok Bot app, open Connect apps in the sidebar and choose Add a custom connector.",
+      "Name it o7, choose Remote HTTPS, paste this address as the Server URL, then choose Add plugin.",
       "Ask your bot to list your o7 chats.",
     ],
   },
@@ -505,10 +516,13 @@ function PairingDialog({
 export function BotDialog({
   initial,
   create,
+  called,
   onClose,
 }: {
   readonly initial: BotChoice;
   readonly create: (name: string, full: boolean) => Promise<RemoteBotLink>;
+  /** Whether the link with this id has made a call yet: the dialog then says it is connected. */
+  readonly called?: (id: string) => boolean;
   readonly onClose: () => void;
 }) {
   const [bot, setBot] = useState<BotChoice>(initial);
@@ -552,6 +566,13 @@ export function BotDialog({
               <li key={step}>{step}</li>
             ))}
           </ol>
+          {called ? (
+            <p className="remote-note" role="status" data-testid="remote-bot-called">
+              {called(link.id)
+                ? `Connected: ${link.name} just called this computer.`
+                : `Waiting for ${link.name}'s first call. This line changes when it arrives.`}
+            </p>
+          ) : null}
           <div className="g-dialog-actions">
             <button className="g-button g-button-primary" type="button" onClick={onClose}>
               Done

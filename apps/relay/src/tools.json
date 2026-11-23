@@ -82,7 +82,8 @@
       },
       "required": ["text"],
       "additionalProperties": false
-    }
+    },
+    "annotations": { "readOnlyHint": false, "destructiveHint": true }
   },
   {
     "name": "wait",
@@ -115,7 +116,8 @@
       },
       "required": ["chat", "request"],
       "additionalProperties": false
-    }
+    },
+    "annotations": { "readOnlyHint": false, "destructiveHint": true }
   },
   {
     "name": "stop",
@@ -125,7 +127,8 @@
       "properties": { "chat": { "type": "string" } },
       "required": ["chat"],
       "additionalProperties": false
-    }
+    },
+    "annotations": { "readOnlyHint": false, "destructiveHint": false }
   },
   {
     "name": "set",
@@ -148,7 +151,8 @@
       },
       "required": ["chat"],
       "additionalProperties": false
-    }
+    },
+    "annotations": { "readOnlyHint": false, "destructiveHint": false }
   },
   {
     "name": "changes",
@@ -168,7 +172,7 @@
   {
     "name": "memory",
     "full": true,
-    "description": "Read a project's memory, the notes each of its chats starts with. With markdown, replace all of it (16 KiB at most).",
+    "description": "Read a project's memory, the notes each of its chats starts with. With markdown, replace all of it (4 KiB at most).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -177,7 +181,8 @@
       },
       "required": ["project"],
       "additionalProperties": false
-    }
+    },
+    "annotations": { "readOnlyHint": false, "destructiveHint": true }
   },
   {
     "name": "new_project",
@@ -191,6 +196,7 @@
       },
       "required": ["path"],
       "additionalProperties": false
-    }
+    },
+    "annotations": { "readOnlyHint": false, "destructiveHint": false }
   }
 ]

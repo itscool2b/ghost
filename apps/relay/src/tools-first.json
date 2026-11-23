@@ -486,7 +486,7 @@
   {
     "name": "write_memory",
     "title": "Replace a project's memory",
-    "description": "Replace the notes every chat in a project starts with. Send the whole new text (read_memory first, then change it), at most 16 KiB. It is refused when the owner has turned off edits to project memory.",
+    "description": "Replace the notes every chat in a project starts with. Send the whole new text (read_memory first, then change it), at most 4 KiB. It is refused when the owner has turned off edits to project memory.",
     "full": true,
     "inputSchema": {
       "type": "object",

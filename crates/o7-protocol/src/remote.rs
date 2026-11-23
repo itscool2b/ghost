@@ -50,6 +50,10 @@ pub struct RemoteBot {
     pub last_used_at: Option<Millis>,
     /// Made with full control: every tool, where a link without it has the chat tools only.
     pub full: bool,
+    /// Tool calls the link has made, and how many were answered with an error. Counted on this
+    /// computer only.
+    pub calls: u32,
+    pub failed: u32,
 }
 
 /// A pairing link, shown once: whoever opens it first within its time becomes a device.
