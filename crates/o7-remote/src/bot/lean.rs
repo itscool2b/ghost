@@ -7,7 +7,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use o7_protocol::{UiAnswer, UiPrompt, UiQuestion, UiQuestionAnswer};
+use o7_protocol::{SessionStatus, UiAnswer, UiPrompt, UiQuestion, UiQuestionAnswer};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -19,8 +19,8 @@ use crate::{
 };
 
 /// The tools every bot link has.
-pub const CHAT_TOOLS: [&str; 7] = [
-    "chats", "projects", "read", "send", "wait", "answer", "stop",
+pub const CHAT_TOOLS: [&str; 8] = [
+    "inbox", "chats", "projects", "read", "send", "wait", "answer", "stop",
 ];
 /// The tools only a full-control link has.
 pub const FULL_TOOLS: [&str; 4] = ["set", "changes", "memory", "new_project"];
@@ -28,13 +28,21 @@ pub const FULL_TOOLS: [&str; 4] = ["set", "changes", "memory", "new_project"];
 const FULL_SEND: &str = "This link has the chat tools only, so it cannot choose a chat's model, thinking or access. Its owner can create a full control link in o7: Settings, Remote access.";
 
 const PAGE: usize = 30;
-/// How long a call waits for the turn when the bot does not say: under the shortest time the
-/// assistants o7 names give a tool before they give up on it.
-const WAIT_SENT: u64 = 30;
+/// How long a call waits for the turn when the bot does not say: under the shortest time an
+/// assistant is known to give a tool before it gives up on it (a minute).
+const WAIT_SENT: u64 = 45;
 /// The longest a call waits. Each time a wait runs out the bot takes another step of its own,
 /// reading everything it holds again, so a bot whose tool timeout allows it waits minutes at a
-/// time. The relay gives a call a little longer than this (`BOT_CALL_MS`).
-const WAIT_MAX: u64 = 240;
+/// time. The relay gives a call a little longer than this (`BOT_CALL_MS`). It was 240 until
+/// 23 November 2026: one assistant ends a tool call at 240 seconds with the network's time in
+/// it, so a wait of exactly that long was lost there every time.
+const WAIT_MAX: u64 = 200;
+
+/// How many chats each part of `inbox` reads into: every one costs the bot what it says.
+const INBOX_ASKING: usize = 6;
+const INBOX_DONE: usize = 6;
+/// A chat that finished longer ago than this is not news.
+const INBOX_RECENT_MS: i64 = 24 * 60 * 60 * 1000;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,6 +160,10 @@ pub(super) async fn run(
                 args.query.as_deref(),
                 args.page.unwrap_or(1).max(1) as usize,
             )))
+        }
+        "inbox" => {
+            arguments::<Nothing>(args)?;
+            Ok(Answer::ok(inbox(backend).await?))
         }
         "projects" => {
             arguments::<Nothing>(args)?;
@@ -707,6 +719,123 @@ async fn waited(
         render::progress(chat, &page.items),
         timeout.as_secs()
     ))
+}
+
+/// What needs the bot or its person across every open chat, in one reading: the chats asking for
+/// an answer with what each asks, the chats still working, and the chats that finished in the
+/// last day with what each came to. A bot that is woken, or comes back after a while, starts
+/// here instead of listing the chats and reading them one by one.
+async fn inbox(backend: &Arc<dyn Backend>) -> Result<String, Answer> {
+    let overview = backend.overview().await?;
+    let project = |id: &str| {
+        overview
+            .projects
+            .iter()
+            .find(|project| project.id == id)
+            .map_or("no project", |project| project.name.as_str())
+    };
+    let line = |entry: &o7_protocol::workspace::WorkspaceChat| {
+        format!(
+            "{} \"{}\" ({}, {})",
+            entry.chat.id,
+            render::title(&entry.chat),
+            project(&entry.project_id),
+            entry.chat.agent_name
+        )
+    };
+    let open: Vec<_> = overview
+        .chats
+        .iter()
+        .filter(|entry| !entry.archived)
+        .collect();
+    let busy = |status: SessionStatus| {
+        matches!(
+            status,
+            SessionStatus::Running | SessionStatus::Starting | SessionStatus::Cancelling
+        )
+    };
+    let asking: Vec<_> = open
+        .iter()
+        .filter(|entry| entry.chat.needs_attention)
+        .collect();
+    let working: Vec<_> = open
+        .iter()
+        .filter(|entry| !entry.chat.needs_attention && busy(entry.chat.status))
+        .collect();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+        });
+    let mut done: Vec<_> = open
+        .iter()
+        .filter(|entry| {
+            !entry.chat.needs_attention
+                && !busy(entry.chat.status)
+                && now.saturating_sub(entry.chat.updated_at) <= INBOX_RECENT_MS
+        })
+        .collect();
+    done.sort_by_key(|entry| std::cmp::Reverse(entry.chat.updated_at));
+    if asking.is_empty() && working.is_empty() && done.is_empty() {
+        return Ok(
+            "Nothing needs you: no chat is asking, working or finished in the last day.".into(),
+        );
+    }
+    let mut out = String::new();
+    if !asking.is_empty() {
+        out.push_str(&format!("Asking ({}):\n", asking.len()));
+        for entry in asking.iter().take(INBOX_ASKING) {
+            let page = backend.history(&entry.chat.id, u32::MAX).await?;
+            out.push_str(&format!("{}\n", line(entry)));
+            let asks = render::asking(&page.items);
+            if asks.is_empty() {
+                out.push_str("  It waits for an answer; call read for what it asks.\n");
+            } else {
+                out.push_str(&asks);
+            }
+        }
+        if asking.len() > INBOX_ASKING {
+            out.push_str(&format!(
+                "and {} more; chats lists them.\n",
+                asking.len() - INBOX_ASKING
+            ));
+        }
+    }
+    if !working.is_empty() {
+        out.push_str(&format!("\nWorking ({}):\n", working.len()));
+        for entry in &working {
+            out.push_str(&format!("{}\n", line(entry)));
+        }
+    }
+    if !done.is_empty() {
+        out.push_str(&format!("\nFinished in the last day ({}):\n", done.len()));
+        for entry in done.iter().take(INBOX_DONE) {
+            let page = backend.history(&entry.chat.id, u32::MAX).await?;
+            out.push_str(&format!(
+                "{}, {}: {}\n",
+                line(entry),
+                ago(now.saturating_sub(entry.chat.updated_at)),
+                render::brief(&entry.chat, &page.items)
+            ));
+        }
+        if done.len() > INBOX_DONE {
+            out.push_str(&format!(
+                "and {} more; chats lists them.\n",
+                done.len() - INBOX_DONE
+            ));
+        }
+    }
+    Ok(out.trim_start().to_owned())
+}
+
+/// How long ago, in the largest unit that fits: "just now", "12 min ago", "3 h ago".
+fn ago(millis: i64) -> String {
+    let minutes = millis / 60_000;
+    match minutes {
+        ..=0 => "just now".into(),
+        1..=59 => format!("{minutes} min ago"),
+        _ => format!("{} h ago", minutes / 60),
+    }
 }
 
 /// One line a chat: its id, how it stands, its title, its project and its agent.

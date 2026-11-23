@@ -448,7 +448,7 @@ async function botFlow(address) {
   const listed = (await rpc("tools/list")).tools;
   assert.deepEqual(
     listed.map((entry) => entry.name),
-    ["chats", "projects", "read", "send", "wait", "answer", "stop"],
+    ["inbox", "chats", "projects", "read", "send", "wait", "answer", "stop"],
   );
   assert.deepEqual(
     Object.keys(listed.find((entry) => entry.name === "send").inputSchema.properties),
@@ -472,6 +472,12 @@ async function botFlow(address) {
   const request = /Waiting request (\S+) \(permission\): Run `npm test`/.exec(asking.text)?.[1];
   assert.ok(request, asking.text);
   assert.match(asking.text, /Options for answer: allow = Allow once; reject = Reject/);
+  // While it asks, one call says so for every chat, with the request to answer.
+  const asks = await tool("inbox");
+  assert.equal(asks.error, false, asks.text);
+  assert.match(asks.text, /^Asking \(1\):\n/);
+  assert.ok(asks.text.includes(`${chat} "`) && asks.text.includes(request), asks.text);
+  assert.match(asks.text, /Options for answer: allow = Allow once; reject = Reject/);
   const finished = await tool("answer", { chat, request, option: "allow", wait: 20 });
   assert.equal(finished.error, false, finished.text);
   assert.match(finished.text, /^Answered\. Chat /);
@@ -481,6 +487,22 @@ async function botFlow(address) {
   assert.match(finished.text, /Agent: [\s\S]*Done\. The form now checks the email/);
   assert.match(finished.text, /The turn finished\.\n/);
   assert.doesNotMatch(finished.text, /Waiting request/);
+  // The result carries its proof: what ran and how each ended, and what still fails.
+  assert.match(finished.text, /Ran:\n- exit 0 \| npm test\n- exit 1 \| npm run lint\n/);
+  assert.match(
+    finished.text,
+    /Still failing: exit 1 \| npm run lint\nFirst error:\n {2}3:7 {2}error {2}'old' is assigned/,
+  );
+  // Afterwards the inbox has nothing asking and names the finished chat with what it came to.
+  const after = await tool("inbox");
+  assert.doesNotMatch(after.text, /Asking/);
+  assert.match(after.text, /Finished in the last day \(\d+\):\n/);
+  assert.match(
+    after.text,
+    new RegExp(
+      `${chat} "[^"]*" \\(demo, Demo agent\\), just now: finished, still failing: exit 1 \\| npm run lint\\. Done\\.`,
+    ),
+  );
   // Reading it again is the same turn, and a wait on a chat at rest returns at once.
   assert.match((await tool("read", { chat })).text, /The turn finished\.\n/);
   assert.match((await tool("wait", { chat, seconds: 5 })).text, /: idle\./);

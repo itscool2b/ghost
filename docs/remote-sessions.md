@@ -52,7 +52,7 @@ about a link's use is sent anywhere.
 A link has one of two levels, chosen when it is made and never changed after (a wider link is a
 new link):
 
-- **Chats** (seven tools): `chats`, `projects`, `read`, `send`, `wait`, `answer`, `stop`.
+- **Chats** (eight tools): `inbox`, `chats`, `projects`, `read`, `send`, `wait`, `answer`, `stop`.
 - **Full control** (those, and four more): `set`, `changes`, `memory`, `new_project`, and in
   `send` the model, thinking level and access a chat runs with. This is what a person does with
   chats and projects in the app's window.
@@ -67,8 +67,9 @@ A bot pays for a link in tokens three ways, and the tools are shaped by all thre
 
 1. **The tools' descriptions**, read again on every step of the bot's own turn. The first set
    was 21 tools and 11.4 KB as listed (about 3,200 tokens) for a full-control link, 4.7 KB for a
-   chats link. The current set is 11 tools and 5.5 KB (about 1,500 tokens, estimated from its
-   size), 3.4 KB for a chats link: one `set` where there were seven tools that changed a chat,
+   chats link. The second set was 11 tools and 5.5 KB (about 1,500 tokens, estimated from its
+   size), 3.4 KB for a chats link; the current one adds `inbox` (12 tools, 5.9 KB, and 3.8 KB
+   for a chats link). They share their shape: one `set` where there were seven tools that changed a chat,
    `changes` and `memory` that read or write by whether an argument is given, and no titles.
    Every tool says whether it only reads and whether it can destroy (`readOnlyHint`,
    `destructiveHint`), which costs about 370 bytes and lets an assistant decide what to ask its
@@ -79,14 +80,24 @@ A bot pays for a link in tokens three ways, and the tools are shaped by all thre
 2. **Round trips.** Every call is another step of the bot's turn, which reads everything it
    holds again. `send` starts a chat or sends to one and waits for the turn, so "start it and
    tell me what happened" is one call where it was three; `answer` answers and waits. A wait
-   lasts up to 240 seconds when the bot asks (30 by default, under the shortest tool timeout
-   among the assistants named), where the first tools stopped at 45: a ten minute turn is three
-   calls, not fourteen. A full-control link gives the model and access in `send` itself, so a
+   lasts up to 200 seconds when the bot asks (45 by default, under the minute that is the
+   shortest tool timeout known among assistants), where the first tools stopped at 45: a ten
+   minute turn is three or four calls, not fourteen. It was 240 until 23 November 2026: one
+   assistant ends a tool call at 240 seconds with the network's time in it, so a wait of
+   exactly that long was lost there every time. `inbox` is the one call for a bot that comes
+   back, or is woken: the chats asking with what each asks, the chats working, and the chats
+   that finished in the last day with a line each, where it took `chats` and a `read` per
+   chat. A full-control link gives the model and access in `send` itself, so a
    new chat's first turn runs with them, which the first tools could not do.
 3. **What comes back**, which stays in the bot's context for the rest of its turn. A wait that
    runs out answers in one line (the chat's status, how many steps so far and the last three),
    where the first tools sent the whole turn again each time. A reading is the last 3,000
    characters of the answer and the last five steps unless `full` is asked for (12,000 and 20).
+   It carries its proof: the turn's commands with how each ended (the last six, or twelve),
+   and the last one still failing with the first lines of its error, read from the tool calls
+   by the code a handoff between agents uses (`o7_protocol::commands`). A command that failed
+   and later passed is not "still failing". Values of secret-looking flags and variables are
+   hidden. So "did the tests pass" is read, not inferred from the agent's words.
    A changed file is its differing lines with two around them, not the whole file twice. A
    chat's options are a line each.
 
@@ -219,7 +230,7 @@ thirty days forgets all of it; the computer sends its bot links again whenever i
   address, so treat those as private. See "Not done".
 - A browser sends at most 96 KiB per message and 240 messages per ten seconds.
 - A wrong or removed bot address is a plain 404. At most eight bot calls wait at once, each for
-  at most 250 seconds: a call may wait up to 240 for an agent's turn, so that a long turn costs
+  at most 250 seconds: a call may wait up to 200 for an agent's turn, so that a long turn costs
   a bot few calls. Only a link's own bot can hold those eight places, and only on its computer.
   A bot that gives up on a waiting call and says so (`notifications/cancelled` with the call's
   own id) frees its place at once; the chat carries on, and nothing else can be cancelled that

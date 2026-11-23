@@ -4,7 +4,9 @@
 use std::collections::HashMap;
 
 use o7_protocol::{
-    O7Event, PermissionRequest, SessionStatus, StopReason, ToolStatus, UiPrompt, UiRequest,
+    O7Event, PermissionRequest, SessionStatus, StopReason, ToolCall, ToolStatus, UiPrompt,
+    UiRequest,
+    commands::{CommandRun, first_error, hide_secret_flags},
     session::{ChatSummary, HistoryItem},
 };
 
@@ -16,6 +18,9 @@ pub struct Limits {
     pub prompt: usize,
     pub answer: usize,
     pub steps: usize,
+    /// How many of a turn's commands are listed with how each ended, newest last. None: the
+    /// commands stay among the steps, by title.
+    pub commands: usize,
     /// The short tool names (`answer`, `wait`) in what a reading says to do next.
     pub lean: bool,
 }
@@ -26,6 +31,7 @@ impl Limits {
         prompt: 2_000,
         answer: 6_000,
         steps: 12,
+        commands: 0,
         lean: false,
     };
     /// A reading for a bot that follows a chat: the end of the answer, the last few steps.
@@ -33,6 +39,7 @@ impl Limits {
         prompt: 400,
         answer: 3_000,
         steps: 5,
+        commands: 6,
         lean: true,
     };
     /// The same reading when the bot asks for all of it.
@@ -40,6 +47,7 @@ impl Limits {
         prompt: 2_000,
         answer: 12_000,
         steps: 20,
+        commands: 12,
         lean: true,
     };
 }
@@ -56,6 +64,9 @@ pub struct Turn {
     pub said: Vec<String>,
     /// Each step's title and how it ended.
     pub steps: Vec<(String, ToolStatus)>,
+    /// Each step's tool call as its updates left it, in the order of `steps`: what a command
+    /// was, how it ended and what it printed are read from here.
+    pub calls: Vec<ToolCall>,
     pub errors: Vec<String>,
     /// `None` while the turn runs.
     pub ended: Option<StopReason>,
@@ -132,6 +143,7 @@ pub fn digest(items: &[HistoryItem]) -> Digest {
                     call.title.clone()
                 };
                 turns[at].steps.push((title, call.status));
+                turns[at].calls.push(call.clone());
                 tools.insert(&call.tool_call_id, (at, turns[at].steps.len() - 1));
             }
             O7Event::ToolUpdate(update) => {
@@ -142,6 +154,19 @@ pub fn digest(items: &[HistoryItem]) -> Digest {
                     }
                     if let Some(status) = update.status {
                         entry.1 = status;
+                    }
+                    let call = &mut turns[turn].calls[step];
+                    if let Some(status) = update.status {
+                        call.status = status;
+                    }
+                    if let Some(kind) = update.kind {
+                        call.kind = kind;
+                    }
+                    if let Some(input) = &update.raw_input {
+                        call.raw_input = Some(input.clone());
+                    }
+                    if let Some(content) = &update.content {
+                        call.content.clone_from(content);
                     }
                 }
             }
@@ -320,10 +345,24 @@ pub fn chat_with(
                 head(steer, limits.prompt)
             ));
         }
-        if !turn.steps.is_empty() {
-            let shown = turn.steps.len().min(limits.steps);
-            let earlier = turn.steps.len() - shown;
-            let steps: Vec<String> = turn.steps[earlier..]
+        // The commands are told apart from the other steps where the reading has room for how
+        // each ended: "did the tests pass" is then read, not inferred from a title.
+        let runs: Vec<Option<CommandRun>> = if limits.commands == 0 {
+            turn.steps.iter().map(|_| None).collect()
+        } else {
+            turn.calls.iter().map(CommandRun::of).collect()
+        };
+        let others: Vec<&(String, ToolStatus)> = turn
+            .steps
+            .iter()
+            .zip(&runs)
+            .filter(|(_, run)| run.is_none())
+            .map(|(step, _)| step)
+            .collect();
+        if !others.is_empty() {
+            let shown = others.len().min(limits.steps);
+            let earlier = others.len() - shown;
+            let steps: Vec<String> = others[earlier..]
                 .iter()
                 .map(|(title, status)| match status {
                     ToolStatus::Failed => format!("{} (failed)", one_line(title, 120)),
@@ -341,6 +380,10 @@ pub fn chat_with(
                 steps.join("; ")
             ));
         }
+        out.push_str(&ran(
+            &runs.into_iter().flatten().collect::<Vec<_>>(),
+            limits.commands,
+        ));
         let said = turn.said.join("\n\n");
         if !said.trim().is_empty() {
             out.push_str(&format!("Agent: {}\n", tail(said.trim(), limits.answer)));
@@ -363,6 +406,108 @@ pub fn chat_with(
     for request in &digest.waiting {
         out.push('\n');
         out.push_str(&waiting(request, limits.lean));
+    }
+    out
+}
+
+/// What a chat is asking, each request as `read` shows it, for a reading of several chats.
+pub fn asking(items: &[HistoryItem]) -> String {
+    digest(items)
+        .waiting
+        .iter()
+        .map(|request| {
+            let text = waiting(request, true);
+            text.lines()
+                .map(|line| format!("  {line}\n"))
+                .collect::<String>()
+        })
+        .collect()
+}
+
+/// What a chat's last turn came to, in one line: how it ended, whether a command still fails,
+/// and how the agent's last message begins.
+pub fn brief(chat: &ChatSummary, items: &[HistoryItem]) -> String {
+    let digest = digest(items);
+    let Some(turn) = digest.turns.last() else {
+        return status(chat);
+    };
+    let ended = match turn.ended {
+        None => status(chat),
+        Some(StopReason::EndTurn) => "finished".into(),
+        Some(StopReason::Cancelled | StopReason::Interrupted) => "stopped".into(),
+        Some(StopReason::Refusal) => "refused".into(),
+        Some(StopReason::MaxTokens | StopReason::MaxTurnRequests) => "ended at a limit".into(),
+        Some(StopReason::Error) => "ended with an error".into(),
+        Some(StopReason::Other) => "ended".into(),
+    };
+    let runs: Vec<CommandRun> = turn.calls.iter().filter_map(CommandRun::of).collect();
+    let failing = runs.iter().enumerate().rev().find(|(index, run)| {
+        run.failed()
+            && !runs[index + 1..]
+                .iter()
+                .any(|later| later.command == run.command && later.succeeded())
+    });
+    let mut out = ended;
+    if let Some((_, run)) = failing {
+        out.push_str(&format!(", still failing: {}", run_line(run)));
+    }
+    if let Some(said) = turn.said.last().filter(|said| !said.trim().is_empty()) {
+        out.push_str(&format!(". {}", one_line(said.trim(), 200)));
+    } else if let Some(error) = turn.errors.last() {
+        out.push_str(&format!(". {}", one_line(error, 200)));
+    }
+    out
+}
+
+/// A command as one line: how it ended, then the command with secret-looking values hidden.
+fn run_line(run: &CommandRun) -> String {
+    format!("{} | {}", run.outcome(), hide_secret_flags(&run.line()))
+}
+
+/// The commands a turn ran, newest last, and the last one still failing with its first error. A
+/// failure is "still failing" unless the same command later ran and succeeded, as in a handoff
+/// (`o7-core`'s conversation.rs).
+fn ran(runs: &[CommandRun], shown: usize) -> String {
+    if runs.is_empty() || shown == 0 {
+        return String::new();
+    }
+    let earlier = runs.len().saturating_sub(shown);
+    let mut out = String::from("Ran");
+    if earlier > 0 {
+        out.push_str(&format!(" ({earlier} earlier not listed)"));
+    }
+    out.push_str(
+        ":
+",
+    );
+    for run in &runs[earlier..] {
+        out.push_str(&format!(
+            "- {}
+",
+            run_line(run)
+        ));
+    }
+    let failing = runs.iter().enumerate().rev().find(|(index, run)| {
+        run.failed()
+            && !runs[index + 1..]
+                .iter()
+                .any(|later| later.command == run.command && later.succeeded())
+    });
+    if let Some((_, run)) = failing {
+        out.push_str(&format!(
+            "Still failing: {}
+",
+            run_line(run)
+        ));
+        let error = first_error(&run.output);
+        if !error.trim().is_empty() {
+            out.push_str(&format!(
+                "First error:
+{}
+",
+                head(&error, 700)
+            ));
+        }
     }
     out
 }
@@ -517,6 +662,38 @@ mod tests {
             content: vec![],
             truncated: None,
         })
+    }
+
+    /// A step that is not a command: a file read.
+    fn looked(id: &str, title: &str) -> O7Event {
+        let O7Event::ToolCall(mut call) = tool(id, title, ToolStatus::Completed) else {
+            unreachable!()
+        };
+        call.kind = ToolKind::Read;
+        call.tool_name = Some("Read".into());
+        O7Event::ToolCall(call)
+    }
+
+    /// A command with what it printed and how it ended.
+    fn ran_command(id: &str, command: &str, exit: i32, output: &str) -> O7Event {
+        let O7Event::ToolCall(mut call) = tool(
+            id,
+            command,
+            if exit == 0 {
+                ToolStatus::Completed
+            } else {
+                ToolStatus::Failed
+            },
+        ) else {
+            unreachable!()
+        };
+        call.raw_input = Some(serde_json::json!({ "command": command }));
+        call.content = vec![o7_protocol::ToolContent::Terminal {
+            output: output.into(),
+            exit_code: Some(exit),
+            truncated: None,
+        }];
+        O7Event::ToolCall(call)
     }
 
     fn started(id: &str) -> O7Event {
@@ -706,16 +883,92 @@ mod tests {
         assert!(text.contains("Step 19\n"));
     }
 
+    /// "Did the tests pass" is read from the result, not inferred from a step's title: the
+    /// commands with how each ended, the one still failing and the first lines of its error.
+    #[test]
+    fn a_lean_reading_says_what_ran_and_what_still_fails() {
+        let history = items(vec![
+            started("t1"),
+            user("u", "Fix the login test"),
+            looked("r", "Read login.test.ts"),
+            ran_command(
+                "1",
+                "npm test",
+                1,
+                "PASS a.test.ts\nFAIL login.test.ts\n  Error: Cannot find module 'x'\n    at load\n",
+            ),
+            ran_command("2", "npm run lint --token abc", 0, "ok"),
+            ran_command(
+                "3",
+                "cargo build",
+                101,
+                "error[E0425]: cannot find value `y`\n",
+            ),
+            ran_command("4", "npm test", 0, "PASS login.test.ts"),
+            said("m", "Fixed the import. The build still fails on y."),
+            ended("t1", StopReason::EndTurn),
+        ]);
+        let chat = summary(SessionStatus::Ready, false);
+        let lean = chat_with(&chat, &history, 1, &Limits::LEAN);
+        assert!(lean.contains("Steps: Read login.test.ts\n"), "{lean}");
+        assert!(
+            lean.contains(
+                "Ran:\n- exit 1 | npm test\n- exit 0 | npm run lint --token <SECRET>\n- exit 101 | cargo build\n- exit 0 | npm test\n"
+            ),
+            "{lean}"
+        );
+        // npm test failed and later passed: it is not what still fails.
+        assert!(
+            lean.contains("Still failing: exit 101 | cargo build\nFirst error:\nerror[E0425]: cannot find value `y`\n"),
+            "{lean}"
+        );
+        assert!(!lean.contains("Still failing: exit 1 | npm test"), "{lean}");
+        // One line for a reading of several chats.
+        assert_eq!(
+            brief(&chat, &history),
+            "finished, still failing: exit 101 | cargo build. Fixed the import. The build still fails on y."
+        );
+        // A turn whose every command passed says nothing fails.
+        let clean = items(vec![
+            started("t1"),
+            ran_command("1", "npm test", 0, "PASS"),
+            said("m", "All green."),
+            ended("t1", StopReason::EndTurn),
+        ]);
+        let lean = chat_with(&chat, &clean, 1, &Limits::LEAN);
+        assert!(lean.contains("Ran:\n- exit 0 | npm test\n") && !lean.contains("Still failing"));
+        assert_eq!(brief(&chat, &clean), "finished. All green.");
+        // More commands than a reading lists: the newest, and how many are left out.
+        let many: Vec<O7Event> = std::iter::once(started("t"))
+            .chain((0..9).map(|n| ran_command(&format!("c{n}"), &format!("step {n}"), 0, "")))
+            .collect();
+        let lean = chat_with(&chat, &items(many), 1, &Limits::LEAN);
+        assert!(
+            lean.contains("Ran (3 earlier not listed):\n- exit 0 | step 3\n"),
+            "{lean}"
+        );
+    }
+
+    #[test]
+    fn what_chats_ask_reads_as_in_read_for_a_reading_of_several() {
+        let history = items(vec![started("t1"), permission("p1")]);
+        let asks = asking(&history);
+        assert!(asks.starts_with("  "), "{asks}");
+        assert!(asks.contains("p1") && asks.contains("answer"), "{asks}");
+        assert_eq!(asking(&items(vec![started("t1")])), "");
+    }
+
     #[test]
     fn a_lean_reading_is_shorter_and_names_the_current_tools() {
         let history = items(vec![
             started("t1"),
             user("u", &"a".repeat(1_000)),
-            tool("1", "Read a.rs", ToolStatus::Completed),
-            tool("2", "Read b.rs", ToolStatus::Completed),
-            tool("3", "Read c.rs", ToolStatus::Completed),
-            tool("4", "Read d.rs", ToolStatus::Completed),
-            tool("5", "Read e.rs", ToolStatus::Completed),
+            looked("0", "Read z.rs"),
+            looked("1", "Read a.rs"),
+            looked("2", "Read b.rs"),
+            looked("3", "Read c.rs"),
+            looked("4", "Read d.rs"),
+            looked("5", "Read e.rs"),
             tool("6", "Run tests", ToolStatus::InProgress),
             said("m", &"b".repeat(5_000)),
             permission("p1"),
@@ -729,14 +982,18 @@ mod tests {
             lean.len(),
             first.len()
         );
-        assert!(lean.contains("Steps: 1 earlier, then Read b.rs;"), "{lean}");
+        // The steps that are not commands by title; the command with how it stands.
+        assert!(lean.contains("Steps: 1 earlier, then Read a.rs;"), "{lean}");
+        assert!(lean.contains("Ran:\n- running | Run tests\n"), "{lean}");
+        assert!(!first.contains("Ran:"), "the first tools read as they did");
+        assert!(first.contains("Run tests (running)"), "{first}");
         assert!(lean.contains("Options for answer: "), "{lean}");
         assert!(first.contains("Options for respond_to_request: "));
         // A turn in progress is a line, whatever it has said so far.
         assert_eq!(
             progress(&chat, &history),
             format!(
-                "Chat {}: working, waiting for an answer. 6 steps so far; latest: Read d.rs; Read e.rs; Run tests.",
+                "Chat {}: working, waiting for an answer. 7 steps so far; latest: Read d.rs; Read e.rs; Run tests.",
                 chat.id
             )
         );

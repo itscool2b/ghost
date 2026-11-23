@@ -16,11 +16,14 @@ import FIRST_TOOLS from "./tools-first.json";
 
 /**
  * A tool as its file describes it. `full` is this relay's own mark, on a tool or on one of its
- * arguments: only a full-control link is shown it. It is not part of what MCP lists.
+ * arguments: only a full-control link is shown it. `since` is the first set of tools the tool
+ * is in (2 when it says nothing): a copy of the app that answers an earlier set is not shown it.
+ * Neither is part of what MCP lists.
  */
 interface Tool {
   readonly name: string;
   readonly full?: boolean;
+  readonly since?: number;
   readonly inputSchema: {
     readonly properties?: Record<string, { readonly full?: boolean }>;
     readonly [key: string]: unknown;
@@ -33,10 +36,10 @@ interface Listed {
 }
 
 /** The tools as MCP lists them to a link of one level, without this relay's marks. */
-function listed(tools: readonly Tool[], wide: boolean): Listed[] {
+function listed(tools: readonly Tool[], wide: boolean, version = 2): Listed[] {
   return tools
-    .filter((tool) => wide || !tool.full)
-    .map(({ full: _full, inputSchema, ...tool }) => ({
+    .filter((tool) => (wide || !tool.full) && (tool.since ?? 2) <= version)
+    .map(({ full: _full, since: _since, inputSchema, ...tool }) => ({
       ...tool,
       inputSchema: {
         ...inputSchema,
@@ -50,9 +53,10 @@ function listed(tools: readonly Tool[], wide: boolean): Listed[] {
 }
 
 /**
- * The two sets of tools. A copy of the app answers the set it was built with and says which in
- * its bot links (`v`): the current one, or, from a copy older than it, the first one. A bot is
- * shown the set its computer answers, so the relay and the app can be updated apart.
+ * The sets of tools. A copy of the app answers the set it was built with and says which in its
+ * bot links (`v`): the latest (3), the one before it (2: the same tools without `inbox`), or,
+ * from a copy older than both, the first one. A bot is shown the set its computer answers, so
+ * the relay and the app can be updated apart.
  */
 const SETS = {
   first: {
@@ -67,9 +71,16 @@ const SETS = {
     instructions:
       "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, so do not read a chat you just heard from, and do not ask more often than wait does. Agents edit files and run commands, so send only what the person asked for.",
   },
+  latest: {
+    chat: listed(TOOLS as unknown as readonly Tool[], false, 3),
+    full: listed(TOOLS as unknown as readonly Tool[], true, 3),
+    instructions:
+      "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
+  },
 } as const;
-/** The number a copy of the app sends for the current set. */
+/** The number a copy of the app sends for the second set, and for the latest. */
 const CURRENT_TOOLS = 2;
+const LATEST_TOOLS = 3;
 
 export interface Env {
   readonly ROOMS: DurableObjectNamespace<Room>;
@@ -132,7 +143,7 @@ const HOST_SILENT_MS = 75_000;
 const HEARD_NOTE_MS = 5_000;
 /**
  * How long the desktop has to answer one tool call. A call may wait for an agent's turn, for up
- * to four minutes when the bot asks (`WAIT_MAX` in crates/o7-remote/src/bot/lean.rs), so that a
+ * to 200 seconds when the bot asks (`WAIT_MAX` in crates/o7-remote/src/bot/lean.rs), so that a
  * long turn costs a bot a few calls and not one every half minute.
  */
 const BOT_CALL_MS = 250_000;
@@ -210,8 +221,10 @@ export default {
       return json(200, {
         ok: true,
         protocol: 1,
-        tools: SETS.current.chat.length,
-        full_tools: SETS.current.full.length,
+        tools: SETS.latest.chat.length,
+        full_tools: SETS.latest.full.length,
+        second_tools: SETS.current.chat.length,
+        second_full_tools: SETS.current.full.length,
         first_tools: SETS.first.chat.length,
         first_full_tools: SETS.first.full.length,
       });
@@ -536,6 +549,7 @@ export class Room extends DurableObject<Env> {
     const bots: Record<string, string> = {};
     const full: string[] = [];
     const current: string[] = [];
+    const latest: string[] = [];
     if (Array.isArray(body))
       for (const entry of body.slice(0, MAX_BOTS)) {
         const {
@@ -557,10 +571,12 @@ export class Room extends DurableObject<Env> {
         ) {
           bots[id] = hash;
           if (wide === true) full.push(id);
-          if (v === CURRENT_TOOLS) current.push(id);
+          // A copy newer than this relay answers at least the latest set this relay knows.
+          if (typeof v === "number" && v >= CURRENT_TOOLS) current.push(id);
+          if (typeof v === "number" && v >= LATEST_TOOLS) latest.push(id);
         }
       }
-    await this.ctx.storage.put({ bots, full, current });
+    await this.ctx.storage.put({ bots, full, current, latest });
   }
 
   override async webSocketClose(socket: WebSocket, code: number, reason: string) {
@@ -623,9 +639,11 @@ export class Room extends DurableObject<Env> {
     if (messages.length === 0 || messages.length > 16)
       return json(400, rpcError(null, -32600, "Invalid request"), CORS);
     const wide = ((await this.ctx.storage.get<string[]>("full")) ?? []).includes(id);
-    const set = ((await this.ctx.storage.get<string[]>("current")) ?? []).includes(id)
-      ? SETS.current
-      : SETS.first;
+    const set = ((await this.ctx.storage.get<string[]>("latest")) ?? []).includes(id)
+      ? SETS.latest
+      : ((await this.ctx.storage.get<string[]>("current")) ?? []).includes(id)
+        ? SETS.current
+        : SETS.first;
     const replies: unknown[] = [];
     for (const message of messages) {
       const reply = await this.#rpc(
