@@ -582,7 +582,18 @@ async fn trigger(
             ""
         }
     );
-    match bot::start_task(backend, &goal, Some(&hook.project), None, None).await {
+    // What was sent comes from outside: its agent asks before every edit and command,
+    // whatever the project's default.
+    match bot::start_task(
+        backend,
+        &goal,
+        Some(&hook.project),
+        None,
+        None,
+        bot::Most::Ask,
+    )
+    .await
+    {
         Ok(started) => {
             let mut task = started.task;
             task.bot = id.to_owned();
@@ -682,12 +693,15 @@ async fn later_tick(shared: &Arc<Shared>) {
     if working {
         return;
     }
+    // Started for its link, it may approve no more than the link may, as now.
+    let most = bot::Most::of(lock(&shared.registry).bot_rights(&next.bot));
     match bot::start_task(
         &bound,
         &next.goal,
         next.project.as_deref(),
         next.agent.as_deref(),
         next.review,
+        most,
     )
     .await
     {

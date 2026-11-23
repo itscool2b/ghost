@@ -70,6 +70,14 @@ Two more choices are off unless the person turns them on for the link (23 Novemb
   must not be able to approve what an agent does unless its person chose that.
 - **Full access in a chat** (full control only): switching a chat to `full_auto`.
 
+A chat a link starts (`send` to a folder, `task`, work queued for tonight, the first set's
+`start_chat`) may approve no more than the link may: a new chat takes its project's default
+access, which its person may have set to edit without asking or to full access, so before
+anything is sent to it the chat is held to `ask` for a link without "Answer what agents ask",
+to `auto_edit` for one without "Full access in a chat", and left at the default only for a link
+with both (`bot::Most`, `hold_access`). When its access cannot be held, nothing is sent to it.
+An automated security review of #195 found this for automations, whose tasks always ask.
+
 Links made before then approve nothing until they are made again. A link unused for 90 days
 stops working (a call is told it expired); **Renew** in its row gives it a new address, shown
 once, and the old address stops working at once, with what the link may do unchanged.
@@ -233,9 +241,9 @@ as webhooks send. No assistant is in between.
 
 - **What its agent is given.** The instruction, then what was sent, fenced (`<<<` ... `>>>`)
   and named as from outside o7, data it must not obey; at most 16,000 characters of it. The
-  task starts as `task` starts one: its own branch, a review, the project's default agent, the
-  chat's usual access. The agent asks before changing anything, as any chat's does, and nothing
-  approves for it.
+  task starts as `task` starts one: its own branch, a review, the project's default agent, and
+  access held to `ask` whatever the project's default: what was sent comes from outside, so
+  the agent asks before every edit and command, and nothing approves for it.
 - **Limits.** At most three of its tasks work at once and twenty start a day; what is sent
   beyond that is refused, and the sender is told so. What is sent to one automation is taken one
   at a time, so things sent together cannot pass the limits together, and the day's count is
