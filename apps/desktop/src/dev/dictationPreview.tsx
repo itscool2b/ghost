@@ -87,7 +87,14 @@ function fixture() {
       installed: scenario !== "missing",
       name: "Parakeet TDT-CTC 110M",
       bytes: 113552320,
-      larger: { name: "Parakeet Ultra", bytes: 486280096, state: "absent", available: false },
+      larger: {
+        name: "Parakeet Ultra",
+        bytes: 486280096,
+        state: "absent",
+        available: false,
+        received: 0,
+        automatic: false,
+      },
       supported: scenario !== "unsupported",
     }),
     start: async (_id, event) => {

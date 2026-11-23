@@ -120,6 +120,11 @@ pub struct LargerModel {
     pub state: LargerState,
     /// Whether this copy can keep a downloaded model at all.
     pub available: bool,
+    /// Bytes of it here so far, while it downloads: a page that did not start the download
+    /// shows how far it has come from this.
+    pub received: u32,
+    /// o7 will fetch it by itself: nobody said no and the disk has the room (`larger::wanted`).
+    pub automatic: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]

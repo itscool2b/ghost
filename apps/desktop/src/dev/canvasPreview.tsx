@@ -38,7 +38,14 @@ function scriptedMicrophone(): DictationApi {
       supported: true,
       name: "fixture",
       bytes: 0,
-      larger: { name: "fixture", bytes: 0, state: "absent", available: false },
+      larger: {
+        name: "fixture",
+        bytes: 0,
+        state: "absent",
+        available: false,
+        received: 0,
+        automatic: false,
+      },
     }),
     start: async (_id, onEvent) => {
       emit = onEvent;
