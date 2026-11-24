@@ -69,8 +69,9 @@ jobs:
       TESTS: ${{ inputs.tests || '--workspace' }}
       SMOKE: ${{ inputs.smoke || 'stream' }}
       BROWSER: ${{ inputs.browser || 'check:header-labels' }}
-      CLIPPY: ${{ inputs.clippy != false }}
-      FRONTEND: ${{ inputs.frontend != false }}
+      # On by default. Compared as text: an expression counts a missing input as equal to false.
+      CLIPPY: ${{ format('{0}', inputs.clippy) != 'false' }}
+      FRONTEND: ${{ format('{0}', inputs.frontend) != 'false' }}
     steps:
       - name: Keep LF line endings (Windows)
         if: runner.os == 'Windows'
