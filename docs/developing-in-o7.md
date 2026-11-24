@@ -28,7 +28,7 @@ machines instead:
 
   A branch's run starts from main's build cache. The first run on a system with none builds cold
   (CI once took 27 minutes of Clippy on Windows), so after a merge that changes dependencies, run
-  Check on `main` too.
+  Check on `main` too: `--ref main` (a worktree cannot check main out).
 - **CI** is the full run on every system, before a release.
 - **Publish** runs only with the owner's approval for that build.
 - **Each time you start a build or a CI run, tell the owner the GitHub bill so far.** The helper

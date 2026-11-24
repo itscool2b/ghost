@@ -10,9 +10,18 @@ test("with no options a run checks Linux with the whole workspace, Clippy and th
     frontend: true,
     smoke: "none",
     browser: "none",
+    ref: undefined,
     watch: undefined,
     wait: true,
   });
+});
+
+test("--ref names a branch to check as GitHub has it, and only a plain branch name", () => {
+  assert.equal(parseOptions(["--ref", "main"]).ref, "main");
+  assert.equal(parseOptions(["--ref", "codex/check-ref"]).ref, "codex/check-ref");
+  assert.throws(() => parseOptions(["--ref", "-main"]), /--ref takes a branch name/u);
+  assert.throws(() => parseOptions(["--ref", "main; echo"]), /--ref takes a branch name/u);
+  assert.throws(() => parseOptions(["--ref", "a..b"]), /--ref takes a branch name/u);
 });
 
 test("options narrow the run and pass through as workflow fields", () => {
