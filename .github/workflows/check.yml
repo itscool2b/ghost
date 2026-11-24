@@ -1,0 +1,224 @@
+# A branch's checks on one of GitHub's machines instead of the owner's PC: local builds and WSL
+# crashed their games (owner, 24 November 2026). An agent starts it with
+# `node .github/scripts/remote-check.mjs`, which waits for the result and reports the month's GitHub
+# bill; nothing starts it by itself. CI stays the full run on every system before a release. This
+# runs only what one change needs, on one system, so it is quicker and its build cache stays warm.
+name: Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: The system to check on
+        type: choice
+        options:
+          - linux
+          - windows
+          - macos
+        default: linux
+      tests:
+        description: Arguments for cargo test, or "none" to skip the Rust tests
+        type: string
+        default: --workspace
+      clippy:
+        description: Clippy (warnings fail) and rustfmt over the workspace
+        type: boolean
+        default: true
+      frontend:
+        description: pnpm lint, typecheck and the TypeScript tests
+        type: boolean
+        default: true
+      smoke:
+        description: Smoke runs of the real app built with its frontend (stream, chat or all), or "none"
+        type: string
+        default: none
+      browser:
+        description: Browser checks of apps/desktop, separated by ";" (for example "check:chat --engines chromium"), or "none"
+        type: string
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}-${{ inputs.os || 'linux' }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    name: check (${{ inputs.os || 'linux' }})
+    # Ubuntu 22.04 for the oldest libraries the release packages support, as CI and Build use.
+    runs-on: ${{ inputs.os == 'windows' && 'windows-2025' || inputs.os == 'macos' && 'macos-26-intel' || 'ubuntu-22.04' }}
+    # A cold Windows cache took 27 minutes of Clippy and 39 of tests in CI (2026-11-09).
+    timeout-minutes: 150
+    env:
+      # Inputs reach the scripts through the environment, never pasted into them.
+      TESTS: ${{ inputs.tests || '--workspace' }}
+      SMOKE: ${{ inputs.smoke || 'none' }}
+      BROWSER: ${{ inputs.browser || 'none' }}
+      # On by default. Compared as text: an expression counts a missing input as equal to false.
+      CLIPPY: ${{ format('{0}', inputs.clippy) != 'false' }}
+      FRONTEND: ${{ format('{0}', inputs.frontend) != 'false' }}
+    steps:
+      - name: Keep LF line endings (Windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        run: |
+          node=false
+          if [ "$FRONTEND" = true ] || [ "$SMOKE" != none ] || [ "$BROWSER" != none ]; then node=true; fi
+          rust=false
+          if [ "$CLIPPY" = true ] || [ "$TESTS" != none ] || [ "$SMOKE" != none ]; then rust=true; fi
+          echo "node=$node" >> "$GITHUB_OUTPUT"
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Check on $RUNNER_OS"
+            echo "- Rust tests: \`$TESTS\`"
+            echo "- Clippy and rustfmt: $CLIPPY"
+            echo "- Frontend: $FRONTEND"
+            echo "- Smoke: \`$SMOKE\`"
+            echo "- Browser checks: \`$BROWSER\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Rust
+        if: steps.plan.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Install Linux build dependencies
+        if: steps.plan.outputs.rust == 'true' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev libxdo-dev xvfb
+
+      - name: Cache Rust build
+        if: steps.plan.outputs.rust == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # One cache per system for every Check run: a branch starts from main's.
+          shared-key: check
+          cache-on-failure: true
+
+      - name: Rust formatting
+        if: ${{ !cancelled() && env.CLIPPY == 'true' }}
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        if: ${{ !cancelled() && env.CLIPPY == 'true' }}
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Rust tests
+        if: ${{ !cancelled() && env.TESTS != 'none' }}
+        run: |
+          read -r -a args <<< "$TESTS"
+          cargo test --locked "${args[@]}"
+
+      - name: Set up pnpm
+        if: ${{ !cancelled() && steps.plan.outputs.node == 'true' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        if: ${{ !cancelled() && steps.plan.outputs.node == 'true' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install JS dependencies
+        id: js
+        if: ${{ !cancelled() && steps.plan.outputs.node == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: ${{ !cancelled() && env.FRONTEND == 'true' && steps.js.outcome == 'success' }}
+        run: pnpm lint
+
+      - name: Typecheck
+        if: ${{ !cancelled() && env.FRONTEND == 'true' && steps.js.outcome == 'success' }}
+        run: pnpm typecheck
+
+      - name: TypeScript tests
+        if: ${{ !cancelled() && env.FRONTEND == 'true' && steps.js.outcome == 'success' }}
+        run: pnpm test
+
+      - name: Browser checks
+        if: ${{ !cancelled() && env.BROWSER != 'none' && steps.js.outcome == 'success' }}
+        timeout-minutes: 60
+        run: |
+          pnpm --filter @o7/desktop exec playwright install --with-deps chromium webkit
+          failed=0
+          IFS=';' read -r -a checks <<< "$BROWSER"
+          for check in "${checks[@]}"; do
+            read -r -a args <<< "$check"
+            [ "${#args[@]}" -gt 0 ] || continue
+            case ${args[0]} in
+            check:*) ;;
+            *) echo "::error::Not a browser check: ${args[0]}"; failed=1; continue ;;
+            esac
+            echo "::group::${check}"
+            if ! pnpm --filter @o7/desktop "${args[@]}"; then
+              echo "::error::${check} failed"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$failed"
+
+      - name: Build the app with its frontend embedded
+        id: app
+        if: ${{ !cancelled() && env.SMOKE != 'none' && steps.js.outcome == 'success' }}
+        timeout-minutes: 45
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
+        run: pnpm --filter @o7/desktop tauri build --debug --no-bundle
+
+      - name: Smoke runs of the real app
+        if: ${{ !cancelled() && steps.app.outcome == 'success' }}
+        timeout-minutes: 20
+        run: |
+          binary=target/debug/o7
+          if [ "$RUNNER_OS" = Windows ]; then binary="$binary.exe"; fi
+          # Linux has no display on the runner: a virtual one, at the window's default size.
+          display=()
+          if [ "$RUNNER_OS" = Linux ]; then display=(xvfb-run -a -s "-screen 0 1440x900x24"); fi
+          failed=0
+          read -r -a scenarios <<< "$SMOKE"
+          for scenario in "${scenarios[@]}"; do
+            "${display[@]}" bash .github/scripts/run-smoke.sh "$binary" "$scenario" || failed=1
+          done
+          exit "$failed"
+
+      - name: Keep smoke and browser evidence
+        if: ${{ !cancelled() && (steps.app.outcome == 'success' || env.BROWSER != 'none') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: check-${{ runner.os }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/auracode-smoke*.stdout
+            target/*-browser
+            target/web-checks
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Keep a cancelled build out of the cache
+        if: cancelled()
+        run: echo "CACHE_ON_FAILURE=false" >> "$GITHUB_ENV"

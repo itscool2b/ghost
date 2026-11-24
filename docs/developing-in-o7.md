@@ -8,6 +8,36 @@ the work. This page covers what the code guarantees, how to build and test a cha
 next to the running app, how to get the change into the installed app, and how to recover when
 the new build is broken.
 
+## Heavy work runs on GitHub
+
+Builds and tests do not run on the owner's PC (owner, 24 November 2026). Compiling o7 takes every
+core and many gigabytes of memory, and other programs crashed beside it. They run on GitHub's
+machines instead:
+
+- **Check** (`.github/workflows/check.yml`) runs what one change needs on one system. Push the
+  branch, then start it with `node .github/scripts/remote-check.mjs`: it waits, prints each step,
+  the failed steps' logs and the month's GitHub bill, and exits 0 only on success.
+  - No options: Linux, rustfmt, Clippy, `cargo test --workspace`, then pnpm lint, typecheck and
+    tests.
+  - `--tests "-p o7-core --lib chatstore" --no-frontend`: one crate's tests; `--tests none` skips
+    them, `--no-clippy` skips rustfmt and Clippy.
+  - `--os windows --smoke stream`: the real app built with its frontend and smoke-run on Windows
+    (`--os macos` likewise; scenarios are those of `run-smoke.sh`).
+  - `--browser "check:chat --engines chromium; check:settings"`: browser checks, `;` between them.
+  - `--no-wait` returns once it starts; `--watch <run id>` waits for a run already going.
+
+  A branch's run starts from main's build cache. The first run on a system with none builds cold
+  (CI once took 27 minutes of Clippy on Windows), so after a merge that changes dependencies, run
+  Check on `main` too.
+- **CI** is the full run on every system, before a release.
+- **Publish** runs only with the owner's approval for that build.
+- **Each time you start a build or a CI run, tell the owner the GitHub bill so far.** The helper
+  prints it. It needs `gh`'s `user` scope once: `gh auth refresh -h github.com -s user`.
+
+What stays local is what cannot go elsewhere: editing, quick scripts, and checks against a copy of
+someone's real data, which never goes to a public repository's machines. Before anything local
+that compiles, check that no game is running; WSL is capped at 8 GB and 6 cores (`.wslconfig`).
+
 ## What a development build cannot do
 
 A development build is one with debug assertions: `cargo run`, `cargo test`, `pnpm dev`
@@ -69,6 +99,9 @@ Get-ChildItem $target -Recurse -Depth 2 -Directory -Filter .fingerprint |
 `corepack pnpm %*` first on `PATH`.
 
 ## Testing a change next to the running app
+
+On the owner's machine, Check's smoke runs and browser checks come first (see "Heavy work runs on
+GitHub"). Build here only for what needs real data.
 
 - **The UI:** the browser fixtures first (`check:*` scripts, `?preview=` modes). They need no
   native window and touch no data.
