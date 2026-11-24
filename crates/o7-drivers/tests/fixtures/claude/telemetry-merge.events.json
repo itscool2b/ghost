@@ -130,6 +130,7 @@
           "limits": true,
           "slash_commands": true,
           "add_dirs": true,
+          "plan_edits": true,
           "autonomy_levels": [
             "full_auto",
             "auto_edit",

@@ -15,19 +15,26 @@ use serde::Serialize;
 use tokio::sync::broadcast;
 
 use crate::adb::{Adb, DeviceState as Connection, Listed};
-use crate::android::Device;
+use crate::android::{Appearance, Device, Orientation};
 use crate::emulator::{self, Emulator, Launch};
 use crate::install::{self, Need, Plan};
+use crate::ios::{self, Display, Missing, Runtime, Sims, Simulator, Xcode, hid};
 use crate::outline::Outline;
 use crate::repo::Host;
-use crate::scrcpy::{self, Control, Packet, Touch};
+use crate::scrcpy::{self, Control, Packet, Touch, key};
 use crate::sdk::{self, Acceleration, Installed, Places};
-use crate::{Error, avd};
+use crate::{Error, avd, axe};
 
 /// How many emulators may run at once unless the person says otherwise. Each takes 2 to 4 GB.
+/// iPhone simulators are counted apart, against the same number.
 pub const DEFAULT_RUNNING: usize = 2;
-/// How many emulators o7 keeps on disk at most.
+/// How many emulators, and how many iPhone simulators, o7 keeps on disk at most.
 const SLOTS: usize = 4;
+/// The id prefix of o7's own iPhone simulators (`o7_iphone_1`).
+const IPHONE: &str = "o7_iphone_";
+/// A request for any iPhone of o7's own, or any emulator, rather than a named one.
+pub const ANY_IPHONE: &str = "ios";
+pub const ANY_EMULATOR: &str = "android";
 /// A device nobody watches and no agent uses is stopped after this long.
 const IDLE: Duration = Duration::from_secs(600);
 /// How long an emulator may take to start (a first start is about a minute).
@@ -61,6 +68,14 @@ impl Config {
     fn avds(&self) -> PathBuf {
         self.android().join("avd")
     }
+
+    fn ios(&self) -> PathBuf {
+        self.root.join("ios")
+    }
+
+    fn sims_file(&self) -> PathBuf {
+        self.ios().join("simulators.json")
+    }
 }
 
 /// Everything the pane shows, as one value. It is small, and sent whole on every change.
@@ -85,6 +100,32 @@ pub struct Setup {
     /// Whether the emulator can run fast here, once it is installed and was asked.
     pub acceleration: Option<AccelerationInfo>,
     pub fetch: Fetch,
+    pub ios: IosSetup,
+}
+
+/// iPhone simulators on a Mac: what this computer has for them.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct IosSetup {
+    /// This is a Mac, so an iPhone simulator could run here.
+    pub possible: bool,
+    /// Xcode and an iOS runtime were found: an iPhone can be started.
+    pub ready: bool,
+    /// What it would run ("Xcode 26.1, iPhone 17 Pro, iOS 26.1").
+    pub detail: Option<String>,
+    /// What is missing, in words a person can act on.
+    pub missing: Option<String>,
+    /// AXe, the tool o7 drives the simulator with, fetched on first use.
+    pub tool: ToolFetch,
+}
+
+/// Fetching AXe.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ToolFetch {
+    Missing,
+    Downloading { received_mb: f64, total_mb: f64 },
+    Ready,
+    Failed { message: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
@@ -104,9 +145,20 @@ pub enum Fetch {
     /// Reading Google's index.
     Planning,
     /// What would be fetched, and the licence to accept first.
-    Offer { items: Vec<FetchItem>, total_mb: f64, license: String },
-    Running { name: String, phase: FetchPhase, received_mb: f64, total_mb: f64 },
-    Failed { message: String },
+    Offer {
+        items: Vec<FetchItem>,
+        total_mb: f64,
+        license: String,
+    },
+    Running {
+        name: String,
+        phase: FetchPhase,
+        received_mb: f64,
+        total_mb: f64,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
@@ -130,6 +182,8 @@ pub enum DeviceKind {
     Emulator,
     /// A device o7 did not start: a phone on a cable, or an emulator from another program.
     Phone,
+    /// An iPhone simulator o7 made and runs, on a Mac.
+    Simulator,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
@@ -188,11 +242,19 @@ pub struct ToolReply {
 
 impl ToolReply {
     pub(crate) fn text(text: impl Into<String>) -> ToolReply {
-        ToolReply { text: text.into(), image: None, error: false }
+        ToolReply {
+            text: text.into(),
+            image: None,
+            error: false,
+        }
     }
 
     pub(crate) fn failed(text: impl Into<String>) -> ToolReply {
-        ToolReply { text: text.into(), image: None, error: true }
+        ToolReply {
+            text: text.into(),
+            image: None,
+            error: true,
+        }
     }
 }
 
@@ -246,19 +308,83 @@ struct Held {
 enum Shown {
     Size(u16, u16),
     Config(Arc<[u8]>),
-    Frame { key: bool, pts: u64, data: Arc<[u8]> },
+    Frame {
+        key: bool,
+        pts: u64,
+        data: Arc<[u8]>,
+    },
+    /// A whole picture of the screen, as a JPEG (an iPhone simulator's).
+    Picture(Arc<[u8]>),
     Ended,
+}
+
+/// What a device runs on: Android over adb and scrcpy, or an iPhone simulator over simctl and AXe.
+pub(crate) enum Backend {
+    Android(Box<AndroidLive>),
+    Ios(Box<IosLive>),
+}
+
+pub(crate) struct AndroidLive {
+    pub(crate) device: Device,
+    control: tokio::sync::Mutex<Control>,
+    _server: scrcpy::Server,
+}
+
+/// An iPhone simulator's live parts.
+pub(crate) struct IosLive {
+    pub(crate) sim: Simulator,
+    /// The screen in points, the units AXe takes.
+    display: Display,
+    /// "iPhone 17 Pro" and "iOS 26.1", for the agent.
+    model: String,
+    os: String,
+    /// Where the person's finger went down on the pane, until it lifts.
+    press: Mutex<Option<(u32, u32, Instant)>>,
+    /// The person's scrolling, gathered while a swipe for it runs.
+    scroll: Mutex<Scroll>,
+    /// The person's typing and keys, sent in order by one task.
+    input: tokio::sync::mpsc::UnboundedSender<PaneInput>,
+    /// The size of the pane's pictures against the screen's.
+    stream_scale: f64,
+    /// AXe's stream of pictures, while the pane watches ([`Live::start_pictures`]).
+    pictures: Mutex<Option<Pictures>>,
+}
+
+/// AXe's stream of an iPhone's pictures and the task that reads it. Dropping it ends both.
+struct Pictures {
+    _child: tokio::process::Child,
+    reader: tokio::task::AbortHandle,
+}
+
+impl Drop for Pictures {
+    fn drop(&mut self) {
+        self.reader.abort();
+    }
+}
+
+#[derive(Debug, Default)]
+struct Scroll {
+    pending: (f32, f32),
+    running: bool,
+}
+
+/// What the person typed or pressed on an iPhone's pane.
+#[derive(Debug)]
+enum PaneInput {
+    Text(String),
+    Key(u32),
 }
 
 /// A device whose screen is being read: its video, its input, and what was last learned of it.
 pub(crate) struct Live {
-    pub(crate) device: Device,
-    control: tokio::sync::Mutex<Control>,
+    pub(crate) backend: Backend,
     /// The video's size now.
     size: Mutex<(u16, u16)>,
     config: Mutex<Option<Arc<[u8]>>>,
+    /// The latest picture of an iPhone, so a new viewer sees the screen at once.
+    still: Mutex<Option<Arc<[u8]>>>,
     video: broadcast::Sender<Shown>,
-    /// The display's size in its natural position.
+    /// The display's size in its natural position, in pixels.
     display: (u32, u32),
     /// The outline an agent last read: its refs are what `mobile_tap` means.
     pub(crate) outline: Mutex<Option<Outline>>,
@@ -266,7 +392,6 @@ pub(crate) struct Live {
     pub(crate) app: Mutex<Option<String>>,
     viewers: AtomicUsize,
     reader: tokio::task::AbortHandle,
-    _server: scrcpy::Server,
 }
 
 impl Drop for Live {
@@ -275,16 +400,113 @@ impl Drop for Live {
     }
 }
 
+const NO_ROTATION: &str = "The iPhone simulator cannot be turned from o7 yet.";
+const NO_SUCH_KEY: &str = "The iPhone simulator has no such key. Use home, back, recents, enter, tab, escape, delete, space, the arrows, page_up, page_down or power.";
+
+/// An Android key, as what an iPhone simulator does for it.
+async fn iphone_key(sim: &Simulator, code: u32) -> Result<(), Error> {
+    match code {
+        key::HOME => sim.button("home").await,
+        key::APP_SWITCH => sim.app_switcher().await,
+        key::POWER => sim.button("lock").await,
+        key::BACK => sim.back().await,
+        key::ENTER => sim.key(hid::ENTER).await,
+        key::DELETE_BACK => sim.key(hid::BACKSPACE).await,
+        key::DELETE_FORWARD => sim.key(hid::DELETE_FORWARD).await,
+        key::TAB => sim.key(hid::TAB).await,
+        key::ESCAPE => sim.key(hid::ESCAPE).await,
+        key::SPACE => sim.key(hid::SPACE).await,
+        key::DPAD_UP => sim.key(hid::UP).await,
+        key::DPAD_DOWN => sim.key(hid::DOWN).await,
+        key::DPAD_LEFT => sim.key(hid::LEFT).await,
+        key::DPAD_RIGHT => sim.key(hid::RIGHT).await,
+        key::PAGE_UP => sim.key(hid::PAGE_UP).await,
+        key::PAGE_DOWN => sim.key(hid::PAGE_DOWN).await,
+        _ => Err(Error::Refused(NO_SUCH_KEY.into())),
+    }
+}
+
+/// Sends what the person types and presses on an iPhone's pane, in order. Keystrokes that come
+/// close together are typed as one piece of text, since each AXe call costs a moment.
+async fn iphone_input(sim: Simulator, mut inputs: tokio::sync::mpsc::UnboundedReceiver<PaneInput>) {
+    while let Some(first) = inputs.recv().await {
+        let mut batch = vec![first];
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        while let Ok(next) = inputs.try_recv() {
+            batch.push(next);
+        }
+        for input in merge_typing(batch) {
+            // The person sees what happened on the screen; a key the simulator lacks does nothing.
+            let _ = match input {
+                PaneInput::Text(text) => sim.type_text(&text).await,
+                PaneInput::Key(code) => iphone_key(&sim, code).await,
+            };
+        }
+    }
+}
+
+/// Joins text typed one key after another into one piece, keeping keys where they fell.
+fn merge_typing(batch: Vec<PaneInput>) -> Vec<PaneInput> {
+    let mut merged: Vec<PaneInput> = Vec::new();
+    for input in batch {
+        if let PaneInput::Text(text) = &input
+            && let Some(PaneInput::Text(before)) = merged.last_mut()
+        {
+            before.push_str(text);
+            continue;
+        }
+        merged.push(input);
+    }
+    merged
+}
+
+/// What the person's finger did on the pane, from where it went down to where it lifted (in
+/// points) and how long it stayed: a tap, a long press, or a swipe taking that long.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Gesture {
+    Tap {
+        at: (f64, f64),
+        hold: Option<Duration>,
+    },
+    Swipe {
+        from: (f64, f64),
+        to: (f64, f64),
+        duration: Duration,
+    },
+}
+
+fn gesture(from: (f64, f64), to: (f64, f64), held: Duration) -> Gesture {
+    let distance = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
+    if distance < 8.0 {
+        let hold = (held >= Duration::from_millis(450)).then(|| held.min(Duration::from_secs(5)));
+        Gesture::Tap { at: from, hold }
+    } else {
+        let duration = held.clamp(Duration::from_millis(100), Duration::from_secs(2));
+        Gesture::Swipe { from, to, duration }
+    }
+}
+
 impl Live {
     fn video_size(&self) -> (u16, u16) {
         *lock(&self.size)
+    }
+
+    pub(crate) fn iphone(&self) -> Option<&IosLive> {
+        match &self.backend {
+            Backend::Ios(ios) => Some(ios.as_ref()),
+            Backend::Android(_) => None,
+        }
     }
 
     /// The display's size the way it is turned now.
     pub(crate) fn screen(&self) -> (u32, u32) {
         let (width, height) = self.display;
         let (video_width, video_height) = self.video_size();
-        if (video_width > video_height) != (width > height) { (height, width) } else { (width, height) }
+        if (video_width > video_height) != (width > height) {
+            (height, width)
+        } else {
+            (width, height)
+        }
     }
 
     /// A point of the display, in the video's pixels.
@@ -294,18 +516,238 @@ impl Live {
         scale_point(x, y, (width, height), size)
     }
 
+    /// A point of the display's pixels as an iPhone's points.
+    fn to_points(ios: &IosLive, x: i32, y: i32) -> (f64, f64) {
+        let scale = ios.display.scale.max(1.0);
+        let clamp = |value: f64, side: f64| value.clamp(0.0, (side - 0.5).max(0.0));
+        (
+            clamp(f64::from(x) / scale, ios.display.width),
+            clamp(f64::from(y) / scale, ios.display.height),
+        )
+    }
+
+    /// A point of the video the person watches as an iPhone's points.
+    fn video_points(&self, ios: &IosLive, x: u32, y: u32) -> Option<(f64, f64)> {
+        let (width, height) = self.video_size();
+        if width == 0 || height == 0 {
+            return None;
+        }
+        let x = f64::from(x) * ios.display.width / f64::from(width);
+        let y = f64::from(y) * ios.display.height / f64::from(height);
+        Some((
+            x.clamp(0.0, ios.display.width - 0.5),
+            y.clamp(0.0, ios.display.height - 0.5),
+        ))
+    }
+
+    /// The person's finger, at a point of the video they are watching.
     pub(crate) async fn touch_video(&self, phase: Touch, x: u32, y: u32) -> Result<(), Error> {
-        let size = self.video_size();
-        self.control.lock().await.touch(phase, x, y, size).await
+        match &self.backend {
+            Backend::Android(android) => {
+                let size = self.video_size();
+                android.control.lock().await.touch(phase, x, y, size).await
+            }
+            // AXe takes whole gestures, not a finger's every move: a press becomes a tap, a long
+            // press or a swipe when it lifts.
+            Backend::Ios(ios) => match phase {
+                Touch::Down => {
+                    *lock(&ios.press) = Some((x, y, Instant::now()));
+                    Ok(())
+                }
+                Touch::Move => Ok(()),
+                Touch::Up => {
+                    let Some((start_x, start_y, at)) = lock(&ios.press).take() else {
+                        return Ok(());
+                    };
+                    let (Some(from), Some(to)) = (
+                        self.video_points(ios, start_x, start_y),
+                        self.video_points(ios, x, y),
+                    ) else {
+                        return Ok(());
+                    };
+                    match gesture(from, to, at.elapsed()) {
+                        Gesture::Tap { at, hold } => ios.sim.tap(at.0, at.1, hold).await,
+                        Gesture::Swipe { from, to, duration } => {
+                            ios.sim.swipe(from, to, duration).await
+                        }
+                    }
+                }
+            },
+        }
+    }
+
+    /// The person's wheel, at a point of the video.
+    pub(crate) async fn scroll_video(
+        &self,
+        x: u32,
+        y: u32,
+        horizontal: f32,
+        vertical: f32,
+    ) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => {
+                let size = self.video_size();
+                android
+                    .control
+                    .lock()
+                    .await
+                    .scroll(x, y, size, horizontal, vertical)
+                    .await
+            }
+            Backend::Ios(ios) => {
+                let Some(at) = self.video_points(ios, x, y) else {
+                    return Ok(());
+                };
+                {
+                    let mut scroll = lock(&ios.scroll);
+                    scroll.pending.0 += horizontal;
+                    scroll.pending.1 += vertical;
+                    if scroll.running {
+                        return Ok(());
+                    }
+                    scroll.running = true;
+                }
+                // One swipe for the notches of one flick of the wheel, then another for what came
+                // meanwhile, until none are left.
+                loop {
+                    tokio::time::sleep(Duration::from_millis(70)).await;
+                    let (horizontal, vertical) = {
+                        let mut scroll = lock(&ios.scroll);
+                        let pending = std::mem::take(&mut scroll.pending);
+                        if pending == (0.0, 0.0) {
+                            scroll.running = false;
+                            return Ok(());
+                        }
+                        pending
+                    };
+                    let step = 60.0;
+                    let reach = |notches: f32, side: f64| {
+                        (f64::from(notches) * step).clamp(-side * 0.4, side * 0.4)
+                    };
+                    let to = (
+                        (at.0 + reach(horizontal, ios.display.width))
+                            .clamp(1.0, ios.display.width - 1.0),
+                        (at.1 + reach(vertical, ios.display.height))
+                            .clamp(1.0, ios.display.height - 1.0),
+                    );
+                    let _ = ios.sim.swipe(at, to, Duration::from_millis(250)).await;
+                }
+            }
+        }
+    }
+
+    /// A key from the person, as one of [`scrcpy::key`].
+    pub(crate) async fn pane_key(&self, code: u32) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.control.lock().await.press(code).await,
+            Backend::Ios(ios) => send_input(ios, PaneInput::Key(code)),
+        }
+    }
+
+    /// Text the person typed or pasted.
+    pub(crate) async fn pane_text(&self, text: &str) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.control.lock().await.text(text).await,
+            Backend::Ios(ios) => send_input(ios, PaneInput::Text(text.to_owned())),
+        }
+    }
+
+    /// The device's Back: Android's button, or a swipe in from the left edge on an iPhone.
+    pub(crate) async fn back(&self) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.control.lock().await.back().await,
+            Backend::Ios(ios) => send_input(ios, PaneInput::Key(key::BACK)),
+        }
+    }
+
+    pub(crate) async fn rotate(&self) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.control.lock().await.rotate().await,
+            Backend::Ios(_) => Err(Error::Refused(NO_ROTATION.into())),
+        }
+    }
+
+    /// Starts an iPhone's pictures for the pane, unless they run. Each is a screenshot, so they
+    /// run only while the pane watches: a stream nobody watches would slow the whole Mac.
+    fn start_pictures(self: &Arc<Live>) -> Result<(), Error> {
+        let Backend::Ios(ios) = &self.backend else {
+            return Ok(());
+        };
+        let mut running = lock(&ios.pictures);
+        if running
+            .as_ref()
+            .is_some_and(|pictures| !pictures.reader.is_finished())
+        {
+            return Ok(());
+        }
+        let mut child = ios.sim.stream(12, ios.stream_scale)?;
+        let mut frames = child
+            .stdout
+            .take()
+            .ok_or_else(|| Error::Protocol("AXe gave no pictures.".into()))?;
+        let weak = Arc::downgrade(self);
+        let reader = tokio::spawn(async move {
+            let mut size = (0u16, 0u16);
+            while let Ok(Some(frame)) = ios::next_frame(&mut frames).await {
+                let Some(live) = weak.upgrade() else { return };
+                if let Some(measured) = ios::jpeg_size(&frame)
+                    && measured != size
+                {
+                    size = measured;
+                    *lock(&live.size) = size;
+                    let _ = live.video.send(Shown::Size(size.0, size.1));
+                }
+                let picture: Arc<[u8]> = frame.into();
+                *lock(&live.still) = Some(Arc::clone(&picture));
+                let _ = live.video.send(Shown::Picture(picture));
+            }
+            if let Some(live) = weak.upgrade() {
+                let _ = live.video.send(Shown::Ended);
+            }
+        })
+        .abort_handle();
+        *running = Some(Pictures {
+            _child: child,
+            reader,
+        });
+        Ok(())
+    }
+
+    /// Stops an iPhone's pictures once nobody watches.
+    fn stop_pictures(&self) {
+        if let Backend::Ios(ios) = &self.backend {
+            let mut running = lock(&ios.pictures);
+            if self.viewers.load(Ordering::Acquire) == 0 {
+                running.take();
+            }
+        }
+    }
+
+    /// Asks the encoder for a fresh start, so a viewer that fell behind can draw again. Each
+    /// iPhone picture stands alone, so there is nothing to ask for.
+    async fn restart_video(&self) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.control.lock().await.reset_video().await,
+            Backend::Ios(_) => Ok(()),
+        }
     }
 
     /// A tap at a point of the display, held for `hold`.
     pub(crate) async fn tap(&self, x: i32, y: i32, hold: Duration) -> Result<(), Error> {
-        let (x, y, size) = self.to_video(x, y);
-        let mut control = self.control.lock().await;
-        control.touch(Touch::Down, x, y, size).await?;
-        tokio::time::sleep(hold).await;
-        control.touch(Touch::Up, x, y, size).await
+        match &self.backend {
+            Backend::Android(android) => {
+                let (x, y, size) = self.to_video(x, y);
+                let mut control = android.control.lock().await;
+                control.touch(Touch::Down, x, y, size).await?;
+                tokio::time::sleep(hold).await;
+                control.touch(Touch::Up, x, y, size).await
+            }
+            Backend::Ios(ios) => {
+                let (x, y) = Live::to_points(ios, x, y);
+                let hold = (hold >= Duration::from_millis(300)).then_some(hold);
+                ios.sim.tap(x, y, hold).await
+            }
+        }
     }
 
     /// A finger drawn from one point of the display to another over `duration`.
@@ -315,9 +757,17 @@ impl Live {
         to: (i32, i32),
         duration: Duration,
     ) -> Result<(), Error> {
+        let android = match &self.backend {
+            Backend::Android(android) => android,
+            Backend::Ios(ios) => {
+                let from = Live::to_points(ios, from.0, from.1);
+                let to = Live::to_points(ios, to.0, to.1);
+                return ios.sim.swipe(from, to, duration).await;
+            }
+        };
         const STEPS: i32 = 16;
         let (x, y, size) = self.to_video(from.0, from.1);
-        let mut control = self.control.lock().await;
+        let mut control = android.control.lock().await;
         control.touch(Touch::Down, x, y, size).await?;
         for step in 1..=STEPS {
             tokio::time::sleep(duration / STEPS as u32).await;
@@ -334,9 +784,169 @@ impl Live {
         control.touch(Touch::Up, x, y, size).await
     }
 
-    pub(crate) async fn control(&self) -> tokio::sync::MutexGuard<'_, Control> {
-        self.control.lock().await
+    /// A key by Android's code ([`scrcpy::key`]); an iPhone does what it has for it.
+    pub(crate) async fn press_key(&self, code: u32) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) if code == key::BACK => {
+                android.control.lock().await.back().await
+            }
+            Backend::Android(android) => android.control.lock().await.press(code).await,
+            Backend::Ios(ios) => iphone_key(&ios.sim, code).await,
+        }
     }
+
+    /// Types text where the focus is; `clear` empties the field first and `submit` presses
+    /// Enter after.
+    pub(crate) async fn type_text(
+        &self,
+        text: &str,
+        clear: bool,
+        submit: bool,
+    ) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => {
+                let mut control = android.control.lock().await;
+                if clear {
+                    control.select_all().await?;
+                    control.press(key::DELETE_BACK).await?;
+                }
+                control.text(text).await?;
+                if submit {
+                    control.press(key::ENTER).await?;
+                }
+                Ok(())
+            }
+            Backend::Ios(ios) => {
+                if clear {
+                    ios.sim.combo(&[hid::COMMAND], hid::A).await?;
+                    ios.sim.key(hid::BACKSPACE).await?;
+                }
+                ios.sim.type_text(text).await?;
+                if submit {
+                    ios.sim.key(hid::ENTER).await?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// The screen as a PNG at its own size.
+    pub(crate) async fn screenshot(&self) -> Result<Vec<u8>, Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.screenshot().await,
+            Backend::Ios(ios) => ios.sim.screenshot().await,
+        }
+    }
+
+    /// The screen as an outline; with the app in front named when `app` is asked for.
+    pub(crate) async fn read_outline(&self, app: bool) -> Result<Outline, Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.outline().await,
+            Backend::Ios(ios) => ios.sim.outline(ios.display.scale, app).await,
+        }
+    }
+
+    pub(crate) async fn install(&self, path: &std::path::Path) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.install(path).await,
+            Backend::Ios(ios) => ios.sim.install(path).await,
+        }
+    }
+
+    /// Starts an app; answers what was started.
+    pub(crate) async fn launch(&self, app: &str, activity: Option<&str>) -> Result<String, Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.launch(app, activity).await,
+            Backend::Ios(_) if activity.is_some() => Err(Error::Refused(
+                "An iPhone app has no activities: give only its bundle id.".into(),
+            )),
+            Backend::Ios(ios) => {
+                ios.sim.launch(app).await?;
+                Ok(ios::bundle_id(app)?.to_owned())
+            }
+        }
+    }
+
+    pub(crate) async fn stop_app(&self, app: &str) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.stop_app(app).await,
+            Backend::Ios(ios) => ios.sim.terminate(app).await,
+        }
+    }
+
+    pub(crate) async fn open_link(&self, link: &str) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.open_link(link).await,
+            Backend::Ios(ios) => ios.sim.open_link(crate::shell::link(link)?).await,
+        }
+    }
+
+    /// The app in front: its package, or its bundle id.
+    pub(crate) async fn foreground(&self) -> Option<String> {
+        match &self.backend {
+            Backend::Android(android) => android.device.foreground().await,
+            Backend::Ios(ios) => ios.sim.foreground().await,
+        }
+    }
+
+    pub(crate) async fn logs(&self, app: Option<&str>, lines: u32) -> Result<String, Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.logs(app, lines).await,
+            Backend::Ios(ios) => ios.sim.logs(app, lines).await,
+        }
+    }
+
+    pub(crate) async fn set_appearance(&self, appearance: Appearance) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.set_appearance(appearance).await,
+            Backend::Ios(ios) => ios.sim.set_appearance(appearance == Appearance::Dark).await,
+        }
+    }
+
+    pub(crate) async fn set_text_scale(&self, scale: f32) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.set_text_scale(scale).await,
+            Backend::Ios(ios) => ios.sim.set_text_scale(scale).await,
+        }
+    }
+
+    pub(crate) async fn set_orientation(&self, orientation: Orientation) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.set_orientation(orientation).await,
+            Backend::Ios(_) => Err(Error::Refused(NO_ROTATION.into())),
+        }
+    }
+
+    pub(crate) async fn set_permission(
+        &self,
+        app: &str,
+        name: &str,
+        granted: bool,
+    ) -> Result<(), Error> {
+        match &self.backend {
+            Backend::Android(android) => android.device.set_permission(app, name, granted).await,
+            Backend::Ios(ios) => ios.sim.set_permission(app, name, granted).await,
+        }
+    }
+
+    /// What the device runs: "Android 17", or "iPhone 17 Pro, iOS 26.1".
+    pub(crate) async fn system(&self) -> String {
+        match &self.backend {
+            Backend::Android(android) => format!(
+                "Android {}",
+                android
+                    .device
+                    .android_version()
+                    .await
+                    .unwrap_or_else(|| "unknown".into())
+            ),
+            Backend::Ios(ios) => format!("{}, {}", ios.model, ios.os),
+        }
+    }
+}
+
+fn send_input(ios: &IosLive, input: PaneInput) -> Result<(), Error> {
+    ios.input.send(input).map_err(|_| Error::DeviceGone)
 }
 
 /// `(x, y)` of a `from` sized display as a point of a `to` sized video, kept inside it.
@@ -358,6 +968,7 @@ fn scale_point(x: i32, y: i32, from: (u32, u32), to: (u16, u16)) -> (u32, u32, (
 /// - `3`: a key frame, as a big-endian `u64` time in microseconds, then the picture.
 /// - `4`: a frame that builds on the one before, in the same form.
 /// - `5`: the stream ended.
+/// - `6`: a whole picture, as a JPEG (an iPhone simulator's screen).
 pub struct Viewer {
     live: Arc<Live>,
     receiver: broadcast::Receiver<Shown>,
@@ -370,7 +981,10 @@ pub struct Viewer {
 
 impl Drop for Viewer {
     fn drop(&mut self) {
-        self.live.viewers.fetch_sub(1, Ordering::AcqRel);
+        // The last viewer gone: an iPhone's pictures stop until the pane comes back.
+        if self.live.viewers.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.live.stop_pictures();
+        }
     }
 }
 
@@ -395,6 +1009,12 @@ fn encode(shown: &Shown) -> Vec<u8> {
             out.extend_from_slice(data);
             out
         }
+        Shown::Picture(data) => {
+            let mut out = Vec::with_capacity(1 + data.len());
+            out.push(6);
+            out.extend_from_slice(data);
+            out
+        }
         Shown::Ended => vec![5],
     }
 }
@@ -413,7 +1033,8 @@ impl Viewer {
                 Ok(Shown::Frame { key: false, .. }) if !self.started => {}
                 Ok(shown) => {
                     match &shown {
-                        Shown::Frame { key: true, .. } => self.started = true,
+                        // A picture stands alone, as a key frame does.
+                        Shown::Frame { key: true, .. } | Shown::Picture(_) => self.started = true,
                         // A new configuration means a new stream: wait for its key frame.
                         Shown::Config(_) => self.started = false,
                         Shown::Ended => self.ended = true,
@@ -425,7 +1046,7 @@ impl Viewer {
                 // until the encoder starts again.
                 Err(broadcast::error::RecvError::Lagged(_)) => {
                     self.started = false;
-                    let _ = self.live.control.lock().await.reset_video().await;
+                    let _ = self.live.restart_video().await;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     self.ended = true;
@@ -444,9 +1065,52 @@ struct State {
     slots: Vec<Slot>,
     phones: Vec<Listed>,
     chats: HashMap<String, Held>,
+    ios: IosState,
     tracking: bool,
     reaping: bool,
     notified: Instant,
+}
+
+/// One iPhone simulator o7 keeps.
+#[derive(Debug)]
+struct SimSlot {
+    number: usize,
+    name: String,
+    title: String,
+    phase: Phase,
+    error: Option<String>,
+}
+
+impl SimSlot {
+    fn numbered(number: usize) -> SimSlot {
+        SimSlot {
+            number,
+            name: format!("{IPHONE}{number}"),
+            title: format!("iPhone {number}"),
+            phase: Phase::Stopped,
+            error: None,
+        }
+    }
+}
+
+/// What o7 knows of iPhone simulators here.
+#[derive(Debug)]
+struct IosState {
+    /// What looking for Xcode found, once it has looked.
+    found: Option<Result<(Xcode, Vec<Runtime>), Missing>>,
+    tool: ToolFetch,
+    sims: Vec<SimSlot>,
+    /// The simulators o7 made, by number.
+    made: Sims,
+}
+
+impl IosState {
+    fn ready(&self) -> Option<(&Xcode, &Runtime)> {
+        match &self.found {
+            Some(Ok((xcode, runtimes))) => runtimes.first().map(|runtime| (xcode, runtime)),
+            _ => None,
+        }
+    }
 }
 
 struct Inner {
@@ -454,6 +1118,9 @@ struct Inner {
     host: Option<Host>,
     enabled: AtomicBool,
     cancel_fetch: AtomicBool,
+    /// Stops AXe's download, apart from Android's: the person's "Not now" on Android's offer
+    /// must not stop an iPhone starting.
+    cancel_tool: AtomicBool,
     notify: Box<dyn Fn() + Send + Sync>,
     state: Mutex<State>,
 }
@@ -478,12 +1145,25 @@ impl Manager {
             .filter(|number| avd::exists(&config.avds(), &format!("o7_phone_{number}")))
             .map(Slot::numbered)
             .collect();
+        let made = Sims::load(&config.sims_file());
+        let sims = made
+            .made
+            .iter()
+            .filter(|made| made.number <= SLOTS)
+            .map(|made| SimSlot::numbered(made.number))
+            .collect();
+        let tool = if axe::installed(&config.root).is_some() {
+            ToolFetch::Ready
+        } else {
+            ToolFetch::Missing
+        };
         Manager {
             inner: Arc::new(Inner {
                 config,
                 host,
                 enabled: AtomicBool::new(true),
                 cancel_fetch: AtomicBool::new(false),
+                cancel_tool: AtomicBool::new(false),
                 notify: Box::new(notify),
                 state: Mutex::new(State {
                     installed: Installed::default(),
@@ -493,6 +1173,12 @@ impl Manager {
                     slots,
                     phones: Vec::new(),
                     chats: HashMap::new(),
+                    ios: IosState {
+                        found: None,
+                        tool,
+                        sims,
+                        made,
+                    },
                     tracking: false,
                     reaping: false,
                     notified: Instant::now(),
@@ -546,6 +1232,20 @@ impl Manager {
                 pid: slot.emulator.as_ref().and_then(Emulator::pid),
             })
             .collect();
+        devices.extend(state.ios.sims.iter().map(|sim| DeviceInfo {
+            id: sim.name.clone(),
+            kind: DeviceKind::Simulator,
+            title: sim.title.clone(),
+            state: match sim.phase {
+                Phase::Stopped => DeviceState::Stopped,
+                Phase::Starting => DeviceState::Starting,
+                Phase::Ready => DeviceState::Ready,
+                Phase::Stopping => DeviceState::Stopping,
+            },
+            error: sim.error.clone(),
+            chat_id: holder(&sim.name),
+            pid: None,
+        }));
         devices.extend(state.phones.iter().map(|phone| {
             let id = format!("{PHONE}{}", phone.serial);
             DeviceInfo {
@@ -580,18 +1280,24 @@ impl Manager {
         chats.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
         MobileStatus {
             enabled: self.enabled(),
-            unavailable: self.inner.host.is_none().then(|| {
-                "Android's tools are not published for this kind of computer.".to_owned()
-            }),
+            unavailable: self
+                .inner
+                .host
+                .is_none()
+                .then(|| "Android's tools are not published for this kind of computer.".to_owned()),
             setup: Setup {
                 adb: state.installed.adb.is_some(),
                 emulator: state.installed.can_emulate(),
-                acceleration: state.acceleration.as_ref().map(|acceleration| AccelerationInfo {
-                    usable: acceleration.usable,
-                    detail: acceleration.detail.clone(),
-                    fix: (!acceleration.usable).then(acceleration_fix).flatten(),
-                }),
+                acceleration: state
+                    .acceleration
+                    .as_ref()
+                    .map(|acceleration| AccelerationInfo {
+                        usable: acceleration.usable,
+                        detail: acceleration.detail.clone(),
+                        fix: (!acceleration.usable).then(acceleration_fix).flatten(),
+                    }),
                 fetch: state.fetch.clone(),
+                ios: ios_setup(&state.ios),
             },
             devices,
             chats,
@@ -603,6 +1309,7 @@ impl Manager {
         self.inner.enabled.store(enabled, Ordering::Release);
         if !enabled {
             self.inner.cancel_fetch.store(true, Ordering::Release);
+            self.inner.cancel_tool.store(true, Ordering::Release);
             self.stop_everything(Duration::from_secs(20)).await;
         }
         self.changed();
@@ -610,24 +1317,76 @@ impl Manager {
 
     /// Looks again at what is installed, and starts watching for phones once adb is there.
     pub async fn refresh(&self) {
-        let Some(host) = self.inner.host else { return };
-        let config = self.inner.config.clone();
-        let installed =
-            tokio::task::spawn_blocking(move || sdk::find(&config.sdk(), &config.places, host))
-                .await
-                .unwrap_or_default();
-        let acceleration = match &installed.emulator_root {
-            Some(root) => Some(sdk::acceleration(root).await),
-            None => None,
-        };
-        {
+        if let Some(host) = self.inner.host {
+            let config = self.inner.config.clone();
+            let installed =
+                tokio::task::spawn_blocking(move || sdk::find(&config.sdk(), &config.places, host))
+                    .await
+                    .unwrap_or_default();
+            let acceleration = match &installed.emulator_root {
+                Some(root) => Some(sdk::acceleration(root).await),
+                None => None,
+            };
             let mut state = lock(&self.inner.state);
             state.installed = installed;
             state.acceleration = acceleration;
         }
+        self.refresh_ios().await;
         self.changed();
         self.watch_phones();
         self.reap_idle();
+    }
+
+    /// Looks for Xcode unless it was found, and at the simulators o7 made: one Xcode no longer
+    /// has is forgotten, and one still booted from before o7 last quit is o7's to stop again.
+    async fn refresh_ios(&self) {
+        if !cfg!(target_os = "macos") {
+            return;
+        }
+        let found = matches!(lock(&self.inner.state).ios.found, Some(Ok(_)));
+        if !found {
+            let looked = ios::find_xcode().await;
+            lock(&self.inner.state).ios.found = Some(looked);
+        }
+        let xcode = match &lock(&self.inner.state).ios.found {
+            Some(Ok((xcode, _))) => xcode.clone(),
+            _ => return,
+        };
+        let Ok(devices) = xcode.devices().await else {
+            return;
+        };
+        let mut state = lock(&self.inner.state);
+        let ios = &mut state.ios;
+        if !matches!(ios.tool, ToolFetch::Downloading { .. })
+            && axe::installed(&self.inner.config.root).is_some()
+        {
+            ios.tool = ToolFetch::Ready;
+        }
+        let gone: Vec<usize> = ios
+            .made
+            .made
+            .iter()
+            .filter(|made| !devices.iter().any(|device| device.udid == made.udid))
+            .map(|made| made.number)
+            .collect();
+        for number in &gone {
+            ios.made.forget(*number);
+        }
+        ios.sims
+            .retain(|sim| sim.phase != Phase::Stopped || !gone.contains(&sim.number));
+        for sim in &mut ios.sims {
+            let booted = ios.made.udid_of(sim.number).is_some_and(|udid| {
+                devices
+                    .iter()
+                    .any(|device| device.udid == udid && device.booted)
+            });
+            if sim.phase == Phase::Stopped && booted {
+                sim.phase = Phase::Ready;
+            }
+        }
+        if !gone.is_empty() {
+            let _ = ios.made.save(&self.inner.config.sims_file());
+        }
     }
 
     /// Follows adb's device list for as long as Mobile is on.
@@ -637,14 +1396,18 @@ impl Manager {
             if state.tracking || !self.enabled() {
                 return;
             }
-            let Some(adb) = state.installed.adb.clone() else { return };
+            let Some(adb) = state.installed.adb.clone() else {
+                return;
+            };
             state.tracking = true;
             adb
         };
         let weak = Arc::downgrade(&self.inner);
         tokio::spawn(async move {
             loop {
-                let Some(manager) = upgrade(&weak) else { return };
+                let Some(manager) = upgrade(&weak) else {
+                    return;
+                };
                 if !manager.enabled() {
                     break;
                 }
@@ -654,7 +1417,9 @@ impl Manager {
                     && let Ok(mut tracker) = adb.track().await
                 {
                     while let Ok(listed) = tracker.next().await {
-                        let Some(manager) = upgrade(&weak) else { return };
+                        let Some(manager) = upgrade(&weak) else {
+                            return;
+                        };
                         manager.phones_changed(listed);
                     }
                 }
@@ -673,7 +1438,11 @@ impl Manager {
             let ours: Vec<u16> = state.slots.iter().filter_map(|slot| slot.port).collect();
             state.phones = listed
                 .into_iter()
-                .filter(|device| !device.emulator_port().is_some_and(|port| ours.contains(&port)))
+                .filter(|device| {
+                    !device
+                        .emulator_port()
+                        .is_some_and(|port| ours.contains(&port))
+                })
                 .collect();
             // A chat whose phone is gone keeps its place and says why its screen is not there.
             let present: Vec<String> = state
@@ -708,7 +1477,9 @@ impl Manager {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(30)).await;
-                let Some(manager) = upgrade(&weak) else { return };
+                let Some(manager) = upgrade(&weak) else {
+                    return;
+                };
                 manager.stop_idle(IDLE).await;
             }
         });
@@ -724,9 +1495,10 @@ impl Manager {
                 .filter(|(_, held)| {
                     !held.starting
                         && held.used.elapsed() >= idle
-                        && held.live.as_ref().is_none_or(|live| {
-                            live.viewers.load(Ordering::Acquire) == 0
-                        })
+                        && held
+                            .live
+                            .as_ref()
+                            .is_none_or(|live| live.viewers.load(Ordering::Acquire) == 0)
                 })
                 .map(|(chat_id, _)| chat_id.clone())
                 .collect()
@@ -749,6 +1521,23 @@ impl Manager {
         };
         for index in unheld {
             self.stop_slot(index, Duration::from_secs(40)).await;
+        }
+        let unheld_sims: Vec<usize> = {
+            let state = lock(&self.inner.state);
+            state
+                .ios
+                .sims
+                .iter()
+                .enumerate()
+                .filter(|(_, sim)| {
+                    sim.phase == Phase::Ready
+                        && !state.chats.values().any(|held| held.device_id == sim.name)
+                })
+                .map(|(index, _)| index)
+                .collect()
+        };
+        for index in unheld_sims {
+            self.stop_sim(index).await;
         }
     }
 
@@ -798,7 +1587,11 @@ impl Manager {
                     };
                     state.plan = Some(plan);
                 }
-                Err(error) => state.fetch = Fetch::Failed { message: error.to_string() },
+                Err(error) => {
+                    state.fetch = Fetch::Failed {
+                        message: error.to_string(),
+                    }
+                }
             }
         }
         self.changed();
@@ -810,10 +1603,16 @@ impl Manager {
         let plan = {
             let mut state = lock(&self.inner.state);
             let Some(plan) = state.plan.take() else {
-                return Err(Error::Refused("There is nothing offered to download.".into()));
+                return Err(Error::Refused(
+                    "There is nothing offered to download.".into(),
+                ));
             };
             state.fetch = Fetch::Running {
-                name: plan.items.first().map(|item| item.choice.name.clone()).unwrap_or_default(),
+                name: plan
+                    .items
+                    .first()
+                    .map(|item| item.choice.name.clone())
+                    .unwrap_or_default(),
                 phase: FetchPhase::Downloading,
                 received_mb: 0.0,
                 total_mb: megabytes(plan.download_size()),
@@ -853,7 +1652,9 @@ impl Manager {
             .await;
             lock(&manager.inner.state).fetch = match fetched {
                 Ok(()) | Err(Error::Cancelled) => Fetch::Idle,
-                Err(error) => Fetch::Failed { message: error.to_string() },
+                Err(error) => Fetch::Failed {
+                    message: error.to_string(),
+                },
             };
             manager.refresh().await;
         });
@@ -875,27 +1676,86 @@ impl Manager {
 
     // -------------------------------------------------------------- devices
 
-    /// Gives `chat_id` a device and starts it: the one named, or one of o7's emulators. Returns
-    /// at once; [`Manager::status`] says how it goes. A chat that already holds the device it
-    /// asks for keeps it.
+    /// Gives `chat_id` a device and starts it: the one named, one of o7's emulators
+    /// ([`ANY_EMULATOR`]), or one of o7's iPhone simulators ([`ANY_IPHONE`]). Returns at once;
+    /// [`Manager::status`] says how it goes. A chat that already holds the device it asks for,
+    /// or one of the kind it asks for, keeps it.
     pub fn attach(&self, chat_id: &str, device_id: Option<&str>) -> Result<(), Error> {
         self.check()?;
         let target = {
             let mut state = lock(&self.inner.state);
             if let Some(held) = state.chats.get_mut(chat_id) {
                 held.used = Instant::now();
-                let same = device_id.is_none_or(|device_id| device_id == held.device_id);
+                let same = match device_id {
+                    None => true,
+                    Some(ANY_IPHONE) => held.kind == DeviceKind::Simulator,
+                    Some(ANY_EMULATOR) => held.kind == DeviceKind::Emulator,
+                    Some(device_id) => device_id == held.device_id,
+                };
                 if same && (held.starting || held.live.is_some()) {
                     return Ok(());
                 }
             }
-            let wanted = device_id
-                .map(str::to_owned)
-                .or_else(|| state.chats.get(chat_id).map(|held| held.device_id.clone()));
+            let held_id = state
+                .chats
+                .get(chat_id)
+                .map(|held| (held.device_id.clone(), held.kind));
+            let wanted = match (device_id, held_id) {
+                // The kind asked for, and the chat's own device is of that kind: start it again.
+                (Some(ANY_IPHONE), Some((id, DeviceKind::Simulator)))
+                | (Some(ANY_EMULATOR), Some((id, DeviceKind::Emulator))) => Some(id),
+                (Some(ANY_IPHONE), _) => Some(ANY_IPHONE.to_owned()),
+                (Some(ANY_EMULATOR), _) => None,
+                (Some(id), _) => Some(id.to_owned()),
+                (None, held) => held.map(|(id, _)| id),
+            };
+            let android_wanted = device_id == Some(ANY_EMULATOR);
             let taken = |state: &State, id: &str| {
-                state.chats.iter().any(|(other, held)| other != chat_id && held.device_id == id)
+                state
+                    .chats
+                    .iter()
+                    .any(|(other, held)| other != chat_id && held.device_id == id)
             };
             let target = match wanted {
+                Some(id) if id == ANY_IPHONE => {
+                    if let Some(missing) = iphone_missing(&state.ios) {
+                        return Err(Error::Refused(missing));
+                    }
+                    let index = choose_sim(&mut state, self.inner.config.max_running)?;
+                    let sim = &state.ios.sims[index];
+                    Target {
+                        id: sim.name.clone(),
+                        kind: DeviceKind::Simulator,
+                        title: sim.title.clone(),
+                        slot: Some(index),
+                    }
+                }
+                Some(id) if id.starts_with(IPHONE) => {
+                    let Some(index) = state.ios.sims.iter().position(|sim| sim.name == id) else {
+                        return Err(Error::Refused("That device does not exist.".into()));
+                    };
+                    if taken(&state, &id) {
+                        return Err(Error::Refused("Another chat is using that device.".into()));
+                    }
+                    let running = state
+                        .ios
+                        .sims
+                        .iter()
+                        .filter(|sim| sim.phase != Phase::Stopped)
+                        .count();
+                    if state.ios.sims[index].phase == Phase::Stopped
+                        && running >= self.inner.config.max_running
+                    {
+                        return Err(Error::Refused(too_many(self.inner.config.max_running)));
+                    }
+                    let title = state.ios.sims[index].title.clone();
+                    Target {
+                        id,
+                        kind: DeviceKind::Simulator,
+                        title,
+                        slot: Some(index),
+                    }
+                }
                 Some(id) if id.starts_with(PHONE) => {
                     let serial = &id[PHONE.len()..];
                     let phone = state.phones.iter().find(|phone| phone.serial == serial);
@@ -908,7 +1768,12 @@ impl Manager {
                         return Err(Error::Refused("Another chat is using that phone.".into()));
                     }
                     let title = phone.map(phone_title).unwrap_or_default();
-                    Target { id, kind: DeviceKind::Phone, title, slot: None }
+                    Target {
+                        id,
+                        kind: DeviceKind::Phone,
+                        title,
+                        slot: None,
+                    }
                 }
                 Some(id) => {
                     let Some(index) = state.slots.iter().position(|slot| slot.name == id) else {
@@ -917,34 +1782,58 @@ impl Manager {
                     if taken(&state, &id) {
                         return Err(Error::Refused("Another chat is using that device.".into()));
                     }
-                    let running =
-                        state.slots.iter().filter(|slot| slot.phase != Phase::Stopped).count();
+                    let running = state
+                        .slots
+                        .iter()
+                        .filter(|slot| slot.phase != Phase::Stopped)
+                        .count();
                     if state.slots[index].phase == Phase::Stopped
                         && running >= self.inner.config.max_running
                     {
                         return Err(Error::Refused(too_many(self.inner.config.max_running)));
                     }
                     let title = state.slots[index].title.clone();
-                    Target { id, kind: DeviceKind::Emulator, title, slot: Some(index) }
+                    Target {
+                        id,
+                        kind: DeviceKind::Emulator,
+                        title,
+                        slot: Some(index),
+                    }
                 }
                 None => {
-                    if !state.installed.can_emulate() {
-                        return Err(Error::Refused(NOT_SET_UP.into()));
-                    }
-                    let index = choose_slot(&mut state, self.inner.config.max_running)?;
-                    let slot = &state.slots[index];
-                    Target {
-                        id: slot.name.clone(),
-                        kind: DeviceKind::Emulator,
-                        title: slot.title.clone(),
-                        slot: Some(index),
+                    // An emulator when Android is set up; else an iPhone when this Mac has one.
+                    let iphone = !android_wanted
+                        && !state.installed.can_emulate()
+                        && state.ios.ready().is_some();
+                    if iphone {
+                        let index = choose_sim(&mut state, self.inner.config.max_running)?;
+                        let sim = &state.ios.sims[index];
+                        Target {
+                            id: sim.name.clone(),
+                            kind: DeviceKind::Simulator,
+                            title: sim.title.clone(),
+                            slot: Some(index),
+                        }
+                    } else {
+                        if !state.installed.can_emulate() {
+                            return Err(Error::Refused(NOT_SET_UP.into()));
+                        }
+                        let index = choose_slot(&mut state, self.inner.config.max_running)?;
+                        let slot = &state.slots[index];
+                        Target {
+                            id: slot.name.clone(),
+                            kind: DeviceKind::Emulator,
+                            title: slot.title.clone(),
+                            slot: Some(index),
+                        }
                     }
                 }
             };
             let agent_allowed = match state.chats.get(chat_id) {
                 // The person's answer for a phone lasts while the chat keeps that phone.
                 Some(held) if held.device_id == target.id => held.agent_allowed,
-                _ => target.kind == DeviceKind::Emulator,
+                // o7's own emulators and simulators need no answer.
+                _ => target.kind != DeviceKind::Phone,
             };
             state.chats.insert(
                 chat_id.to_owned(),
@@ -970,8 +1859,10 @@ impl Manager {
             {
                 let mut state = lock(&manager.inner.state);
                 // The chat may have let go, or taken another device, while this one started.
-                if let Some(held) =
-                    state.chats.get_mut(&chat_id).filter(|held| held.device_id == target.id)
+                if let Some(held) = state
+                    .chats
+                    .get_mut(&chat_id)
+                    .filter(|held| held.device_id == target.id)
                 {
                     held.starting = false;
                     held.used = Instant::now();
@@ -988,6 +1879,10 @@ impl Manager {
 
     /// Starts the device if it is not running, and opens its screen.
     async fn bring_up(&self, chat_id: &str, target: &Target) -> Result<Arc<Live>, Error> {
+        if target.kind == DeviceKind::Simulator {
+            let index = target.slot.ok_or(Error::DeviceGone)?;
+            return self.bring_up_iphone(index).await;
+        }
         let adb_program = lock(&self.inner.state)
             .installed
             .adb
@@ -1002,7 +1897,12 @@ impl Manager {
         let session = scrcpy::start(&adb, &serial, scrcpy::Options::default()).await?;
         let device = Device::new(adb, serial);
         let display = device.display_size().await?;
-        let scrcpy::Session { video, control, server, .. } = session;
+        let scrcpy::Session {
+            video,
+            control,
+            server,
+            ..
+        } = session;
         let (sender, _) = broadcast::channel(256);
         let for_reader = sender.clone();
         let weak = Arc::downgrade(&self.inner);
@@ -1032,9 +1932,11 @@ impl Manager {
                             }
                             Shown::Config(data)
                         }
-                        Ok(Packet::Frame { key, pts, data }) => {
-                            Shown::Frame { key, pts, data: data.into() }
-                        }
+                        Ok(Packet::Frame { key, pts, data }) => Shown::Frame {
+                            key,
+                            pts,
+                            data: data.into(),
+                        },
                         Err(_) => break,
                     };
                     let _ = sender.send(shown);
@@ -1047,27 +1949,290 @@ impl Manager {
             })
             .abort_handle();
             Live {
-                device,
-                control: tokio::sync::Mutex::new(control),
+                backend: Backend::Android(Box::new(AndroidLive {
+                    device,
+                    control: tokio::sync::Mutex::new(control),
+                    _server: server,
+                })),
                 size: Mutex::new((0, 0)),
                 config: Mutex::new(None),
+                still: Mutex::new(None),
                 video: sender,
                 display,
                 outline: Mutex::new(None),
                 app: Mutex::new(None),
                 viewers: AtomicUsize::new(0),
                 reader,
-                _server: server,
             }
         });
         Ok(live)
     }
 
+    // ------------------------------------------------------------- iPhone
+
+    /// Xcode and the runtime to use, looking for them first when nobody has yet.
+    async fn xcode(&self) -> Result<(Xcode, Runtime), Error> {
+        let looked = lock(&self.inner.state).ios.found.is_some();
+        if !looked {
+            self.refresh_ios().await;
+            if !cfg!(target_os = "macos") {
+                return Err(Error::Refused(Missing::NotMac.to_string()));
+            }
+        }
+        let state = lock(&self.inner.state);
+        match &state.ios.found {
+            Some(Ok((xcode, runtimes))) => match runtimes.first() {
+                Some(runtime) => Ok((xcode.clone(), runtime.clone())),
+                None => Err(Error::Refused(Missing::NoRuntime.to_string())),
+            },
+            Some(Err(missing)) => Err(Error::Refused(missing.to_string())),
+            None => Err(Error::Refused(Missing::NotMac.to_string())),
+        }
+    }
+
+    /// AXe's program, fetched first when it is not here yet; the pane shows the download.
+    async fn axe(&self) -> Result<PathBuf, Error> {
+        if let Some(program) = axe::installed(&self.inner.config.root) {
+            return Ok(program);
+        }
+        let another = {
+            let mut state = lock(&self.inner.state);
+            let another = matches!(state.ios.tool, ToolFetch::Downloading { .. });
+            if !another {
+                state.ios.tool = ToolFetch::Downloading {
+                    received_mb: 0.0,
+                    total_mb: megabytes(axe::SIZE),
+                };
+                self.inner.cancel_tool.store(false, Ordering::Release);
+            }
+            another
+        };
+        // Another chat's start is fetching it: wait for that one.
+        if another {
+            let deadline = Instant::now() + Duration::from_secs(600);
+            loop {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                if let Some(program) = axe::installed(&self.inner.config.root) {
+                    return Ok(program);
+                }
+                let failed = match &lock(&self.inner.state).ios.tool {
+                    ToolFetch::Downloading { .. } if Instant::now() < deadline => None,
+                    ToolFetch::Failed { message } => Some(message.clone()),
+                    _ => Some("AXe was not downloaded.".to_owned()),
+                };
+                if let Some(message) = failed {
+                    return Err(Error::Download(message));
+                }
+            }
+        }
+        self.changed();
+        let reporter = self.clone();
+        let report = move |progress: axe::Progress| {
+            let due = {
+                let mut state = lock(&reporter.inner.state);
+                state.ios.tool = ToolFetch::Downloading {
+                    received_mb: megabytes(progress.received),
+                    total_mb: megabytes(progress.total),
+                };
+                state.notified.elapsed() >= Duration::from_millis(250)
+            };
+            if due {
+                reporter.changed();
+            }
+        };
+        let fetched = axe::fetch(&self.inner.config.root, &report, &self.inner.cancel_tool).await;
+        lock(&self.inner.state).ios.tool = match &fetched {
+            Ok(_) => ToolFetch::Ready,
+            Err(error) => ToolFetch::Failed {
+                message: error.to_string(),
+            },
+        };
+        self.changed();
+        fetched
+    }
+
+    /// Starts the chat's iPhone simulator if it is not running, and opens its screen.
+    async fn bring_up_iphone(&self, index: usize) -> Result<Arc<Live>, Error> {
+        let (xcode, runtime) = self.xcode().await?;
+        let axe_program = self.axe().await?;
+        let (udid, model) = self.boot_sim(index, &xcode, &runtime).await?;
+        // Xcode 26 lets AXe read and touch the screen only while Simulator.app shows it.
+        xcode.show(&udid).await?;
+        let sim = Simulator {
+            xcode,
+            axe: axe_program,
+            udid,
+            scratch: self.inner.config.ios().join("scratch"),
+        };
+        let display = sim.settle(Duration::from_secs(300)).await?;
+        sim.warm().await;
+        let pixels = display.pixels();
+        let (sender, _) = broadcast::channel(16);
+        let (input, inputs) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(iphone_input(sim.clone(), inputs));
+        // No pictures until the pane watches; nothing else reads in the background.
+        let idle = tokio::spawn(async {}).abort_handle();
+        Ok(Arc::new(Live {
+            backend: Backend::Ios(Box::new(IosLive {
+                sim,
+                display,
+                model,
+                os: runtime.name.clone(),
+                press: Mutex::new(None),
+                scroll: Mutex::new(Scroll::default()),
+                input,
+                stream_scale: ios::stream_scale(pixels),
+                pictures: Mutex::new(None),
+            })),
+            size: Mutex::new((0, 0)),
+            config: Mutex::new(None),
+            still: Mutex::new(None),
+            video: sender,
+            display: pixels,
+            outline: Mutex::new(None),
+            app: Mutex::new(None),
+            viewers: AtomicUsize::new(0),
+            reader: idle,
+        }))
+    }
+
+    /// Makes sure the simulator in slot `index` is booted; answers its UDID and model.
+    async fn boot_sim(
+        &self,
+        index: usize,
+        xcode: &Xcode,
+        runtime: &Runtime,
+    ) -> Result<(String, String), Error> {
+        let deadline = Instant::now() + ios::BOOT;
+        let number = loop {
+            {
+                let mut state = lock(&self.inner.state);
+                let ios = &mut state.ios;
+                let sim = ios.sims.get_mut(index).ok_or(Error::DeviceGone)?;
+                let number = sim.number;
+                match (sim.phase, ios.made.udid_of(number).map(str::to_owned)) {
+                    (Phase::Ready, Some(udid)) => return Ok((udid, sim_model(runtime))),
+                    (Phase::Stopped, _) | (Phase::Ready, None) => {
+                        sim.phase = Phase::Starting;
+                        sim.error = None;
+                        break number;
+                    }
+                    // Another chat's request is starting or stopping it: wait for that.
+                    (Phase::Starting | Phase::Stopping, _) => {}
+                }
+            }
+            if Instant::now() >= deadline {
+                return Err(Error::Timeout);
+            }
+            tokio::time::sleep(Duration::from_millis(400)).await;
+        };
+        self.changed();
+        let started = self.start_sim(number, xcode, runtime).await;
+        {
+            let mut state = lock(&self.inner.state);
+            if let Some(sim) = state.ios.sims.get_mut(index) {
+                match &started {
+                    Ok(_) => sim.phase = Phase::Ready,
+                    Err(error) => {
+                        sim.phase = Phase::Stopped;
+                        sim.error = Some(error.to_string());
+                    }
+                }
+            }
+        }
+        self.changed();
+        started.map(|udid| (udid, sim_model(runtime)))
+    }
+
+    /// Boots o7's simulator number `number`, making it first when Xcode does not have it (a new
+    /// Mac, a runtime that was removed). Answers its UDID.
+    async fn start_sim(
+        &self,
+        number: usize,
+        xcode: &Xcode,
+        runtime: &Runtime,
+    ) -> Result<String, Error> {
+        let known = lock(&self.inner.state)
+            .ios
+            .made
+            .udid_of(number)
+            .map(str::to_owned);
+        let devices = xcode.devices().await?;
+        let usable = known.as_ref().filter(|udid| {
+            devices
+                .iter()
+                .any(|device| device.udid == **udid && device.available)
+        });
+        let udid = match usable {
+            Some(udid) => udid.clone(),
+            None => {
+                // One o7 made for a runtime this Xcode no longer runs is removed, not left behind.
+                if let Some(old) = &known
+                    && devices.iter().any(|device| device.udid == *old)
+                {
+                    let _ = xcode.delete(old).await;
+                }
+                let kind = ios::choose_device_type(&runtime.device_types)
+                    .ok_or_else(|| Error::Refused(Missing::NoRuntime.to_string()))?;
+                let made = xcode
+                    .create(
+                        &format!("o7 iPhone {number}"),
+                        &kind.identifier,
+                        &runtime.identifier,
+                    )
+                    .await?;
+                let mut state = lock(&self.inner.state);
+                state.ios.made.set(number, &made);
+                state.ios.made.save(&self.inner.config.sims_file())?;
+                made
+            }
+        };
+        // Simulator.app opens while the simulator boots, rather than after (Xcode 26 needs it for
+        // AXe to read the screen; a first launch takes a while).
+        xcode.show(&udid).await?;
+        xcode.boot(&udid).await?;
+        Ok(udid)
+    }
+
+    /// Shuts down o7's simulator in slot `index`, whoever holds it.
+    async fn stop_sim(&self, index: usize) {
+        let (udid, xcode) = {
+            let mut state = lock(&self.inner.state);
+            let number = {
+                let Some(sim) = state.ios.sims.get_mut(index) else {
+                    return;
+                };
+                if sim.phase == Phase::Stopped || sim.phase == Phase::Stopping {
+                    return;
+                }
+                sim.phase = Phase::Stopping;
+                sim.number
+            };
+            let name = state.ios.sims[index].name.clone();
+            state.chats.retain(|_, held| held.device_id != name);
+            let xcode = match &state.ios.found {
+                Some(Ok((xcode, _))) => Some(xcode.clone()),
+                _ => None,
+            };
+            (state.ios.made.udid_of(number).map(str::to_owned), xcode)
+        };
+        self.changed();
+        if let (Some(udid), Some(xcode)) = (udid, xcode) {
+            let _ = xcode.shutdown(&udid).await;
+        }
+        if let Some(sim) = lock(&self.inner.state).ios.sims.get_mut(index) {
+            sim.phase = Phase::Stopped;
+        }
+        self.changed();
+    }
+
     fn screen_ended(&self, chat_id: &str, device_id: &str) {
         {
             let mut state = lock(&self.inner.state);
-            let Some(held) =
-                state.chats.get_mut(chat_id).filter(|held| held.device_id == device_id)
+            let Some(held) = state
+                .chats
+                .get_mut(chat_id)
+                .filter(|held| held.device_id == device_id)
             else {
                 return;
             };
@@ -1127,14 +2292,21 @@ impl Manager {
         let config = &self.inner.config;
         let serial = {
             let mut state = lock(&self.inner.state);
-            let root =
-                state.installed.emulator_root.clone().ok_or_else(|| Error::Refused(NOT_SET_UP.into()))?;
-            let image =
-                state.installed.images.first().ok_or_else(|| Error::Refused(NOT_SET_UP.into()))?.path.clone();
+            let root = state
+                .installed
+                .emulator_root
+                .clone()
+                .ok_or_else(|| Error::Refused(NOT_SET_UP.into()))?;
+            let image = state
+                .installed
+                .images
+                .first()
+                .ok_or_else(|| Error::Refused(NOT_SET_UP.into()))?
+                .path
+                .clone();
             let taken: Vec<u16> = state.slots.iter().filter_map(|slot| slot.port).collect();
-            let port = emulator::free_port(&taken).ok_or_else(|| {
-                Error::Device("No port is free for another emulator.".into())
-            })?;
+            let port = emulator::free_port(&taken)
+                .ok_or_else(|| Error::Device("No port is free for another emulator.".into()))?;
             let slot = state.slots.get_mut(index).ok_or(Error::DeviceGone)?;
             // A device made for an image that is gone starts over on the image there is.
             if avd::image_of(&config.avds(), &slot.name).is_some_and(|have| have != image) {
@@ -1161,7 +2333,10 @@ impl Manager {
                 emulator_home: config.android().join("emulator-home"),
                 name: slot.name.clone(),
                 port,
-                log: config.android().join("logs").join(format!("{}.log", slot.name)),
+                log: config
+                    .android()
+                    .join("logs")
+                    .join(format!("{}.log", slot.name)),
             };
             let emulator = emulator::start(&launch)?;
             let serial = emulator.serial.clone();
@@ -1214,21 +2389,33 @@ impl Manager {
         }
     }
 
-    /// Stops one of o7's emulators, whoever holds it.
+    /// Stops one of o7's emulators or iPhone simulators, whoever holds it.
     pub async fn stop_device(&self, device_id: &str) -> Result<(), Error> {
-        let index = lock(&self.inner.state)
-            .slots
-            .iter()
-            .position(|slot| slot.name == device_id)
-            .ok_or_else(|| Error::Refused("o7 can only stop the devices it started.".into()))?;
-        self.stop_slot(index, Duration::from_secs(40)).await;
+        let (slot, sim) = {
+            let state = lock(&self.inner.state);
+            (
+                state.slots.iter().position(|slot| slot.name == device_id),
+                state.ios.sims.iter().position(|sim| sim.name == device_id),
+            )
+        };
+        match (slot, sim) {
+            (Some(index), _) => self.stop_slot(index, Duration::from_secs(40)).await,
+            (None, Some(index)) => self.stop_sim(index).await,
+            (None, None) => {
+                return Err(Error::Refused(
+                    "o7 can only stop the devices it started.".into(),
+                ));
+            }
+        }
         Ok(())
     }
 
     async fn stop_slot(&self, index: usize, patience: Duration) {
         let (emulator, adb_program) = {
             let mut state = lock(&self.inner.state);
-            let Some(slot) = state.slots.get_mut(index) else { return };
+            let Some(slot) = state.slots.get_mut(index) else {
+                return;
+            };
             if slot.phase == Phase::Stopped || slot.phase == Phase::Stopping {
                 return;
             }
@@ -1242,7 +2429,9 @@ impl Manager {
         if let Some(emulator) = emulator {
             match adb_program {
                 Some(adb_program) => {
-                    emulator.stop(&adb_program, &self.inner.config.adb, patience).await;
+                    emulator
+                        .stop(&adb_program, &self.inner.config.adb, patience)
+                        .await;
                 }
                 None => emulator.kill().await,
             }
@@ -1258,31 +2447,43 @@ impl Manager {
     }
 
     async fn stop_everything(&self, patience: Duration) {
-        let count = {
+        let (count, sims) = {
             let mut state = lock(&self.inner.state);
             state.chats.clear();
-            state.slots.len()
+            (state.slots.len(), state.ios.sims.len())
         };
         let mut stops = Vec::new();
         for index in 0..count {
             let manager = self.clone();
-            stops.push(tokio::spawn(async move { manager.stop_slot(index, patience).await }));
+            stops.push(tokio::spawn(async move {
+                manager.stop_slot(index, patience).await
+            }));
+        }
+        // A simulator is not o7's process: it would outlive the app unless it is shut down.
+        for index in 0..sims {
+            let manager = self.clone();
+            stops.push(tokio::spawn(async move {
+                let _ = tokio::time::timeout(patience, manager.stop_sim(index)).await;
+            }));
         }
         for stop in stops {
             let _ = stop.await;
         }
     }
 
-    /// o7 is quitting: every emulator is asked to save and stop, and none outlives the app.
+    /// o7 is quitting: every emulator is asked to save and stop, every iPhone simulator is shut
+    /// down, and none outlives the app.
     pub async fn shutdown(&self) {
         self.inner.cancel_fetch.store(true, Ordering::Release);
+        self.inner.cancel_tool.store(true, Ordering::Release);
         self.stop_everything(Duration::from_secs(12)).await;
     }
 
-    /// The person's answer to "may the agent use this phone?", for the chat's device.
+    /// The person's answer to "may the agent use this phone?", for the chat's device. o7's own
+    /// emulators and simulators need no answer.
     pub fn allow_agent(&self, chat_id: &str, allowed: bool) {
         if let Some(held) = lock(&self.inner.state).chats.get_mut(chat_id) {
-            held.agent_allowed = allowed || held.kind == DeviceKind::Emulator;
+            held.agent_allowed = allowed || held.kind != DeviceKind::Phone;
         }
         self.changed();
     }
@@ -1324,14 +2525,19 @@ impl Manager {
 
     /// Whether the chat holds a device its agent may not use.
     pub(crate) fn agent_refused(&self, chat_id: &str) -> bool {
-        lock(&self.inner.state).chats.get(chat_id).is_some_and(|held| !held.agent_allowed)
+        lock(&self.inner.state)
+            .chats
+            .get(chat_id)
+            .is_some_and(|held| !held.agent_allowed)
     }
 
     /// Says in the pane what the agent is doing on the chat's device, or that it has finished.
     pub(crate) fn agent_doing(&self, chat_id: &str, label: Option<String>) {
         {
             let mut state = lock(&self.inner.state);
-            let Some(held) = state.chats.get_mut(chat_id) else { return };
+            let Some(held) = state.chats.get_mut(chat_id) else {
+                return;
+            };
             if held.agent == label {
                 return;
             }
@@ -1354,9 +2560,19 @@ impl Manager {
         if let Some(config) = lock(&live.config).clone() {
             first.push(encode(&Shown::Config(config)));
         }
+        if let Some(picture) = lock(&live.still).clone() {
+            first.push(encode(&Shown::Picture(picture)));
+        }
         live.viewers.fetch_add(1, Ordering::AcqRel);
-        let viewer = Viewer { live: Arc::clone(&live), receiver, first, started: false, ended: false };
-        live.control.lock().await.reset_video().await?;
+        let viewer = Viewer {
+            live: Arc::clone(&live),
+            receiver,
+            first,
+            started: false,
+            ended: false,
+        };
+        live.start_pictures()?;
+        live.restart_video().await?;
         Ok(viewer)
     }
 
@@ -1374,41 +2590,50 @@ impl Manager {
         horizontal: f32,
         vertical: f32,
     ) -> Result<(), Error> {
-        let live = self.live(chat_id)?;
-        let size = live.video_size();
-        live.control.lock().await.scroll(x, y, size, horizontal, vertical).await
+        self.live(chat_id)?
+            .scroll_video(x, y, horizontal, vertical)
+            .await
     }
 
     /// A key from the person: one of [`scrcpy::key`].
     pub async fn press(&self, chat_id: &str, keycode: u32) -> Result<(), Error> {
-        self.live(chat_id)?.control.lock().await.press(keycode).await
+        self.live(chat_id)?.pane_key(keycode).await
     }
 
     /// Text the person typed.
     pub async fn text(&self, chat_id: &str, text: &str) -> Result<(), Error> {
-        self.live(chat_id)?.control.lock().await.text(text).await
+        self.live(chat_id)?.pane_text(text).await
     }
 
     pub async fn back(&self, chat_id: &str) -> Result<(), Error> {
-        self.live(chat_id)?.control.lock().await.back().await
+        self.live(chat_id)?.back().await
     }
 
     pub async fn rotate(&self, chat_id: &str) -> Result<(), Error> {
-        self.live(chat_id)?.control.lock().await.rotate().await
+        self.live(chat_id)?.rotate().await
     }
 
     /// The chat's screen as a PNG at its own size, for the person to save.
     pub async fn screenshot(&self, chat_id: &str) -> Result<Vec<u8>, Error> {
-        self.live(chat_id)?.device.screenshot().await
+        self.live(chat_id)?.screenshot().await
     }
 
     /// Runs one of the agent's tools for `chat_id`.
-    pub async fn tool(&self, chat_id: &str, tool: &str, arguments: &serde_json::Value) -> ToolReply {
+    pub async fn tool(
+        &self,
+        chat_id: &str,
+        tool: &str,
+        arguments: &serde_json::Value,
+    ) -> ToolReply {
         crate::tools::call(self, chat_id, tool, arguments).await
     }
 
     /// Waits until the chat's device is live, for a tool that just asked for it.
-    pub(crate) async fn wait_live(&self, chat_id: &str, within: Duration) -> Result<Arc<Live>, Error> {
+    pub(crate) async fn wait_live(
+        &self,
+        chat_id: &str,
+        within: Duration,
+    ) -> Result<Arc<Live>, Error> {
         let deadline = Instant::now() + within;
         loop {
             {
@@ -1421,7 +2646,9 @@ impl Manager {
                         }
                         if !held.starting {
                             return Err(Error::Device(
-                                held.error.clone().unwrap_or_else(|| "The device did not start.".into()),
+                                held.error
+                                    .clone()
+                                    .unwrap_or_else(|| "The device did not start.".into()),
                             ));
                         }
                     }
@@ -1437,8 +2664,43 @@ impl Manager {
     }
 }
 
+/// What the pane says about iPhone simulators here.
+fn ios_setup(ios: &IosState) -> IosSetup {
+    let possible = cfg!(target_os = "macos");
+    let (ready, detail, missing) = match &ios.found {
+        _ if !possible => (false, None, Some(Missing::NotMac.to_string())),
+        None => (false, None, None),
+        Some(Err(missing)) => (false, None, Some(missing.to_string())),
+        Some(Ok((xcode, runtimes))) => {
+            let runtime = runtimes.first();
+            let model = runtime
+                .and_then(|runtime| ios::choose_device_type(&runtime.device_types))
+                .map(|kind| kind.name.clone());
+            match (runtime, model) {
+                (Some(runtime), Some(model)) => (
+                    true,
+                    Some(format!(
+                        "Xcode {}, {model}, {}",
+                        xcode.version, runtime.name
+                    )),
+                    None,
+                ),
+                _ => (false, None, Some(Missing::NoRuntime.to_string())),
+            }
+        }
+    };
+    IosSetup {
+        possible,
+        ready,
+        detail,
+        missing,
+        tool: ios.tool.clone(),
+    }
+}
+
 /// What a device answers when Mobile is off.
-pub const TURNED_OFF: &str = "Mobile is turned off in Settings > Plugins & MCP. Ask the person to turn it on.";
+pub const TURNED_OFF: &str =
+    "Mobile is turned off in Settings > Plugins & MCP. Ask the person to turn it on.";
 const NOT_SET_UP: &str = "Android is not set up on this computer yet. Ask the person to open the Device pane and set it up.";
 const NO_DEVICE: &str = "This chat has no device yet. Call mobile_start first.";
 const NOT_ALLOWED: &str = "This chat's device is the person's phone, and they have not allowed agents to use it. Ask them to turn on \"Let the agent use this phone\" in the Device pane.";
@@ -1473,23 +2735,88 @@ fn phone_title(phone: &Listed) -> String {
     }
 }
 
-/// One of o7's emulators for a chat that named none: a running one nobody holds, else a stopped
-/// one, else a new one, while fewer than `max_running` run.
-fn choose_slot(state: &mut State, max_running: usize) -> Result<usize, Error> {
-    let free = |state: &State, slot: &Slot| {
-        !state.chats.values().any(|held| held.device_id == slot.name)
-    };
-    if let Some(index) =
-        state.slots.iter().position(|slot| slot.phase == Phase::Ready && free(state, slot))
+/// Why an iPhone cannot be started here, when that is already known.
+fn iphone_missing(ios: &IosState) -> Option<String> {
+    if !cfg!(target_os = "macos") {
+        return Some(Missing::NotMac.to_string());
+    }
+    match &ios.found {
+        Some(Err(missing)) => Some(missing.to_string()),
+        Some(Ok((_, runtimes))) if runtimes.is_empty() => Some(Missing::NoRuntime.to_string()),
+        _ => None,
+    }
+}
+
+/// The iPhone o7 simulates on `runtime`.
+fn sim_model(runtime: &Runtime) -> String {
+    ios::choose_device_type(&runtime.device_types)
+        .map_or_else(|| "iPhone".to_owned(), |kind| kind.name.clone())
+}
+
+/// One of o7's iPhone simulators for a chat: a running one nobody holds, else a stopped one, else
+/// a new one, while fewer than `max_running` run.
+fn choose_sim(state: &mut State, max_running: usize) -> Result<usize, Error> {
+    let free =
+        |state: &State, sim: &SimSlot| !state.chats.values().any(|held| held.device_id == sim.name);
+    if let Some(index) = state
+        .ios
+        .sims
+        .iter()
+        .position(|sim| sim.phase == Phase::Ready && free(state, sim))
     {
         return Ok(index);
     }
-    let running = state.slots.iter().filter(|slot| slot.phase != Phase::Stopped).count();
+    let running = state
+        .ios
+        .sims
+        .iter()
+        .filter(|sim| sim.phase != Phase::Stopped)
+        .count();
     if running >= max_running {
         return Err(Error::Refused(too_many(max_running)));
     }
-    if let Some(index) =
-        state.slots.iter().position(|slot| slot.phase == Phase::Stopped && free(state, slot))
+    if let Some(index) = state
+        .ios
+        .sims
+        .iter()
+        .position(|sim| sim.phase == Phase::Stopped && free(state, sim))
+    {
+        return Ok(index);
+    }
+    if state.ios.sims.len() >= SLOTS {
+        return Err(Error::Refused(too_many(state.ios.sims.len())));
+    }
+    let number = (1..=SLOTS)
+        .find(|number| !state.ios.sims.iter().any(|sim| sim.number == *number))
+        .unwrap_or(state.ios.sims.len() + 1);
+    state.ios.sims.push(SimSlot::numbered(number));
+    Ok(state.ios.sims.len() - 1)
+}
+
+/// One of o7's emulators for a chat that named none: a running one nobody holds, else a stopped
+/// one, else a new one, while fewer than `max_running` run.
+fn choose_slot(state: &mut State, max_running: usize) -> Result<usize, Error> {
+    let free =
+        |state: &State, slot: &Slot| !state.chats.values().any(|held| held.device_id == slot.name);
+    if let Some(index) = state
+        .slots
+        .iter()
+        .position(|slot| slot.phase == Phase::Ready && free(state, slot))
+    {
+        return Ok(index);
+    }
+    let running = state
+        .slots
+        .iter()
+        .filter(|slot| slot.phase != Phase::Stopped)
+        .count();
+    if running >= max_running {
+        return Err(Error::Refused(too_many(max_running)));
+    }
+    if let Some(index) = state
+        .slots
+        .iter()
+        .position(|slot| slot.phase == Phase::Stopped && free(state, slot))
     {
         return Ok(index);
     }
@@ -1497,7 +2824,12 @@ fn choose_slot(state: &mut State, max_running: usize) -> Result<usize, Error> {
         return Err(Error::Refused(too_many(state.slots.len())));
     }
     let number = (1..=SLOTS)
-        .find(|number| !state.slots.iter().any(|slot| slot.name == format!("o7_phone_{number}")))
+        .find(|number| {
+            !state
+                .slots
+                .iter()
+                .any(|slot| slot.name == format!("o7_phone_{number}"))
+        })
         .unwrap_or(state.slots.len() + 1);
     state.slots.push(Slot::numbered(number));
     Ok(state.slots.len() - 1)
@@ -1566,6 +2898,12 @@ pub(crate) mod tests {
             slots: Vec::new(),
             phones: Vec::new(),
             chats: HashMap::new(),
+            ios: IosState {
+                found: None,
+                tool: ToolFetch::Missing,
+                sims: Vec::new(),
+                made: Sims::default(),
+            },
             tracking: false,
             reaping: false,
             notified: Instant::now(),
@@ -1614,7 +2952,10 @@ pub(crate) mod tests {
             (Phase::Stopped, None),
         ]);
         let refused = choose_slot(&mut state, 2).unwrap_err().to_string();
-        assert!(refused.starts_with("2 devices are already running"), "{refused}");
+        assert!(
+            refused.starts_with("2 devices are already running"),
+            "{refused}"
+        );
         assert_eq!(choose_slot(&mut state, 3).unwrap(), 2);
         // Every slot held: no fifth device is made.
         let mut state = state_with(vec![
@@ -1630,10 +2971,22 @@ pub(crate) mod tests {
     #[test]
     fn points_scale_to_the_video_and_stay_inside_it() {
         // A 1080x2400 display shown as a 720x1600 video.
-        assert_eq!(scale_point(540, 1200, (1080, 2400), (720, 1600)), (360, 800, (720, 1600)));
-        assert_eq!(scale_point(0, 0, (1080, 2400), (720, 1600)), (0, 0, (720, 1600)));
-        assert_eq!(scale_point(1080, 2400, (1080, 2400), (720, 1600)), (719, 1599, (720, 1600)));
-        assert_eq!(scale_point(-50, 99_999, (1080, 2400), (720, 1600)), (0, 1599, (720, 1600)));
+        assert_eq!(
+            scale_point(540, 1200, (1080, 2400), (720, 1600)),
+            (360, 800, (720, 1600))
+        );
+        assert_eq!(
+            scale_point(0, 0, (1080, 2400), (720, 1600)),
+            (0, 0, (720, 1600))
+        );
+        assert_eq!(
+            scale_point(1080, 2400, (1080, 2400), (720, 1600)),
+            (719, 1599, (720, 1600))
+        );
+        assert_eq!(
+            scale_point(-50, 99_999, (1080, 2400), (720, 1600)),
+            (0, 1599, (720, 1600))
+        );
         assert_eq!(scale_point(5, 5, (0, 0), (720, 1600)), (0, 0, (720, 1600)));
         assert_eq!(scale_point(5, 5, (10, 10), (0, 0)), (0, 0, (0, 0)));
     }
@@ -1643,11 +2996,167 @@ pub(crate) mod tests {
         assert_eq!(encode(&Shown::Size(720, 1600)), [1, 0x02, 0xd0, 0x06, 0x40]);
         assert_eq!(encode(&Shown::Config(vec![9, 8].into())), [2, 9, 8]);
         assert_eq!(
-            encode(&Shown::Frame { key: true, pts: 0x0102, data: vec![7].into() }),
+            encode(&Shown::Frame {
+                key: true,
+                pts: 0x0102,
+                data: vec![7].into()
+            }),
             [3, 0, 0, 0, 0, 0, 0, 1, 2, 7]
         );
-        assert_eq!(encode(&Shown::Frame { key: false, pts: 0, data: vec![].into() })[0], 4);
+        assert_eq!(
+            encode(&Shown::Frame {
+                key: false,
+                pts: 0,
+                data: vec![].into()
+            })[0],
+            4
+        );
         assert_eq!(encode(&Shown::Ended), [5]);
+        assert_eq!(
+            encode(&Shown::Picture(vec![0xff, 0xd8].into())),
+            [6, 0xff, 0xd8]
+        );
+    }
+
+    #[test]
+    fn an_iphone_is_chosen_like_an_emulator_and_counted_apart() {
+        let mut state = state_with(vec![
+            (Phase::Ready, Some("a")),
+            (Phase::Starting, Some("b")),
+        ]);
+        // Two emulators run, and an iPhone may still start: each kind has its own limit.
+        assert_eq!(choose_sim(&mut state, 2).unwrap(), 0);
+        assert_eq!(state.ios.sims[0].name, "o7_iphone_1");
+        assert_eq!(state.ios.sims[0].title, "iPhone 1");
+        state.ios.sims[0].phase = Phase::Ready;
+        state.chats.insert(
+            "c".into(),
+            Held {
+                device_id: "o7_iphone_1".into(),
+                kind: DeviceKind::Simulator,
+                title: "iPhone 1".into(),
+                starting: false,
+                live: None,
+                agent_allowed: true,
+                agent: None,
+                error: None,
+                used: Instant::now(),
+            },
+        );
+        assert_eq!(
+            choose_sim(&mut state, 2).unwrap(),
+            1,
+            "a second one, since the first is held"
+        );
+        state.ios.sims[1].phase = Phase::Starting;
+        let refused = choose_sim(&mut state, 2).unwrap_err().to_string();
+        assert!(
+            refused.starts_with("2 devices are already running"),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn the_persons_finger_on_an_iphone_becomes_a_tap_a_long_press_or_a_swipe() {
+        let quick = Duration::from_millis(80);
+        assert_eq!(
+            gesture((100.0, 200.0), (103.0, 204.0), quick),
+            Gesture::Tap {
+                at: (100.0, 200.0),
+                hold: None
+            }
+        );
+        assert_eq!(
+            gesture((100.0, 200.0), (100.0, 200.0), Duration::from_millis(900)),
+            Gesture::Tap {
+                at: (100.0, 200.0),
+                hold: Some(Duration::from_millis(900))
+            }
+        );
+        assert_eq!(
+            gesture((100.0, 600.0), (100.0, 200.0), quick),
+            Gesture::Swipe {
+                from: (100.0, 600.0),
+                to: (100.0, 200.0),
+                duration: Duration::from_millis(100)
+            }
+        );
+        assert_eq!(
+            gesture((10.0, 10.0), (300.0, 10.0), Duration::from_secs(9)),
+            Gesture::Swipe {
+                from: (10.0, 10.0),
+                to: (300.0, 10.0),
+                duration: Duration::from_secs(2)
+            }
+        );
+    }
+
+    #[test]
+    fn typing_on_an_iphones_pane_goes_as_words_with_keys_in_their_place() {
+        let merged = merge_typing(vec![
+            PaneInput::Text("h".into()),
+            PaneInput::Text("i".into()),
+            PaneInput::Key(key::ENTER),
+            PaneInput::Text("x".into()),
+        ]);
+        assert_eq!(merged.len(), 3);
+        assert!(matches!(&merged[0], PaneInput::Text(text) if text == "hi"));
+        assert!(matches!(merged[1], PaneInput::Key(key::ENTER)));
+        assert!(matches!(&merged[2], PaneInput::Text(text) if text == "x"));
+    }
+
+    #[tokio::test]
+    async fn an_iphone_needs_a_mac_and_says_so() {
+        let folder = tempfile::tempdir().unwrap();
+        let manager = manager(folder.path());
+        let ios = manager.status().setup.ios;
+        assert_eq!(ios.tool, ToolFetch::Missing);
+        if cfg!(target_os = "macos") {
+            return;
+        }
+        assert!(!ios.possible && !ios.ready);
+        assert_eq!(
+            ios.missing.as_deref(),
+            Some("iPhone simulators run only on a Mac.")
+        );
+        let refused = manager
+            .attach("chat", Some(ANY_IPHONE))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(refused, "iPhone simulators run only on a Mac.");
+        assert!(
+            manager.attach("chat", Some("o7_iphone_1")).is_err(),
+            "no such simulator"
+        );
+        assert!(manager.status().chats.is_empty() && manager.status().devices.is_empty());
+        // Any device, or an emulator by name, still means Android.
+        let refused = manager
+            .attach("chat", Some(ANY_EMULATOR))
+            .unwrap_err()
+            .to_string();
+        assert!(refused.starts_with("Android is not set up"), "{refused}");
+    }
+
+    #[tokio::test]
+    async fn the_simulators_o7_made_are_its_devices_after_a_restart() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut made = Sims::default();
+        made.set(2, "0D3B2A61-4C8E-4D0A-9C55-1B9E9B7B0A01");
+        made.save(&folder.path().join("ios").join("simulators.json"))
+            .unwrap();
+        let manager = manager(folder.path());
+        let status = manager.status();
+        assert_eq!(status.devices.len(), 1);
+        assert_eq!(status.devices[0].id, "o7_iphone_2");
+        assert_eq!(status.devices[0].kind, DeviceKind::Simulator);
+        assert_eq!(status.devices[0].title, "iPhone 2");
+        assert_eq!(status.devices[0].state, super::DeviceState::Stopped);
+        // Only o7's own devices can be stopped by o7.
+        assert!(manager.stop_device("o7_iphone_9").await.is_err());
+        assert!(
+            manager.stop_device("o7_iphone_2").await.is_ok(),
+            "a stopped simulator stops at once"
+        );
     }
 
     #[tokio::test]
@@ -1662,7 +3171,10 @@ pub(crate) mod tests {
         assert!(refused.starts_with("Android is not set up"), "{refused}");
         assert!(manager.attach("chat", Some("o7_phone_9")).is_err());
         assert!(manager.attach("chat", Some("adb:R58M")).is_err());
-        assert!(manager.fetch_start().is_err(), "nothing was offered, so nothing is fetched");
+        assert!(
+            manager.fetch_start().is_err(),
+            "nothing was offered, so nothing is fetched"
+        );
         assert!(manager.stop_device("adb:R58M").await.is_err());
         assert!(manager.status().chats.is_empty());
     }
@@ -1676,8 +3188,14 @@ pub(crate) mod tests {
         manager.set_enabled(false).await;
         let status = manager.status();
         assert!(!status.enabled && status.chats.is_empty());
-        assert_eq!(manager.attach("chat", None).unwrap_err().to_string(), TURNED_OFF);
-        assert_eq!(manager.watch("chat").await.err().unwrap().to_string(), TURNED_OFF);
+        assert_eq!(
+            manager.attach("chat", None).unwrap_err().to_string(),
+            TURNED_OFF
+        );
+        assert_eq!(
+            manager.watch("chat").await.err().unwrap().to_string(),
+            TURNED_OFF
+        );
         assert_eq!(manager.fetch_start().unwrap_err().to_string(), TURNED_OFF);
         manager.set_enabled(true).await;
         assert!(manager.status().enabled);
@@ -1693,7 +3211,10 @@ pub(crate) mod tests {
         assert_eq!(held.title, "Pixel 8");
         assert!(!held.agent_allowed);
         assert!(manager.agent_refused("chat"));
-        assert_eq!(manager.live_for_agent("chat").err().unwrap().to_string(), NOT_ALLOWED);
+        assert_eq!(
+            manager.live_for_agent("chat").err().unwrap().to_string(),
+            NOT_ALLOWED
+        );
         manager.allow_agent("chat", true);
         assert!(!manager.agent_refused("chat"));
         // Allowed now, but its screen is not open: a different, honest reason.
@@ -1704,9 +3225,15 @@ pub(crate) mod tests {
         manager.allow_agent("chat", false);
         assert!(manager.agent_refused("chat"));
         // Another chat cannot take a phone that is held.
-        let taken = manager.attach("other", Some("adb:R58M")).unwrap_err().to_string();
+        let taken = manager
+            .attach("other", Some("adb:R58M"))
+            .unwrap_err()
+            .to_string();
         assert_eq!(taken, "Another chat is using that phone.");
-        assert_eq!(manager.live_for_agent("other").err().unwrap().to_string(), NO_DEVICE);
+        assert_eq!(
+            manager.live_for_agent("other").err().unwrap().to_string(),
+            NO_DEVICE
+        );
         manager.detach("chat");
         assert!(manager.status().chats.is_empty());
     }
@@ -1722,7 +3249,10 @@ pub(crate) mod tests {
             model: None,
         }]);
         let status = manager.status();
-        assert_eq!(status.chats[0].error.as_deref(), Some("The phone was disconnected."));
+        assert_eq!(
+            status.chats[0].error.as_deref(),
+            Some("The phone was disconnected.")
+        );
         assert_eq!(status.devices[0].state, super::DeviceState::Offline);
         // Not authorized yet: it is listed, and cannot be taken.
         manager.detach("chat");
@@ -1731,8 +3261,14 @@ pub(crate) mod tests {
             state: Connection::Unauthorized,
             model: None,
         }]);
-        assert_eq!(manager.status().devices[0].state, super::DeviceState::Unauthorized);
-        assert!(matches!(manager.attach("chat", Some("adb:NEW1")), Err(Error::Unauthorized)));
+        assert_eq!(
+            manager.status().devices[0].state,
+            super::DeviceState::Unauthorized
+        );
+        assert!(matches!(
+            manager.attach("chat", Some("adb:NEW1")),
+            Err(Error::Unauthorized)
+        ));
     }
 
     #[tokio::test]
@@ -1753,9 +3289,15 @@ pub(crate) mod tests {
             state: Connection::Device,
             model: model.map(str::to_owned),
         };
-        assert_eq!(phone_title(&phone("R58M", Some("Pixel_8_Pro"))), "Pixel 8 Pro");
+        assert_eq!(
+            phone_title(&phone("R58M", Some("Pixel_8_Pro"))),
+            "Pixel 8 Pro"
+        );
         assert_eq!(phone_title(&phone("R58M", None)), "R58M");
-        assert_eq!(phone_title(&phone("emulator-5554", Some("sdk_gphone64"))), "Emulator on port 5554");
+        assert_eq!(
+            phone_title(&phone("emulator-5554", Some("sdk_gphone64"))),
+            "Emulator on port 5554"
+        );
         assert_eq!(megabytes(1_895_447_397), 1807.6);
         assert_eq!(megabytes(0), 0.0);
     }

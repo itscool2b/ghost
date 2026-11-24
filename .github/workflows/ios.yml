@@ -6,6 +6,12 @@ name: iPhone simulator
 # artifact: a transcript of every call, screenshots, and the pane's pictures.
 on:
   workflow_dispatch:
+    inputs:
+      xcode:
+        description: The Xcode to check with
+        type: choice
+        options: [both, "26", "27"]
+        default: both
 
 permissions:
   contents: read
@@ -16,24 +22,40 @@ concurrency:
 
 jobs:
   simulator:
-    name: iPhone simulator (macOS)
-    runs-on: macos-26
+    name: iPhone simulator (Xcode ${{ matrix.xcode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        xcode: ${{ fromJSON(inputs.xcode == 'both' && '["26", "27"]' || format('["{0}"]', inputs.xcode)) }}
+    # Xcode 26 opens Simulator.app for AXe; Xcode 27 has no need. GitHub keeps each Xcode's own
+    # image: macos-26 has Xcode 26, and the xcode-27 image (macOS 27, Apple silicon) Xcode 27.
+    runs-on: ${{ matrix.xcode == '27' && 'xcode-27' || 'macos-26' }}
     timeout-minutes: 75
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install rustup if the image has none
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
+          components: clippy
       - name: Cache Rust build
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Each image its own build: the cache key does not name the image by itself.
+          key: xcode-${{ matrix.xcode }}
           cache-on-failure: true
       - name: Show Xcode and its simulator runtimes
         run: |
+          sw_vers
           xcode-select -p
           xcodebuild -version
           ls -d /Applications/Xcode*.app
@@ -41,18 +63,44 @@ jobs:
       - name: Build the test app for the simulator
         run: bash crates/o7-devices/tests/ios-app/build.sh "$RUNNER_TEMP/ios-app"
       - name: Test o7-devices
+        env:
+          # Debug builds give async tests large frames; the default 2 MiB is tight.
+          RUST_MIN_STACK: "33554432"
         run: cargo test --locked -p o7-devices
       - name: Drive a real iPhone simulator
         env:
+          RUST_MIN_STACK: "33554432"
           O7_IOS_E2E: "1"
           O7_IOS_E2E_APP: ${{ runner.temp }}/ios-app/HelloO7.app
           O7_IOS_E2E_OUT: ${{ runner.temp }}/ios-e2e
         run: cargo test --locked -p o7-devices --test ios -- --nocapture
+      # The crate's lint on the commit the simulator ran, without waiting for the whole CI.
+      - name: Lint o7-devices on a Mac
+        if: ${{ !cancelled() }}
+        run: cargo clippy --locked -p o7-devices --all-targets -- -D warnings
+      - name: Show the simulators and AXe afterwards
+        if: always()
+        run: |
+          xcrun simctl list devices booted
+          axe="$RUNNER_TEMP/ios-e2e/data/ios/axe/2.0.4/axe"
+          udid=$(xcrun simctl list devices | sed -n 's/.*o7 iPhone [0-9] (\([0-9A-F-]*\)) (Booted).*/\1/p' | head -1)
+          echo "o7's booted simulator: ${udid:-none}"
+          if [ -z "$udid" ] || [ ! -x "$axe" ]; then exit 0; fi
+          probe() {
+            echo "== axe $*"
+            /usr/bin/time -p perl -e 'alarm shift; exec @ARGV' 45 "$axe" "$@" 2>&1 | head -c 1500
+            echo
+          }
+          probe --version
+          probe --output json displays --udid "$udid"
+          probe describe-ui --udid "$udid"
+          probe --output json tap -x 200 -y 400 --tap-style physical --udid "$udid"
+          probe --output json key 225 --udid "$udid"
       - name: Keep what the simulator showed
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ios-e2e
+          name: ios-e2e-xcode-${{ matrix.xcode }}
           path: |
             ${{ runner.temp }}/ios-e2e/*.txt
             ${{ runner.temp }}/ios-e2e/*.png

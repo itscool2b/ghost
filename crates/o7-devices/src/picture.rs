@@ -41,7 +41,12 @@ pub fn for_agent(png: &[u8]) -> Result<Picture, Error> {
     let (width, height) = (frame.width, frame.height);
     let factor = factor_for(width, height);
     if factor == 1 {
-        return Ok(Picture { png: png.to_vec(), width, height, factor });
+        return Ok(Picture {
+            png: png.to_vec(),
+            width,
+            height,
+            factor,
+        });
     }
     let samples = frame.color_type.samples();
     let line = frame.line_size;
@@ -76,14 +81,24 @@ pub fn for_agent(png: &[u8]) -> Result<Picture, Error> {
         writer.write_image_data(&small).map_err(|_| unreadable())?;
         writer.finish().map_err(|_| unreadable())?;
     }
-    Ok(Picture { png: out, width: out_width, height: out_height, factor })
+    Ok(Picture {
+        png: out,
+        width: out_width,
+        height: out_height,
+        factor,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn png(width: u32, height: u32, color: png::ColorType, pixel: impl Fn(u32, u32) -> Vec<u8>) -> Vec<u8> {
+    fn png(
+        width: u32,
+        height: u32,
+        color: png::ColorType,
+        pixel: impl Fn(u32, u32) -> Vec<u8>,
+    ) -> Vec<u8> {
         let mut data = Vec::new();
         for y in 0..height {
             for x in 0..width {
@@ -101,7 +116,9 @@ mod tests {
     }
 
     fn decode(png: &[u8]) -> (u32, u32, Vec<u8>) {
-        let mut reader = png::Decoder::new(std::io::Cursor::new(png)).read_info().unwrap();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(png))
+            .read_info()
+            .unwrap();
         let mut pixels = vec![0u8; reader.output_buffer_size().unwrap()];
         let frame = reader.next_frame(&mut pixels).unwrap();
         (frame.width, frame.height, pixels)
@@ -138,7 +155,10 @@ mod tests {
             vec![value, value, value, 255]
         });
         let picture = for_agent(&original).unwrap();
-        assert_eq!((picture.width, picture.height, picture.factor), (540, 1200, 2));
+        assert_eq!(
+            (picture.width, picture.height, picture.factor),
+            (540, 1200, 2)
+        );
         let (width, height, pixels) = decode(&picture.png);
         assert_eq!((width, height), (540, 1200));
         let at = |x: usize, y: usize| pixels[(y * 540 + x) * 4];
@@ -151,7 +171,9 @@ mod tests {
 
     #[test]
     fn rgb_without_alpha_and_odd_sizes_work() {
-        let original = png(1081, 3201, png::ColorType::Rgb, |x, y| vec![(x % 256) as u8, (y % 256) as u8, 7]);
+        let original = png(1081, 3201, png::ColorType::Rgb, |x, y| {
+            vec![(x % 256) as u8, (y % 256) as u8, 7]
+        });
         let picture = for_agent(&original).unwrap();
         assert_eq!(picture.factor, 3);
         assert_eq!((picture.width, picture.height), (360, 1067));

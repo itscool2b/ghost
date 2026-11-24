@@ -99,7 +99,9 @@ fn checked_url(url: &str) -> Result<reqwest::Url, Error> {
     if allowed {
         Ok(parsed)
     } else {
-        Err(Error::Refused("o7 downloads Android's tools only from dl.google.com.".into()))
+        Err(Error::Refused(
+            "o7 downloads Android's tools only from dl.google.com.".into(),
+        ))
     }
 }
 
@@ -133,8 +135,10 @@ fn plain(error: &reqwest::Error) -> String {
 async fn index(client: &reqwest::Client, url: &str) -> Result<Index, Error> {
     let mut response = get(client, url).await?;
     let mut body = Vec::new();
-    while let Some(chunk) =
-        response.chunk().await.map_err(|error| Error::Download(plain(&error)))?
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| Error::Download(plain(&error)))?
     {
         if body.len() + chunk.len() > INDEX_LIMIT {
             return Err(Error::TooLarge);
@@ -147,28 +151,39 @@ async fn index(client: &reqwest::Client, url: &str) -> Result<Index, Error> {
 /// Reads Google's index and chooses the newest stable release of each missing package.
 pub async fn plan(client: &reqwest::Client, host: Host, need: Need) -> Result<Plan, Error> {
     let missing = |what: &str| {
-        Error::Download(format!("Google does not publish {what} for this kind of computer."))
+        Error::Download(format!(
+            "Google does not publish {what} for this kind of computer."
+        ))
     };
     let mut items = Vec::new();
     let mut license = None;
     if need.adb || need.emulator {
         let main = index(client, MAIN_INDEX).await?;
         if need.adb {
-            let choice =
-                main.newest("platform-tools", host).ok_or_else(|| missing("adb"))?;
-            items.push(Item { choice, folder: "platform-tools".into() });
+            let choice = main
+                .newest("platform-tools", host)
+                .ok_or_else(|| missing("adb"))?;
+            items.push(Item {
+                choice,
+                folder: "platform-tools".into(),
+            });
         }
         if need.emulator {
-            let choice =
-                main.newest("emulator", host).ok_or_else(|| missing("the Android emulator"))?;
-            items.push(Item { choice, folder: "emulator".into() });
+            let choice = main
+                .newest("emulator", host)
+                .ok_or_else(|| missing("the Android emulator"))?;
+            items.push(Item {
+                choice,
+                folder: "emulator".into(),
+            });
         }
         license = main.license;
     }
     if need.image {
         let images = index(client, IMAGE_INDEX).await?;
-        let choice =
-            images.newest_image(host).ok_or_else(|| missing("an Android system image"))?;
+        let choice = images
+            .newest_image(host)
+            .ok_or_else(|| missing("an Android system image"))?;
         let folder = ImagePath::parse(&choice.path)
             .ok_or_else(|| Error::Protocol("Google's index named a package oddly.".into()))?
             .folder();
@@ -243,15 +258,19 @@ async fn download(
     let mut hasher = Hasher::new(&expected.checksum);
     let mut received = 0u64;
     let mut reported = 0u64;
-    while let Some(chunk) =
-        response.chunk().await.map_err(|error| Error::Download(plain(&error)))?
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| Error::Download(plain(&error)))?
     {
         if cancel.load(Ordering::Acquire) {
             return Err(Error::Cancelled);
         }
         received += chunk.len() as u64;
         if received > expected.size {
-            return Err(Error::Download(format!("{name} is larger than Google's index says.")));
+            return Err(Error::Download(format!(
+                "{name} is larger than Google's index says."
+            )));
         }
         hasher.update(&chunk);
         file.write_all(&chunk).await?;
@@ -274,7 +293,9 @@ async fn download(
         total,
     });
     if received != expected.size {
-        return Err(Error::Download(format!("The download of {name} was cut short.")));
+        return Err(Error::Download(format!(
+            "The download of {name} was cut short."
+        )));
     }
     if !hasher.matches(&expected.checksum) {
         return Err(Error::Download(format!(
@@ -305,7 +326,12 @@ impl Hasher {
     }
 
     fn matches(self, checksum: &Checksum) -> bool {
-        let hex = |bytes: &[u8]| bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let hex = |bytes: &[u8]| {
+            bytes
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
         match (self, checksum) {
             (Hasher::Sha1(hasher), Checksum::Sha1(expected)) => {
                 hex(&sha1::Digest::finalize(hasher)) == *expected
@@ -344,7 +370,11 @@ fn unpack(archive: &Path, into: &Path) -> Result<(), Error> {
         }
         if entry.is_symlink() {
             let mut link = String::new();
-            entry.by_ref().take(4096).read_to_string(&mut link).map_err(|_| bad())?;
+            entry
+                .by_ref()
+                .take(4096)
+                .read_to_string(&mut link)
+                .map_err(|_| bad())?;
             links.push((relative, link));
             continue;
         }
@@ -360,8 +390,14 @@ fn unpack(archive: &Path, into: &Path) -> Result<(), Error> {
         }
         let mode = entry.unix_mode();
         // `create_new`: a second entry of the same name never overwrites the first.
-        let mut out = std::fs::OpenOptions::new().write(true).create_new(true).open(&target)?;
-        let copied = std::io::copy(&mut entry.by_ref().take(declared.saturating_add(1)), &mut out)?;
+        let mut out = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)?;
+        let copied = std::io::copy(
+            &mut entry.by_ref().take(declared.saturating_add(1)),
+            &mut out,
+        )?;
         written = written.saturating_add(copied);
         if copied != declared {
             return Err(bad());
@@ -412,7 +448,9 @@ fn make_links(into: &Path, links: &[(PathBuf, String)]) -> Result<(), Error> {
 /// placed "inside" another link would really be placed wherever that one leads.
 fn real_folders_only(into: &Path, relative: &Path) -> Result<(), Error> {
     let mut path = into.to_owned();
-    let Some(parent) = relative.parent() else { return Ok(()) };
+    let Some(parent) = relative.parent() else {
+        return Ok(());
+    };
     for part in parent.components() {
         path.push(part);
         match std::fs::symlink_metadata(&path) {
@@ -436,7 +474,9 @@ fn check_link(relative: &Path, link: &str) -> Result<(), Error> {
     if link.is_empty() || link_path.is_absolute() {
         return Err(escapes());
     }
-    let mut depth = relative.parent().map_or(0, |parent| parent.components().count()) as i64;
+    let mut depth = relative
+        .parent()
+        .map_or(0, |parent| parent.components().count()) as i64;
     for part in link_path.components() {
         match part {
             Component::Normal(_) => depth += 1,
@@ -491,10 +531,14 @@ async fn place(unpacked: &Path, destination: &Path) -> Result<(), Error> {
         top.push(entry.path());
     }
     let [folder] = top.as_slice() else {
-        return Err(Error::Download("The downloaded archive is not laid out as expected.".into()));
+        return Err(Error::Download(
+            "The downloaded archive is not laid out as expected.".into(),
+        ));
     };
     if !folder.is_dir() {
-        return Err(Error::Download("The downloaded archive is not laid out as expected.".into()));
+        return Err(Error::Download(
+            "The downloaded archive is not laid out as expected.".into(),
+        ));
     }
     if let Some(parent) = destination.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -518,9 +562,11 @@ mod tests {
         let mut zip = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
         for (name, data) in entries {
             if name.ends_with('/') {
-                zip.add_directory(name.trim_end_matches('/'), SimpleFileOptions::default()).unwrap();
+                zip.add_directory(name.trim_end_matches('/'), SimpleFileOptions::default())
+                    .unwrap();
             } else {
-                zip.start_file(*name, SimpleFileOptions::default().unix_permissions(0o755)).unwrap();
+                zip.start_file(*name, SimpleFileOptions::default().unix_permissions(0o755))
+                    .unwrap();
                 zip.write_all(data).unwrap();
             }
         }
@@ -547,15 +593,31 @@ mod tests {
     fn an_archive_unpacks_into_its_folder() {
         let folder = tempfile::tempdir().unwrap();
         let zip = folder.path().join("a.zip");
-        archive(&zip, &[("platform-tools/", b""), ("platform-tools/adb", b"binary"), ("platform-tools/lib/x.so", b"lib")]);
+        archive(
+            &zip,
+            &[
+                ("platform-tools/", b""),
+                ("platform-tools/adb", b"binary"),
+                ("platform-tools/lib/x.so", b"lib"),
+            ],
+        );
         let into = folder.path().join("out");
         unpack(&zip, &into).unwrap();
-        assert_eq!(std::fs::read(into.join("platform-tools/adb")).unwrap(), b"binary");
-        assert_eq!(std::fs::read(into.join("platform-tools/lib/x.so")).unwrap(), b"lib");
+        assert_eq!(
+            std::fs::read(into.join("platform-tools/adb")).unwrap(),
+            b"binary"
+        );
+        assert_eq!(
+            std::fs::read(into.join("platform-tools/lib/x.so")).unwrap(),
+            b"lib"
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(into.join("platform-tools/adb")).unwrap().permissions().mode();
+            let mode = std::fs::metadata(into.join("platform-tools/adb"))
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o777, 0o755);
         }
     }
@@ -612,8 +674,14 @@ mod tests {
             ],
         )
         .unwrap();
-        assert_eq!(std::fs::read(into.join("emulator/lib/libfoo.so")).unwrap(), b"lib");
-        assert_eq!(std::fs::read(into.join("emulator/current/libfoo.so.1")).unwrap(), b"lib");
+        assert_eq!(
+            std::fs::read(into.join("emulator/lib/libfoo.so")).unwrap(),
+            b"lib"
+        );
+        assert_eq!(
+            std::fs::read(into.join("emulator/current/libfoo.so.1")).unwrap(),
+            b"lib"
+        );
         assert!(std::fs::symlink_metadata(into.join("emulator/dangling")).is_err());
 
         // The chain: `d/up` leads to the top, and a second link "inside" it would then be made
@@ -623,12 +691,18 @@ mod tests {
         std::fs::write(folder.path().join("secret"), b"outside").unwrap();
         let chained = make_links(&into, &[link("d/up", ".."), link("d/up/out", "..")]);
         assert!(chained.is_err());
-        assert!(std::fs::symlink_metadata(into.join("out")).is_err(), "no link at the top");
+        assert!(
+            std::fs::symlink_metadata(into.join("out")).is_err(),
+            "no link at the top"
+        );
 
         // A link whose text is innocent but whose real target is outside, through another link.
         let into = folder.path().join("through");
         std::fs::create_dir_all(into.join("a/b")).unwrap();
-        let through = make_links(&into, &[link("a/b/top", "../.."), link("a/out", "b/top/..")]);
+        let through = make_links(
+            &into,
+            &[link("a/b/top", "../.."), link("a/out", "b/top/..")],
+        );
         assert!(through.is_err());
     }
 
@@ -661,8 +735,14 @@ mod tests {
         let sha1_of_abc = "a9993e364706816aba3e25717850c26c9cd0d89d";
         let sha256_of_abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
         for (checksum, wrong) in [
-            (Checksum::Sha1(sha1_of_abc.into()), Checksum::Sha1("0".repeat(40))),
-            (Checksum::Sha256(sha256_of_abc.into()), Checksum::Sha256("0".repeat(64))),
+            (
+                Checksum::Sha1(sha1_of_abc.into()),
+                Checksum::Sha1("0".repeat(40)),
+            ),
+            (
+                Checksum::Sha256(sha256_of_abc.into()),
+                Checksum::Sha256("0".repeat(64)),
+            ),
         ] {
             let mut hasher = Hasher::new(&checksum);
             hasher.update(b"a");
@@ -682,7 +762,8 @@ mod tests {
 
     #[test]
     fn a_plan_adds_up_its_downloads() {
-        let item = |size: u64| Item {
+        let item = |size: u64| {
+            Item {
             choice: Choice {
                 path: "p".into(),
                 name: "P".into(),
@@ -700,10 +781,20 @@ mod tests {
                 .archive,
             },
             folder: "p".into(),
+        }
         };
-        let plan = Plan { items: vec![item(10), item(32)], license: "terms".into() };
+        let plan = Plan {
+            items: vec![item(10), item(32)],
+            license: "terms".into(),
+        };
         assert_eq!(plan.download_size(), 42);
         assert!(Need::default().nothing());
-        assert!(!Need { image: true, ..Need::default() }.nothing());
+        assert!(
+            !Need {
+                image: true,
+                ..Need::default()
+            }
+            .nothing()
+        );
     }
 }

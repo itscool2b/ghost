@@ -9,16 +9,20 @@
 //! - [`sdk`], [`repo`], [`install`]: finding Android's tools, Google's package index, and
 //!   fetching the three packages the pane needs, each checked before it is unpacked.
 //! - [`avd`], [`emulator`]: virtual devices as files, and the emulator's life.
+//! - [`ios`], [`axe`]: iPhone simulators on a Mac, through Xcode's `simctl` and AXe, which is
+//!   fetched at a pinned version and checked before it is unpacked.
 //! - [`manager`]: which chat holds which device; [`tools`]: what agents may do on theirs.
 //!
 //! Nothing in this crate listens on a port, and every connection it makes is to the loopback
-//! address or to `dl.google.com`.
+//! address, to `dl.google.com`, or to GitHub for AXe's pinned release.
 
 pub mod adb;
 pub mod android;
 pub mod avd;
+pub mod axe;
 pub mod emulator;
 pub mod install;
+pub mod ios;
 pub mod manager;
 pub mod outline;
 pub mod picture;
@@ -44,7 +48,9 @@ pub enum Error {
     #[error("The device is not connected.")]
     DeviceGone,
     /// The phone has not allowed this computer to debug it.
-    #[error("The phone has not allowed this computer yet. Unlock it and accept \"Allow USB debugging\".")]
+    #[error(
+        "The phone has not allowed this computer yet. Unlock it and accept \"Allow USB debugging\"."
+    )]
     Unauthorized,
     /// The device answered, and the answer was a failure.
     #[error("{0}")]

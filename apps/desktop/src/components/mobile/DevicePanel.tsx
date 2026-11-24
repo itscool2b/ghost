@@ -11,7 +11,14 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ChatDevice, DeviceInfo, DeviceKey, Fetch, MobileStatus } from "../../bindings";
+import type {
+  ChatDevice,
+  DeviceInfo,
+  DeviceKey,
+  Fetch,
+  MobileStatus,
+  ToolFetch,
+} from "../../bindings";
 import { errorMessage } from "../../lib/errors";
 import {
   deviceKey,
@@ -25,10 +32,10 @@ import {
 
 /**
  * The device beside the chat (docs/superpowers/plans/2026-11-21-mobile.md): an Android emulator of
- * the chat's own, or a phone the person chose, with its live screen. The person uses it by
- * clicking and typing; the chat's agent uses the same device through its tools, and a bar says
- * what it is doing. Setting Android up, accepting Google's licence and handing a phone to the
- * agent happen here and nowhere else.
+ * the chat's own, an iPhone simulator of its own on a Mac, or a phone the person chose, with its
+ * live screen. The person uses it by clicking and typing; the chat's agent uses the same device
+ * through its tools, and a bar says what it is doing. Setting Android up, accepting Google's
+ * licence and handing a phone to the agent happen here and nowhere else.
  */
 export function DevicePanel({
   chatId,
@@ -67,6 +74,7 @@ export function DevicePanel({
     api.attach(chatId, deviceId).catch(fail);
   };
   const live = held?.live === true;
+  const iphone = held?.kind === "simulator";
   const press = (key: DeviceKey) => api.key(chatId, key).catch(fail);
 
   return (
@@ -84,15 +92,17 @@ export function DevicePanel({
         <span className="device-head-end">
           {live ? (
             <>
-              <button
-                type="button"
-                className="g-button g-button-ghost g-button-icon g-button-28"
-                aria-label="Turn the device"
-                title="Turn the device"
-                onClick={() => api.rotate(chatId).catch(fail)}
-              >
-                <RotateCw size={15} />
-              </button>
+              {iphone ? null : (
+                <button
+                  type="button"
+                  className="g-button g-button-ghost g-button-icon g-button-28"
+                  aria-label="Turn the device"
+                  title="Turn the device"
+                  onClick={() => api.rotate(chatId).catch(fail)}
+                >
+                  <RotateCw size={15} />
+                </button>
+              )}
               <button
                 type="button"
                 className="g-button g-button-ghost g-button-icon g-button-28"
@@ -111,9 +121,9 @@ export function DevicePanel({
               className="g-button g-button-ghost g-button-28"
               data-testid="device-change"
               title={
-                held.kind === "emulator"
-                  ? "Choose another device. This one keeps running for a while."
-                  : "Choose another device"
+                held.kind === "phone"
+                  ? "Choose another device"
+                  : "Choose another device. This one keeps running for a while."
               }
               onClick={() => {
                 setProblem(null);
@@ -183,6 +193,7 @@ export function DevicePanel({
             chatId={chatId}
             api={api}
             held={held}
+            tool={status.setup.ios.tool}
             onError={fail}
             onRetry={() => attach(held.device_id)}
           />
@@ -192,15 +203,18 @@ export function DevicePanel({
       </div>
       {live ? (
         <div className="device-keys" role="toolbar" aria-label="Device buttons">
-          <button
-            type="button"
-            className="g-button g-button-ghost g-button-icon g-button-28"
-            aria-label="Back"
-            title="Back"
-            onClick={() => press("back")}
-          >
-            <ChevronLeft size={17} />
-          </button>
+          {/* An iPhone has no Back button: its apps go back with a swipe from the left edge. */}
+          {iphone ? null : (
+            <button
+              type="button"
+              className="g-button g-button-ghost g-button-icon g-button-28"
+              aria-label="Back"
+              title="Back"
+              onClick={() => press("back")}
+            >
+              <ChevronLeft size={17} />
+            </button>
+          )}
           <button
             type="button"
             className="g-button g-button-ghost g-button-icon g-button-28"
@@ -230,12 +244,15 @@ function HeldDevice({
   chatId,
   api,
   held,
+  tool,
   onError,
   onRetry,
 }: {
   readonly chatId: string;
   readonly api: MobileApi;
   readonly held: ChatDevice;
+  /** AXe, which an iPhone's first start downloads. */
+  readonly tool: ToolFetch;
   readonly onError: (error: unknown) => void;
   readonly onRetry: () => void;
 }) {
@@ -248,8 +265,28 @@ function HeldDevice({
         <p>
           {held.kind === "emulator"
             ? "A first start takes about a minute. After that it starts from where it left off."
-            : "Connecting to the phone."}
+            : held.kind === "simulator"
+              ? "A first start takes about a minute. After that it starts quicker."
+              : "Connecting to the phone."}
         </p>
+        {held.kind === "simulator" && tool.state === "downloading" ? (
+          <>
+            <progress
+              className="device-meter"
+              value={
+                (tool.total_mb ?? 0) > 0
+                  ? Math.min(1, (tool.received_mb ?? 0) / (tool.total_mb ?? 1))
+                  : 0
+              }
+              max={1}
+              aria-label="AXe download progress"
+            />
+            <p data-testid="device-tool">
+              Downloading AXe, which o7 drives the simulator with: {megabytes(tool.received_mb)} of{" "}
+              {megabytes(tool.total_mb)}.
+            </p>
+          </>
+        ) : null}
       </div>
     );
   return (
@@ -448,14 +485,29 @@ function Chooser({
   const { setup, devices } = status;
   const phones = devices.filter((device) => device.kind === "phone");
   const emulators = devices.filter((device) => device.kind === "emulator");
+  const simulators = devices.filter((device) => device.kind === "simulator");
   const slow = setup.acceleration !== null && !setup.acceleration.usable;
   const busy = setup.fetch.state !== "idle";
 
   if (busy) return <FetchView fetch={setup.fetch} api={api} onError={onError} />;
 
+  const listed = [...emulators, ...simulators, ...phones];
+  const blocked = (device: DeviceInfo) =>
+    device.kind === "emulator"
+      ? slow || !setup.emulator
+      : device.kind === "simulator"
+        ? !setup.ios.ready
+        : false;
   return (
     <div className="device-message device-chooser" data-testid="device-chooser">
-      {setup.emulator ? (
+      {setup.ios.possible ? (
+        <MacChoices
+          setup={setup}
+          slow={slow}
+          onAttach={onAttach}
+          onSetUp={() => api.fetchOffer().catch(onError)}
+        />
+      ) : setup.emulator ? (
         <>
           <h2>A phone beside the chat</h2>
           <p>
@@ -499,13 +551,13 @@ function Chooser({
           </button>
         </>
       )}
-      {emulators.length > 0 || phones.length > 0 ? (
+      {listed.length > 0 ? (
         <ul className="device-list" aria-label="Devices">
-          {[...emulators, ...phones].map((device) => (
+          {listed.map((device) => (
             <DeviceRow
               key={device.id}
               device={device}
-              blocked={device.kind === "emulator" && (slow || !setup.emulator)}
+              blocked={blocked(device)}
               onUse={() => onAttach(device.id)}
               onStop={() => api.stopDevice(device.id).catch(onError)}
             />
@@ -514,10 +566,89 @@ function Chooser({
       ) : null}
       {setup.adb && phones.length === 0 ? (
         <p className="device-note">
-          To use your own phone, turn on USB debugging in its developer options and plug it in.
+          To use your own Android phone, turn on USB debugging in its developer options and plug it
+          in.
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * On a Mac: an Android phone and an iPhone, one row each, started or set up from the row. An
+ * iPhone needs Xcode, which the person installs from Apple; the row says what is missing.
+ */
+function MacChoices({
+  setup,
+  slow,
+  onAttach,
+  onSetUp,
+}: {
+  readonly setup: MobileStatus["setup"];
+  readonly slow: boolean;
+  readonly onAttach: (deviceId: string | null) => void;
+  readonly onSetUp: () => void;
+}) {
+  const ios = setup.ios;
+  const android = !setup.emulator
+    ? "Downloads Android's emulator from Google, about 8 GB"
+    : slow
+      ? (setup.acceleration?.fix ?? setup.acceleration?.detail ?? "It cannot run fast here yet.")
+      : "Android's emulator";
+  return (
+    <>
+      <h2>A phone beside the chat</h2>
+      <p>
+        Start an Android phone or an iPhone that you and your agent both use. Each chat gets its
+        own, so two chats never install over each other.
+      </p>
+      <ul className="device-list" aria-label="Phones to start" data-testid="device-kinds">
+        <li className="device-row">
+          <span className="device-row-text">
+            <span className="device-row-title">Android phone</span>
+            <span className="device-row-state">{android}</span>
+          </span>
+          {setup.emulator ? (
+            <button
+              type="button"
+              className="g-button g-button-outline g-button-28"
+              data-testid="device-start"
+              disabled={slow}
+              onClick={() => onAttach("android")}
+            >
+              Start
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="g-button g-button-outline g-button-28"
+              data-testid="device-setup"
+              onClick={onSetUp}
+            >
+              Set up
+            </button>
+          )}
+        </li>
+        <li className="device-row">
+          <span className="device-row-text">
+            <span className="device-row-title">iPhone</span>
+            <span className="device-row-state" data-testid="device-iphone-state">
+              {ios.ready ? ios.detail : (ios.missing ?? "Looking for Xcode")}
+            </span>
+          </span>
+          {ios.ready ? (
+            <button
+              type="button"
+              className="g-button g-button-outline g-button-28"
+              data-testid="device-start-iphone"
+              onClick={() => onAttach("ios")}
+            >
+              Start
+            </button>
+          ) : null}
+        </li>
+      </ul>
+    </>
   );
 }
 
@@ -550,19 +681,18 @@ function DeviceRow({
   readonly onUse: () => void;
   readonly onStop: () => void;
 }) {
+  const own = device.kind !== "phone";
   const usable =
     !blocked &&
     device.chat_id === null &&
-    (device.kind === "emulator"
-      ? device.state === "stopped" || device.state === "ready"
-      : device.state === "ready");
+    (own ? device.state === "stopped" || device.state === "ready" : device.state === "ready");
   return (
     <li className="device-row" data-testid="device-row">
       <span className="device-row-text">
         <span className="device-row-title">{device.title}</span>
         <span className="device-row-state">{device.error ?? stateWords(device)}</span>
       </span>
-      {device.kind === "emulator" && device.state === "ready" && device.chat_id === null ? (
+      {own && device.state === "ready" && device.chat_id === null ? (
         <button type="button" className="g-button g-button-ghost g-button-28" onClick={onStop}>
           Stop
         </button>

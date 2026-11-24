@@ -834,7 +834,10 @@ mod tests {
     fn mobile_is_on_for_legacy_profiles_and_can_be_turned_off() {
         let dir = tempfile::tempdir().unwrap();
         let mut legacy = serde_json::to_value(Record::default()).unwrap();
-        legacy["preferences"]["general"].as_object_mut().unwrap().remove("mobile");
+        legacy["preferences"]["general"]
+            .as_object_mut()
+            .unwrap()
+            .remove("mobile");
         std::fs::write(
             dir.path().join("onboarding.json"),
             serde_json::to_vec(&legacy).unwrap(),
@@ -843,11 +846,16 @@ mod tests {
         let store = OnboardingStore::open(dir.path()).unwrap();
         assert!(store.snapshot().unwrap().notice.is_none());
         assert!(store.preferences().general.mobile);
-        store.apply(0, SetupAction::Mobile { enabled: false }).unwrap();
+        store
+            .apply(0, SetupAction::Mobile { enabled: false })
+            .unwrap();
         let reopened = OnboardingStore::open(dir.path()).unwrap();
         assert_eq!(
             reopened.preferences().general,
-            GeneralPreferences { mobile: false, ..GeneralPreferences::default() }
+            GeneralPreferences {
+                mobile: false,
+                ..GeneralPreferences::default()
+            }
         );
     }
 

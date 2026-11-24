@@ -34,7 +34,9 @@ and take input in the Device pane. `scrcpy.json` pins its release and the SHA-25
 publishes, `crates/o7-devices` refuses any other bytes, and its LICENSE is preserved in
 `upstream/`. The generator fails when the bundled file and that pin disagree. Android's own tools
 (adb, the emulator, a system image) are not bundled: o7 fetches them from Google on the person's
-own computer, after the person has read and accepted Google's SDK licence in the pane.
+own computer, after the person has read and accepted Google's SDK licence in the pane. AXe, which
+drives iPhone simulators on a Mac, is not bundled either: o7 fetches one pinned MIT release from
+its own GitHub release page on an iPhone's first start, checked by size and SHA-256 (`axe.md`).
 
 An npm package whose package.json names no license gets the license its own license file states,
 reviewed into `NPM_LICENSES` (khroma, MIT); any other stops the refresh. `NPM_EXCLUDED` lists packages

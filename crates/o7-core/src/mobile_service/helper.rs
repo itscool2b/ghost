@@ -82,7 +82,7 @@ fn reference() -> Value {
 }
 
 fn package() -> Value {
-    json!({ "type": "string", "description": "The app's package, like com.example.app." })
+    json!({ "type": "string", "description": "The app's Android package or iPhone bundle id, like com.example.app." })
 }
 
 fn nothing() -> Value {
@@ -93,36 +93,39 @@ pub(crate) fn tools() -> Value {
     json!([
         {
             "name": "mobile_devices",
-            "description": "List the devices o7 knows (its own Android emulators, and phones on a cable), each one's state, and which is this chat's.",
+            "description": "List the devices o7 knows (its own Android emulators, its own iPhone simulators on a Mac, and phones on a cable), each one's state, and which is this chat's.",
             "inputSchema": nothing()
         },
         {
             "name": "mobile_start",
-            "description": "Start this chat's device and wait until it is ready: an Android emulator of this chat's own, made if there is none. A first start takes about a minute. Says the screen's size, where adb is and the device's serial. Only the person can choose a phone, in the Device pane.",
+            "description": "Start this chat's device and wait until it is ready: an Android emulator of this chat's own, or with platform ios an iPhone simulator of its own (a Mac with Xcode), made if there is none. A first start takes about a minute. Says the screen's size, and for an iPhone its UDID to build for. Only the person can choose a phone, in the Device pane.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "device": { "type": "string", "description": "A device id from mobile_devices, to start that emulator instead of any free one." } },
+                "properties": {
+                    "platform": { "type": "string", "enum": ["android", "ios"], "description": "android (the default when Android is set up) or ios." },
+                    "device": { "type": "string", "description": "A device id from mobile_devices, to start that emulator or simulator instead of any free one." }
+                },
                 "additionalProperties": false
             }
         },
         {
             "name": "mobile_install",
-            "description": "Install an .apk file from this computer on the device, replacing the copy that is there. Build it first with the project's own tools.",
+            "description": "Install an app built on this computer on the device, replacing the copy that is there: an .apk for Android, or the .app a build made for the iPhone simulator. Build it first with the project's own tools.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "path": { "type": "string", "description": "The .apk file's full path on this computer." } },
+                "properties": { "path": { "type": "string", "description": "The .apk file's or .app folder's full path on this computer." } },
                 "required": ["path"],
                 "additionalProperties": false
             }
         },
         {
             "name": "mobile_launch",
-            "description": "Start an installed app at its first screen, or at the activity named. Says what was started.",
+            "description": "Start an installed app at its first screen (by its package, or its bundle id on an iPhone), or at the Android activity named. Says what was started.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "package": package(),
-                    "activity": { "type": "string", "description": "An activity to start instead of the app's launcher screen, like .SettingsActivity." }
+                    "activity": { "type": "string", "description": "Android only: an activity to start instead of the app's launcher screen, like .SettingsActivity." }
                 },
                 "required": ["package"],
                 "additionalProperties": false
@@ -189,7 +192,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "mobile_press",
-            "description": "Press a key: back, home, recents, enter, tab, escape, delete, space, up, down, left, right, page_up, page_down, menu, volume_up, volume_down or power.",
+            "description": "Press a key: back, home, recents, enter, tab, escape, delete, space, up, down, left, right, page_up, page_down, menu, volume_up, volume_down or power. On an iPhone, back swipes in from the left edge, and menu and the volume keys do not exist.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "key": { "type": "string" } },
@@ -226,7 +229,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "mobile_settings",
-            "description": "Change how the device is set, to check the app under each: appearance (light or dark), text_scale (0.85 to 2, 1 is usual), orientation (portrait or landscape), or grant or take away one of an app's permissions.",
+            "description": "Change how the device is set, to check the app under each: appearance (light or dark), text_scale (0.85 to 2 on Android, up to 3 on an iPhone; 1 is usual), orientation (portrait or landscape, Android only), or grant or take away one of an app's permissions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -237,7 +240,7 @@ pub(crate) fn tools() -> Value {
                         "type": "object",
                         "properties": {
                             "package": package(),
-                            "name": { "type": "string", "description": "Like android.permission.CAMERA." },
+                            "name": { "type": "string", "description": "Android: like android.permission.CAMERA. iPhone: calendar, contacts, location, location-always, photos, photos-add, media-library, microphone, motion, reminders, siri or all." },
                             "granted": { "type": "boolean" }
                         },
                         "required": ["package", "name"],
@@ -263,7 +266,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "mobile_stop",
-            "description": "Stop this chat's emulator when the work with it is done, or let go of the person's phone. The emulator saves its state, so its next start is quick.",
+            "description": "Stop this chat's emulator or iPhone simulator when the work with it is done, or let go of the person's phone. Its state is kept, so its next start is quicker.",
             "inputSchema": nothing()
         }
     ])

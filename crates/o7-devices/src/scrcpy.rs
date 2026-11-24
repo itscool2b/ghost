@@ -17,8 +17,8 @@ use tokio::net::TcpStream;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::task::AbortHandle;
 
-use crate::adb::Adb;
 use crate::Error;
+use crate::adb::Adb;
 
 /// The scrcpy release whose server is bundled and whose protocol this module speaks.
 pub const VERSION: &str = "5.0.1";
@@ -51,7 +51,11 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { max_size: 1600, bit_rate: 8_000_000, max_fps: 60 }
+        Options {
+            max_size: 1600,
+            bit_rate: 8_000_000,
+            max_fps: 60,
+        }
     }
 }
 
@@ -150,7 +154,9 @@ pub mod key {
 pub async fn start(adb: &Adb, serial: &str, options: Options) -> Result<Session, Error> {
     adb.push(serial, SERVER, REMOTE_PATH, 0o644).await?;
     // 31 random bits, as scrcpy's own client picks, so two sessions on one device do not meet.
-    let scid = (std::collections::hash_map::RandomState::new().build_hasher().finish() as u32)
+    let scid = (std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish() as u32)
         & 0x7fff_ffff;
     let command = format!(
         "shell:CLASSPATH={REMOTE_PATH} app_process / com.genymobile.scrcpy.Server {VERSION} \
@@ -197,7 +203,11 @@ pub async fn start(adb: &Adb, serial: &str, options: Options) -> Result<Session,
         failed => {
             server.abort();
             let said = said_rx.borrow_and_update().clone();
-            let said = said.lines().rev().find(|line| !line.trim().is_empty()).map(str::trim);
+            let said = said
+                .lines()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .map(str::trim);
             return Err(match (failed, said) {
                 (_, Some(said)) => {
                     Error::Device(format!("The device's screen could not be shown: {said}"))
@@ -213,7 +223,10 @@ pub async fn start(adb: &Adb, serial: &str, options: Options) -> Result<Session,
             "The device could not encode its screen as H.264 video.".into(),
         ));
     }
-    let end = name.iter().position(|byte| *byte == 0).unwrap_or(name.len());
+    let end = name
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(name.len());
     let device_name = String::from_utf8_lossy(&name[..end]).into_owned();
     let (mut reader, writer) = control.into_split();
     // What the device sends back (its clipboard, acknowledgements) is not used; it is read so
@@ -226,7 +239,11 @@ pub async fn start(adb: &Adb, serial: &str, options: Options) -> Result<Session,
     Ok(Session {
         device_name,
         video: Video { stream: video },
-        control: Control { writer, drain, sequence: 0 },
+        control: Control {
+            writer,
+            drain,
+            sequence: 0,
+        },
         server: Server(server),
     })
 }
@@ -245,8 +262,16 @@ async fn open_when_listening(adb: &Adb, serial: &str, socket: &str) -> Result<Tc
 /// A packet's 12-byte header, decoded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Head {
-    Size { width: u32, height: u32 },
-    Media { config: bool, key: bool, pts: u64, length: usize },
+    Size {
+        width: u32,
+        height: u32,
+    },
+    Media {
+        config: bool,
+        key: bool,
+        pts: u64,
+        length: usize,
+    },
 }
 
 fn parse_head(head: [u8; 12]) -> Head {
@@ -256,7 +281,10 @@ fn parse_head(head: [u8; 12]) -> Head {
     let second = u32::from_be_bytes([head[8], head[9], head[10], head[11]]);
     if first >> 63 == 1 {
         // A session packet: a flags word, then the width and the height.
-        return Head::Size { width: (first & 0xffff_ffff) as u32, height: second };
+        return Head::Size {
+            width: (first & 0xffff_ffff) as u32,
+            height: second,
+        };
     }
     let config = first & (1 << 62) != 0;
     Head::Media {
@@ -272,16 +300,31 @@ impl Video {
     /// was closed.
     pub async fn next(&mut self) -> Result<Packet, Error> {
         let mut head = [0u8; 12];
-        self.stream.read_exact(&mut head).await.map_err(|_| Error::DeviceGone)?;
+        self.stream
+            .read_exact(&mut head)
+            .await
+            .map_err(|_| Error::DeviceGone)?;
         match parse_head(head) {
             Head::Size { width, height } => Ok(Packet::Size { width, height }),
-            Head::Media { config, key, pts, length } => {
+            Head::Media {
+                config,
+                key,
+                pts,
+                length,
+            } => {
                 if length > PACKET_LIMIT {
                     return Err(Error::TooLarge);
                 }
                 let mut data = vec![0u8; length];
-                self.stream.read_exact(&mut data).await.map_err(|_| Error::DeviceGone)?;
-                Ok(if config { Packet::Config(data) } else { Packet::Frame { key, pts, data } })
+                self.stream
+                    .read_exact(&mut data)
+                    .await
+                    .map_err(|_| Error::DeviceGone)?;
+                Ok(if config {
+                    Packet::Config(data)
+                } else {
+                    Packet::Frame { key, pts, data }
+                })
             }
         }
     }
@@ -289,7 +332,10 @@ impl Video {
 
 impl Control {
     async fn send(&mut self, message: &[u8]) -> Result<(), Error> {
-        self.writer.write_all(message).await.map_err(|_| Error::DeviceGone)?;
+        self.writer
+            .write_all(message)
+            .await
+            .map_err(|_| Error::DeviceGone)?;
         self.writer.flush().await.map_err(|_| Error::DeviceGone)
     }
 
@@ -316,7 +362,8 @@ impl Control {
         horizontal: f32,
         vertical: f32,
     ) -> Result<(), Error> {
-        self.send(&scroll_message(x, y, size, horizontal, vertical)).await
+        self.send(&scroll_message(x, y, size, horizontal, vertical))
+            .await
     }
 
     /// One key, pressed and released.
@@ -340,7 +387,9 @@ impl Control {
             return Ok(());
         }
         if text.len() > CLIPBOARD_LIMIT {
-            return Err(Error::Refused("That is too much text to type at once.".into()));
+            return Err(Error::Refused(
+                "That is too much text to type at once.".into(),
+            ));
         }
         if text.chars().all(|ch| ch == ' ' || ch.is_ascii_graphic()) {
             for part in text.as_bytes().chunks(TEXT_LIMIT) {
@@ -509,10 +558,16 @@ mod tests {
 
     #[test]
     fn keys_text_and_paste_match_scrcpys_layout() {
-        assert_eq!(key_message(true, key::ENTER, 0), [0, 1, 0, 0, 0, 0x42, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(
+            key_message(true, key::ENTER, 0),
+            [0, 1, 0, 0, 0, 0x42, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
         assert_eq!(key_message(false, key::BACK, 0)[1], 0);
         // scrcpy's vector: Enter up with Shift held.
-        assert_eq!(key_message(true, key::ENTER, 0x41), [0, 1, 0, 0, 0, 0x42, 0, 0, 0, 0, 0, 0, 0, 0x41]);
+        assert_eq!(
+            key_message(true, key::ENTER, 0x41),
+            [0, 1, 0, 0, 0, 0x42, 0, 0, 0, 0, 0, 0, 0, 0x41]
+        );
         let mut text = vec![1, 0, 0, 0, 0x0d];
         text.extend_from_slice(b"hello, world!");
         assert_eq!(text_message(b"hello, world!"), text);
@@ -526,24 +581,45 @@ mod tests {
         // A session packet: the first bit, then the width and the height.
         assert_eq!(
             parse_head([0x80, 0, 0, 0, 0, 0, 0x02, 0x40, 0, 0, 0x05, 0]),
-            Head::Size { width: 576, height: 1280 }
+            Head::Size {
+                width: 576,
+                height: 1280
+            }
         );
         // The "client resized" flag does not change the width.
         assert_eq!(
             parse_head([0x80, 0, 0, 1, 0, 0, 0x02, 0x40, 0, 0, 0x05, 0]),
-            Head::Size { width: 576, height: 1280 }
+            Head::Size {
+                width: 576,
+                height: 1280
+            }
         );
         assert_eq!(
             parse_head([0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32]),
-            Head::Media { config: true, key: false, pts: 0, length: 32 }
+            Head::Media {
+                config: true,
+                key: false,
+                pts: 0,
+                length: 32
+            }
         );
         assert_eq!(
             parse_head([0x20, 0, 0, 0, 0, 0, 0x03, 0xe8, 0, 0, 0x64, 0x41]),
-            Head::Media { config: false, key: true, pts: 1000, length: 25665 }
+            Head::Media {
+                config: false,
+                key: true,
+                pts: 1000,
+                length: 25665
+            }
         );
         assert_eq!(
             parse_head([0, 0, 0, 0, 0, 0x01, 0x86, 0xa0, 0, 0, 0, 9]),
-            Head::Media { config: false, key: false, pts: 100_000, length: 9 }
+            Head::Media {
+                config: false,
+                key: false,
+                pts: 100_000,
+                length: 9
+            }
         );
     }
 }

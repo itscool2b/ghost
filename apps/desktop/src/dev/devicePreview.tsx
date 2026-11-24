@@ -5,8 +5,10 @@
  * emulator, are recorded in the plan.
  *
  * `?state=` chooses what the pane opens on: `setup`, `offer`, `downloading`, `failed`, `slow`,
- * `chooser` (the default), `starting`, `live`, `stopped`, `phone` or `off`. `window.deviceFixture`
- * is the stand-in itself: its `calls`, `change(...)` and `watching`.
+ * `chooser` (the default), `starting`, `live`, `stopped`, `phone` or `off`; on a Mac, `mac` (an
+ * Android phone and an iPhone to start), `mac-missing` (no Xcode), `iphone-starting` (AXe on its
+ * way) and `iphone` (a live simulator). `window.deviceFixture` is the stand-in itself: its
+ * `calls`, `change(...)` and `watching`.
  */
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -21,7 +23,17 @@ import {
   sessionInfo,
 } from "../lib/chat/testing";
 import { devicePanels, MobileStore } from "../lib/mobile";
-import { emulator, FakeMobile, held, mobileStatus, OFFER, phone } from "./mobileFixture";
+import {
+  emulator,
+  FakeMobile,
+  held,
+  MAC_IPHONE,
+  macStatus,
+  mobileStatus,
+  OFFER,
+  phone,
+  simulator,
+} from "./mobileFixture";
 import { withPreviewContext } from "./previewContext";
 
 declare global {
@@ -105,6 +117,45 @@ function statusFor(state: string): MobileStatus {
       });
     case "off":
       return mobileStatus({ enabled: false });
+    case "mac":
+      return macStatus({
+        devices: [simulator({ state: "ready" }), emulator()],
+      });
+    case "mac-missing":
+      return macStatus({
+        setup: {
+          ...base.setup,
+          ios: {
+            ...MAC_IPHONE,
+            ready: false,
+            detail: null,
+            missing: "Install Xcode from the App Store and open it once, then come back.",
+          },
+        },
+      });
+    case "iphone-starting":
+      return macStatus({
+        setup: {
+          ...base.setup,
+          ios: { ...MAC_IPHONE, tool: { state: "downloading", received_mb: 4.2, total_mb: 15.8 } },
+        },
+        devices: [simulator({ state: "starting", chat_id: CHAT })],
+        chats: [
+          held(CHAT, {
+            device_id: "o7_iphone_1",
+            kind: "simulator",
+            title: "iPhone 1",
+            starting: true,
+            live: false,
+          }),
+        ],
+      });
+    case "iphone":
+      return macStatus({
+        setup: { ...base.setup, ios: { ...MAC_IPHONE, tool: { state: "ready" } } },
+        devices: [simulator({ state: "ready", chat_id: CHAT })],
+        chats: [held(CHAT, { device_id: "o7_iphone_1", kind: "simulator", title: "iPhone 1" })],
+      });
     default:
       return mobileStatus({
         devices: [

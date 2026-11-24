@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { MobileStatus, SetupPreferences } from "../../bindings";
-import { emulator, FakeMobile, mobileStatus } from "../../dev/mobileFixture";
+import { emulator, FakeMobile, macStatus, mobileStatus, simulator } from "../../dev/mobileFixture";
 import { MobileStore } from "../../lib/mobile";
 import { DEFAULT_GENERAL } from "../../lib/setup";
 import type { Preferences } from "../settings/preferences";
@@ -57,7 +57,7 @@ describe("Settings > Mobile", () => {
 
   it("says what is installed in plain words", () => {
     const android = (status: MobileStatus) =>
-      />([^<]*)<\/span><\/div><\/div><\/section>/.exec(render(status))?.[1] ?? "";
+      /data-testid="mobile-android">([^<]*)</.exec(render(status))?.[1] ?? "";
     expect(android(mobileStatus())).toMatch(/^Set up\. Open the Device pane/);
     expect(
       android(
@@ -91,6 +91,28 @@ describe("Settings > Mobile", () => {
         },
       }),
     ).toBe("The emulator is installed, but this computer cannot run it fast yet. Turn it on.");
+  });
+
+  it("says what an iPhone needs, and what runs on a Mac that has it", () => {
+    const iphone = (status: MobileStatus) =>
+      /data-testid="mobile-iphone">([^<]*)</.exec(render(status))?.[1] ?? "";
+    expect(iphone(mobileStatus())).toBe("An iPhone simulator needs a Mac with Xcode.");
+    expect(iphone(macStatus())).toBe(
+      "Ready: Xcode 26.1, iPhone 17 Pro, iOS 26.1. Open the Device pane in a chat to start an iPhone.",
+    );
+    expect(iphone(macStatus({ devices: [simulator({ state: "ready" })] }))).toBe(
+      "Ready: Xcode 26.1, iPhone 17 Pro, iOS 26.1. One iPhone is running.",
+    );
+    const mac = macStatus();
+    expect(
+      iphone({
+        ...mac,
+        setup: {
+          ...mac.setup,
+          ios: { ...mac.setup.ios, ready: false, detail: null, missing: "Install Xcode." },
+        },
+      }),
+    ).toBe("Install Xcode.");
   });
 
   it("turned off, says what stops and shows nothing else", () => {

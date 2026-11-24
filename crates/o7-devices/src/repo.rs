@@ -157,14 +157,13 @@ impl ImagePath {
         };
         let plain = |part: &str| {
             !part.is_empty()
-                && part.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+                && part
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
                 && !part.starts_with('.')
         };
-        (parts.next().is_none()
-            && plain(&image.platform)
-            && plain(&image.tag)
-            && plain(&image.abi))
-        .then_some(image)
+        (parts.next().is_none() && plain(&image.platform) && plain(&image.tag) && plain(&image.abi))
+            .then_some(image)
     }
 
     /// The Android version as a number that sorts: `android-36` is 36.0, `android-37.0` is 37.0.
@@ -186,7 +185,9 @@ impl Index {
     pub fn parse(xml: &str, source: &str) -> Result<Index, Error> {
         let base = source.rsplit_once('/').map_or(source, |(base, _)| base);
         if !base.starts_with(&format!("https://{HOST}/")) {
-            return Err(Error::Refused("The index is not from Google's download site.".into()));
+            return Err(Error::Refused(
+                "The index is not from Google's download site.".into(),
+            ));
         }
         let unreadable = || Error::Protocol("Google's package index could not be read.".into());
         let mut reader = Reader::from_str(xml);
@@ -243,7 +244,9 @@ impl Index {
                 Event::CData(chunk) => text.push_str(&chunk),
                 Event::GeneralRef(reference) => text.push_str(&resolve(&reference)),
                 Event::End(_) => {
-                    let Some(name) = path.pop() else { return Err(unreadable()) };
+                    let Some(name) = path.pop() else {
+                        return Err(unreadable());
+                    };
                     let parent = path.last().map(String::as_str).unwrap_or_default();
                     let value = text.trim();
                     match (name.as_str(), parent) {
@@ -347,7 +350,11 @@ impl Index {
 }
 
 fn choice(package: &Package, host: Host) -> Option<Choice> {
-    let archive = package.archives.iter().find(|archive| archive.fits(host))?.clone();
+    let archive = package
+        .archives
+        .iter()
+        .find(|archive| archive.fits(host))?
+        .clone();
     Some(Choice {
         path: package.path.clone(),
         name: package.name.clone(),
@@ -385,7 +392,10 @@ impl Draft {
         if !digest.chars().all(|ch| ch.is_ascii_hexdigit()) {
             return None;
         }
-        let checksum = match (self.checksum_type.as_deref().unwrap_or("sha1"), digest.len()) {
+        let checksum = match (
+            self.checksum_type.as_deref().unwrap_or("sha1"),
+            digest.len(),
+        ) {
             ("sha1" | "sha-1", 40) => Checksum::Sha1(digest),
             ("sha256" | "sha-256", 64) => Checksum::Sha256(digest),
             _ => return None,
@@ -403,7 +413,13 @@ impl Draft {
             Some("aarch64") => Some(HostArch::Arm64),
             Some(_) => return None,
         };
-        Some(Archive { url: format!("{base}/{file}"), size: self.size.filter(|size| *size > 0)?, checksum, os, arch })
+        Some(Archive {
+            url: format!("{base}/{file}"),
+            size: self.size.filter(|size| *size > 0)?,
+            checksum,
+            os,
+            arch,
+        })
     }
 }
 
@@ -418,7 +434,10 @@ fn attribute(element: &BytesStart<'_>, key: &str) -> Option<String> {
         .flatten()
         .find(|attribute| attribute.key.as_ref() == key)
         .and_then(|attribute| {
-            attribute.normalized_value(XmlVersion::Implicit1_0).ok().map(|value| value.into_owned())
+            attribute
+                .normalized_value(XmlVersion::Implicit1_0)
+                .ok()
+                .map(|value| value.into_owned())
         })
 }
 
@@ -427,28 +446,56 @@ fn resolve(reference: &BytesRef<'_>) -> String {
     if let Ok(Some(ch)) = reference.resolve_char_ref() {
         return ch.to_string();
     }
-    quick_xml::escape::resolve_predefined_entity(reference).unwrap_or_default().to_owned()
+    quick_xml::escape::resolve_predefined_entity(reference)
+        .unwrap_or_default()
+        .to_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const WINDOWS: Host = Host { os: HostOs::Windows, arch: HostArch::X64 };
-    const MAC_ARM: Host = Host { os: HostOs::MacOs, arch: HostArch::Arm64 };
-    const LINUX: Host = Host { os: HostOs::Linux, arch: HostArch::X64 };
+    const WINDOWS: Host = Host {
+        os: HostOs::Windows,
+        arch: HostArch::X64,
+    };
+    const MAC_ARM: Host = Host {
+        os: HostOs::MacOs,
+        arch: HostArch::Arm64,
+    };
+    const LINUX: Host = Host {
+        os: HostOs::Linux,
+        arch: HostArch::X64,
+    };
 
-    fn archive(file: &str, size: u64, digest: &str, os: Option<&str>, arch: Option<&str>) -> String {
+    fn archive(
+        file: &str,
+        size: u64,
+        digest: &str,
+        os: Option<&str>,
+        arch: Option<&str>,
+    ) -> String {
         format!(
             "<archive><complete><size>{size}</size><checksum type=\"sha1\">{digest}</checksum><url>{file}</url></complete>\
              <patches><patch><size>1</size><checksum type=\"sha1\">{bad}</checksum><url>patch.zip</url></patch></patches>{os}{arch}</archive>",
             bad = "0".repeat(40),
-            os = os.map(|os| format!("<host-os>{os}</host-os>")).unwrap_or_default(),
-            arch = arch.map(|arch| format!("<host-arch>{arch}</host-arch>")).unwrap_or_default(),
+            os = os
+                .map(|os| format!("<host-os>{os}</host-os>"))
+                .unwrap_or_default(),
+            arch = arch
+                .map(|arch| format!("<host-arch>{arch}</host-arch>"))
+                .unwrap_or_default(),
         )
     }
 
-    fn package(path: &str, revision: (u32, u32, u32), extra: &str, license: &str, channel: &str, archives: &str) -> String {
+    fn package(
+        path: &str,
+        revision: (u32, u32, u32),
+        extra: &str,
+        license: &str,
+        channel: &str,
+        archives: &str,
+    ) -> String {
         format!(
             "<remotePackage path=\"{path}\"{extra}><type-details xsi:type=\"x\"><api-level>36</api-level></type-details>\
              <revision><major>{}</major><minor>{}</minor><micro>{}</micro></revision>\
@@ -476,7 +523,20 @@ mod tests {
     fn the_newest_stable_release_for_this_computer_is_chosen() {
         let xml = document(
             &[
-                package("emulator", (37, 4, 1), "", "android-sdk-preview-license", "channel-2", &archive("emulator-windows_x64-2.zip", 9, &sha('a'), Some("windows"), Some("x64"))),
+                package(
+                    "emulator",
+                    (37, 4, 1),
+                    "",
+                    "android-sdk-preview-license",
+                    "channel-2",
+                    &archive(
+                        "emulator-windows_x64-2.zip",
+                        9,
+                        &sha('a'),
+                        Some("windows"),
+                        Some("x64"),
+                    ),
+                ),
                 package(
                     "emulator",
                     (37, 3, 10),
@@ -484,16 +544,67 @@ mod tests {
                     LICENSE,
                     STABLE,
                     &[
-                        archive("emulator-linux_x64-1.zip", 350, &sha('b'), Some("linux"), Some("x64")),
-                        archive("emulator-darwin_x64-1.zip", 487, &sha('c'), Some("macosx"), Some("x64")),
-                        archive("emulator-darwin_aarch64-1.zip", 420, &sha('d'), Some("macosx"), Some("aarch64")),
-                        archive("emulator-windows_x64-1.zip", 456, &sha('e'), Some("windows"), Some("x64")),
+                        archive(
+                            "emulator-linux_x64-1.zip",
+                            350,
+                            &sha('b'),
+                            Some("linux"),
+                            Some("x64"),
+                        ),
+                        archive(
+                            "emulator-darwin_x64-1.zip",
+                            487,
+                            &sha('c'),
+                            Some("macosx"),
+                            Some("x64"),
+                        ),
+                        archive(
+                            "emulator-darwin_aarch64-1.zip",
+                            420,
+                            &sha('d'),
+                            Some("macosx"),
+                            Some("aarch64"),
+                        ),
+                        archive(
+                            "emulator-windows_x64-1.zip",
+                            456,
+                            &sha('e'),
+                            Some("windows"),
+                            Some("x64"),
+                        ),
                     ]
                     .concat(),
                 ),
-                package("emulator", (36, 0, 0), "", LICENSE, STABLE, &archive("old.zip", 1, &sha('f'), Some("windows"), Some("x64"))),
-                package("emulator", (99, 0, 0), " obsolete=\"true\"", LICENSE, STABLE, &archive("gone.zip", 1, &sha('f'), Some("windows"), None)),
-                package("platform-tools", (37, 0, 3), "", LICENSE, STABLE, &archive("platform-tools_r37.0.3-win.zip", 8, &sha('1'), Some("windows"), None)),
+                package(
+                    "emulator",
+                    (36, 0, 0),
+                    "",
+                    LICENSE,
+                    STABLE,
+                    &archive("old.zip", 1, &sha('f'), Some("windows"), Some("x64")),
+                ),
+                package(
+                    "emulator",
+                    (99, 0, 0),
+                    " obsolete=\"true\"",
+                    LICENSE,
+                    STABLE,
+                    &archive("gone.zip", 1, &sha('f'), Some("windows"), None),
+                ),
+                package(
+                    "platform-tools",
+                    (37, 0, 3),
+                    "",
+                    LICENSE,
+                    STABLE,
+                    &archive(
+                        "platform-tools_r37.0.3-win.zip",
+                        8,
+                        &sha('1'),
+                        Some("windows"),
+                        None,
+                    ),
+                ),
             ]
             .concat(),
         );
@@ -511,31 +622,110 @@ mod tests {
         );
         assert_eq!(emulator.archive.size, 456);
         assert_eq!(emulator.archive.checksum, Checksum::Sha1(sha('e')));
-        assert!(index.newest("emulator", MAC_ARM).unwrap().archive.url.ends_with("darwin_aarch64-1.zip"));
-        assert!(index.newest("emulator", LINUX).unwrap().archive.url.ends_with("linux_x64-1.zip"));
+        assert!(
+            index
+                .newest("emulator", MAC_ARM)
+                .unwrap()
+                .archive
+                .url
+                .ends_with("darwin_aarch64-1.zip")
+        );
+        assert!(
+            index
+                .newest("emulator", LINUX)
+                .unwrap()
+                .archive
+                .url
+                .ends_with("linux_x64-1.zip")
+        );
         // Nothing is published for Windows on ARM, and platform-tools has no Linux archive here.
-        assert!(index.newest("emulator", Host { os: HostOs::Windows, arch: HostArch::Arm64 }).is_none());
+        assert!(
+            index
+                .newest(
+                    "emulator",
+                    Host {
+                        os: HostOs::Windows,
+                        arch: HostArch::Arm64
+                    }
+                )
+                .is_none()
+        );
         assert!(index.newest("platform-tools", LINUX).is_none());
-        assert_eq!(index.newest("platform-tools", WINDOWS).unwrap().revision, (37, 0, 3));
+        assert_eq!(
+            index.newest("platform-tools", WINDOWS).unwrap().revision,
+            (37, 0, 3)
+        );
         assert!(index.newest("build-tools", WINDOWS).is_none());
     }
 
     #[test]
     fn the_image_is_the_highest_released_android_for_this_processor() {
         let image = |path: &str, revision: u32, license: &str, file: &str| {
-            package(path, (revision, 0, 0), "", license, STABLE, &archive(file, 1_900, &sha('9'), None, None))
+            package(
+                path,
+                (revision, 0, 0),
+                "",
+                license,
+                STABLE,
+                &archive(file, 1_900, &sha('9'), None, None),
+            )
         };
         let xml = document(
             &[
-                image("system-images;android-35;google_apis;x86_64", 9, LICENSE, "x86_64-35_r09.zip"),
-                image("system-images;android-36;google_apis;x86_64", 7, LICENSE, "x86_64-36_r07.zip"),
-                image("system-images;android-36;google_apis;arm64-v8a", 7, LICENSE, "arm64-v8a-36_r07.zip"),
-                image("system-images;android-37.0;google_apis;x86_64", 8, LICENSE, "x86_64-37.0_r08.zip"),
-                image("system-images;android-37.0;google_apis;x86_64", 6, LICENSE, "x86_64-37.0_r06.zip"),
-                image("system-images;android-37.2;google_apis_ps16k;x86_64", 1, LICENSE, "ps16k.zip"),
-                image("system-images;android-36-ext19;google_apis;x86_64", 1, LICENSE, "ext.zip"),
-                image("system-images;android-38;google_apis;x86_64", 1, "android-sdk-preview-license", "preview.zip"),
-                image("system-images;android-Baklava;google_apis;x86_64", 1, LICENSE, "codename.zip"),
+                image(
+                    "system-images;android-35;google_apis;x86_64",
+                    9,
+                    LICENSE,
+                    "x86_64-35_r09.zip",
+                ),
+                image(
+                    "system-images;android-36;google_apis;x86_64",
+                    7,
+                    LICENSE,
+                    "x86_64-36_r07.zip",
+                ),
+                image(
+                    "system-images;android-36;google_apis;arm64-v8a",
+                    7,
+                    LICENSE,
+                    "arm64-v8a-36_r07.zip",
+                ),
+                image(
+                    "system-images;android-37.0;google_apis;x86_64",
+                    8,
+                    LICENSE,
+                    "x86_64-37.0_r08.zip",
+                ),
+                image(
+                    "system-images;android-37.0;google_apis;x86_64",
+                    6,
+                    LICENSE,
+                    "x86_64-37.0_r06.zip",
+                ),
+                image(
+                    "system-images;android-37.2;google_apis_ps16k;x86_64",
+                    1,
+                    LICENSE,
+                    "ps16k.zip",
+                ),
+                image(
+                    "system-images;android-36-ext19;google_apis;x86_64",
+                    1,
+                    LICENSE,
+                    "ext.zip",
+                ),
+                image(
+                    "system-images;android-38;google_apis;x86_64",
+                    1,
+                    "android-sdk-preview-license",
+                    "preview.zip",
+                ),
+                image(
+                    "system-images;android-Baklava;google_apis;x86_64",
+                    1,
+                    LICENSE,
+                    "codename.zip",
+                ),
             ]
             .concat(),
         );
@@ -546,9 +736,15 @@ mod tests {
             chosen.archive.url,
             "https://dl.google.com/android/repository/sys-img/google_apis/x86_64-37.0_r08.zip"
         );
-        assert_eq!(index.newest_image(MAC_ARM).unwrap().path, "system-images;android-36;google_apis;arm64-v8a");
+        assert_eq!(
+            index.newest_image(MAC_ARM).unwrap().path,
+            "system-images;android-36;google_apis;arm64-v8a"
+        );
         let path = ImagePath::parse(&chosen.path).unwrap();
-        assert_eq!(path.folder(), "system-images/android-37.0/google_apis/x86_64");
+        assert_eq!(
+            path.folder(),
+            "system-images/android-37.0/google_apis/x86_64"
+        );
         assert_eq!(path.api(), Some((37, 0)));
     }
 
@@ -565,11 +761,30 @@ mod tests {
             archive("bsd.zip", 5, &sha('a'), Some("freebsd"), None),
         ]
         .concat();
-        let xml = document(&package("platform-tools", (1, 0, 0), "", LICENSE, STABLE, &bad));
+        let xml = document(&package(
+            "platform-tools",
+            (1, 0, 0),
+            "",
+            LICENSE,
+            STABLE,
+            &bad,
+        ));
         let index = Index::parse(&xml, MAIN_INDEX).unwrap();
         assert!(index.newest("platform-tools", WINDOWS).is_none());
-        assert!(Index::parse(&xml, "https://example.com/android/repository/repository2-3.xml").is_err());
-        assert!(Index::parse(&xml, "http://dl.google.com/android/repository/repository2-3.xml").is_err());
+        assert!(
+            Index::parse(
+                &xml,
+                "https://example.com/android/repository/repository2-3.xml"
+            )
+            .is_err()
+        );
+        assert!(
+            Index::parse(
+                &xml,
+                "http://dl.google.com/android/repository/repository2-3.xml"
+            )
+            .is_err()
+        );
         assert!(Index::parse("<nothing/>", MAIN_INDEX).is_err());
         assert!(Index::parse("not xml <", MAIN_INDEX).is_err());
     }
@@ -587,6 +802,11 @@ mod tests {
         ] {
             assert!(ImagePath::parse(bad).is_none(), "{bad}");
         }
-        assert_eq!(ImagePath::parse("system-images;android-36-ext19;google_apis;x86_64").unwrap().api(), None);
+        assert_eq!(
+            ImagePath::parse("system-images;android-36-ext19;google_apis;x86_64")
+                .unwrap()
+                .api(),
+            None
+        );
     }
 }

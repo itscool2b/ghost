@@ -246,10 +246,20 @@ async fn an_agent_keeps_notes_through_its_grant_and_every_write_follows_the_swit
             .starts_with("A note write needs the note's name")
     );
     // A project named by the caller is not a field the service takes.
-    let elsewhere = call(&endpoint, &token, serde_json::json!({"operation":"read","project_id":"another-project"})).await;
+    let elsewhere = call(
+        &endpoint,
+        &token,
+        serde_json::json!({"operation":"read","project_id":"another-project"}),
+    )
+    .await;
     assert_eq!(elsewhere["error"], "Invalid memory request.");
 
-    let added = call(&endpoint, &token, write(serde_json::Value::Null, "Use tb2.")).await;
+    let added = call(
+        &endpoint,
+        &token,
+        write(serde_json::Value::Null, "Use tb2."),
+    )
+    .await;
     assert_eq!(added["result"]["name"], "windows-build");
     assert_eq!(added["result"]["by"], "agent");
     let first = added["result"]["revision"].as_str().unwrap().to_owned();
@@ -277,7 +287,12 @@ async fn an_agent_keeps_notes_through_its_grant_and_every_write_follows_the_swit
         "Read before building on Windows"
     );
     assert!(listed["result"]["notes"][0].get("markdown").is_none());
-    let read = call(&endpoint, &token, serde_json::json!({"operation":"read","note":"windows-build"})).await;
+    let read = call(
+        &endpoint,
+        &token,
+        serde_json::json!({"operation":"read","note":"windows-build"}),
+    )
+    .await;
     assert_eq!(read["result"]["markdown"], "Use tb2.");
     // Replacing it needs the revision that was read.
     let stale = call(&endpoint, &token, write(serde_json::Value::Null, "Other")).await;
@@ -287,7 +302,12 @@ async fn an_agent_keeps_notes_through_its_grant_and_every_write_follows_the_swit
             .unwrap()
             .starts_with("There is already a note windows-build")
     );
-    let replaced = call(&endpoint, &token, write(serde_json::json!(first), "Use tb2. Never cargo.")).await;
+    let replaced = call(
+        &endpoint,
+        &token,
+        write(serde_json::json!(first), "Use tb2. Never cargo."),
+    )
+    .await;
     let second = replaced["result"]["revision"].as_str().unwrap().to_owned();
     assert_ne!(second, first);
     let _ = changes.recv().await.unwrap();
@@ -301,7 +321,12 @@ async fn an_agent_keeps_notes_through_its_grant_and_every_write_follows_the_swit
     ] {
         assert_eq!(call(&endpoint, &token, refused).await["error"], READ_ONLY);
     }
-    let still = call(&endpoint, &token, serde_json::json!({"operation":"read","note":"windows-build"})).await;
+    let still = call(
+        &endpoint,
+        &token,
+        serde_json::json!({"operation":"read","note":"windows-build"}),
+    )
+    .await;
     assert_eq!(still["result"]["markdown"], "Use tb2. Never cargo.");
     direct.store(true, Ordering::Release);
 
@@ -316,7 +341,12 @@ async fn an_agent_keeps_notes_through_its_grant_and_every_write_follows_the_swit
         (edit.note.as_deref(), edit.deleted, edit.parent_revision),
         (Some("windows-build"), true, Some(second))
     );
-    let gone = call(&endpoint, &token, serde_json::json!({"operation":"read","note":"windows-build"})).await;
+    let gone = call(
+        &endpoint,
+        &token,
+        serde_json::json!({"operation":"read","note":"windows-build"}),
+    )
+    .await;
     assert_eq!(
         gone["error"],
         "There is no note windows-build. o7_memory_read lists the notes there are."

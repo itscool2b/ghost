@@ -8,7 +8,9 @@ use crate::Error;
 /// A NUL cannot be passed in a command line and is refused.
 pub fn quote(text: &str) -> Result<String, Error> {
     if text.contains('\0') {
-        return Err(Error::Refused("Text for the device cannot hold a NUL character.".into()));
+        return Err(Error::Refused(
+            "Text for the device cannot hold a NUL character.".into(),
+        ));
     }
     let mut out = String::with_capacity(text.len() + 2);
     out.push('\'');
@@ -32,7 +34,9 @@ pub fn package(name: &str) -> Result<&str, Error> {
         && parts.len() >= 2
         && parts.iter().all(|part| {
             let mut chars = part.chars();
-            chars.next().is_some_and(|first| first.is_ascii_alphabetic())
+            chars
+                .next()
+                .is_some_and(|first| first.is_ascii_alphabetic())
                 && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
         });
     if valid {
@@ -57,13 +61,43 @@ pub fn component(name: &str) -> Result<&str, Error> {
     if valid {
         Ok(name)
     } else {
-        Err(Error::Refused(format!("\"{}\" is not an activity name.", shown(name))))
+        Err(Error::Refused(format!(
+            "\"{}\" is not an activity name.",
+            shown(name)
+        )))
+    }
+}
+
+/// A link to open on a device: a scheme (`https:`, `myapp:`) and something after it, with no
+/// control characters, at most 2,000 characters.
+pub(crate) fn link(link: &str) -> Result<&str, Error> {
+    let link = link.trim();
+    let has_scheme = link.split_once(':').is_some_and(|(scheme, rest)| {
+        !rest.is_empty()
+            && scheme
+                .chars()
+                .next()
+                .is_some_and(|first| first.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
+    });
+    if has_scheme && link.len() <= 2000 && !link.chars().any(char::is_control) {
+        Ok(link)
+    } else {
+        Err(Error::Refused(
+            "A link needs a scheme, like https://example.com or myapp://screen.".into(),
+        ))
     }
 }
 
 /// At most 80 characters of `text`, for an error message.
 pub(crate) fn shown(text: &str) -> String {
-    let mut out: String = text.chars().filter(|ch| !ch.is_control()).take(80).collect();
+    let mut out: String = text
+        .chars()
+        .filter(|ch| !ch.is_control())
+        .take(80)
+        .collect();
     if text.chars().count() > 80 {
         out.push_str("...");
     }
@@ -79,7 +113,10 @@ mod tests {
         assert_eq!(quote("plain").unwrap(), "'plain'");
         assert_eq!(quote("").unwrap(), "''");
         assert_eq!(quote("it's").unwrap(), "'it'\\''s'");
-        assert_eq!(quote("$(reboot); `id` && rm -rf /").unwrap(), "'$(reboot); `id` && rm -rf /'");
+        assert_eq!(
+            quote("$(reboot); `id` && rm -rf /").unwrap(),
+            "'$(reboot); `id` && rm -rf /'"
+        );
         assert_eq!(quote("line\nbreak").unwrap(), "'line\nbreak'");
         assert!(quote("a\0b").is_err());
     }
@@ -112,6 +149,26 @@ mod tests {
         assert!(component("com.example.Main$Inner").is_ok());
         for bad in ["", "...", "Main Activity", "Main;id", "-n", "a/b"] {
             assert!(component(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn links_need_a_scheme_and_nothing_hidden() {
+        assert_eq!(
+            link(" https://example.com/a?b=c ").unwrap(),
+            "https://example.com/a?b=c"
+        );
+        assert!(link("myapp://screen").is_ok());
+        for bad in [
+            "",
+            "example.com",
+            "https:",
+            "1http://x",
+            "-x:y",
+            "https://a\nb",
+            &format!("a:{}", "x".repeat(2000)),
+        ] {
+            assert!(link(bad).is_err(), "{bad:?}");
         }
     }
 
