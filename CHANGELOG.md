@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-24
 
+- Fixed: in a long chat you could not send or steer. The message box said "Could not verify the saved handoff" and that o7's database was busy. To list a chat's turns, o7 read through the whole chat once for every turn, which took more than 5 seconds in a long chat. It now reads only each turn's own part, about 30 times faster. ([#205](https://github.com/itscool2b/o7/pull/205))
 - The chat is cleaner. The agent's thinking no longer fills the transcript with rows between its steps: while it thinks, its newest words show under the line at the bottom of the turn, and each run of steps is one line you can open to see them all. The message box has one + button for files, images and the canvas. ([#203](https://github.com/itscool2b/o7/pull/203))
 
 ## 2026-11-23

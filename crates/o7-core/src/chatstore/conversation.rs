@@ -266,6 +266,18 @@ const COMMAND_TURNS: usize = 20;
 /// The most of one turn's tool events read for its commands.
 const COMMAND_EVENT_BYTES: usize = 4 * 1024 * 1024;
 
+// A turn's rows are read through the turn's own index. `+chat_id` keeps the planner off the
+// chat's `(chat_id, seq)` index, which `ORDER BY seq` would otherwise make it pick: that walks
+// every row of the chat once per turn read. A 34-turn chat of 130,000 rows took 5 s to list its
+// turns that way, past the store's answer limit, so the composer could not send.
+
+/// One turn's tool rows, for its commands.
+const TURN_COMMANDS_SQL: &str = "SELECT payload FROM events WHERE +chat_id=?1 AND turn_id=?2 \
+     AND kind IN ('tool_call','tool_update') ORDER BY seq";
+/// One turn's message rows, for its prompt and answer; one past the limit shows it was reached.
+const TURN_MESSAGES_SQL: &str = "SELECT payload FROM events WHERE +chat_id=?1 AND turn_id=?2 \
+     AND kind IN ('user_message_delta','message_delta','message_completed') ORDER BY seq LIMIT 10001";
+
 /// The shell commands a turn ran, in the order they started: its tool calls folded with their
 /// updates. A row that is not JSON (a salvaged one) is skipped, never the turn.
 fn read_commands(
@@ -275,9 +287,7 @@ fn read_commands(
 ) -> rusqlite::Result<Vec<CommandRun>> {
     let mut calls: Vec<o7_protocol::ToolCall> = Vec::new();
     let mut bytes = 0;
-    let mut statement = conn.prepare_cached(
-        "SELECT payload FROM events WHERE chat_id=?1 AND turn_id=?2          AND kind IN ('tool_call','tool_update') ORDER BY seq",
-    )?;
+    let mut statement = conn.prepare_cached(TURN_COMMANDS_SQL)?;
     let mut rows = statement.query(params![chat_id, turn_id])?;
     while let Some(row) = rows.next()? {
         let payload: String = row.get(0)?;
@@ -355,7 +365,7 @@ fn read_turn(conn: &Connection, chat_id: &str, turn_id: &str) -> rusqlite::Resul
     let mut steering_text = BTreeMap::<String, String>::new();
     let mut messages = BTreeMap::<String, String>::new();
     let mut last_message = None;
-    let mut statement = conn.prepare("SELECT payload FROM events WHERE chat_id=?1 AND turn_id=?2 AND kind IN ('user_message_delta','message_delta','message_completed') ORDER BY seq LIMIT 10001")?;
+    let mut statement = conn.prepare_cached(TURN_MESSAGES_SQL)?;
     let values = statement.query_map(params![chat_id, turn_id], |row| row.get::<_, String>(0))?;
     let mut bytes = 0;
     for (index, value) in values.enumerate() {
@@ -585,5 +595,34 @@ mod image_tests {
                 Some("claude-fable-5-2".into())
             )
         );
+    }
+}
+
+#[cfg(test)]
+mod turn_read_tests {
+    use super::*;
+    use crate::{paths::DataRoot, profile::Profiles, store::Store};
+
+    /// A turn's rows come through the turn's index, never a walk through the whole chat: listing a
+    /// long chat's turns ran past the store's 5 s answer limit that way.
+    #[test]
+    fn turn_rows_are_read_through_the_turn_index() {
+        let scratch = tempfile::tempdir().unwrap();
+        let profile = Profiles::new(DataRoot::at(scratch.path()))
+            .create("Local")
+            .unwrap();
+        let (store, _) = Store::open(&profile).unwrap();
+        for sql in [TURN_MESSAGES_SQL, TURN_COMMANDS_SQL] {
+            let plan = store
+                .conn()
+                .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+                .unwrap()
+                .query_map(params!["chat", "turn"], |row| row.get::<_, String>(3))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap()
+                .join("; ");
+            assert!(plan.contains("USING INDEX events_turn_id"), "{sql}: {plan}");
+        }
     }
 }
