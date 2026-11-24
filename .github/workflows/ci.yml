@@ -313,7 +313,7 @@ jobs:
       - name: Test the CI scripts
         if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
         run: |
-          node --test .github/scripts/acceptance-gates.test.mjs .github/scripts/webdriver-smoke.test.mjs .github/scripts/release-plan.test.mjs
+          node --test .github/scripts/acceptance-gates.test.mjs .github/scripts/webdriver-smoke.test.mjs .github/scripts/release-plan.test.mjs .github/scripts/remote-check.test.mjs
           bash .github/scripts/test.sh
           bash .github/scripts/test-export-bindings.sh
   layout:
