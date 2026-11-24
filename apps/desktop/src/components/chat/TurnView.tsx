@@ -3,7 +3,11 @@ import { Fragment, memo, useRef } from "react";
 import type { PlanEntry, UiAnswer } from "../../bindings";
 import type { RequestState } from "../../lib/chat/chatStore";
 import { costLabel, type ErrorActions, tokensLabel } from "../../lib/chat/present";
-import { type RenderedSegment, stopReasonLabel } from "../../lib/chat/transcript";
+import {
+  type RenderedItem,
+  type RenderedSegment,
+  stopReasonLabel,
+} from "../../lib/chat/transcript";
 import { formatDuration } from "../../lib/format";
 import { Answer } from "../Markdown";
 import type { ConversationIntent } from "./ConversationDialog";
@@ -68,6 +72,7 @@ export const TurnView = memo(function TurnView({
   suppressByline = false,
   bareTool = false,
   tail,
+  merged,
 }: {
   readonly segment: RenderedSegment;
   readonly actions: TurnActions;
@@ -83,12 +88,14 @@ export const TurnView = memo(function TurnView({
   readonly bareTool?: boolean;
   /** The turn still runs: its footer's place shows the working line, or what the agent waits on. */
   readonly tail?: LiveTail;
+  /** Shown at `part` instead of the segment's own item: reasoning in a row merged into one. */
+  readonly merged?: RenderedItem;
 }) {
   // The footer fades in where the working line was, never when its row merely scrolls back in.
   const wasLive = useRef(false);
   if (tail) wasLive.current = true;
   const firstAgentItem = segment.items.findIndex((item) => item.kind !== "user");
-  const selected = typeof part === "number" ? segment.items[part] : undefined;
+  const selected = typeof part === "number" ? (merged ?? segment.items[part]) : undefined;
   const entries =
     part === undefined
       ? segment.items.map((item, index) => ({ item, index }))

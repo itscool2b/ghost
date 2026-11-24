@@ -350,24 +350,47 @@
 }
 
 /*
- * The working line (owner, 2 November 2026). While a turn runs and neither text nor reasoning
- * streams, its tail holds one quiet line: a neutral dot breathing in the
- * gutter (never a glow), a playful verb that crossfades to the next
- * every few seconds with a sheen passing over it, and the elapsed time at the line's end. It is
- * live agent state, so it alone keeps moving, like the composer's rim; streamed text fades it out
- * in place, and the footer takes the same place when the turn ends, so nothing below it shifts.
+ * The working line (owner, 2 November 2026). While a turn runs and no answer streams, its tail
+ * holds one quiet line: the model maker's mark breathing in the gutter (never a glow), a playful
+ * verb that crossfades to the next every few seconds with a sheen passing over it, and the elapsed
+ * time at the line's end. While the agent thinks, the reasoning's newest words run under it in one
+ * quiet line (owner, 23 November 2026: reasoning has no rows of its own). It is live agent state,
+ * so it alone keeps moving; a streamed answer fades it out in place, and the footer takes the same
+ * place when the turn ends, so nothing below it shifts.
  */
 .chat-working {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--g-space-8);
+  gap: 0 var(--g-space-8);
   min-height: 28px;
   padding: 0 var(--g-space-8) 0 var(--ui-gutter);
   color: var(--g-fg-2);
   transition:
     opacity var(--g-dur-panel) var(--g-ease),
     transform var(--g-dur-panel) var(--g-ease);
+}
+
+/* The mark stays on the verb's line when the reasoning runs under it. */
+.chat-working > .chat-gutter {
+  bottom: auto;
+  height: 28px;
+}
+
+/* The reasoning being thought: its newest words, under the verb, cut at the line's end. */
+.chat-working-reasoning {
+  flex: 1 0 100%;
+  min-width: 0;
+  margin-top: calc(var(--g-space-4) * -1);
+  padding-bottom: var(--g-space-4);
+  overflow: hidden;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: chat-working-in var(--g-dur-glide) var(--g-ease) both;
 }
 
 .chat-working[data-hidden] {
@@ -3306,6 +3329,74 @@
 .chat-composer-attach:disabled {
   color: var(--g-fg-4);
   cursor: not-allowed;
+}
+
+/*
+ * "+" (owner, 23 November 2026: a simpler message box): files, images and the canvas in one menu,
+ * where a paperclip and a pen sat side by side. The disc is Attach's; open, it holds the pressed
+ * step and its plus turns to a cross.
+ */
+.chat-add-popover > summary {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-glass-control);
+  color: var(--g-fg-2);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color var(--g-dur-micro) var(--g-ease),
+    color var(--g-dur-micro) var(--g-ease);
+}
+
+.chat-add-popover > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-add-popover > summary > svg {
+  transition: transform var(--g-dur-fast) var(--g-ease);
+}
+
+@media (hover: hover) {
+  .chat-add-popover > summary:hover {
+    background-color: var(--g-glass-control-hover);
+    color: var(--g-fg-1);
+  }
+}
+
+.chat-add-popover[open]:not([data-closing]) > summary {
+  background-color: var(--g-glass-control-active);
+  color: var(--g-fg-1);
+}
+
+.chat-add-popover[open]:not([data-closing]) > summary > svg {
+  transform: rotate(45deg);
+}
+
+.chat-add-popover > .chat-popover-panel {
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(320px, calc(100vw - 80px));
+  padding: var(--g-space-4);
+}
+
+/* Each row: its glyph, then what it adds over how else it can arrive. */
+.chat-add-popover .picker-choices > button {
+  align-items: flex-start;
+  gap: var(--g-space-12);
+}
+
+/* How else something can arrive is a sentence: it wraps instead of being cut. */
+.chat-add-popover .picker-choice-copy small {
+  white-space: normal;
+}
+
+.chat-add-popover .picker-choices > button > svg {
+  flex: none;
+  margin-top: var(--g-space-2);
+  color: var(--g-fg-2);
 }
 
 .chat-composer-actions {

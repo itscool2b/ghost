@@ -1,4 +1,4 @@
-import { ArrowUp, Paperclip, PenTool, Square } from "lucide-react";
+import { ArrowUp, Paperclip, PenTool, Plus, Square } from "lucide-react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { FileMention, SessionStatus, SlashCommand } from "../../bindings";
 import { matchingCommands, slashQuery } from "../../lib/chat/present";
@@ -15,6 +15,8 @@ import {
   revealDictation,
   useDictation,
 } from "./Dictation";
+import { movePickerFocus } from "./PickerChoices";
+import { closePopover, Popover } from "./Popover";
 import { SlashMenu } from "./SlashMenu";
 
 /**
@@ -329,29 +331,12 @@ ${value}`
         ) : null}
       </div>
       <div className="chat-composer-controls" hidden={dictation?.open}>
-        {contextApi ? (
-          <button
-            type="button"
-            className="chat-composer-attach"
-            aria-label="Attach a file"
-            title="Attach a file, drop one here, or paste an image. Type @ to mention a project file."
-            disabled={context.busy || sending}
-            onClick={() => void context.pick()}
-          >
-            <Paperclip size={16} />
-          </button>
-        ) : null}
-        {canvas ? (
-          <button
-            type="button"
-            className="chat-composer-attach chat-composer-canvas"
-            aria-label="Canvas"
-            aria-pressed={canvas.open}
-            title={canvas.open ? "Close the canvas" : "Draw on a canvas and add it to this message"}
-            onClick={canvas.onToggle}
-          >
-            <PenTool size={16} />
-          </button>
+        {contextApi || canvas ? (
+          <AddMenu
+            onAttach={contextApi ? () => void context.pick() : null}
+            attachDisabled={context.busy || sending}
+            canvas={canvas ?? null}
+          />
         ) : null}
         {controls}
         <div className="chat-composer-actions" data-running={working ? "" : undefined}>
@@ -396,6 +381,77 @@ ${value}`
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * "+": what can go into a message, in one menu (owner, 23 November 2026: the message box should be
+ * simpler and more intuitive), where a paperclip and a pen sat side by side. Files and images open
+ * the file picker; Canvas opens the drawing pane over the transcript. Dropping a file on the box,
+ * pasting an image and typing @ for a project file still work without it, and the menu says so.
+ */
+export function AddMenu({
+  onAttach,
+  attachDisabled,
+  canvas,
+}: {
+  readonly onAttach: (() => void) | null;
+  readonly attachDisabled: boolean;
+  readonly canvas: { readonly open: boolean; readonly onToggle: () => void } | null;
+}) {
+  const attachHint = useId();
+  const canvasHint = useId();
+  return (
+    <Popover
+      label="Add to message"
+      className="chat-add-popover"
+      tip="Add files, images or a drawing"
+      trigger={<Plus size={16} aria-hidden="true" />}
+    >
+      <fieldset className="picker-choices" aria-label="Add to message" onKeyDown={movePickerFocus}>
+        {onAttach ? (
+          <button
+            type="button"
+            data-testid="composer-attach"
+            aria-label="Files and images"
+            aria-describedby={attachHint}
+            disabled={attachDisabled}
+            onClick={(event) => {
+              closePopover(event.currentTarget);
+              onAttach();
+            }}
+          >
+            <Paperclip size={16} aria-hidden="true" />
+            <span className="picker-choice-copy">
+              <strong>Files and images</strong>
+              <small id={attachHint}>
+                Or drop them on the box, or paste an image. Type @ for a project file.
+              </small>
+            </span>
+          </button>
+        ) : null}
+        {canvas ? (
+          <button
+            type="button"
+            data-testid="composer-canvas"
+            aria-label={canvas.open ? "Close the canvas" : "Canvas"}
+            aria-describedby={canvasHint}
+            onClick={(event) => {
+              closePopover(event.currentTarget);
+              canvas.onToggle();
+            }}
+          >
+            <PenTool size={16} aria-hidden="true" />
+            <span className="picker-choice-copy">
+              <strong>{canvas.open ? "Close the canvas" : "Canvas"}</strong>
+              <small id={canvasHint}>
+                Draw it and talk it through, then add it to this message.
+              </small>
+            </span>
+          </button>
+        ) : null}
+      </fieldset>
+    </Popover>
   );
 }
 

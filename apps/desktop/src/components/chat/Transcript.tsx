@@ -8,7 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { chatActivity, lastToolKind, streamingText } from "../../lib/chat/activity";
+import {
+  chatActivity,
+  lastToolKind,
+  liveReasoning,
+  streamingText,
+  thinkingNow,
+} from "../../lib/chat/activity";
 import type { ChatState } from "../../lib/chat/chatStore";
 import { findMatches, highlightRanges } from "../../lib/chat/find";
 import { useKeepStepsOpen } from "../../lib/chat/stepsPreference";
@@ -36,6 +42,34 @@ interface Reveal {
 /** Each a little longer than its glide (--g-dur-glide 240ms, --g-dur-panel 180ms). */
 const OPEN_MS = 300;
 const CLOSE_MS = 240;
+
+type RenderedTool = Extract<RenderedItem, { kind: "tool" }>;
+type RenderedThought = Extract<RenderedItem, { kind: "thought" }>;
+/** What a stretch of work holds: the agent's calls and its reasoning between them. */
+type WorkItem = RenderedTool | RenderedThought;
+
+/**
+ * Reasoning with no call in it, as its one row: "Thought for" the whole of it, opening to every
+ * part in order. A single piece is itself.
+ */
+export function mergeThoughts(work: readonly WorkItem[]): RenderedThought | undefined {
+  const thoughts = work.filter((entry): entry is RenderedThought => entry.kind === "thought");
+  const first = thoughts[0];
+  if (first === undefined || thoughts.length === 1) return undefined;
+  const timed = thoughts.flatMap((thought) =>
+    thought.durationMs === null ? [] : [thought.durationMs],
+  );
+  return {
+    ...first,
+    text: thoughts
+      .map((thought) => thought.text.trim())
+      .filter((text) => text !== "")
+      .join("\n\n"),
+    completed: thoughts.every((thought) => thought.completed),
+    durationMs: timed.length > 0 ? timed.reduce((sum, ms) => sum + ms, 0) : null,
+    thinking: thoughts.some((thought) => thought.thinking),
+  };
+}
 
 /** What each kind of row usually measures, so the rows below hold still while it is measured. */
 function estimateOf(item: RenderedItem, grouped: boolean): number {
@@ -214,6 +248,7 @@ export function Transcript({
       index: number,
       item: RenderedItem,
       inGroup?: { readonly bare: boolean; readonly reveal?: Reveal["kind"] },
+      merged?: RenderedItem,
     ) =>
       rows.push({
         key: JSON.stringify([segment.key, item.key]),
@@ -238,6 +273,7 @@ export function Transcript({
             live={live}
             suppressByline={inGroup !== undefined}
             bareTool={inGroup?.bare === true}
+            merged={merged}
           />
         ),
       });
@@ -270,18 +306,30 @@ export function Transcript({
         continue;
       if (item.kind === "user")
         prompt = { key: JSON.stringify([segment.key, item.key]), text: item.text };
-      if (item.kind !== "tool") {
+      if (item.kind !== "tool" && item.kind !== "thought") {
         addItem(index, item);
         continue;
       }
-      // A stretch of work: every call until the agent's next text, reasoning, card or notice.
-      const tools: Extract<RenderedItem, { kind: "tool" }>[] = [];
+      // A stretch of work: every call and every piece of reasoning until the agent's next text,
+      // card or notice. Reasoning has no row of its own among the calls (owner, 23 November 2026:
+      // the "Thought" rows between them were clutter); an opened stretch lists it in its place.
+      const work: WorkItem[] = [];
       for (let next = index; next < segment.items.length; next++) {
         const candidate = segment.items[next];
-        if (candidate?.kind !== "tool") break;
-        tools.push(candidate);
+        if (candidate?.kind !== "tool" && candidate?.kind !== "thought") break;
+        work.push(candidate);
       }
-      // Keyed by its first call, so a stretch keeps its row (and its disclosure) as calls join.
+      const tools = work.filter((entry): entry is RenderedTool => entry.kind === "tool");
+      if (tools.length === 0) {
+        // Reasoning alone. While the running turn may still add a call to it, the working line
+        // speaks for it; once anything else follows, or the turn ends, it is one "Thought" row.
+        const trailing = segment === tailTurn && index + work.length >= segment.items.length;
+        if (!trailing) addItem(index, item, undefined, mergeThoughts(work));
+        index += work.length - 1;
+        continue;
+      }
+      // Keyed by its first call or reasoning, so a stretch keeps its row (and its disclosure) as
+      // calls join.
       const key = JSON.stringify([segment.key, "tool-group", item.key]);
       const failed = tools.some((tool) => tool.display === "failed");
       const phase = failed
@@ -290,8 +338,8 @@ export function Transcript({
           ? "running"
           : "settled";
       const choice = groups.get(key);
-      const ownsFocus = tools.some(
-        (tool) => JSON.stringify([segment.key, tool.key]) === focusedKey,
+      const ownsFocus = work.some(
+        (entry) => JSON.stringify([segment.key, entry.key]) === focusedKey,
       );
       if (ownsFocus) {
         focusedGroupKey = key;
@@ -324,15 +372,17 @@ export function Transcript({
           />
         ),
       });
-      // Closing, the calls stay a moment to glide their height away.
+      // Closing, the calls stay a moment to glide their height away. Opened, reasoning shows where
+      // it has words to read; the reasoning being thought now is the working line's.
       if (expanded || moving === "close")
-        tools.forEach((tool, offset) => {
-          addItem(index + offset, tool, {
-            bare: tools.length === 1,
+        work.forEach((entry, offset) => {
+          if (entry.kind === "thought" && (entry.thinking || entry.text.trim() === "")) return;
+          addItem(index + offset, entry, {
+            bare: entry.kind === "tool" && tools.length === 1,
             reveal: expanded ? (moving === "open" ? "open" : undefined) : "close",
           });
         });
-      index += tools.length - 1;
+      index += work.length - 1;
     }
     const tail: LiveTail | undefined =
       segment !== tailTurn
@@ -344,8 +394,10 @@ export function Transcript({
             : {
                 kind: "working",
                 seed: segment.key,
-                context: workingContext(lastToolKind(segment)),
+                // While the agent thinks, the words are thinking words, whatever it ran before.
+                context: thinkingNow(segment) ? null : workingContext(lastToolKind(segment)),
                 visible: !streamingText(segment),
+                reasoning: liveReasoning(segment),
                 since: workingSince(`${state.chatId}:${segment.key}`, Date.now()),
                 model: state.session?.model ?? null,
               };

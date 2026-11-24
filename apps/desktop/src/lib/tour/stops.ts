@@ -124,7 +124,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "chat",
     side: "above",
     title: "The message box",
-    body: "Attach files, draw on the canvas, dictate, and choose the model and how hard it thinks. A message sent while the agent works can wait its turn or steer it.",
+    body: "+ adds files, images or a drawing. Dictate, and choose the model and how hard it thinks. A message sent while the agent works can wait its turn or steer it.",
   },
   {
     id: "read-aloud",

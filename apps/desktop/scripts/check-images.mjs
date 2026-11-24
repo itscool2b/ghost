@@ -74,7 +74,8 @@ for (const [engine, launcher] of Object.entries({ chromium, webkit })) {
       await page.getByRole("button", { name: "Remove Draft screen.png", exact: true }).click();
       assert.equal(await draft.count(), 0);
       assert.equal(await input.inputValue(), "Keep the controls compact");
-      await page.getByRole("button", { name: "Attach a file", exact: true }).click();
+      await page.locator('summary[aria-label="Add to message"]').click();
+      await page.getByRole("button", { name: "Files and images", exact: true }).click();
       await draft.locator("img").waitFor();
       await page.getByRole("button", { name: "Reattach chat", exact: true }).click();
       await draft.locator("img").waitFor();

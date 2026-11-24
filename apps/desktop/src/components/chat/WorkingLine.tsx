@@ -22,6 +22,8 @@ export type LiveTail =
       readonly since: number;
       /** The model at work, whose maker's mark leads the line. */
       readonly model?: string | null;
+      /** The newest words of the reasoning being thought, shown under the line. */
+      readonly reasoning?: string | null;
     }
   | { readonly kind: "waiting" }
   | { readonly kind: "stopping" };
@@ -58,6 +60,7 @@ export function WorkingLine({
   agentName,
   reduced,
   model = null,
+  reasoning = null,
 }: {
   readonly seed: string;
   readonly context: WorkingContext;
@@ -69,6 +72,8 @@ export function WorkingLine({
   readonly reduced?: boolean;
   /** The model at work: its maker's mark leads the line (ModelMark). */
   readonly model?: string | null;
+  /** The newest words of the reasoning being thought: one quiet line under the verb. */
+  readonly reasoning?: string | null;
 }) {
   const preference = usePrefersReducedMotion();
   const still = reduced ?? preference;
@@ -189,6 +194,12 @@ export function WorkingLine({
           {formatElapsed(elapsed)}
         </span>
       ) : null}
+      {reasoning ? (
+        // The reasoning's newest words, one line; screen readers hear only that the agent works.
+        <span className="chat-working-reasoning" aria-hidden="true" data-testid="working-reasoning">
+          {reasoning}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -241,6 +252,7 @@ export function LiveTailLine({
           agentId={agentId}
           agentName={agentName}
           model={tail.model ?? null}
+          reasoning={tail.reasoning ?? null}
         />
       );
     case "waiting":
