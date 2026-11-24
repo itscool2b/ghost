@@ -31,6 +31,11 @@ import {
 } from "./appimage-upgrade.mjs";
 import { EXIT } from "./host-upgrade.mjs";
 
+/** Tests that compare Linux paths as text are skipped on Windows. */
+const LINUX_ONLY =
+  process.platform === "win32" &&
+  "Linux paths: node:path writes Windows paths here, and the AppImage scripts run only on Linux";
+
 const scratch = [];
 afterEach(() => {
   for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -116,7 +121,7 @@ const options = (extra = {}) => ({
 });
 const quiet = () => {};
 
-test("folders follow the XDG variables and the overrides", () => {
+test("folders follow the XDG variables and the overrides", { skip: LINUX_ONLY }, () => {
   const paths = folders({ HOME: "/home/me" });
   assert.equal(paths.link, "/home/me/Applications/o7.AppImage");
   assert.equal(paths.dataDir, "/home/me/.local/share/codes.o7.desktop");
