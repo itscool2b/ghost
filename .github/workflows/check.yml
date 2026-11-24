@@ -6,9 +6,6 @@
 name: Check
 
 on:
-  push: # TEMPORARY: test this workflow before it reaches main
-    branches:
-      - codex/check-on-github
   workflow_dispatch:
     inputs:
       os:
@@ -67,8 +64,8 @@ jobs:
     env:
       # Inputs reach the scripts through the environment, never pasted into them.
       TESTS: ${{ inputs.tests || '--workspace' }}
-      SMOKE: ${{ inputs.smoke || 'stream' }}
-      BROWSER: ${{ inputs.browser || 'check:header-labels' }}
+      SMOKE: ${{ inputs.smoke || 'none' }}
+      BROWSER: ${{ inputs.browser || 'none' }}
       # On by default. Compared as text: an expression counts a missing input as equal to false.
       CLIPPY: ${{ format('{0}', inputs.clippy) != 'false' }}
       FRONTEND: ${{ format('{0}', inputs.frontend) != 'false' }}
