@@ -220,7 +220,9 @@ export const BIG_OUTPUT_CHARS = 200 * 1024;
 /** The demo agent's 40 slash commands (`COMMANDS` in its driver). */
 export const DEMO_COMMANDS = 40;
 
-const DEMO_ITEMS = ["tool:read:completed", "tool:edit:completed", "message"];
+// The demo agent thinks, reads and edits: one stretch of work, which lists all three once opened
+// (the transcript reader opens every stretch).
+const DEMO_ITEMS = ["thought", "tool:read:completed", "tool:edit:completed", "message"];
 const DEMO_PLAN = ["completed", "completed", "in_progress"];
 
 function turn(
@@ -426,6 +428,11 @@ function turnOf(prompt: string): SegmentView | null {
     (segment) => segment.kind === "turn" && segment.prompt === prompt,
   );
   return turns[turns.length - 1] ?? null;
+}
+
+/** Whether an item shows inside an opened stretch of work rather than as a row of its own. */
+function inStretch(element: HTMLElement): boolean {
+  return element.closest("[data-test-segment-key]")?.hasAttribute("data-in-group") === true;
 }
 
 async function waitTurnEnded(prompt: string, timeoutMs?: number): Promise<SegmentView> {
@@ -1028,10 +1035,12 @@ async function chatScenario(
 
   await checks.run("demo-turn", async () => {
     await send(PROMPTS.demo);
+    // The reader opens every stretch of work, so the reasoning, the read and the edit all show.
     const ended = await waitTurnEnded(PROMPTS.demo);
     expectSegment(ended, demoTurn(PROMPTS.demo));
-    if (ended.views.some((view) => view.kind === "thought"))
-      throw new StepError("the transcript exposed a reasoning row");
+    // Reasoning has no row of its own: it shows only inside its stretch of work.
+    if (ended.views.some((view) => view.kind === "thought" && !inStretch(view.element)))
+      throw new StepError("the transcript showed reasoning outside its stretch of work");
     const [read, edit] = items(ended, "tool");
     if (attr(one("tool-content", read), "type") !== "text") {
       throw new StepError("the read tool shows no text output");
@@ -1054,7 +1063,7 @@ async function chatScenario(
     const usage = await waitFor("the header to show context and cost", () =>
       text(one("chat-usage")),
     );
-    return `reasoning hidden, a read with text output, an edit with a diff, a 3-step plan, the markdown answer, and "${usage}" in the header`;
+    return `reasoning inside its stretch of work, a read with text output, an edit with a diff, a 3-step plan, the markdown answer, and "${usage}" in the header`;
   });
 
   await checks.run("option-change", async () => {
@@ -1265,15 +1274,21 @@ async function chatScenario(
     await queueBehindSlowTurn(PROMPTS.beforeCrash, [PROMPTS.crash, PROMPTS.heldAtCrash]);
     const crashed = await waitTurnEnded(PROMPTS.crash);
     expectSegment(crashed, SEGMENTS.crash);
-    const card = item(crashed, "error");
-    const detail = text(one("error-detail", card));
+    const detail = text(one("error-detail", item(crashed, "error")));
     if (!detail.includes("the demo agent crashed on purpose")) {
       throw new StepError(`the crash card's detail reads "${detail}"`);
     }
-    for (const button of ["error-retry", "error-start-fresh"]) {
-      if (one(button, card) === null) throw new StepError(`the crash card has no ${button}`);
-    }
+    // Retry and Start fresh are offered once the crashed agent has stopped, not before.
     await waitStatus("stopped");
+    const card = await waitFor("the crash card to offer Retry and Start fresh", () => {
+      const shown = turnOf(PROMPTS.crash);
+      const found = shown === null ? null : (items(shown, "error")[0] ?? null);
+      return found !== null &&
+        one("error-retry", found) !== null &&
+        one("error-start-fresh", found) !== null
+        ? found
+        : null;
+    });
     return `the crash card read "${text(one("error-message", card))}" with the agent's stderr, Retry and Start fresh; the agent stopped`;
   });
 

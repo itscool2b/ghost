@@ -9,6 +9,10 @@ adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-24
+
+- The chat is cleaner. The agent's thinking no longer fills the transcript with rows between its steps: while it thinks, its newest words show under the line at the bottom of the turn, and each run of steps is one line you can open to see them all. The message box has one + button for files, images and the canvas. ([#203](https://github.com/itscool2b/o7/pull/203))
+
 ## 2026-11-23
 
 - New: an iPhone beside the chat on a Mac. The Device pane can start an iPhone simulator of the chat's own (Xcode is needed), and agents use it with the same tools as the Android emulator: they install and start the app they build, read the screen, tap, type and take screenshots. ([#202](https://github.com/itscool2b/o7/pull/202))

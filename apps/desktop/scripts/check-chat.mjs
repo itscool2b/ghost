@@ -135,6 +135,15 @@ async function workingLifecycle(page, engine, theme) {
         window.dispatchEvent(new CustomEvent("auracode-preview-working-step", { detail })),
       name,
     );
+  // Reasoning streaming in shows on the working line, under its verb, and has no row of its own.
+  await step("think");
+  await page
+    .getByTestId("working-reasoning")
+    .getByText("Weighing the narrow layout", { exact: true })
+    .waitFor();
+  assert.equal(await line.getAttribute("data-hidden"), null, "reasoning hid the working line");
+  const thoughts = page.locator('[data-test-turn-id="next"] [data-test-kind="thought"]');
+  assert.equal(await thoughts.count(), 0, "reasoning took a row of its own");
   await step("tools");
   const group = page.getByTestId("tool-group").last();
   await page.waitForFunction(() =>
@@ -149,25 +158,13 @@ async function workingLifecycle(page, engine, theme) {
     "a wordless thought split a tool stretch",
   );
   assert.equal(await line.count(), 1, "tools duplicated the working line");
-  // The reasoning before the calls is one folded row; the wordless blink between them has none.
-  const thoughts = page.locator('[data-test-turn-id="next"] [data-test-kind="thought"]');
-  assert.equal(await thoughts.count(), 1);
   assert.equal(
-    (await thoughts.getByTestId("thought-toggle").textContent())?.trim(),
-    "Thought for 2 s",
+    await page.getByTestId("working-reasoning").count(),
+    0,
+    "done reasoning stayed live",
   );
-  assert.equal(await thoughts.getByTestId("thought-body").isVisible(), false);
-  await thoughts.getByTestId("thought-toggle").click();
-  await thoughts
-    .getByTestId("thought-body")
-    .getByText(/sidebar truncates long titles/)
-    .waitFor();
-  await thoughts.getByTestId("thought-toggle").click();
-  await page.waitForFunction(
-    () =>
-      !document.querySelector('[data-test-turn-id="next"] [data-test-kind="thought"] details')
-        ?.open,
-  );
+  // The reasoning around the calls is part of their stretch: none shows while it is closed.
+  assert.equal(await thoughts.count(), 0, "reasoning showed outside its stretch");
   await group.focus();
   await page.evaluate(() => {
     window.__disclosureOverlaps = [];
@@ -197,6 +194,25 @@ async function workingLifecycle(page, engine, theme) {
     "disclosure height changes overlapped neighboring virtual rows in Strict Mode",
   );
   assert.equal(await page.locator('[data-test-turn-id="next"] [data-test-kind="tool"]').count(), 2);
+  // Opened, the stretch lists its reasoning that has words, in order; the wordless blink has none.
+  assert.deepEqual(
+    (await thoughts.getByTestId("thought-toggle").allTextContents()).map((text) => text.trim()),
+    ["Thought for 2 s", "Thought for 3 s"],
+  );
+  const reasoning = thoughts.first();
+  assert.equal(await reasoning.getByTestId("thought-body").isVisible(), false);
+  await reasoning.getByTestId("thought-toggle").click();
+  await reasoning
+    .getByTestId("thought-body")
+    .getByText(/sidebar truncates long titles/)
+    .waitFor();
+  await reasoning.getByTestId("thought-toggle").click();
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[data-test-turn-id="next"] [data-test-kind="thought"] details')
+        ?.open,
+  );
+  await group.focus();
   await page.keyboard.press("Space");
   await settled(page);
   await page.waitForFunction(
@@ -204,6 +220,7 @@ async function workingLifecycle(page, engine, theme) {
       document.querySelectorAll('[data-test-turn-id="next"] [data-test-kind="tool"]').length === 0,
   );
   assert.equal(await group.getAttribute("aria-expanded"), "false");
+  assert.equal(await thoughts.count(), 0, "closing the stretch left its reasoning");
 
   // OS preference and application overrides both stop all working-line motion immediately.
   await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
@@ -833,44 +850,27 @@ async function richAnswer(page, theme) {
 }
 /**
  * Reasoning as it streams (owner, 19 November 2026: make "it thinking, tool calling, etc."
- * sexier): a "Thinking" row with a sheen and the newest lines under it stands in for the working
- * line, then folds to "Thought for 2 s" that opens to the whole reasoning. A running call's words
- * carry the sheen too. Reduced motion stills both.
+ * sexier; 23 November 2026: the rows of reasoning between calls were clutter): its newest words
+ * run under the working line's verb, with no row of its own, and once done it joins the calls
+ * after it. A running call's words carry the sheen. Reduced motion stills both.
  */
 async function liveReasoning(page) {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(`${url}/?preview=streaming`);
-  const thought = page.locator('[data-test-kind="thought"]').last();
-  await page.locator('[data-test-kind="thought"][data-thinking]').waitFor();
-  assert.equal((await thought.locator(".chat-thought-label").textContent())?.trim(), "Thinking");
-  assert.notEqual(await thought.locator(".chat-thought-label").getAttribute("data-sheen"), null);
-  await thought
-    .getByTestId("thought-preview")
-    .getByText(/Checking how the composer/)
-    .waitFor();
+  const line = page.getByTestId("working-line");
+  const words = page.getByTestId("working-reasoning");
+  await words.getByText(/Checking how the composer/).waitFor();
+  // One live indicator: the working line, carrying the reasoning; no row of reasoning.
+  assert.equal(await line.count(), 1);
+  assert.equal(await line.getAttribute("data-hidden"), null, "reasoning hid the working line");
+  assert.equal(await page.locator('[data-test-kind="thought"]').count(), 0, "reasoning took a row");
+  // Done, it leaves the line and joins the calls after it.
+  await words.waitFor({ state: "detached" });
   assert.equal(
-    await thought
-      .locator(".chat-thought-label")
-      .evaluate(
-        (node) =>
-          node.getAnimations().filter((animation) => animation.playState === "running").length,
-      ),
-    1,
-    "the Thinking sheen does not move",
+    await page.locator('[data-test-kind="thought"]').count(),
+    0,
+    "done reasoning took a row",
   );
-  // One live indicator: the working line steps aside while the reasoning streams.
-  assert.notEqual(await page.getByTestId("working-line").getAttribute("data-hidden"), null);
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector('[data-test-kind="thought"]:last-of-type .chat-thought-label')
-        ?.textContent?.trim() === "Thought for 2 s" ||
-      [...document.querySelectorAll('[data-test-kind="thought"] .chat-thought-label')].some(
-        (node) => node.textContent?.trim() === "Thought for 2 s",
-      ),
-  );
-  assert.equal(await page.locator('[data-test-kind="thought"][data-thinking]').count(), 0);
-  assert.equal(await page.getByTestId("thought-preview").count(), 0);
   // A running call's words carry the sheen until it completes.
   await page
     .locator(".chat-tool-label[data-sheen], .chat-tool-group-summary[data-sheen]")
@@ -881,15 +881,18 @@ async function liveReasoning(page) {
   const quiet = await page.context().newPage();
   await quiet.emulateMedia({ reducedMotion: "reduce" });
   await quiet.goto(`${url}/?preview=streaming`);
-  await quiet.locator('[data-test-kind="thought"][data-thinking]').waitFor();
-  const still = quiet.locator('[data-test-kind="thought"][data-thinking] .chat-thought-label');
+  const still = quiet.getByTestId("working-reasoning");
+  await still.getByText(/Checking how the composer/).waitFor();
+  assert.notEqual(await quiet.getByTestId("working-line").getAttribute("data-still"), null);
+  assert.equal(await quiet.locator(".chat-working-sheen").count(), 0);
   assert.equal(
     await still.evaluate(
       (node) =>
-        node.getAnimations().length + (getComputedStyle(node).color === "rgba(0, 0, 0, 0)" ? 1 : 0),
+        node.getAnimations().filter((animation) => animation.playState === "running").length +
+        (getComputedStyle(node).color === "rgba(0, 0, 0, 0)" ? 1 : 0),
     ),
     0,
-    "reduced motion: the Thinking words move or vanish",
+    "reduced motion: the reasoning moves or vanishes",
   );
   await quiet.close();
 }
@@ -1961,7 +1964,8 @@ async function inspect(engine, launcher) {
     await page.keyboard.press("Escape");
     await page.goto(`${url}/?preview=settled`);
     await page.locator('[data-test-phase="live"]').waitFor();
-    await page.getByRole("button", { name: "Attach a file", exact: true }).click();
+    await page.locator('summary[aria-label="Add to message"]').click();
+    await page.getByRole("button", { name: "Files and images", exact: true }).click();
     await page.getByText("interface-notes.md", { exact: true }).waitFor();
     await page.getByTestId("composer-input").fill("Review @Sidebar");
     await page.getByRole("button", { name: "src/components/Sidebar.tsx", exact: true }).click();

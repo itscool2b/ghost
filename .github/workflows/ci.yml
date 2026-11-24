@@ -208,11 +208,17 @@ jobs:
         timeout-minutes: 5
         run: pnpm --filter @o7/desktop exec node scripts/check-terminal-panel.mjs
 
-      - name: Check dictation, images, the Dashboard, typing, update notices and terminal chats
+      # Fourteen checks in two engines took 16 minutes on GitHub's Macs by November 2026, past one
+      # step's 15: the suite runs in two parts.
+      - name: Check dictation, images, the Dashboard, typing, update notices, terminal chats and Canvas
         if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
-        # Fourteen checks in two engines: about 17 minutes on GitHub's Macs by November 2026.
-        timeout-minutes: 25
-        run: pnpm --filter @o7/desktop check:fixtures
+        timeout-minutes: 15
+        run: pnpm --filter @o7/desktop exec node scripts/check-fixture-suite.mjs --part 1
+
+      - name: Check the browser, the Device pane, opening, the tour, plans and reading aloud
+        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        timeout-minutes: 15
+        run: pnpm --filter @o7/desktop exec node scripts/check-fixture-suite.mjs --part 2
 
       - name: Check Delete all o7 data
         if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}

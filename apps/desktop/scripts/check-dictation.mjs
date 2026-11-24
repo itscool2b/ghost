@@ -84,7 +84,7 @@ export async function checkDictation(browser, url, out, engine) {
       await open();
       await mic.click();
       await page.getByRole("meter", { name: "Microphone level" }).waitFor();
-      assert.equal(await page.getByRole("button", { name: "Attach a file" }).isVisible(), false);
+      assert.equal(await page.locator('summary[aria-label="Add to message"]').isVisible(), false);
       await page.waitForFunction(
         () => document.activeElement?.getAttribute("aria-label") === "Finish dictation",
       );
@@ -159,7 +159,7 @@ export async function checkDictation(browser, url, out, engine) {
       await audit("dropped");
       await page.getByRole("button", { name: "Close dictation", exact: true }).click();
       await bar.waitFor({ state: "detached" });
-      assert.equal(await page.getByRole("button", { name: "Attach a file" }).isVisible(), true);
+      assert.equal(await page.locator('summary[aria-label="Add to message"]').isVisible(), true);
 
       // Finishing with nothing heard explains, inside the bar, and offers another try.
       await mic.click();

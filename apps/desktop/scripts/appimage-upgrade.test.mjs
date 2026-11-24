@@ -93,7 +93,7 @@ function fakeSystem({
 function setup() {
   const root = temp();
   const paths = {
-    link: join(root, "Applications", "auracode.AppImage"),
+    link: join(root, "Applications", "o7.AppImage"),
     dataDir: join(root, "data"),
     stateDir: join(root, "state"),
   };
@@ -338,18 +338,13 @@ test("old builds beyond --keep are pruned, never the previous one", async () => 
     utimesSync(file, new Date(2026, 0, 1 + index), new Date(2026, 0, 1 + index));
   }
   utimesSync(installed, new Date(2025, 0, 1), new Date(2025, 0, 1));
-  const staged = appImage(join(dir, "auracode_new.AppImage"), "new");
+  const staged = appImage(join(dir, "o7_new.AppImage"), "new");
   assert.equal(await activate(staged, options({ keep: 2 }), paths, system, quiet, {}), EXIT.done);
   const left = readdirSync(dir).sort();
   // Current, the previous (oldest, but the rollback target) and the newest spare one.
   assert.deepEqual(
     left,
-    [
-      "auracode.AppImage",
-      basename(installed),
-      "auracode_d.AppImage",
-      "auracode_new.AppImage",
-    ].sort(),
+    ["o7.AppImage", basename(installed), "o7_d.AppImage", "o7_new.AppImage"].sort(),
   );
 });
 

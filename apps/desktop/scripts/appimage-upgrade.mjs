@@ -42,8 +42,11 @@ import { cleanEnv, EXIT, restoreDatabases, stampOf } from "./host-upgrade.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const REPO = resolve(dirname(SCRIPT), "..", "..", "..");
-/** A kept build: `auracode_<anything>.AppImage`, never the link itself. */
-const BUILD = /^auracode_.+\.AppImage$/u;
+/**
+ * A kept build: `o7_<anything>.AppImage`, as builds are named since the rename, or
+ * `auracode_<anything>.AppImage` from before it; never the link itself.
+ */
+const BUILD = /^(o7|auracode)_.+\.AppImage$/u;
 
 const USAGE = `Usage: pnpm --filter @o7/desktop host-upgrade <command> [options]   (Linux)
 

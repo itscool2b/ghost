@@ -248,6 +248,67 @@ function recorded(source: { events: readonly { type: string; data: unknown }[] }
   return events;
 }
 
+/** `?preview=working-long`: what an hour of an agent's work looked like row by row. */
+function workingLongEvents(): O7Event[] {
+  const events: O7Event[] = [
+    ev.turnStarted("long"),
+    ev.user("long-user", "Check the Xcode 27 run, find why it failed and fix it."),
+  ];
+  const steps: readonly (readonly [string, Partial<Parameters<typeof ev.toolCall>[1]>])[] = [
+    ["Save the run log and read the Xcode 27 image's setup", { kind: "execute" }],
+    ["Read the Xcode 27 test's progress and failure", { kind: "execute" }],
+    [
+      "Read ios.rs",
+      { kind: "read", locations: [{ path: "crates/o7-devices/src/ios.rs", line: 428 }] },
+    ],
+    ["Search for choose_device_type", { kind: "search" }],
+    [
+      "Read manager.rs",
+      { kind: "read", locations: [{ path: "crates/o7-devices/src/manager.rs", line: 2175 }] },
+    ],
+    ["Read the passing Xcode 26 transcript's steps", { kind: "execute" }],
+  ];
+  const thoughts = [
+    "The runner picked a device-specific runtime first.",
+    "",
+    "Both iOS 27.2 runtimes sort equal, so the listing's order decides.",
+    "The general runtime lists the Pro, the device-specific one only the foldable.",
+    "",
+    "Xcode 26 passed end to end, so only the runtime choice differs.",
+  ];
+  steps.forEach(([title, call], index) => {
+    const thought = thoughts[index] ?? "";
+    events.push(
+      ev.thought(`long-thought-${index}`, thought),
+      ev.thoughtDone(
+        `long-thought-${index}`,
+        [3000, 13_000, 4000, 7000, 21_000, 2000][index] ?? 1000,
+      ),
+      ev.toolCall(`long-call-${index}`, { title, status: "completed", ...call }),
+    );
+    if (index === 2)
+      events.push(
+        ev.message(
+          "long-interim",
+          "The Xcode 27 run chose a foldable on a runtime made for it alone. Checking how the runtime is picked.",
+        ),
+        ev.messageDone("long-interim"),
+      );
+  });
+  events.push(
+    ev.thought("long-thought-edit", "Sort the general runtimes first."),
+    ev.thoughtDone("long-thought-edit", 1000),
+    ev.toolCall("long-edit", {
+      kind: "edit",
+      title: "Edit ios.rs",
+      status: "completed",
+      locations: [{ path: "crates/o7-devices/src/ios.rs", line: 460 }],
+    }),
+    ev.thought("long-thought-now", "Adding a test with both 27.2 runtimes listed"),
+  );
+  return events;
+}
+
 function synthetic(mode: string): O7Event[] {
   // The native smoke's short history crosses a prompt boundary just above the bottom.
   // Keep both resolved permission rows: their measured heights trigger viewport clamping
@@ -662,6 +723,9 @@ function synthetic(mode: string): O7Event[] {
   // A running turn that started subagents and background commands (tasksPreview.ts).
   if (mode === "tasks" || mode === "tasks-many")
     return [...events, ...taskPreviewEvents(mode === "tasks-many")];
+  // A long turn still running, as an agent that thinks between its calls works: reasoning before
+  // nearly every call, one word to the person midway, and the agent thinking again at its end.
+  if (mode === "working-long") return [...events, ...workingLongEvents()];
   // A later start failed: the chat's worktree folder was deleted outside the app.
   if (mode === "missing-worktree")
     return [
@@ -907,6 +971,7 @@ function Preview() {
     "missing-worktree",
     "tasks",
     "tasks-many",
+    "working-long",
     "tool-details",
     "rich-answer",
     "file-links",
@@ -979,7 +1044,8 @@ function Preview() {
           mode === "history-question" ||
           mode === "focus-group" ||
           mode === "tasks" ||
-          mode === "tasks-many"
+          mode === "tasks-many" ||
+          mode === "working-long"
         ? "running"
         : mode === "error" || mode === "missing-worktree"
           ? "failed"
@@ -1050,8 +1116,13 @@ function Preview() {
     // Browser acceptance advances one live turn deterministically, without sending a prompt.
     const step = (event: Event) => {
       switch ((event as CustomEvent).detail) {
+        case "think":
+          // Reasoning streaming in: its newest words show on the working line.
+          publishPreview.current?.([ev.thought("working-live", "Weighing the narrow layout")]);
+          break;
         case "tools":
           publishPreview.current?.([
+            ev.thoughtDone("working-live", 3000),
             ev.toolCall("working-read", { title: "Read first.ts", status: "completed" }),
             // A blink of reasoning with no words gets no row, so it does not split the stretch.
             ev.thought("working-hidden", ""),

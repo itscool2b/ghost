@@ -42,17 +42,42 @@ export function chatActivity(state: ChatState): OrbState {
 }
 
 /**
- * Whether a running turn's newest shown output is text still streaming in: an answer, or the
- * reasoning's "Thinking" row. That is then the live part of the turn, so the working line steps
- * aside until it ends.
+ * Whether a running turn's newest shown output is its answer still streaming in. That is then the
+ * live part of the turn, so the working line steps aside until it ends. Reasoning does not: it
+ * shows on the working line itself (`liveReasoning`).
  */
 export function streamingText(segment: RenderedSegment | undefined): boolean {
   if (segment === undefined || segment.end !== null) return false;
   const newest = segment.items.at(-1);
-  return (
-    (newest?.kind === "message" && !newest.completed) ||
-    (newest?.kind === "thought" && newest.thinking)
-  );
+  return newest?.kind === "message" && !newest.completed;
+}
+
+/** Whether a running turn's newest shown output is reasoning the agent is thinking now. */
+export function thinkingNow(segment: RenderedSegment | undefined): boolean {
+  if (segment === undefined || segment.end !== null) return false;
+  const newest = segment.items.at(-1);
+  return newest?.kind === "thought" && newest.thinking;
+}
+
+/** The longest stretch of the reasoning's newest words the working line shows. */
+const REASONING_SHOWN = 160;
+
+/**
+ * The newest words of the reasoning a running turn is thinking now, as the working line shows
+ * them under its verb: the last line with words, its end kept when it is long. Null while the
+ * agent is not thinking, or thinks without words.
+ */
+export function liveReasoning(segment: RenderedSegment | undefined): string | null {
+  if (segment === undefined || segment.end !== null) return null;
+  const newest = segment.items.at(-1);
+  if (newest?.kind !== "thought" || !newest.thinking) return null;
+  const line = newest.text
+    .split("\n")
+    .map((part) => part.replace(/[*_`#>]+/g, "").trim())
+    .filter((part) => part !== "")
+    .at(-1);
+  if (line === undefined) return null;
+  return line.length > REASONING_SHOWN ? `…${line.slice(-REASONING_SHOWN).trimStart()}` : line;
 }
 
 /** The kind of a turn's latest call, which the working line's words lean towards. */

@@ -33,16 +33,24 @@ export async function checkCanvas(browser, url, out, engine) {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.goto(`${url}/?preview=canvas&theme=${theme}`);
-      const opener = page.getByRole("button", { name: "Canvas", exact: true });
-      await opener.waitFor();
-      await opener.click();
+      // Canvas is in the composer's "+" menu, beside Files and images.
+      const plus = page.locator('summary[aria-label="Add to message"]');
+      const opener = async () => {
+        await plus.click();
+        await page.getByRole("button", { name: "Canvas", exact: true }).click();
+      };
+      await plus.waitFor();
+      await opener();
       const pane = page.locator("section[aria-label=Canvas]");
       await pane.waitFor();
+      // Open, the menu's row closes it instead, and says so.
+      await plus.click();
       assert.equal(
-        await opener.getAttribute("aria-pressed"),
-        "true",
+        await page.getByTestId("composer-canvas").getAttribute("aria-label"),
+        "Close the canvas",
         `${label}: Canvas shows open`,
       );
+      await page.keyboard.press("Escape");
       await axe(page, `${label} empty`);
       const surface = page.locator(".canvas-surface");
       let box = await surface.boundingBox();
@@ -212,7 +220,7 @@ export async function checkCanvas(browser, url, out, engine) {
       // Closing keeps the drawing; the transcript comes back.
       await pane.getByRole("button", { name: "Close the canvas" }).click();
       await pane.waitFor({ state: "detached" });
-      await opener.click();
+      await opener();
       await pane.waitFor();
       assert.equal(await count("rect[data-id]"), 2, `${label}: the drawing stayed`);
       assert.deepEqual(errors, [], `${label}: no page errors`);
