@@ -19,6 +19,11 @@ import {
   takeWithoutMedia,
 } from "./appimage-media.mjs";
 
+/** Tests that compare Linux paths as text are skipped on Windows. */
+const LINUX_ONLY =
+  process.platform === "win32" &&
+  "Linux paths: node:path writes Windows paths here, and the AppImage scripts run only on Linux";
+
 const scratch = [];
 afterEach(() => {
   for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -82,7 +87,7 @@ test("--without-media is the bundle script's own flag, never Tauri's", () => {
   assert.deepEqual(takeWithoutMedia(["--debug"]), { args: ["--debug"], withoutMedia: false });
 });
 
-test("the plugin folder is the system's, or the one named", () => {
+test("the plugin folder is the system's, or the one named", { skip: LINUX_ONLY }, () => {
   const root = folder();
   assert.equal(findPluginsDir({}, root), null);
   mkdirSync(join(root, "usr/lib/gstreamer-1.0"), { recursive: true });
@@ -204,7 +209,7 @@ test("the built image is checked for its plugins, or for none when built without
   checkTree(folder(), false);
 });
 
-test("the images a build made are found where Tauri writes them", () => {
+test("the images a build made are found where Tauri writes them", { skip: LINUX_ONLY }, () => {
   assert.equal(
     imageDir(["--bundles", "appimage"], {}, "/repo"),
     "/repo/target/release/bundle/appimage",
