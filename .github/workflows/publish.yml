@@ -187,6 +187,16 @@ jobs:
         if: matrix.target == 'aarch64-pc-windows-msvc'
         shell: pwsh
         run: |
+          # Visual Studio's own Clang matches its STL; the image's separate LLVM can be older than that
+          # STL accepts (Clang 20 against MSVC 14.52, which asks for 22, on 24 November 2026).
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $bundled = if (Test-Path $vswhere) {
+            & $vswhere -latest -products * -find 'VC\Tools\Llvm\x64\bin\clang-cl.exe' | Select-Object -First 1
+          }
+          if ($bundled) {
+            Split-Path $bundled >> $env:GITHUB_PATH
+            & $bundled --version
+          }
           Get-Command ninja.exe, clang-cl.exe -ErrorAction Stop | Out-Null
           "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
           $toolchain = Join-Path $env:GITHUB_WORKSPACE '.github/cmake/windows-arm64-clang.cmake'

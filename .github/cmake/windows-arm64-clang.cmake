@@ -15,3 +15,7 @@ set(CMAKE_CXX_COMPILER_TARGET aarch64-pc-windows-msvc)
 # cmake-rs supplies CMAKE_CXX_FLAGS itself, replacing CMake's default /EHsc. GGUF uses
 # try/catch, which clang-cl rejects without exception handling. Keep this C++-only.
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/EHsc>")
+# The windows-2025 image's Visual Studio 18 STL (MSVC 14.52) asks for Clang 22, while the image's
+# LLVM is 20 (24 November 2026: "error STL1000: Unexpected compiler version"). ggml is plain C++17,
+# which Clang 20 compiles against this STL; this define is MSVC's own way past the version check.
+add_compile_definitions(_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH)
