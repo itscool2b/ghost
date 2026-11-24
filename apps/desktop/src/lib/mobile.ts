@@ -99,7 +99,13 @@ export const tauriMobileApi: MobileApi = {
 const NOTHING: MobileStatus = {
   enabled: false,
   unavailable: "Devices are not available here.",
-  setup: { adb: false, emulator: false, acceleration: null, fetch: { state: "idle" } },
+  setup: {
+    adb: false,
+    emulator: false,
+    acceleration: null,
+    fetch: { state: "idle" },
+    ios: { possible: false, ready: false, detail: null, missing: null, tool: { state: "missing" } },
+  },
   devices: [],
   chats: [],
 };
@@ -226,6 +232,8 @@ const PACKET_CONFIG = 2;
 const PACKET_KEY = 3;
 const PACKET_FRAME = 4;
 const PACKET_ENDED = 5;
+/** A whole picture as a JPEG: an iPhone simulator's screen. */
+const PACKET_PICTURE = 6;
 
 /**
  * The WebCodecs codec string for an H.264 configuration in Annex B form: `avc1.` and the three
@@ -257,7 +265,8 @@ export type ScreenState =
 /**
  * Draws a device's video on a canvas. Packets go in as they arrive; frames come out on the canvas
  * as soon as they are decoded. A configuration packet starts the decoder again, and the key frame
- * after it carries the configuration in front of it, as Annex B decoding needs.
+ * after it carries the configuration in front of it, as Annex B decoding needs. An iPhone's screen
+ * arrives as whole pictures instead, which every web view can draw.
  */
 export class ScreenPlayer {
   readonly #canvas: HTMLCanvasElement;
@@ -267,12 +276,14 @@ export class ScreenPlayer {
   #configured = false;
   #size: { width: number; height: number } | null = null;
   #closed = false;
+  /** A picture is being drawn; the newest one that came meanwhile waits here. */
+  #drawing = false;
+  #waiting: Uint8Array | null = null;
 
   constructor(canvas: HTMLCanvasElement, onState: (state: ScreenState) => void) {
     this.#canvas = canvas;
     this.#onState = onState;
-    if (typeof VideoDecoder === "undefined") onState({ kind: "unsupported" });
-    else onState({ kind: "waiting" });
+    onState({ kind: "waiting" });
   }
 
   /** The video's size now, in its own pixels: what a touch's coordinates are measured in. */
@@ -281,20 +292,29 @@ export class ScreenPlayer {
   }
 
   push(packet: Uint8Array): void {
-    if (this.#closed || packet.length === 0 || typeof VideoDecoder === "undefined") return;
+    if (this.#closed || packet.length === 0) return;
     const kind = packet[0];
     const view = new DataView(packet.buffer, packet.byteOffset, packet.byteLength);
     if (kind === PACKET_SIZE && packet.length >= 5) {
       this.#size = { width: view.getUint16(1), height: view.getUint16(3) };
       return;
     }
+    if (kind === PACKET_ENDED) {
+      this.#onState({ kind: "ended" });
+      return;
+    }
+    if (kind === PACKET_PICTURE) {
+      this.#picture(packet.subarray(1));
+      return;
+    }
+    // The rest is H.264, which needs the web view's video decoder.
+    if (typeof VideoDecoder === "undefined") {
+      if (kind === PACKET_CONFIG || kind === PACKET_KEY) this.#onState({ kind: "unsupported" });
+      return;
+    }
     if (kind === PACKET_CONFIG) {
       this.#config = packet.slice(1);
       this.#configured = false;
-      return;
-    }
-    if (kind === PACKET_ENDED) {
-      this.#onState({ kind: "ended" });
       return;
     }
     if ((kind !== PACKET_KEY && kind !== PACKET_FRAME) || packet.length < 9) return;
@@ -353,6 +373,43 @@ export class ScreenPlayer {
     this.#canvas.getContext("2d")?.drawImage(frame, 0, 0, width, height);
     frame.close();
     this.#onState({ kind: "live", width, height });
+  }
+
+  /** Draws one JPEG. Pictures can come faster than a slow machine draws them: only the newest
+   * one waits, and the rest are dropped. */
+  #picture(jpeg: Uint8Array): void {
+    if (this.#drawing) {
+      this.#waiting = jpeg;
+      return;
+    }
+    this.#drawing = true;
+    createImageBitmap(new Blob([jpeg.slice()], { type: "image/jpeg" }))
+      .then(
+        (bitmap) => {
+          if (this.#closed) {
+            bitmap.close();
+            return;
+          }
+          const { width, height } = bitmap;
+          if (this.#canvas.width !== width || this.#canvas.height !== height) {
+            this.#canvas.width = width;
+            this.#canvas.height = height;
+          }
+          this.#canvas.getContext("2d")?.drawImage(bitmap, 0, 0, width, height);
+          bitmap.close();
+          this.#size = { width, height };
+          this.#onState({ kind: "live", width, height });
+        },
+        () => {
+          // A picture that would not decode: the next one replaces it.
+        },
+      )
+      .finally(() => {
+        this.#drawing = false;
+        const next = this.#waiting;
+        this.#waiting = null;
+        if (next && !this.#closed) this.#picture(next);
+      });
   }
 
   close(): void {

@@ -210,7 +210,8 @@ jobs:
 
       - name: Check dictation, images, the Dashboard, typing, update notices and terminal chats
         if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
-        timeout-minutes: 15
+        # Fourteen checks in two engines: about 17 minutes on GitHub's Macs by November 2026.
+        timeout-minutes: 25
         run: pnpm --filter @o7/desktop check:fixtures
 
       - name: Check Delete all o7 data

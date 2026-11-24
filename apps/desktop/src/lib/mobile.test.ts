@@ -213,13 +213,42 @@ describe("the video", () => {
     };
     afterEach(() => vi.unstubAllGlobals());
 
-    it("says so where the web view cannot decode video", () => {
+    it("says so where the web view cannot decode an Android phone's video", () => {
       vi.stubGlobal("VideoDecoder", undefined);
       const states: ScreenState[] = [];
       const player = new ScreenPlayer(canvas(), (state) => states.push(state));
       player.push(Uint8Array.from([1, 2, 208, 6, 64]));
-      expect(states).toEqual([{ kind: "unsupported" }]);
-      expect(player.size()).toBeNull();
+      expect(states).toEqual([{ kind: "waiting" }]);
+      player.push(Uint8Array.from([2, ...CONFIG]));
+      expect(states).toEqual([{ kind: "waiting" }, { kind: "unsupported" }]);
+    });
+
+    it("draws an iPhone's pictures with no video decoder, and only the newest when they come fast", async () => {
+      vi.stubGlobal("VideoDecoder", undefined);
+      const drawn: number[] = [];
+      vi.stubGlobal("createImageBitmap", async (blob: Blob) => {
+        drawn.push(blob.size);
+        return { width: 603, height: 1311, close: () => {} };
+      });
+      const states: ScreenState[] = [];
+      const element = canvas();
+      const player = new ScreenPlayer(element, (state) => states.push(state));
+      player.push(Uint8Array.from([6, 1]));
+      // Two more while the first is drawn: the second is dropped for the third.
+      player.push(Uint8Array.from([6, 2, 2]));
+      player.push(Uint8Array.from([6, 3, 3, 3]));
+      await flush();
+      await flush();
+      expect(drawn).toEqual([1, 3]);
+      expect(element.width).toBe(603);
+      expect(element.height).toBe(1311);
+      expect(player.size()).toEqual({ width: 603, height: 1311 });
+      expect(states.at(-1)).toEqual({ kind: "live", width: 603, height: 1311 });
+      expect(states).not.toContainEqual({ kind: "unsupported" });
+      player.close();
+      player.push(Uint8Array.from([6, 4, 4, 4, 4]));
+      await flush();
+      expect(drawn).toEqual([1, 3]);
     });
 
     it("starts at a key frame that carries the configuration, then feeds what follows", () => {

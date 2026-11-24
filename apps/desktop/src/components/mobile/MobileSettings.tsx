@@ -47,6 +47,9 @@ export function MobileSettings({
   const running = status?.devices.filter(
     (device) => device.kind === "emulator" && device.state !== "stopped",
   ).length;
+  const iphones = status?.devices.filter(
+    (device) => device.kind === "simulator" && device.state !== "stopped",
+  ).length;
   return (
     <div className="plugins-agent plugins-universal" data-testid="mobile-settings">
       {prefs.error ? (
@@ -63,7 +66,7 @@ export function MobileSettings({
             <h2 id="plugins-universal-mobile">Mobile</h2>
             <p>
               {on
-                ? "A phone beside each chat, for building phone apps: an Android emulator of the chat's own, or your phone on a cable. You and the agent use the same device."
+                ? "A phone beside each chat, for building phone apps: an Android emulator of the chat's own, an iPhone simulator of its own on a Mac, or your phone on a cable. You and the agent use the same device."
                 : "Off for every agent: chats show no device, agents' device tools stop working, and every phone o7 started is stopped."}
             </p>
           </div>
@@ -115,6 +118,22 @@ export function MobileSettings({
                       : setup.adb
                         ? "Phones on a cable work. The emulator is not downloaded yet: open the Device pane in a chat to set it up."
                         : "Not set up. Open the Device pane in a chat (the phone button in its header) and o7 downloads Android's emulator from Google."}
+                </span>
+              </div>
+            </div>
+            <div className="plugins-universal-setting" data-setting="iPhone">
+              <div>
+                <strong>iPhone</strong>
+                <span data-testid="mobile-iphone">
+                  {setup === null
+                    ? "Looking for Xcode."
+                    : !setup.ios.possible
+                      ? "An iPhone simulator needs a Mac with Xcode."
+                      : setup.ios.ready
+                        ? iphones
+                          ? `Ready: ${setup.ios.detail}. ${iphones === 1 ? "One iPhone is" : `${iphones} iPhones are`} running.`
+                          : `Ready: ${setup.ios.detail}. Open the Device pane in a chat to start an iPhone.`
+                        : (setup.ios.missing ?? "Looking for Xcode.")}
                 </span>
               </div>
             </div>

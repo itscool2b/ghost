@@ -21,7 +21,9 @@ impl Places {
     /// This process's environment.
     pub fn current() -> Places {
         let folder = |key: &str| {
-            std::env::var_os(key).filter(|value| !value.is_empty()).map(PathBuf::from)
+            std::env::var_os(key)
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
         };
         let studio_default = match std::env::consts::OS {
             "windows" => folder("LOCALAPPDATA").map(|base| base.join("Android").join("Sdk")),
@@ -66,7 +68,11 @@ impl Installed {
 }
 
 fn program(name: &str) -> String {
-    if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() }
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_owned()
+    }
 }
 
 /// `root/platform-tools/adb`.
@@ -100,14 +106,19 @@ pub fn images_in(root: &Path, host: Host) -> Vec<InstalledImage> {
             }
             let path = format!("system-images;{platform};{tag};{abi}");
             if let Some(path) = ImagePath::parse(&path) {
-                found.push(InstalledImage { path, root: root.to_owned() });
+                found.push(InstalledImage {
+                    path,
+                    root: root.to_owned(),
+                });
             }
         }
     }
     // Released versions before previews, the highest first; Google's APIs before a bare image.
     found.sort_by(|a, b| {
         let rank = |image: &InstalledImage| (image.path.api(), image.path.tag == "google_apis");
-        rank(b).cmp(&rank(a)).then_with(|| a.path.platform.cmp(&b.path.platform))
+        rank(b)
+            .cmp(&rank(a))
+            .then_with(|| a.path.platform.cmp(&b.path.platform))
     });
     found
 }
@@ -115,16 +126,23 @@ pub fn images_in(root: &Path, host: Host) -> Vec<InstalledImage> {
 /// Looks in o7's own SDK folder first, then in the person's.
 pub fn find(own: &Path, places: &Places, host: Host) -> Installed {
     let mut roots = vec![own.to_owned()];
-    for root in [&places.android_home, &places.android_sdk_root, &places.studio_default]
-        .into_iter()
-        .flatten()
+    for root in [
+        &places.android_home,
+        &places.android_sdk_root,
+        &places.studio_default,
+    ]
+    .into_iter()
+    .flatten()
     {
         if root.is_dir() && !roots.contains(root) {
             roots.push(root.clone());
         }
     }
     let mut installed = Installed {
-        adb: roots.iter().map(|root| adb_in(root)).find(|adb| adb.is_file()),
+        adb: roots
+            .iter()
+            .map(|root| adb_in(root))
+            .find(|adb| adb.is_file()),
         own_emulator: emulator_in(own).is_file(),
         own_image: !images_in(own, host).is_empty(),
         ..Installed::default()
@@ -162,18 +180,35 @@ pub async fn acceleration(root: &Path) -> Acceleration {
             usable: false,
             detail: format!("The emulator could not be run: {error}"),
         },
-        Err(_) => Acceleration { usable: false, detail: "The emulator did not answer.".into() },
+        Err(_) => Acceleration {
+            usable: false,
+            detail: "The emulator did not answer.".into(),
+        },
     }
 }
 
 /// `accel:`, a status number (0 is good), one line of explanation, `accel`.
 fn parse_acceleration(output: &str) -> Acceleration {
-    let mut lines = output.lines().map(str::trim).skip_while(|line| *line != "accel:").skip(1);
+    let mut lines = output
+        .lines()
+        .map(str::trim)
+        .skip_while(|line| *line != "accel:")
+        .skip(1);
     let status = lines.next().and_then(|line| line.parse::<i32>().ok());
-    let detail = lines.next().filter(|line| *line != "accel").unwrap_or_default().to_owned();
+    let detail = lines
+        .next()
+        .filter(|line| *line != "accel")
+        .unwrap_or_default()
+        .to_owned();
     match status {
-        Some(0) => Acceleration { usable: true, detail },
-        Some(_) => Acceleration { usable: false, detail },
+        Some(0) => Acceleration {
+            usable: true,
+            detail,
+        },
+        Some(_) => Acceleration {
+            usable: false,
+            detail,
+        },
         None => Acceleration {
             usable: false,
             detail: "The emulator did not say whether acceleration works.".into(),
@@ -186,7 +221,10 @@ mod tests {
     use super::*;
     use crate::repo::{HostArch, HostOs};
 
-    const HOST: Host = Host { os: HostOs::Linux, arch: HostArch::X64 };
+    const HOST: Host = Host {
+        os: HostOs::Linux,
+        arch: HostArch::X64,
+    };
 
     fn touch(path: &Path) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -194,7 +232,14 @@ mod tests {
     }
 
     fn image(root: &Path, platform: &str, tag: &str, abi: &str) {
-        touch(&root.join("system-images").join(platform).join(tag).join(abi).join("system.img"));
+        touch(
+            &root
+                .join("system-images")
+                .join(platform)
+                .join(tag)
+                .join(abi)
+                .join("system.img"),
+        );
     }
 
     #[test]
@@ -214,7 +259,10 @@ mod tests {
             touch(&emulator_in(root));
             image(root, "android-36", "google_apis", "x86_64");
         }
-        let places = Places { android_home: Some(theirs.path().to_owned()), ..Places::default() };
+        let places = Places {
+            android_home: Some(theirs.path().to_owned()),
+            ..Places::default()
+        };
         let found = find(own.path(), &places, HOST);
         assert_eq!(found.adb, Some(adb_in(own.path())));
         assert_eq!(found.emulator_root.as_deref(), Some(own.path()));
@@ -249,9 +297,17 @@ mod tests {
         // The ARM image is not listed on an x64 computer; the extension image sorts last.
         assert_eq!(
             order,
-            ["android-36/google_apis", "android-36/default", "android-35/google_apis", "android-36-ext19/google_apis"]
+            [
+                "android-36/google_apis",
+                "android-36/default",
+                "android-35/google_apis",
+                "android-36-ext19/google_apis"
+            ]
         );
-        assert!(std::fs::read_dir(own.path()).unwrap().next().is_none(), "nothing was written");
+        assert!(
+            std::fs::read_dir(own.path()).unwrap().next().is_none(),
+            "nothing was written"
+        );
     }
 
     #[test]
@@ -267,7 +323,8 @@ mod tests {
 
     #[test]
     fn the_emulators_verdict_is_read() {
-        let good = parse_acceleration("accel:\n0\nWHPX(10.0.26300) is installed and usable.\naccel\n");
+        let good =
+            parse_acceleration("accel:\n0\nWHPX(10.0.26300) is installed and usable.\naccel\n");
         assert!(good.usable);
         assert_eq!(good.detail, "WHPX(10.0.26300) is installed and usable.");
         let bad = parse_acceleration(

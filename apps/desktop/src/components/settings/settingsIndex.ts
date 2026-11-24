@@ -154,6 +154,7 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
     words: "mobile phone tools agents tap swipe screenshot install launch logs",
   },
   { page: "mobile", title: "Android", words: "mobile sdk emulator adb set up download google" },
+  { page: "mobile", title: "iPhone", words: "ios simulator xcode mac apple axe" },
   { page: "instructions", title: "Instructions", words: "agents.md claude.md rules prompt" },
   { page: "instructions", title: "Applies to", words: "scope folder project global chat" },
   {

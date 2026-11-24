@@ -39,7 +39,10 @@ pub enum Orientation {
 
 impl Device {
     pub fn new(adb: Adb, serial: impl Into<String>) -> Device {
-        Device { adb, serial: serial.into() }
+        Device {
+            adb,
+            serial: serial.into(),
+        }
     }
 
     pub fn serial(&self) -> &str {
@@ -47,12 +50,18 @@ impl Device {
     }
 
     async fn run(&self, command: &str, doing: &str) -> Result<String, Error> {
-        self.adb.shell(&self.serial, command, TEXT_LIMIT, SLOW).await?.ok(doing)
+        self.adb
+            .shell(&self.serial, command, TEXT_LIMIT, SLOW)
+            .await?
+            .ok(doing)
     }
 
     async fn property(&self, name: &str) -> Option<String> {
-        let output =
-            self.adb.shell(&self.serial, &format!("getprop {name}"), 4096, QUICK).await.ok()?;
+        let output = self
+            .adb
+            .shell(&self.serial, &format!("getprop {name}"), 4096, QUICK)
+            .await
+            .ok()?;
         Some(output.text()).filter(|value| !value.is_empty())
     }
 
@@ -83,7 +92,10 @@ impl Device {
 
     /// The screen as a PNG, at the device's own size.
     pub async fn screenshot(&self) -> Result<Vec<u8>, Error> {
-        let png = self.adb.exec(&self.serial, "screencap -p", PICTURE_LIMIT, SLOW).await?;
+        let png = self
+            .adb
+            .exec(&self.serial, "screencap -p", PICTURE_LIMIT, SLOW)
+            .await?;
         if png.starts_with(&[0x89, b'P', b'N', b'G']) {
             Ok(png)
         } else {
@@ -100,8 +112,10 @@ impl Device {
             if attempt > 0 {
                 tokio::time::sleep(Duration::from_millis(600)).await;
             }
-            let dump =
-                self.adb.exec(&self.serial, "uiautomator dump /dev/tty", TEXT_LIMIT, SLOW).await?;
+            let dump = self
+                .adb
+                .exec(&self.serial, "uiautomator dump /dev/tty", TEXT_LIMIT, SLOW)
+                .await?;
             match Outline::parse(&dump) {
                 Ok(outline) => return Ok(outline),
                 Err(error) => last = Some(error),
@@ -112,18 +126,24 @@ impl Device {
 
     /// Installs an APK from this computer.
     pub async fn install(&self, apk: &Path) -> Result<(), Error> {
-        let is_apk = apk.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("apk"));
+        let is_apk = apk
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("apk"));
         if !is_apk {
             return Err(Error::Refused("Only an .apk file can be installed.".into()));
         }
-        self.adb.install(&self.serial, apk, Duration::from_secs(300)).await
+        self.adb
+            .install(&self.serial, apk, Duration::from_secs(300))
+            .await
     }
 
     /// Whether `package` is installed.
     pub async fn installed(&self, package: &str) -> Result<bool, Error> {
         let package = shell::package(package)?;
-        let output =
-            self.adb.shell(&self.serial, &format!("pm path {package}"), 8192, QUICK).await?;
+        let output = self
+            .adb
+            .shell(&self.serial, &format!("pm path {package}"), 8192, QUICK)
+            .await?;
         Ok(output.exit == 0 && output.text().starts_with("package:"))
     }
 
@@ -132,7 +152,9 @@ impl Device {
     pub async fn launch(&self, package: &str, activity: Option<&str>) -> Result<String, Error> {
         let package = shell::package(package)?;
         if !self.installed(package).await? {
-            return Err(Error::Device(format!("{package} is not installed on the device.")));
+            return Err(Error::Device(format!(
+                "{package} is not installed on the device."
+            )));
         }
         let component = match activity {
             Some(activity) => format!("{package}/{}", shell::component(activity)?),
@@ -152,7 +174,9 @@ impl Device {
                 })?
             }
         };
-        let said = self.run(&format!("am start -W -n {component}"), "Starting the app").await?;
+        let said = self
+            .run(&format!("am start -W -n {component}"), "Starting the app")
+            .await?;
         match start_error(&said) {
             Some(why) => Err(Error::Device(format!("The app did not start: {why}"))),
             None => Ok(component),
@@ -162,24 +186,33 @@ impl Device {
     /// Ends an app's processes.
     pub async fn stop_app(&self, package: &str) -> Result<(), Error> {
         let package = shell::package(package)?;
-        self.run(&format!("am force-stop {package}"), "Stopping the app").await.map(drop)
+        self.run(&format!("am force-stop {package}"), "Stopping the app")
+            .await
+            .map(drop)
     }
 
     /// Removes an app and its data.
     pub async fn uninstall(&self, package: &str) -> Result<(), Error> {
         let package = shell::package(package)?;
-        let said = self.run(&format!("pm uninstall {package}"), "Removing the app").await?;
+        let said = self
+            .run(&format!("pm uninstall {package}"), "Removing the app")
+            .await?;
         if said.contains("Success") {
             Ok(())
         } else {
-            Err(Error::Device(format!("The app was not removed: {}", shell::shown(&said))))
+            Err(Error::Device(format!(
+                "The app was not removed: {}",
+                shell::shown(&said)
+            )))
         }
     }
 
     /// Wipes an app's data, as if it had just been installed.
     pub async fn clear_data(&self, package: &str) -> Result<(), Error> {
         let package = shell::package(package)?;
-        self.run(&format!("pm clear {package}"), "Clearing the app's data").await.map(drop)
+        self.run(&format!("pm clear {package}"), "Clearing the app's data")
+            .await
+            .map(drop)
     }
 
     /// Opens a link as a tap on it would: a web page, or an app's own deep link.
@@ -187,8 +220,13 @@ impl Device {
         let link = link.trim();
         let has_scheme = link.split_once(':').is_some_and(|(scheme, rest)| {
             !rest.is_empty()
-                && scheme.chars().next().is_some_and(|first| first.is_ascii_alphabetic())
-                && scheme.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
+                && scheme
+                    .chars()
+                    .next()
+                    .is_some_and(|first| first.is_ascii_alphabetic())
+                && scheme
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
         });
         if !has_scheme || link.len() > 2000 || link.chars().any(char::is_control) {
             return Err(Error::Refused(
@@ -197,12 +235,17 @@ impl Device {
         }
         let said = self
             .run(
-                &format!("am start -W -a android.intent.action.VIEW -d {}", shell::quote(link)?),
+                &format!(
+                    "am start -W -a android.intent.action.VIEW -d {}",
+                    shell::quote(link)?
+                ),
                 "Opening the link",
             )
             .await?;
         match start_error(&said) {
-            Some(why) => Err(Error::Device(format!("Nothing on the device opened the link: {why}"))),
+            Some(why) => Err(Error::Device(format!(
+                "Nothing on the device opened the link: {why}"
+            ))),
             None => Ok(()),
         }
     }
@@ -211,7 +254,12 @@ impl Device {
     pub async fn foreground(&self) -> Option<String> {
         let output = self
             .adb
-            .shell(&self.serial, "dumpsys window | grep -m1 mCurrentFocus", 8192, QUICK)
+            .shell(
+                &self.serial,
+                "dumpsys window | grep -m1 mCurrentFocus",
+                8192,
+                QUICK,
+            )
             .await
             .ok()?;
         parse_focus(&output.text())
@@ -230,7 +278,10 @@ impl Device {
                     .shell(&self.serial, &format!("pidof {package}"), 256, QUICK)
                     .await?
                     .text();
-                let pid = pid.split_whitespace().next().and_then(|pid| pid.parse::<u32>().ok());
+                let pid = pid
+                    .split_whitespace()
+                    .next()
+                    .and_then(|pid| pid.parse::<u32>().ok());
                 match pid {
                     Some(pid) => {
                         let log = self
@@ -243,7 +294,9 @@ impl Device {
                     }
                     None => out.push_str(&format!("{package} is not running.\n")),
                 }
-                let crash = self.run("logcat -d -b crash -v time -t 80", "Reading the log").await?;
+                let crash = self
+                    .run("logcat -d -b crash -v time -t 80", "Reading the log")
+                    .await?;
                 if crash.contains(package) {
                     out.push_str(&format!("\nIts last crash:\n{crash}\n"));
                 }
@@ -264,17 +317,27 @@ impl Device {
             Appearance::Dark => "yes",
             Appearance::Light => "no",
         };
-        self.run(&format!("cmd uimode night {night}"), "Changing the appearance").await.map(drop)
+        self.run(
+            &format!("cmd uimode night {night}"),
+            "Changing the appearance",
+        )
+        .await
+        .map(drop)
     }
 
     /// Sets how large text draws: 1.0 is the default, 2.0 the largest Android offers.
     pub async fn set_text_scale(&self, scale: f32) -> Result<(), Error> {
         if !(0.85..=2.0).contains(&scale) {
-            return Err(Error::Refused("Text size is a number from 0.85 to 2.".into()));
+            return Err(Error::Refused(
+                "Text size is a number from 0.85 to 2.".into(),
+            ));
         }
-        self.run(&format!("settings put system font_scale {scale:.2}"), "Changing the text size")
-            .await
-            .map(drop)
+        self.run(
+            &format!("settings put system font_scale {scale:.2}"),
+            "Changing the text size",
+        )
+        .await
+        .map(drop)
     }
 
     /// Turns the device, and stops it turning by itself.
@@ -303,9 +366,12 @@ impl Device {
         let package = shell::package(package)?;
         let permission = shell::component(permission)?;
         let verb = if granted { "grant" } else { "revoke" };
-        self.run(&format!("pm {verb} {package} {permission}"), "Changing the permission")
-            .await
-            .map(drop)
+        self.run(
+            &format!("pm {verb} {package} {permission}"),
+            "Changing the permission",
+        )
+        .await
+        .map(drop)
     }
 }
 
@@ -317,7 +383,9 @@ fn parse_display_size(said: &str) -> Option<(u32, u32)> {
             Some((width.parse().ok()?, height.parse().ok()?))
         })
     };
-    size("Override size:").or_else(|| size("Physical size:")).filter(|(w, h)| *w > 0 && *h > 0)
+    size("Override size:")
+        .or_else(|| size("Physical size:"))
+        .filter(|(w, h)| *w > 0 && *h > 0)
 }
 
 /// The last line that names a component of `package` (`com.example/.MainActivity`).
@@ -365,7 +433,10 @@ mod tests {
 
     #[test]
     fn the_screens_size_prefers_an_override() {
-        assert_eq!(parse_display_size("Physical size: 1080x2400\n"), Some((1080, 2400)));
+        assert_eq!(
+            parse_display_size("Physical size: 1080x2400\n"),
+            Some((1080, 2400))
+        );
         assert_eq!(
             parse_display_size("Physical size: 1080x2400\nOverride size: 720x1600\n"),
             Some((720, 1600))
@@ -378,22 +449,41 @@ mod tests {
     #[test]
     fn the_launcher_screen_is_the_apps_own_component() {
         let said = "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false\ncom.example.app/.MainActivity\n";
-        assert_eq!(parse_component(said, "com.example.app").as_deref(), Some("com.example.app/.MainActivity"));
-        assert_eq!(parse_component("No activity found\n", "com.example.app"), None);
+        assert_eq!(
+            parse_component(said, "com.example.app").as_deref(),
+            Some("com.example.app/.MainActivity")
+        );
+        assert_eq!(
+            parse_component("No activity found\n", "com.example.app"),
+            None
+        );
         // Another app's component, or one with shell characters, is not taken.
-        assert_eq!(parse_component("com.other/.Main\n", "com.example.app"), None);
-        assert_eq!(parse_component("com.example.app/.Main;reboot\n", "com.example.app"), None);
+        assert_eq!(
+            parse_component("com.other/.Main\n", "com.example.app"),
+            None
+        );
+        assert_eq!(
+            parse_component("com.example.app/.Main;reboot\n", "com.example.app"),
+            None
+        );
     }
 
     #[test]
     fn am_starts_complaints_are_found() {
-        assert_eq!(start_error("Starting: Intent { ... }\nStatus: ok\nLaunchState: COLD\n"), None);
         assert_eq!(
-            start_error("Starting: Intent\nError type 3\nError: Activity class {a/b} does not exist.\n").as_deref(),
+            start_error("Starting: Intent { ... }\nStatus: ok\nLaunchState: COLD\n"),
+            None
+        );
+        assert_eq!(
+            start_error(
+                "Starting: Intent\nError type 3\nError: Activity class {a/b} does not exist.\n"
+            )
+            .as_deref(),
             Some("Activity class {a/b} does not exist.")
         );
         assert_eq!(
-            start_error("Error: Activity not started, unable to resolve Intent { act=VIEW }").as_deref(),
+            start_error("Error: Activity not started, unable to resolve Intent { act=VIEW }")
+                .as_deref(),
             Some("Activity not started, unable to resolve Intent { act=VIEW }")
         );
     }
@@ -401,10 +491,16 @@ mod tests {
     #[test]
     fn the_app_in_front_is_read_from_the_focused_window() {
         assert_eq!(
-            parse_focus("  mCurrentFocus=Window{4f5a1b2 u0 com.example.app/com.example.app.MainActivity}").as_deref(),
+            parse_focus(
+                "  mCurrentFocus=Window{4f5a1b2 u0 com.example.app/com.example.app.MainActivity}"
+            )
+            .as_deref(),
             Some("com.example.app")
         );
-        assert_eq!(parse_focus("mCurrentFocus=Window{1 u0 NotificationShade}"), None);
+        assert_eq!(
+            parse_focus("mCurrentFocus=Window{1 u0 NotificationShade}"),
+            None
+        );
         assert_eq!(parse_focus("mCurrentFocus=null"), None);
         assert_eq!(parse_focus(""), None);
     }
@@ -423,24 +519,60 @@ mod tests {
         // Nothing answers on this port: a refusal must come before any connection is tried.
         let device = Device::new(Adb::at(1), "emulator-5580");
         for package in ["", "app", "com.app; reboot", "-r", "com.app --user 0"] {
-            assert!(matches!(device.launch(package, None).await, Err(Error::Refused(_))), "{package:?}");
-            assert!(matches!(device.stop_app(package).await, Err(Error::Refused(_))));
-            assert!(matches!(device.uninstall(package).await, Err(Error::Refused(_))));
-            assert!(matches!(device.clear_data(package).await, Err(Error::Refused(_))));
-            assert!(matches!(device.logs(Some(package), 10).await, Err(Error::Refused(_))));
+            assert!(
+                matches!(device.launch(package, None).await, Err(Error::Refused(_))),
+                "{package:?}"
+            );
             assert!(matches!(
-                device.set_permission(package, "android.permission.CAMERA", true).await,
+                device.stop_app(package).await,
+                Err(Error::Refused(_))
+            ));
+            assert!(matches!(
+                device.uninstall(package).await,
+                Err(Error::Refused(_))
+            ));
+            assert!(matches!(
+                device.clear_data(package).await,
+                Err(Error::Refused(_))
+            ));
+            assert!(matches!(
+                device.logs(Some(package), 10).await,
+                Err(Error::Refused(_))
+            ));
+            assert!(matches!(
+                device
+                    .set_permission(package, "android.permission.CAMERA", true)
+                    .await,
                 Err(Error::Refused(_))
             ));
         }
         assert!(matches!(
-            device.set_permission("com.example.app", "CAMERA; id", true).await,
+            device
+                .set_permission("com.example.app", "CAMERA; id", true)
+                .await,
             Err(Error::Refused(_))
         ));
-        for link in ["", "example.com", "://x", "https:", "1x://a", "https://a\nb", &format!("https://{}", "a".repeat(3000))] {
-            assert!(matches!(device.open_link(link).await, Err(Error::Refused(_))), "{link:?}");
+        for link in [
+            "",
+            "example.com",
+            "://x",
+            "https:",
+            "1x://a",
+            "https://a\nb",
+            &format!("https://{}", "a".repeat(3000)),
+        ] {
+            assert!(
+                matches!(device.open_link(link).await, Err(Error::Refused(_))),
+                "{link:?}"
+            );
         }
-        assert!(matches!(device.set_text_scale(9.0).await, Err(Error::Refused(_))));
-        assert!(matches!(device.install(Path::new("/tmp/app.zip")).await, Err(Error::Refused(_))));
+        assert!(matches!(
+            device.set_text_scale(9.0).await,
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            device.install(Path::new("/tmp/app.zip")).await,
+            Err(Error::Refused(_))
+        ));
     }
 }

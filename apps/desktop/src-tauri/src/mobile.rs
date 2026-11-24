@@ -122,9 +122,9 @@ pub struct MobileToolCheck {
     pub error: bool,
 }
 
-/// What `chat_id`'s emulator shows now, as a PNG, for a bot that asked to look
-/// (`crate::remote`). Never a phone or another program's emulator: those are the person's own,
-/// with whatever else is on them.
+/// What `chat_id`'s emulator or iPhone simulator shows now, as a PNG, for a bot that asked to
+/// look (`crate::remote`). Never a phone or another program's emulator: those are the person's
+/// own, with whatever else is on them.
 pub(crate) async fn picture(app: &AppHandle, chat_id: &str) -> Result<Vec<u8>, String> {
     let manager = app
         .try_state::<Manager>()
@@ -134,14 +134,14 @@ pub(crate) async fn picture(app: &AppHandle, chat_id: &str) -> Result<Vec<u8>, S
     let Some(device) = status.chats.iter().find(|device| device.chat_id == chat_id) else {
         return Err("This chat has no device.".into());
     };
-    if device.kind != DeviceKind::Emulator {
+    if device.kind == DeviceKind::Phone {
         return Err(
-            "This chat's device is a phone or another program's emulator. o7 sends pictures of its own emulators only."
+            "This chat's device is a phone or another program's emulator. o7 sends pictures of its own emulators and simulators only."
                 .into(),
         );
     }
     if !device.live {
-        return Err("This chat's emulator is not running.".into());
+        return Err("This chat's device is not running.".into());
     }
     manager
         .screenshot(chat_id)

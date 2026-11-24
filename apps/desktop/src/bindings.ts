@@ -2046,7 +2046,9 @@ export type DeviceKind =
 /**  An emulator o7 made and runs. */
 "emulator" | 
 /**  A device o7 did not start: a phone on a cable, or an emulator from another program. */
-"phone";
+"phone" | 
+/**  An iPhone simulator o7 made and runs, on a Mac. */
+"simulator";
 
 export type DeviceState = "stopped" | "starting" | "ready" | "stopping" | 
 /**  A phone that has not allowed this computer yet. */
@@ -2683,6 +2685,20 @@ export type InstructionsTarget =
 { type: "folder"; folder_id: string } | 
 /**  A chat's own folder: its worktree for a worktree chat. */
 { type: "chat"; chat_id: string };
+
+/**  iPhone simulators on a Mac: what this computer has for them. */
+export type IosSetup = {
+	/**  This is a Mac, so an iPhone simulator could run here. */
+	possible: boolean,
+	/**  Xcode and an iOS runtime were found: an iPhone can be started. */
+	ready: boolean,
+	/**  What it would run ("Xcode 26.1, iPhone 17 Pro, iOS 26.1"). */
+	detail: string | null,
+	/**  What is missing, in words a person can act on. */
+	missing: string | null,
+	/**  AXe, the tool o7 drives the simulator with, fetched on first use. */
+	tool: ToolFetch,
+};
 
 export type IsolationInput = {
 	slug: string,
@@ -3978,6 +3994,7 @@ export type Setup = {
 	/**  Whether the emulator can run fast here, once it is installed and was asked. */
 	acceleration: AccelerationInfo | null,
 	fetch: Fetch,
+	ios: IosSetup,
 };
 
 export type SetupAction = { type: "visit"; step: SetupStep } | { type: "motion"; value: MotionPreference } | { type: "appearance"; value: AppearancePreference } | { type: "theme"; value: ThemePreference } | { type: "text_size"; value: TextSizePreference } | { type: "project"; project_id: string } | { type: "finish" } | { type: "restart" } | 
@@ -4319,6 +4336,9 @@ export type ToolCall = {
 export type ToolContent = { type: "text"; text: string; truncated: Truncation | null } | { type: "diff"; path: string; 
 /**  `None` when the file is new. */
 old_text: string | null; new_text: string; truncated: Truncation | null } | { type: "terminal"; output: string; exit_code: number | null; truncated: Truncation | null };
+
+/**  Fetching AXe. */
+export type ToolFetch = { state: "missing" } | { state: "downloading"; received_mb: number | null; total_mb: number | null } | { state: "ready" } | { state: "failed"; message: string };
 
 export type ToolKind = "read" | "edit" | "delete" | "move" | "search" | "execute" | "think" | "fetch" | "switch_mode" | "other";
 

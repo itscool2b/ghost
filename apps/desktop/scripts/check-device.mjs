@@ -162,6 +162,13 @@ export async function checkDevice(browser, url, out, engine) {
       await called(page, "watch", label);
       // An engine that cannot decode video says so, and the device's buttons still work.
       if (await page.evaluate(() => typeof VideoDecoder === "undefined")) {
+        // The stream's first packets: its size, then its codec's setup, which this engine cannot
+        // decode. (An iPhone's pictures need no decoder, so the pane waits for the video to say.)
+        await page.evaluate(() => {
+          const push = window.deviceFixture.watching.get("device-fixture-chat");
+          push(new Uint8Array([1, 2, 208, 6, 64]));
+          push(new Uint8Array([2, 0, 0, 0, 1, 103]));
+        });
         await panel.getByRole("heading", { name: "The screen cannot be shown here" }).waitFor();
         assert.ok(await canvas.isHidden(), `${label}: no empty canvas`);
       } else {
@@ -255,6 +262,105 @@ export async function checkDevice(browser, url, out, engine) {
       await called(page, "allowAgent:false", label);
       await axe(page, `${label} phone`);
       await shot("phone");
+
+      // On a Mac: an Android phone and an iPhone, each started from its own row.
+      await open("mac");
+      const kinds = panel.getByTestId("device-kinds");
+      await kinds.waitFor();
+      assert.equal(await kinds.locator(".device-row").count(), 2, `${label}: two kinds of phone`);
+      assert.match(
+        await panel.getByTestId("device-iphone-state").textContent(),
+        /Xcode 26\.1, iPhone 17 Pro, iOS 26\.1/,
+      );
+      assert.match(
+        await panel.getByTestId("device-row").nth(1).textContent(),
+        /iPhone 1\s*Running/,
+      );
+      await axe(page, `${label} mac`);
+      await shot("mac");
+      await panel.getByTestId("device-start-iphone").click();
+      await called(page, "attach:ios", label);
+      await panel.getByTestId("device-starting").waitFor();
+      assert.match(await panel.getByTestId("device-title").textContent(), /iPhone 1/);
+      await panel.getByTestId("device-change").click();
+      await called(page, "detach", label);
+      await panel.getByTestId("device-start").click();
+      await called(page, "attach:android", label);
+
+      // No Xcode: the row says what to install, and offers no start.
+      await open("mac-missing");
+      assert.match(
+        await panel.getByTestId("device-iphone-state").textContent(),
+        /Install Xcode from the App Store/,
+      );
+      assert.equal(
+        await panel.getByTestId("device-start-iphone").count(),
+        0,
+        `${label}: no iPhone without Xcode`,
+      );
+      await axe(page, `${label} mac without Xcode`);
+
+      // An iPhone's first start fetches AXe, and the pane says so.
+      await open("iphone-starting");
+      assert.match(
+        await panel.getByTestId("device-tool").textContent(),
+        /Downloading AXe, which o7 drives the simulator with: 4 MB of 16 MB\./,
+      );
+      await axe(page, `${label} iPhone starting`);
+      await shot("iphone-starting");
+
+      // A live iPhone: its pictures draw in every engine (no video decoder is needed), and it has
+      // Home and the app switcher but no Back button and no turning.
+      await open("iphone");
+      const screen = panel.getByTestId("device-canvas");
+      await called(page, "watch", label);
+      await page.evaluate(async () => {
+        const drawn = document.createElement("canvas");
+        drawn.width = 120;
+        drawn.height = 260;
+        const context = drawn.getContext("2d");
+        context.fillStyle = "#1e6cff";
+        context.fillRect(0, 0, 120, 260);
+        context.fillStyle = "#ffffff";
+        context.fillRect(20, 100, 80, 40);
+        const blob = await new Promise((done) => drawn.toBlob(done, "image/jpeg", 0.9));
+        const jpeg = new Uint8Array(await blob.arrayBuffer());
+        const packet = new Uint8Array(jpeg.length + 1);
+        packet[0] = 6;
+        packet.set(jpeg, 1);
+        window.deviceFixture.watching.get("device-fixture-chat")(packet);
+      });
+      await until(
+        async () => (await screen.getAttribute("width")) === "120",
+        `${label}: the iPhone's picture is drawn`,
+      );
+      assert.equal(await screen.getAttribute("height"), "260");
+      assert.equal(
+        await panel.getByRole("button", { name: "Back", exact: true }).count(),
+        0,
+        `${label}: no Back button on an iPhone`,
+      );
+      assert.equal(
+        await panel.getByRole("button", { name: "Turn the device", exact: true }).count(),
+        0,
+        `${label}: no turning an iPhone`,
+      );
+      const picture = await screen.boundingBox();
+      await page.mouse.click(picture.x + picture.width / 2, picture.y + picture.height / 2);
+      await until(
+        async () =>
+          (await calls(page)).some((call) => /^touch:up:(5\d|6\d),(12\d|13\d)$/.test(call)),
+        `${label}: a click on the picture is a touch at its middle`,
+      );
+      for (const [name, call] of [
+        ["Home", "key:home"],
+        ["Recent apps", "key:recents"],
+      ]) {
+        await panel.getByRole("button", { name, exact: true }).click();
+        await called(page, call, `${label} iPhone ${name}`);
+      }
+      await axe(page, `${label} iPhone`);
+      await shot("iphone");
 
       // The header's button and Ctrl+Shift+D close and open the pane; the browser takes its side.
       await open("chooser");

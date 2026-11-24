@@ -109,7 +109,11 @@ impl Raw {
     }
 
     fn actionable(&self) -> bool {
-        self.clickable || self.long_clickable || self.checkable || self.scrollable || self.editable()
+        self.clickable
+            || self.long_clickable
+            || self.checkable
+            || self.scrollable
+            || self.editable()
     }
 
     fn visible(&self) -> bool {
@@ -208,10 +212,15 @@ fn parse_bounds(text: &str) -> Option<Rect> {
 }
 
 fn read_node(start: &BytesStart<'_>) -> Result<Raw, Error> {
-    let mut raw = Raw { enabled: true, ..Raw::default() };
+    let mut raw = Raw {
+        enabled: true,
+        ..Raw::default()
+    };
     for attribute in start.attributes() {
         let attribute = attribute.map_err(|_| broken())?;
-        let value = attribute.normalized_value(XmlVersion::Implicit1_0).map_err(|_| broken())?;
+        let value = attribute
+            .normalized_value(XmlVersion::Implicit1_0)
+            .map_err(|_| broken())?;
         let flag = value == "true";
         match attribute.key.as_ref() {
             "text" => raw.text = value.into_owned(),
@@ -248,7 +257,9 @@ impl Outline {
         let Some(start) = text.find("<hierarchy") else {
             return Err(Error::Device(no_screen(&text)));
         };
-        let end = text.rfind("</hierarchy>").map_or(text.len(), |at| at + "</hierarchy>".len());
+        let end = text
+            .rfind("</hierarchy>")
+            .map_or(text.len(), |at| at + "</hierarchy>".len());
         let mut reader = Reader::from_str(&text[start..end]);
         let mut rotation = 0u8;
         let mut stack: Vec<Raw> = Vec::new();
@@ -279,20 +290,31 @@ impl Outline {
                 _ => {}
             }
         }
-        let package =
-            roots.first().map(|root| root.package.clone()).filter(|package| !package.is_empty());
+        let package = roots
+            .first()
+            .map(|root| root.package.clone())
+            .filter(|package| !package.is_empty());
         let mut items = Vec::new();
         let mut next_ref = 1usize;
         for root in &roots {
             flatten(root, 0, &mut items, &mut next_ref);
         }
-        Ok(Outline { rotation, package, items })
+        Ok(Outline {
+            rotation,
+            package,
+            items,
+        })
     }
 
     /// The item with this ref.
     pub fn find(&self, reference: &str) -> Option<&Item> {
-        let reference = reference.trim().trim_start_matches('[').trim_end_matches(']');
-        self.items.iter().find(|item| item.reference.as_deref() == Some(reference))
+        let reference = reference
+            .trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']');
+        self.items
+            .iter()
+            .find(|item| item.reference.as_deref() == Some(reference))
     }
 
     /// The innermost item at a point of the display, for Annotate.
@@ -347,7 +369,11 @@ fn hierarchy_rotation(element: &BytesStart<'_>) -> u8 {
         .flatten()
         .find(|attribute| attribute.key.as_ref() == "rotation")
         .and_then(|attribute| {
-            attribute.normalized_value(XmlVersion::Implicit1_0).ok()?.parse::<u8>().ok()
+            attribute
+                .normalized_value(XmlVersion::Implicit1_0)
+                .ok()?
+                .parse::<u8>()
+                .ok()
         })
         .map_or(0, |turns| turns % 4)
 }
@@ -381,7 +407,9 @@ fn borrow_names(node: &Raw, names: &mut Vec<String>) {
 
 /// Whether everything under `node` that has a name was borrowed for its own.
 fn lent_everything(node: &Raw) -> bool {
-    node.children.iter().all(|child| !child.actionable() && lent_everything(child))
+    node.children
+        .iter()
+        .all(|child| !child.actionable() && lent_everything(child))
 }
 
 fn flatten(node: &Raw, depth: usize, items: &mut Vec<Item>, next_ref: &mut usize) {
@@ -445,7 +473,12 @@ fn flatten(node: &Raw, depth: usize, items: &mut Vec<Item>, next_ref: &mut usize
         reference,
         bounds: node.bounds,
         states,
-        id: node.id.rsplit('/').next().filter(|id| !id.is_empty()).map(str::to_owned),
+        id: node
+            .id
+            .rsplit('/')
+            .next()
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned),
         class: node.class.clone(),
     });
     if borrowed {
@@ -456,9 +489,422 @@ fn flatten(node: &Raw, depth: usize, items: &mut Vec<Item>, next_ref: &mut usize
     }
 }
 
+// ------------------------------------------------------------------------------------ iPhone
+
+/// iOS element types that can be acted on: tapped, typed into, switched or moved.
+const IOS_ACTIONABLE: [&str; 21] = [
+    "Button",
+    "Cell",
+    "CheckBox",
+    "Link",
+    "MenuItem",
+    "MenuButton",
+    "PopUpButton",
+    "RadioButton",
+    "SecureTextField",
+    "SegmentedControl",
+    "Slider",
+    "Stepper",
+    "Switch",
+    "Tab",
+    "TabBarButton",
+    "TextField",
+    "SearchField",
+    "TextView",
+    "Toggle",
+    "Picker",
+    "PickerWheel",
+];
+
+/// iOS element types whose content scrolls.
+const IOS_SCROLLING: [&str; 6] = [
+    "ScrollView",
+    "Table",
+    "CollectionView",
+    "List",
+    "Grid",
+    "Outline",
+];
+
+fn ios_role(kind: &str) -> &'static str {
+    match kind {
+        "Application" => "app",
+        "Button" | "Cell" | "PopUpButton" | "MenuButton" | "MenuItem" => "button",
+        "Link" => "link",
+        "TextField" | "SecureTextField" | "SearchField" | "TextView" => "textbox",
+        "Switch" | "Toggle" => "switch",
+        "CheckBox" => "checkbox",
+        "RadioButton" => "radio",
+        "Slider" | "Stepper" => "slider",
+        "Picker" | "PickerWheel" | "ComboBox" => "dropdown",
+        "ProgressIndicator" | "ActivityIndicator" => "progress",
+        "Image" | "Icon" => "image",
+        "Tab" | "TabBarButton" | "SegmentedControl" => "tab",
+        "WebView" => "webview",
+        "Heading" | "NavigationBar" => "heading",
+        "Alert" | "Sheet" | "Dialog" => "dialog",
+        kind if IOS_SCROLLING.contains(&kind) => "list",
+        _ => "text",
+    }
+}
+
+/// A field of an element as text: AXe writes strings, and sometimes numbers or true and false.
+fn ios_text(node: &serde_json::Value, key: &str) -> String {
+    match node.get(key) {
+        Some(serde_json::Value::String(text)) => text.clone(),
+        Some(serde_json::Value::Number(number)) => number.to_string(),
+        Some(serde_json::Value::Bool(flag)) => flag.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn ios_kind(node: &serde_json::Value) -> String {
+    ios_text(node, "type")
+}
+
+fn ios_enabled(node: &serde_json::Value) -> bool {
+    match node.get("enabled") {
+        Some(serde_json::Value::Bool(flag)) => *flag,
+        Some(serde_json::Value::Number(number)) => number.as_f64() != Some(0.0),
+        _ => true,
+    }
+}
+
+fn ios_children(node: &serde_json::Value) -> &[serde_json::Value] {
+    node.get("children")
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn ios_actionable(kind: &str, node: &serde_json::Value) -> bool {
+    IOS_ACTIONABLE.contains(&kind)
+        || IOS_SCROLLING.contains(&kind)
+        || ios_text(node, "role") == "AXSwitch"
+}
+
+/// A frame in points as a rectangle of the display's pixels.
+fn ios_bounds(node: &serde_json::Value, scale: f64) -> Rect {
+    let frame = node.get("frame");
+    let number = |name: &str| {
+        frame
+            .and_then(|frame| frame.get(name))
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+    };
+    let pixel = |points: f64| (points * scale).round().clamp(-1_000_000.0, 1_000_000.0) as i32;
+    let (x, y, width, height) = (number("x"), number("y"), number("width"), number("height"));
+    Rect {
+        left: pixel(x),
+        top: pixel(y),
+        right: pixel(x + width),
+        bottom: pixel(y + height),
+    }
+}
+
+/// What an element is called: its label, else its title.
+fn ios_own_name(node: &serde_json::Value) -> String {
+    let label = clean(&ios_text(node, "AXLabel"));
+    if label.is_empty() {
+        clean(&ios_text(node, "title"))
+    } else {
+        label
+    }
+}
+
+/// Texts inside `node` it may be named after: those of descendants that cannot be acted on.
+fn ios_borrow_names(node: &serde_json::Value, names: &mut Vec<String>) {
+    for child in ios_children(node) {
+        let kind = ios_kind(child);
+        if names.len() >= BORROWED_NAMES
+            || ios_actionable(&kind, child)
+            || child.get("hidden") == Some(&serde_json::Value::Bool(true))
+        {
+            continue;
+        }
+        let name = ios_own_name(child);
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+        ios_borrow_names(child, names);
+    }
+}
+
+/// iOS's name for a scroll view's scroll bar ("Vertical scroll bar, 2 pages"), in English, the
+/// language o7's simulators start in.
+fn ios_scroll_bar(name: &str) -> bool {
+    name.starts_with("Vertical scroll bar") || name.starts_with("Horizontal scroll bar")
+}
+
+fn ios_lent_everything(node: &serde_json::Value) -> bool {
+    ios_children(node)
+        .iter()
+        .all(|child| !ios_actionable(&ios_kind(child), child) && ios_lent_everything(child))
+}
+
+struct IosWalk {
+    scale: f64,
+    items: Vec<Item>,
+    next_ref: usize,
+    keyboard: bool,
+}
+
+impl IosWalk {
+    fn flatten(&mut self, node: &serde_json::Value, depth: usize) {
+        if node.get("hidden") == Some(&serde_json::Value::Bool(true)) {
+            return;
+        }
+        let kind = ios_kind(node);
+        // The keyboard's keys are not the app's: the outline only says the keyboard is up.
+        if kind == "Keyboard" {
+            self.keyboard = true;
+            return;
+        }
+        // iOS gives every scroll view its scroll bars as sliders. An agent scrolls the view
+        // itself, which the outline marks scrollable, so they would only crowd the outline.
+        if ios_role(&kind) == "slider" && ios_scroll_bar(&ios_own_name(node)) {
+            return;
+        }
+        let bounds = ios_bounds(node, self.scale);
+        let visible = bounds.width() > 0 && bounds.height() > 0;
+        let actionable = ios_actionable(&kind, node);
+        let secure = kind == "SecureTextField";
+        let editable = matches!(
+            kind.as_str(),
+            "TextField" | "SecureTextField" | "SearchField" | "TextView"
+        );
+        let mut name = ios_own_name(node);
+        let mut borrowed = false;
+        if name.is_empty() && actionable && !editable {
+            let mut names = Vec::new();
+            ios_borrow_names(node, &mut names);
+            if !names.is_empty() {
+                name = clean(&names.join(", "));
+                borrowed = ios_lent_everything(node);
+            }
+        }
+        let keep = visible && (!name.is_empty() || actionable);
+        if !keep {
+            for child in ios_children(node) {
+                self.flatten(child, depth);
+            }
+            return;
+        }
+        let raw_value = clean(&ios_text(node, "AXValue"));
+        let enabled = ios_enabled(node);
+        let switch_like =
+            matches!(kind.as_str(), "Switch" | "Toggle") || ios_text(node, "role") == "AXSwitch";
+        let checkable = switch_like || kind == "CheckBox";
+        let mut states = Vec::new();
+        if checkable && matches!(raw_value.to_ascii_lowercase().as_str(), "1" | "on" | "true") {
+            states.push("checked");
+        }
+        if !enabled {
+            states.push("disabled");
+        }
+        if IOS_SCROLLING.contains(&kind.as_str()) {
+            states.push("scrollable");
+        }
+        if secure {
+            states.push("password");
+        }
+        let shows_value = editable
+            || matches!(
+                kind.as_str(),
+                "Slider"
+                    | "Stepper"
+                    | "ProgressIndicator"
+                    | "Picker"
+                    | "PickerWheel"
+                    | "PageIndicator"
+            );
+        // A secure field's value is never read, not even as dots.
+        let value = (!secure && shows_value && !raw_value.is_empty() && raw_value != name)
+            .then_some(raw_value);
+        let reference = (actionable && enabled).then(|| {
+            let reference = format!("d{}", self.next_ref);
+            self.next_ref += 1;
+            reference
+        });
+        let id = [ios_text(node, "AXIdentifier"), ios_text(node, "AXUniqueId")]
+            .into_iter()
+            .map(|id| clean(&id))
+            .find(|id| !id.is_empty());
+        self.items.push(Item {
+            depth,
+            role: ios_role(&kind),
+            name,
+            value,
+            reference,
+            bounds,
+            states,
+            id,
+            class: kind,
+        });
+        if borrowed {
+            return;
+        }
+        for child in ios_children(node) {
+            self.flatten(child, depth + 1);
+        }
+    }
+}
+
+impl Outline {
+    /// Reads AXe's `describe-ui` tree of an iPhone screen. Its frames are in points; `scale`
+    /// turns them into the display's pixels, the units of screenshots and taps here.
+    pub fn parse_ios(json: &[u8], scale: f64) -> Result<Outline, Error> {
+        let value: serde_json::Value = serde_json::from_slice(json).map_err(|_| broken())?;
+        let roots: Vec<&serde_json::Value> = match &value {
+            serde_json::Value::Array(roots) => roots.iter().collect(),
+            serde_json::Value::Object(_) => vec![&value],
+            _ => return Err(broken()),
+        };
+        let scale = if scale.is_finite() && scale > 0.0 {
+            scale
+        } else {
+            1.0
+        };
+        let mut walk = IosWalk {
+            scale,
+            items: Vec::new(),
+            next_ref: 1,
+            keyboard: false,
+        };
+        for root in roots {
+            walk.flatten(root, 0);
+        }
+        if walk.keyboard {
+            walk.items.push(Item {
+                depth: 0,
+                role: "keyboard",
+                name: "open".into(),
+                value: None,
+                reference: None,
+                bounds: Rect::default(),
+                states: Vec::new(),
+                id: None,
+                class: "Keyboard".into(),
+            });
+        }
+        Ok(Outline {
+            rotation: 0,
+            package: None,
+            items: walk.items,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Settings-like screen as AXe describes it: an app, a navigation bar, a search field, a
+    /// list of rows and a switch, a password field, a hidden view and the keyboard.
+    const IOS_SCREEN: &str = r#"[{
+        "type": "Application", "AXLabel": "Settings", "pid": 4242, "enabled": true,
+        "frame": {"x": 0, "y": 0, "width": 402, "height": 874},
+        "children": [
+            {"type": "NavigationBar", "AXLabel": "Settings", "frame": {"x": 0, "y": 62, "width": 402, "height": 96},
+             "children": [{"type": "StaticText", "AXLabel": "Settings", "frame": {"x": 20, "y": 100, "width": 120, "height": 41}}]},
+            {"type": "SearchField", "AXLabel": "Search", "AXValue": "wi", "AXIdentifier": "search", "enabled": 1,
+             "frame": {"x": 16, "y": 160, "width": 370, "height": 36}},
+            {"type": "Table", "frame": {"x": 0, "y": 200, "width": 402, "height": 674}, "children": [
+                {"type": "Button", "frame": {"x": 0, "y": 220, "width": 402, "height": 52}, "children": [
+                    {"type": "Image", "frame": {"x": 20, "y": 232, "width": 29, "height": 29}},
+                    {"type": "StaticText", "AXLabel": "General", "frame": {"x": 64, "y": 236, "width": 80, "height": 20}}]},
+                {"type": "Switch", "AXLabel": "Airplane Mode", "AXValue": "1", "role": "AXSwitch",
+                 "frame": {"x": 0, "y": 280, "width": 402, "height": 52}},
+                {"type": "Cell", "AXLabel": "Privacy", "enabled": false, "frame": {"x": 0, "y": 340, "width": 402, "height": 52}}]},
+            {"type": "SecureTextField", "AXLabel": "Your code", "AXValue": "FIELD_TEXT", "frame": {"x": 16, "y": 400, "width": 370, "height": 36}},
+            {"type": "Button", "AXLabel": "Secret", "hidden": true, "frame": {"x": 0, "y": 450, "width": 10, "height": 10}},
+            {"type": "Button", "AXLabel": "Gone", "frame": {"x": 0, "y": 470, "width": 0, "height": 0}},
+            {"type": "Keyboard", "frame": {"x": 0, "y": 600, "width": 402, "height": 274}, "children": [
+                {"type": "Key", "AXLabel": "q", "frame": {"x": 0, "y": 610, "width": 30, "height": 40}}]}
+        ]}]"#;
+
+    #[test]
+    fn an_iphone_screen_reads_as_an_outline_in_pixels() {
+        // What the secure field holds is made here, so the fixture holds nothing like a password.
+        let held = ["typed", "in", "secret"].join("-");
+        let screen = IOS_SCREEN.replace("FIELD_TEXT", &held);
+        let outline = Outline::parse_ios(screen.as_bytes(), 3.0).unwrap();
+        let rendered = outline.render();
+        assert_eq!(
+            rendered,
+            concat!(
+                "- app \"Settings\"\n",
+                "  - heading \"Settings\"\n",
+                "    - text \"Settings\"\n",
+                "  - textbox \"Search\" value \"wi\" [d1]\n",
+                "  - list [d2] (scrollable)\n",
+                "    - button \"General\" [d3]\n",
+                "    - switch \"Airplane Mode\" [d4] (checked)\n",
+                "    - button \"Privacy\" (disabled)\n",
+                "  - textbox \"Your code\" [d5] (password)\n",
+                "- keyboard \"open\"\n",
+            ),
+            "{rendered}"
+        );
+        // Never the password, nor a hidden element, nor the keyboard's keys.
+        assert!(
+            !rendered.contains(&held)
+                && !rendered.contains("Secret")
+                && !rendered.contains("\"q\"")
+        );
+        let general = outline.find("d3").unwrap();
+        assert_eq!(
+            general.bounds,
+            Rect {
+                left: 0,
+                top: 660,
+                right: 1206,
+                bottom: 816
+            }
+        );
+        assert_eq!(general.bounds.center(), (603, 738));
+        assert_eq!(outline.find("d1").unwrap().id.as_deref(), Some("search"));
+        assert_eq!(outline.find("d1").unwrap().class, "SearchField");
+        assert!(outline.package.is_none() && outline.rotation == 0);
+    }
+
+    #[test]
+    fn an_iphone_outline_leaves_out_scroll_bars() {
+        let screen = r#"[{"type": "Application", "AXLabel": "Hello o7", "frame": {"x": 0, "y": 0, "width": 402, "height": 874},
+            "children": [{"type": "ScrollView", "frame": {"x": 0, "y": 0, "width": 402, "height": 874}, "children": [
+                {"type": "Slider", "AXLabel": "Vertical scroll bar, 2 pages", "AXValue": "0%", "frame": {"x": 396, "y": 0, "width": 6, "height": 874}},
+                {"type": "Slider", "AXLabel": "Horizontal scroll bar, 1 page", "AXValue": "0%", "frame": {"x": 0, "y": 868, "width": 402, "height": 6}},
+                {"type": "Slider", "AXLabel": "Volume", "AXValue": "50%", "frame": {"x": 20, "y": 100, "width": 300, "height": 30}},
+                {"type": "Button", "AXLabel": "Open", "frame": {"x": 20, "y": 200, "width": 100, "height": 44}}]}]}]"#;
+        let rendered = Outline::parse_ios(screen.as_bytes(), 3.0).unwrap().render();
+        assert_eq!(
+            rendered,
+            concat!(
+                "- app \"Hello o7\"\n",
+                "  - list [d1] (scrollable)\n",
+                "    - slider \"Volume\" value \"50%\" [d2]\n",
+                "    - button \"Open\" [d3]\n",
+            ),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn an_iphone_outline_accepts_one_root_and_refuses_what_is_not_a_tree() {
+        let one = r#"{"type":"Application","AXLabel":"Clock","frame":{"x":0,"y":0,"width":390,"height":844},"children":[{"type":"Button","AXLabel":7,"frame":{"x":1,"y":1,"width":40,"height":40}}]}"#;
+        let outline = Outline::parse_ios(one.as_bytes(), 2.0).unwrap();
+        assert_eq!(outline.render(), "- app \"Clock\"\n  - button \"7\" [d1]\n");
+        assert!(Outline::parse_ios(b"Error: not booted", 3.0).is_err());
+        assert!(Outline::parse_ios(b"42", 3.0).is_err());
+        assert_eq!(
+            Outline::parse_ios(b"[]", 3.0)
+                .unwrap()
+                .render()
+                .lines()
+                .count(),
+            1
+        );
+    }
 
     fn node(attributes: &str, children: &str) -> String {
         let defaults = [
@@ -548,7 +994,10 @@ mod tests {
         assert_eq!(text, "- textbox \"Password\" [d1] (password)\n");
         assert!(!format!("{outline:?}").contains("hunter2"));
         // Nor when the password is a plain view's text, as some toolkits draw it.
-        let outline = screen(&node("text=\"hunter2-secret\" password=\"true\" content-desc=\"PIN\"", ""));
+        let outline = screen(&node(
+            "text=\"hunter2-secret\" password=\"true\" content-desc=\"PIN\"",
+            "",
+        ));
         assert!(!format!("{outline:?}").contains("hunter2"));
         assert_eq!(outline.render(), "- text \"PIN\" (password)\n");
     }
@@ -611,7 +1060,10 @@ mod tests {
         assert_eq!(outline.render(), "- text \"Say 'hi' [d9] (checked)\"\n");
         assert!(outline.find("d9").is_none());
         let long = "x".repeat(500);
-        let outline = screen(&node(&format!("text=\"{long}\" bounds=\"[0,0][10,10]\""), ""));
+        let outline = screen(&node(
+            &format!("text=\"{long}\" bounds=\"[0,0][10,10]\""),
+            "",
+        ));
         assert_eq!(outline.items[0].name.chars().count(), TEXT_LIMIT + 3);
     }
 
@@ -627,14 +1079,19 @@ mod tests {
 
     #[test]
     fn the_tools_own_complaints_become_plain_words() {
-        let moving = Outline::parse(b"ERROR: could not get idle state.\n").unwrap_err().to_string();
+        let moving = Outline::parse(b"ERROR: could not get idle state.\n")
+            .unwrap_err()
+            .to_string();
         assert!(moving.starts_with("The screen kept moving"), "{moving}");
         let locked = Outline::parse(b"ERROR: null root node returned by UiTestAutomationBridge.\n")
             .unwrap_err()
             .to_string();
         assert!(locked.contains("no screen to read"), "{locked}");
         assert!(Outline::parse(b"").is_err());
-        assert!(Outline::parse(b"<hierarchy rotation=\"0\"><node bounds=\"[0,0][1,1]\"></hierarchy>").is_err());
+        assert!(
+            Outline::parse(b"<hierarchy rotation=\"0\"><node bounds=\"[0,0][1,1]\"></hierarchy>")
+                .is_err()
+        );
         let empty = Outline::parse(b"<hierarchy rotation=\"0\"></hierarchy>").unwrap();
         assert!(empty.render().starts_with("(Nothing on the screen"));
     }
@@ -644,16 +1101,30 @@ mod tests {
     fn a_real_home_screen_reads_as_its_apps() {
         let outline = Outline::parse(include_bytes!("../tests/fixtures/launcher.xml")).unwrap();
         assert_eq!(outline.rotation, 0);
-        assert_eq!(outline.package.as_deref(), Some("com.google.android.apps.nexuslauncher"));
+        assert_eq!(
+            outline.package.as_deref(),
+            Some("com.google.android.apps.nexuslauncher")
+        );
         let text = outline.render();
         for app in ["Gmail", "Photos", "YouTube", "Phone", "Messages", "Chrome"] {
-            let line = text.lines().find(|line| line.contains(&format!("\"{app}\""))).unwrap_or_else(|| panic!("{app}
-{text}"));
+            let line = text
+                .lines()
+                .find(|line| line.contains(&format!("\"{app}\"")))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{app}
+{text}"
+                    )
+                });
             assert!(line.contains("[d"), "{line}");
         }
         // 32 views were dumped; the layout around the apps is gone.
         assert!(outline.items.len() < 20, "{text}");
-        let gmail = outline.items.iter().find(|item| item.name == "Gmail").unwrap();
+        let gmail = outline
+            .items
+            .iter()
+            .find(|item| item.name == "Gmail")
+            .unwrap();
         let (x, y) = gmail.bounds.center();
         assert!(x > 300 && x < 540 && y > 1500 && y < 1800, "{x},{y}");
         assert_eq!(outline.at(x, y).unwrap().name, "Gmail");
@@ -663,7 +1134,12 @@ mod tests {
     fn bounds_parse_strictly() {
         assert_eq!(
             parse_bounds("[0,66][1080,2400]"),
-            Some(Rect { left: 0, top: 66, right: 1080, bottom: 2400 })
+            Some(Rect {
+                left: 0,
+                top: 66,
+                right: 1080,
+                bottom: 2400
+            })
         );
         assert_eq!(parse_bounds("[-5,0][10,10]").unwrap().left, -5);
         assert_eq!(parse_bounds("[0,0][10]"), None);

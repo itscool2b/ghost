@@ -20,6 +20,24 @@ This is the Android Software Development Kit License Agreement
 
 ${"3. More terms follow in the real licence, which is several pages long.\n\n".repeat(12)}`;
 
+/** iPhone simulators as Windows and Linux see them: not possible here. */
+export const NO_IPHONE: MobileStatus["setup"]["ios"] = {
+  possible: false,
+  ready: false,
+  detail: null,
+  missing: "iPhone simulators run only on a Mac.",
+  tool: { state: "missing" },
+};
+
+/** iPhone simulators on a Mac with Xcode, AXe not fetched yet. */
+export const MAC_IPHONE: MobileStatus["setup"]["ios"] = {
+  possible: true,
+  ready: true,
+  detail: "Xcode 26.1, iPhone 17 Pro, iOS 26.1",
+  missing: null,
+  tool: { state: "missing" },
+};
+
 /** A status with Android set up and nothing running, changed by `change`. */
 export function mobileStatus(change: Partial<MobileStatus> = {}): MobileStatus {
   return {
@@ -34,12 +52,30 @@ export function mobileStatus(change: Partial<MobileStatus> = {}): MobileStatus {
         fix: null,
       },
       fetch: { state: "idle" },
+      ios: NO_IPHONE,
     },
     devices: [],
     chats: [],
     ...change,
   };
 }
+
+/** The same on a Mac: Android set up, and Xcode found. */
+export function macStatus(change: Partial<MobileStatus> = {}): MobileStatus {
+  const status = mobileStatus(change);
+  return { ...status, setup: { ...status.setup, ios: MAC_IPHONE, ...change.setup } };
+}
+
+export const simulator = (change: Partial<DeviceInfo> = {}): DeviceInfo => ({
+  id: "o7_iphone_1",
+  kind: "simulator",
+  title: "iPhone 1",
+  state: "stopped",
+  error: null,
+  chat_id: null,
+  pid: null,
+  ...change,
+});
 
 export const emulator = (change: Partial<DeviceInfo> = {}): DeviceInfo => ({
   id: "o7_phone_1",
@@ -145,17 +181,19 @@ export class FakeMobile implements MobileApi {
   }
   async attach(chatId: string, deviceId: string | null): Promise<void> {
     this.calls.push(`attach:${deviceId ?? "any"}`);
+    // "ios" asks for any of o7's iPhones, as `o7_devices::manager::ANY_IPHONE` does.
+    const kind = deviceId === "ios" ? "simulator" : "emulator";
     const device =
       this.#status.devices.find((entry) => entry.id === deviceId) ??
-      this.#status.devices.find((entry) => entry.kind === "emulator") ??
-      emulator();
+      this.#status.devices.find((entry) => entry.kind === kind) ??
+      (kind === "simulator" ? simulator() : emulator());
     const devices = this.#status.devices.some((entry) => entry.id === device.id)
       ? this.#status.devices
       : [...this.#status.devices, device];
     this.change({
       devices: devices.map((entry) =>
         entry.id === device.id
-          ? { ...entry, chat_id: chatId, state: entry.kind === "emulator" ? "starting" : "ready" }
+          ? { ...entry, chat_id: chatId, state: entry.kind === "phone" ? "ready" : "starting" }
           : entry,
       ),
       chats: [
@@ -166,7 +204,7 @@ export class FakeMobile implements MobileApi {
           title: device.title,
           starting: true,
           live: false,
-          agent_allowed: device.kind === "emulator",
+          agent_allowed: device.kind !== "phone",
         }),
       ],
     });

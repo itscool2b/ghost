@@ -90,7 +90,11 @@ impl ShellOutput {
             return Ok(self.text());
         }
         let stderr = String::from_utf8_lossy(&self.stderr);
-        let said = if stderr.trim().is_empty() { self.text() } else { stderr.trim().to_owned() };
+        let said = if stderr.trim().is_empty() {
+            self.text()
+        } else {
+            stderr.trim().to_owned()
+        };
         let said = said.lines().take(6).collect::<Vec<_>>().join(" ");
         Err(Error::Device(if said.is_empty() {
             format!("{doing} failed on the device (exit {}).", self.exit)
@@ -117,7 +121,9 @@ impl Tracker {
 impl Adb {
     /// The server on this computer at `port`.
     pub fn at(port: u16) -> Adb {
-        Adb { addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)) }
+        Adb {
+            addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
+        }
     }
 
     /// The server where adb itself would look: `ANDROID_ADB_SERVER_PORT`, else 5037.
@@ -162,7 +168,10 @@ impl Adb {
             return Ok(());
         }
         let mut command = crate::command(program);
-        command.arg("-P").arg(self.port().to_string()).arg("start-server");
+        command
+            .arg("-P")
+            .arg(self.port().to_string())
+            .arg("start-server");
         let started = tokio::time::timeout(Duration::from_secs(20), command.output()).await;
         match started {
             Ok(Ok(output)) if output.status.success() => {}
@@ -174,7 +183,9 @@ impl Adb {
                 )));
             }
             Ok(Err(error)) => {
-                return Err(Error::AdbUnreachable(format!("adb could not be run: {error}")));
+                return Err(Error::AdbUnreachable(format!(
+                    "adb could not be run: {error}"
+                )));
             }
             Err(_) => return Err(Error::AdbUnreachable("adb took too long to start".into())),
         }
@@ -218,7 +229,9 @@ impl Adb {
             let mut stream = self.open(serial, &format!("exec:{command}")).await?;
             read_to_end(&mut stream, limit).await
         };
-        tokio::time::timeout(within, work).await.map_err(|_| Error::Timeout)?
+        tokio::time::timeout(within, work)
+            .await
+            .map_err(|_| Error::Timeout)?
     }
 
     /// Runs `command` in the device's shell and returns what it printed, what it complained
@@ -231,10 +244,14 @@ impl Adb {
         within: Duration,
     ) -> Result<ShellOutput, Error> {
         let work = async {
-            let mut stream = self.open(serial, &format!("shell,v2,raw:{command}")).await?;
+            let mut stream = self
+                .open(serial, &format!("shell,v2,raw:{command}"))
+                .await?;
             read_shell(&mut stream, limit).await
         };
-        tokio::time::timeout(within, work).await.map_err(|_| Error::Timeout)?
+        tokio::time::timeout(within, work)
+            .await
+            .map_err(|_| Error::Timeout)?
     }
 
     /// Writes `data` to the file `remote` on the device, with Unix permissions `mode`.
@@ -246,7 +263,9 @@ impl Adb {
         mode: u32,
     ) -> Result<(), Error> {
         if remote.contains(',') || remote.contains('\0') || !remote.starts_with('/') {
-            return Err(Error::Refused("A device path must be absolute, with no comma.".into()));
+            return Err(Error::Refused(
+                "A device path must be absolute, with no comma.".into(),
+            ));
         }
         let mut stream = self.open(serial, "sync:").await?;
         let spec = format!("{remote},{}", mode & 0o777);
@@ -264,7 +283,9 @@ impl Adb {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());
         stream.write_all(b"DONE").await?;
-        stream.write_all(&u32::try_from(now).unwrap_or(u32::MAX).to_le_bytes()).await?;
+        stream
+            .write_all(&u32::try_from(now).unwrap_or(u32::MAX).to_le_bytes())
+            .await?;
         stream.flush().await?;
         let mut reply = [0u8; 8];
         stream.read_exact(&mut reply).await?;
@@ -303,7 +324,9 @@ impl Adb {
                 Err(Error::Device(install_failure(&text)))
             }
         };
-        tokio::time::timeout(within, work).await.map_err(|_| Error::Timeout)?
+        tokio::time::timeout(within, work)
+            .await
+            .map_err(|_| Error::Timeout)?
     }
 
     /// Lets the device reach this computer's `host_port` as its own `device_port` on localhost (a
@@ -354,7 +377,9 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     if service.len() > SERVICE_LIMIT {
-        return Err(Error::Refused("That command is too long for the device.".into()));
+        return Err(Error::Refused(
+            "That command is too long for the device.".into(),
+        ));
     }
     let mut line = format!("{:04x}", service.len()).into_bytes();
     line.extend_from_slice(service.as_bytes());
@@ -376,7 +401,9 @@ where
             let reason = read_block(stream, 4096).await?;
             Err(refusal(String::from_utf8_lossy(&reason).trim()))
         }
-        _ => Err(Error::Protocol("adb answered something that is not adb's protocol".into())),
+        _ => Err(Error::Protocol(
+            "adb answered something that is not adb's protocol".into(),
+        )),
     }
 }
 
@@ -385,7 +412,9 @@ fn refusal(reason: &str) -> Error {
     let lower = reason.to_ascii_lowercase();
     if lower.contains("unauthorized") {
         Error::Unauthorized
-    } else if lower.contains("not found") || lower.contains("offline") || lower.contains("no devices")
+    } else if lower.contains("not found")
+        || lower.contains("offline")
+        || lower.contains("no devices")
     {
         Error::DeviceGone
     } else {
@@ -511,7 +540,11 @@ fn parse_devices(text: &str) -> Vec<Listed> {
                 "offline" => DeviceState::Offline,
                 other => DeviceState::Other(other.to_owned()),
             };
-            Some(Listed { serial, state, model })
+            Some(Listed {
+                serial,
+                state,
+                model,
+            })
         })
         .collect()
 }
@@ -520,7 +553,9 @@ fn parse_devices(text: &str) -> Vec<Listed> {
 fn install_failure(reply: &str) -> String {
     let line = reply
         .lines()
-        .find(|line| line.contains("Failure") || line.contains("Exception") || line.contains("rror"))
+        .find(|line| {
+            line.contains("Failure") || line.contains("Exception") || line.contains("rror")
+        })
         .or_else(|| reply.lines().find(|line| !line.trim().is_empty()))
         .unwrap_or("no reason given")
         .trim();
@@ -580,7 +615,10 @@ mod tests {
     }
 
     async fn block(stream: &mut TcpStream, text: &str) {
-        stream.write_all(format!("{:04x}{text}", text.len()).as_bytes()).await.unwrap();
+        stream
+            .write_all(format!("{:04x}{text}", text.len()).as_bytes())
+            .await
+            .unwrap();
     }
 
     const LONG: Duration = Duration::from_secs(5);
@@ -601,7 +639,10 @@ mod tests {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
-        assert!(matches!(Adb::at(port).version().await, Err(Error::AdbUnreachable(_))));
+        assert!(matches!(
+            Adb::at(port).version().await,
+            Err(Error::AdbUnreachable(_))
+        ));
     }
 
     #[test]
@@ -632,10 +673,16 @@ mod tests {
             stream.write_all(b"OKAY").await.unwrap();
             assert_eq!(service(&mut stream).await, "exec:screencap -p");
             stream.write_all(b"OKAY").await.unwrap();
-            stream.write_all(&[0x89, b'P', b'N', b'G', 0, 255, 10, 13]).await.unwrap();
+            stream
+                .write_all(&[0x89, b'P', b'N', b'G', 0, 255, 10, 13])
+                .await
+                .unwrap();
         })
         .await;
-        let bytes = adb.exec("emulator-5580", "screencap -p", 1024, LONG).await.unwrap();
+        let bytes = adb
+            .exec("emulator-5580", "screencap -p", 1024, LONG)
+            .await
+            .unwrap();
         assert_eq!(bytes, [0x89, b'P', b'N', b'G', 0, 255, 10, 13]);
     }
 
@@ -649,7 +696,10 @@ mod tests {
             let _ = stream.write_all(&[7u8; 4096]).await;
         })
         .await;
-        assert!(matches!(adb.exec("abc", "cat big", 100, LONG).await, Err(Error::TooLarge)));
+        assert!(matches!(
+            adb.exec("abc", "cat big", 100, LONG).await,
+            Err(Error::TooLarge)
+        ));
     }
 
     #[tokio::test]
@@ -660,22 +710,40 @@ mod tests {
             if asked.ends_with("gone") {
                 block(&mut stream, "device 'gone' not found").await;
             } else if asked.ends_with("locked") {
-                block(&mut stream, "device unauthorized.\nThis adb server's $ADB_VENDOR_KEYS is not set").await;
+                block(
+                    &mut stream,
+                    "device unauthorized.\nThis adb server's $ADB_VENDOR_KEYS is not set",
+                )
+                .await;
             } else {
                 block(&mut stream, "closed").await;
             }
         })
         .await;
-        assert!(matches!(adb.exec("gone", "id", 10, LONG).await, Err(Error::DeviceGone)));
-        assert!(matches!(adb.exec("locked", "id", 10, LONG).await, Err(Error::Unauthorized)));
-        assert!(matches!(adb.exec("other", "id", 10, LONG).await, Err(Error::Adb(reason)) if reason == "closed"));
+        assert!(matches!(
+            adb.exec("gone", "id", 10, LONG).await,
+            Err(Error::DeviceGone)
+        ));
+        assert!(matches!(
+            adb.exec("locked", "id", 10, LONG).await,
+            Err(Error::Unauthorized)
+        ));
+        assert!(
+            matches!(adb.exec("other", "id", 10, LONG).await, Err(Error::Adb(reason)) if reason == "closed")
+        );
     }
 
     #[tokio::test]
     async fn serials_and_long_commands_are_refused_before_anything_is_sent() {
         let adb = fake(|_stream| async move { panic!("nothing should connect") }).await;
         for serial in ["", "a b", "x;host:kill", "emulator-5554\n", "a/b"] {
-            assert!(matches!(adb.exec(serial, "id", 10, LONG).await, Err(Error::Refused(_))), "{serial:?}");
+            assert!(
+                matches!(
+                    adb.exec(serial, "id", 10, LONG).await,
+                    Err(Error::Refused(_))
+                ),
+                "{serial:?}"
+            );
         }
         let adb = fake(|mut stream| async move {
             service(&mut stream).await;
@@ -683,7 +751,10 @@ mod tests {
         })
         .await;
         let long = "x".repeat(2000);
-        assert!(matches!(adb.exec("abc", &long, 10, LONG).await, Err(Error::Refused(_))));
+        assert!(matches!(
+            adb.exec("abc", &long, 10, LONG).await,
+            Err(Error::Refused(_))
+        ));
     }
 
     #[tokio::test]
@@ -691,21 +762,38 @@ mod tests {
         let adb = fake(|mut stream| async move {
             service(&mut stream).await;
             stream.write_all(b"OKAY").await.unwrap();
-            assert_eq!(service(&mut stream).await, "shell,v2,raw:pm path com.example");
+            assert_eq!(
+                service(&mut stream).await,
+                "shell,v2,raw:pm path com.example"
+            );
             stream.write_all(b"OKAY").await.unwrap();
-            for (kind, data) in [(1u8, &b"package:/data/app/base.apk\n"[..]), (2, b"warn\n"), (9, b"??"), (3, &[4])] {
+            for (kind, data) in [
+                (1u8, &b"package:/data/app/base.apk\n"[..]),
+                (2, b"warn\n"),
+                (9, b"??"),
+                (3, &[4]),
+            ] {
                 stream.write_all(&[kind]).await.unwrap();
-                stream.write_all(&(data.len() as u32).to_le_bytes()).await.unwrap();
+                stream
+                    .write_all(&(data.len() as u32).to_le_bytes())
+                    .await
+                    .unwrap();
                 stream.write_all(data).await.unwrap();
             }
         })
         .await;
-        let output = adb.shell("abc", "pm path com.example", 4096, LONG).await.unwrap();
+        let output = adb
+            .shell("abc", "pm path com.example", 4096, LONG)
+            .await
+            .unwrap();
         assert_eq!(output.text(), "package:/data/app/base.apk");
         assert_eq!(output.stderr, b"warn\n");
         assert_eq!(output.exit, 4);
         let error = output.ok("Finding the app").unwrap_err();
-        assert_eq!(error.to_string(), "Finding the app failed on the device: warn");
+        assert_eq!(
+            error.to_string(),
+            "Finding the app failed on the device: warn"
+        );
     }
 
     #[tokio::test]
@@ -715,10 +803,16 @@ mod tests {
             stream.write_all(b"OKAY").await.unwrap();
             service(&mut stream).await;
             stream.write_all(b"OKAY").await.unwrap();
-            stream.write_all(&[1, 2, 0, 0, 0, b'h', b'i']).await.unwrap();
+            stream
+                .write_all(&[1, 2, 0, 0, 0, b'h', b'i'])
+                .await
+                .unwrap();
         })
         .await;
-        assert!(matches!(adb.shell("abc", "id", 4096, LONG).await, Err(Error::Protocol(_))));
+        assert!(matches!(
+            adb.shell("abc", "id", 4096, LONG).await,
+            Err(Error::Protocol(_))
+        ));
     }
 
     #[tokio::test]
@@ -763,10 +857,18 @@ mod tests {
         })
         .await;
         let data: Vec<u8> = (0..SYNC_CHUNK + 10).map(|i| (i % 251) as u8).collect();
-        adb.push("abc", &data, "/data/local/tmp/x.jar", 0o644).await.unwrap();
+        adb.push("abc", &data, "/data/local/tmp/x.jar", 0o644)
+            .await
+            .unwrap();
         assert_eq!(seen_rx.await.unwrap(), data);
-        assert!(matches!(adb.push("abc", b"x", "relative", 0o644).await, Err(Error::Refused(_))));
-        assert!(matches!(adb.push("abc", b"x", "/a,b", 0o644).await, Err(Error::Refused(_))));
+        assert!(matches!(
+            adb.push("abc", b"x", "relative", 0o644).await,
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            adb.push("abc", b"x", "/a,b", 0o644).await,
+            Err(Error::Refused(_))
+        ));
     }
 
     #[tokio::test]
@@ -789,10 +891,19 @@ mod tests {
                 .unwrap();
         })
         .await;
-        let error = adb.install("abc", &apk, LONG).await.unwrap_err().to_string();
-        assert!(error.starts_with("A copy signed with a different key is already installed."), "{error}");
+        let error = adb
+            .install("abc", &apk, LONG)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.starts_with("A copy signed with a different key is already installed."),
+            "{error}"
+        );
         assert!(error.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"));
-        let missing = adb.install("abc", &folder.path().join("none.apk"), LONG).await;
+        let missing = adb
+            .install("abc", &folder.path().join("none.apk"), LONG)
+            .await;
         assert!(matches!(missing, Err(Error::Refused(_))));
     }
 
@@ -801,7 +912,10 @@ mod tests {
         let adb = fake(|mut stream| async move {
             service(&mut stream).await;
             stream.write_all(b"OKAY").await.unwrap();
-            assert_eq!(service(&mut stream).await, "reverse:forward:tcp:8081;tcp:19001");
+            assert_eq!(
+                service(&mut stream).await,
+                "reverse:forward:tcp:8081;tcp:19001"
+            );
             stream.write_all(b"OKAYOKAY").await.unwrap();
         })
         .await;
@@ -821,7 +935,10 @@ mod tests {
         let mut tracker = adb.track().await.unwrap();
         assert!(tracker.next().await.unwrap().is_empty());
         assert_eq!(tracker.next().await.unwrap()[0].state, DeviceState::Offline);
-        assert_eq!(tracker.next().await.unwrap()[0].model.as_deref(), Some("Pixel_8"));
+        assert_eq!(
+            tracker.next().await.unwrap()[0].model.as_deref(),
+            Some("Pixel_8")
+        );
         assert!(tracker.next().await.is_err());
     }
 }

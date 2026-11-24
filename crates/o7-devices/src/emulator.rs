@@ -87,13 +87,20 @@ pub fn start(launch: &Launch) -> Result<Emulator, Error> {
     #[cfg(windows)]
     {
         use process_wrap::tokio::{CreationFlags, JobObject};
-        wrapped.wrap(CreationFlags(windows::Win32::System::Threading::CREATE_NO_WINDOW));
+        wrapped.wrap(CreationFlags(
+            windows::Win32::System::Threading::CREATE_NO_WINDOW,
+        ));
         wrapped.wrap(JobObject);
     }
     let child = wrapped
         .spawn()
         .map_err(|error| Error::Device(format!("The emulator could not be started: {error}")))?;
-    Ok(Emulator { child, port: launch.port, serial: serial(launch.port), log: launch.log.clone() })
+    Ok(Emulator {
+        child,
+        port: launch.port,
+        serial: serial(launch.port),
+        log: launch.log.clone(),
+    })
 }
 
 impl Emulator {
@@ -116,10 +123,18 @@ impl Emulator {
     /// Stops the emulator: asked first, so it saves its state, then killed if it does not go.
     pub async fn stop(mut self, adb_program: &Path, adb: &Adb, patience: Duration) {
         let mut ask = crate::command(adb_program);
-        ask.arg("-P").arg(adb.port().to_string()).arg("-s").arg(&self.serial).arg("emu").arg("kill");
+        ask.arg("-P")
+            .arg(adb.port().to_string())
+            .arg("-s")
+            .arg(&self.serial)
+            .arg("emu")
+            .arg("kill");
         ask.stdout(Stdio::null()).stderr(Stdio::null());
         let _ = tokio::time::timeout(Duration::from_secs(10), ask.status()).await;
-        if tokio::time::timeout(patience, self.child.wait()).await.is_ok() {
+        if tokio::time::timeout(patience, self.child.wait())
+            .await
+            .is_ok()
+        {
             return;
         }
         self.kill().await;
@@ -133,8 +148,14 @@ impl Emulator {
 
 /// Whether Android on `serial` has finished starting.
 pub async fn booted(adb: &Adb, serial: &str) -> bool {
-    let asked =
-        adb.shell(serial, "getprop sys.boot_completed", 64, Duration::from_secs(5)).await;
+    let asked = adb
+        .shell(
+            serial,
+            "getprop sys.boot_completed",
+            64,
+            Duration::from_secs(5),
+        )
+        .await;
     matches!(&asked, Ok(output) if output.text() == "1")
 }
 
@@ -143,15 +164,20 @@ fn explain(log: &str) -> String {
     let lower = log.to_ascii_lowercase();
     let known = if lower.contains("not enough disk space") || lower.contains("not enough space") {
         Some("The disk is too full for the emulator.")
-    } else if lower.lines().any(|line| {
-        line.contains("whpx") && (line.contains(" not ") || line.contains("fail"))
-    }) {
-        Some("Windows Hypervisor Platform is not turned on. Turn it on in \"Turn Windows features on or off\", then restart the computer.")
+    } else if lower
+        .lines()
+        .any(|line| line.contains("whpx") && (line.contains(" not ") || line.contains("fail")))
+    {
+        Some(
+            "Windows Hypervisor Platform is not turned on. Turn it on in \"Turn Windows features on or off\", then restart the computer.",
+        )
     } else if lower.contains("/dev/kvm") {
         Some("This user cannot use KVM. Add the user to the kvm group, then sign in again.")
     } else if lower.contains("running multiple emulators with the same avd") {
         Some("That device is already running.")
-    } else if lower.contains("cannot find avd system path") || lower.contains("broken avd system path") {
+    } else if lower.contains("cannot find avd system path")
+        || lower.contains("broken avd system path")
+    {
         Some("The device's Android image is missing. Set the device up again.")
     } else {
         None
@@ -167,7 +193,12 @@ fn explain(log: &str) -> String {
             let line = line.to_ascii_lowercase();
             line.contains("error") || line.contains("fatal") || line.contains("panic")
         })
-        .or_else(|| log.lines().rev().map(str::trim).find(|line| !line.is_empty()));
+        .or_else(|| {
+            log.lines()
+                .rev()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+        });
     match last {
         Some(line) => {
             let line: String = line.chars().take(300).collect();
@@ -198,17 +229,36 @@ mod tests {
 
     #[test]
     fn known_failures_say_what_to_do() {
-        assert!(explain("ERROR | Not enough disk space to run AVD 'x'. Exiting...").contains("disk is too full"));
-        assert!(explain("WHPX is not installed or not usable").contains("Windows Hypervisor Platform"));
+        assert!(
+            explain("ERROR | Not enough disk space to run AVD 'x'. Exiting...")
+                .contains("disk is too full")
+        );
+        assert!(
+            explain("WHPX is not installed or not usable").contains("Windows Hypervisor Platform")
+        );
         assert!(explain("ERROR | /dev/kvm device: permission denied").contains("kvm group"));
-        assert!(explain("ERROR | Running multiple emulators with the same AVD is an experimental feature.").contains("already running"));
-        assert!(explain("PANIC: Cannot find AVD system path. Please define ANDROID_SDK_ROOT").contains("image is missing"));
+        assert!(
+            explain(
+                "ERROR | Running multiple emulators with the same AVD is an experimental feature."
+            )
+            .contains("already running")
+        );
+        assert!(
+            explain("PANIC: Cannot find AVD system path. Please define ANDROID_SDK_ROOT")
+                .contains("image is missing")
+        );
         assert_eq!(
             explain("INFO | boot\nFATAL | something odd happened\nINFO | bye\n"),
             "The emulator stopped while starting: FATAL | something odd happened"
         );
-        assert_eq!(explain("\n\n"), "The emulator stopped while starting and gave no reason.");
-        assert_eq!(explain("just a line\n"), "The emulator stopped while starting: just a line");
+        assert_eq!(
+            explain("\n\n"),
+            "The emulator stopped while starting and gave no reason."
+        );
+        assert_eq!(
+            explain("just a line\n"),
+            "The emulator stopped while starting: just a line"
+        );
     }
 
     #[test]

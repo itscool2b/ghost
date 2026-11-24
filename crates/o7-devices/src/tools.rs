@@ -9,7 +9,9 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::android::{Appearance, Orientation};
-use crate::manager::{DeviceKind, DeviceState, Live, Manager, TURNED_OFF, ToolReply};
+use crate::manager::{
+    ANY_EMULATOR, ANY_IPHONE, DeviceKind, DeviceState, Live, Manager, TURNED_OFF, ToolReply,
+};
 use crate::outline::Item;
 use crate::scrcpy::key;
 use crate::{Error, picture};
@@ -44,15 +46,25 @@ fn refused(text: impl Into<String>) -> Error {
 }
 
 fn text_arg<'a>(arguments: &'a Value, name: &str) -> Option<&'a str> {
-    arguments.get(name).and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty())
+    arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 fn flag(arguments: &Value, name: &str) -> bool {
-    arguments.get(name).and_then(Value::as_bool).unwrap_or(false)
+    arguments
+        .get(name)
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn number(arguments: &Value, name: &str) -> Option<f64> {
-    arguments.get(name).and_then(Value::as_f64).filter(|value| value.is_finite())
+    arguments
+        .get(name)
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite())
 }
 
 /// What the pane says the agent is doing. Never the text being typed, a link or a path.
@@ -89,28 +101,30 @@ pub(crate) fn label(tool: &str, arguments: &Value) -> String {
 
 /// A key by the name agents use, as the name shown and Android's key code.
 fn named_key(name: &str) -> Option<(&'static str, u32)> {
-    Some(match name.to_ascii_lowercase().replace([' ', '-'], "_").as_str() {
-        "back" => ("Back", key::BACK),
-        "home" => ("Home", key::HOME),
-        "recents" | "app_switch" | "overview" => ("Recents", key::APP_SWITCH),
-        "enter" | "return" => ("Enter", key::ENTER),
-        "tab" => ("Tab", key::TAB),
-        "escape" | "esc" => ("Escape", key::ESCAPE),
-        "delete" | "backspace" => ("Delete", key::DELETE_BACK),
-        "forward_delete" => ("Forward delete", key::DELETE_FORWARD),
-        "space" => ("Space", key::SPACE),
-        "up" => ("Up", key::DPAD_UP),
-        "down" => ("Down", key::DPAD_DOWN),
-        "left" => ("Left", key::DPAD_LEFT),
-        "right" => ("Right", key::DPAD_RIGHT),
-        "page_up" => ("Page up", key::PAGE_UP),
-        "page_down" => ("Page down", key::PAGE_DOWN),
-        "menu" => ("Menu", key::MENU),
-        "volume_up" => ("Volume up", key::VOLUME_UP),
-        "volume_down" => ("Volume down", key::VOLUME_DOWN),
-        "power" => ("Power", key::POWER),
-        _ => return None,
-    })
+    Some(
+        match name.to_ascii_lowercase().replace([' ', '-'], "_").as_str() {
+            "back" => ("Back", key::BACK),
+            "home" => ("Home", key::HOME),
+            "recents" | "app_switch" | "overview" => ("Recents", key::APP_SWITCH),
+            "enter" | "return" => ("Enter", key::ENTER),
+            "tab" => ("Tab", key::TAB),
+            "escape" | "esc" => ("Escape", key::ESCAPE),
+            "delete" | "backspace" => ("Delete", key::DELETE_BACK),
+            "forward_delete" => ("Forward delete", key::DELETE_FORWARD),
+            "space" => ("Space", key::SPACE),
+            "up" => ("Up", key::DPAD_UP),
+            "down" => ("Down", key::DPAD_DOWN),
+            "left" => ("Left", key::DPAD_LEFT),
+            "right" => ("Right", key::DPAD_RIGHT),
+            "page_up" => ("Page up", key::PAGE_UP),
+            "page_down" => ("Page down", key::PAGE_DOWN),
+            "menu" => ("Menu", key::MENU),
+            "volume_up" => ("Volume up", key::VOLUME_UP),
+            "volume_down" => ("Volume down", key::VOLUME_DOWN),
+            "power" => ("Power", key::POWER),
+            _ => return None,
+        },
+    )
 }
 
 /// Runs `tool` for `chat_id`, and says in the pane what the agent is doing meanwhile.
@@ -124,7 +138,10 @@ pub(crate) async fn call(
         return ToolReply::failed(TURNED_OFF);
     }
     if !TOOLS.contains(&tool) {
-        return ToolReply::failed(format!("There is no tool called {}.", crate::shell::shown(tool)));
+        return ToolReply::failed(format!(
+            "There is no tool called {}.",
+            crate::shell::shown(tool)
+        ));
     }
     if tool != "mobile_devices" {
         manager.agent_doing(chat_id, Some(label(tool, arguments)));
@@ -148,19 +165,22 @@ async fn run(
             let held = status.chats.iter().find(|held| held.chat_id == chat_id);
             return match held {
                 None => Ok(ToolReply::text("This chat has no device.")),
-                Some(held) if held.kind == DeviceKind::Emulator => {
+                Some(held) if held.kind != DeviceKind::Phone => {
                     manager.stop_device(&held.device_id).await?;
                     Ok(ToolReply::text(format!("{} is stopped.", held.title)))
                 }
                 Some(_) => {
                     manager.detach(chat_id);
-                    Ok(ToolReply::text("This chat let go of the phone. It is still on and plugged in."))
+                    Ok(ToolReply::text(
+                        "This chat let go of the phone. It is still on and plugged in.",
+                    ))
                 }
             };
         }
         _ => {}
     }
     let live = manager.live_for_agent(chat_id)?;
+    let iphone = live.iphone().is_some();
     match tool {
         "mobile_snapshot" => snapshot(&live).await,
         "mobile_tap" => tap(&live, arguments).await,
@@ -171,16 +191,16 @@ async fn run(
             let (shown, code) = named_key(name).ok_or_else(|| {
                 refused("That is not a key. Use back, home, recents, enter, tab, escape, delete, space, up, down, left, right, page_up, page_down, menu, volume_up, volume_down or power.")
             })?;
-            if code == key::BACK {
-                live.control().await.back().await?;
-            } else {
-                live.control().await.press(code).await?;
-            }
+            live.press_key(code).await?;
             tokio::time::sleep(SETTLE).await;
-            Ok(ToolReply::text(format!("Pressed {shown}.")))
+            Ok(ToolReply::text(if iphone && code == key::BACK {
+                "Swiped in from the left edge, which is Back on an iPhone.".to_owned()
+            } else {
+                format!("Pressed {shown}.")
+            }))
         }
         "mobile_screenshot" => {
-            let png = live.device.screenshot().await?;
+            let png = live.screenshot().await?;
             let picture = tokio::task::spawn_blocking(move || picture::for_agent(&png))
                 .await
                 .map_err(|_| Error::Device("The screenshot could not be read.".into()))??;
@@ -194,15 +214,25 @@ async fn run(
             })
         }
         "mobile_install" => {
-            let path = text_arg(arguments, "path")
-                .ok_or_else(|| refused("Give the path of the .apk file to install."))?;
-            live.device.install(Path::new(path)).await?;
-            Ok(ToolReply::text("Installed. Start it with mobile_launch."))
+            let what = if iphone {
+                "Give the full path of the .app the build made for the simulator."
+            } else {
+                "Give the path of the .apk file to install."
+            };
+            let path = text_arg(arguments, "path").ok_or_else(|| refused(what))?;
+            live.install(Path::new(path)).await?;
+            Ok(ToolReply::text(if iphone {
+                "Installed. Start it with mobile_launch and its bundle id."
+            } else {
+                "Installed. Start it with mobile_launch."
+            }))
         }
         "mobile_launch" => {
-            let package = text_arg(arguments, "package")
-                .ok_or_else(|| refused("Name the app's package, like com.example.app."))?;
-            let component = live.device.launch(package, text_arg(arguments, "activity")).await?;
+            let package =
+                text_arg(arguments, "package").ok_or_else(|| refused(name_the_app(iphone)))?;
+            let component = live
+                .launch(package, text_arg(arguments, "activity"))
+                .await?;
             *lock(&live.app) = Some(package.to_owned());
             tokio::time::sleep(SETTLE).await;
             Ok(ToolReply::text(format!(
@@ -210,30 +240,42 @@ async fn run(
             )))
         }
         "mobile_stop_app" => {
-            let package = text_arg(arguments, "package")
-                .ok_or_else(|| refused("Name the app's package, like com.example.app."))?;
-            live.device.stop_app(package).await?;
+            let package =
+                text_arg(arguments, "package").ok_or_else(|| refused(name_the_app(iphone)))?;
+            live.stop_app(package).await?;
             Ok(ToolReply::text(format!("Stopped {package}.")))
         }
         "mobile_open_link" => {
-            let link = text_arg(arguments, "link").ok_or_else(|| refused("Give the link to open."))?;
-            live.device.open_link(link).await?;
+            let link =
+                text_arg(arguments, "link").ok_or_else(|| refused("Give the link to open."))?;
+            live.open_link(link).await?;
             tokio::time::sleep(SETTLE).await;
-            Ok(ToolReply::text("Opened the link. Read the screen with mobile_snapshot."))
+            let web = ["http:", "https:"].iter().any(|scheme| {
+                link.trim()
+                    .get(..scheme.len())
+                    .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
+            });
+            Ok(ToolReply::text(if iphone && !web {
+                // As it asks a person, iOS asks before a link opens an app.
+                "Opened the link. iOS may first ask whether to open the app: read the screen with mobile_snapshot, and tap Open if it asks."
+            } else {
+                "Opened the link. Read the screen with mobile_snapshot."
+            }))
         }
         "mobile_logs" => {
-            let lines = number(arguments, "lines").map_or(120, |lines| lines.clamp(1.0, 500.0) as u32);
+            let lines =
+                number(arguments, "lines").map_or(120, |lines| lines.clamp(1.0, 500.0) as u32);
             let package = match text_arg(arguments, "package") {
                 Some(package) => Some(package.to_owned()),
                 None => {
                     let remembered = lock(&live.app).clone();
                     match remembered {
                         Some(app) => Some(app),
-                        None => live.device.foreground().await,
+                        None => live.foreground().await,
                     }
                 }
             };
-            Ok(ToolReply::text(live.device.logs(package.as_deref(), lines).await?))
+            Ok(ToolReply::text(live.logs(package.as_deref(), lines).await?))
         }
         "mobile_settings" => settings(&live, arguments).await,
         "mobile_wait_for" => wait_for(&live, arguments).await,
@@ -242,7 +284,17 @@ async fn run(
 }
 
 fn lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn name_the_app(iphone: bool) -> &'static str {
+    if iphone {
+        "Name the app's bundle id, like com.example.app."
+    } else {
+        "Name the app's package, like com.example.app."
+    }
 }
 
 /// What exists and who holds it, for `mobile_devices`.
@@ -253,21 +305,39 @@ fn devices(manager: &Manager, chat_id: &str) -> String {
         return format!("{unavailable}\n");
     }
     if !status.setup.emulator {
-        out.push_str("No emulator is set up on this computer. The person can set one up in the Device pane beside the chat.\n");
-    } else if status.setup.acceleration.as_ref().is_some_and(|acceleration| !acceleration.usable) {
+        out.push_str("No Android emulator is set up on this computer. The person can set one up in the Device pane beside the chat.\n");
+    } else if status
+        .setup
+        .acceleration
+        .as_ref()
+        .is_some_and(|acceleration| !acceleration.usable)
+    {
         out.push_str("The emulator is installed, but this computer cannot run it fast yet. The Device pane says what to turn on.\n");
+    }
+    let ios = &status.setup.ios;
+    if ios.possible {
+        match (&ios.detail, &ios.missing) {
+            (Some(detail), _) if ios.ready => out.push_str(&format!(
+                "An iPhone simulator can run here ({detail}): mobile_start with platform ios.\n"
+            )),
+            (_, Some(missing)) => out.push_str(&format!("No iPhone simulator yet: {missing}\n")),
+            _ => out.push_str("This is a Mac: mobile_start with platform ios starts an iPhone simulator once Xcode is found.\n"),
+        }
     }
     for device in &status.devices {
         let kind = match device.kind {
             DeviceKind::Emulator => "emulator",
             DeviceKind::Phone => "phone",
+            DeviceKind::Simulator => "iPhone simulator",
         };
         let state = match device.state {
             DeviceState::Stopped => "stopped",
             DeviceState::Starting => "starting",
             DeviceState::Ready => "running",
             DeviceState::Stopping => "stopping",
-            DeviceState::Unauthorized => "waiting for the person to allow this computer on the phone",
+            DeviceState::Unauthorized => {
+                "waiting for the person to allow this computer on the phone"
+            }
             DeviceState::Offline => "not reachable",
         };
         let holder = match &device.chat_id {
@@ -275,10 +345,13 @@ fn devices(manager: &Manager, chat_id: &str) -> String {
             Some(_) => ", in use by another chat",
             None => "",
         };
-        out.push_str(&format!("- {} ({kind}, id {}): {state}{holder}\n", device.title, device.id));
+        out.push_str(&format!(
+            "- {} ({kind}, id {}): {state}{holder}\n",
+            device.title, device.id
+        ));
     }
-    if status.devices.is_empty() && status.setup.emulator {
-        out.push_str("No device exists yet. mobile_start makes and starts an emulator.\n");
+    if status.devices.is_empty() && (status.setup.emulator || ios.ready) {
+        out.push_str("No device exists yet. mobile_start makes and starts one.\n");
     }
     match status.chats.iter().find(|held| held.chat_id == chat_id) {
         Some(held) if !held.agent_allowed => out.push_str(
@@ -301,9 +374,22 @@ fn devices(manager: &Manager, chat_id: &str) -> String {
 }
 
 async fn start(manager: &Manager, chat_id: &str, arguments: &Value) -> Result<ToolReply, Error> {
-    let wanted = text_arg(arguments, "device");
+    let platform = match text_arg(arguments, "platform")
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        None => None,
+        Some("ios" | "iphone") => Some(ANY_IPHONE),
+        Some("android") => Some(ANY_EMULATOR),
+        Some(_) => return Err(refused("platform is android or ios.")),
+    };
+    let wanted = text_arg(arguments, "device").or(platform);
     let holds = |id: &str| {
-        manager.status().chats.iter().any(|held| held.chat_id == chat_id && held.device_id == id)
+        manager
+            .status()
+            .chats
+            .iter()
+            .any(|held| held.chat_id == chat_id && held.device_id == id)
     };
     if let Some(id) = wanted {
         // A phone is the person's to hand over, in the pane. An agent may only keep using the
@@ -322,20 +408,27 @@ async fn start(manager: &Manager, chat_id: &str, arguments: &Value) -> Result<To
     manager.attach(chat_id, wanted)?;
     let live = manager.wait_live(chat_id, START).await?;
     let (width, height) = live.screen();
-    let android = live.device.android_version().await.unwrap_or_else(|| "unknown".into());
+    let system = live.system().await;
     let title = manager
         .status()
         .chats
         .iter()
         .find(|held| held.chat_id == chat_id)
         .map_or_else(|| "The device".to_owned(), |held| held.title.clone());
-    Ok(ToolReply::text(format!(
-        "{title} is ready: Android {android}, screen {width} by {height}. Install an app with mobile_install, start it with mobile_launch, and read the screen with mobile_snapshot."
-    )))
+    let text = match live.iphone() {
+        Some(iphone) => format!(
+            "{title} is ready: {system}, screen {width} by {height} pixels. Its UDID is {udid}: build the app for it with xcodebuild -destination 'platform=iOS Simulator,id={udid}', install the .app with mobile_install, start it with mobile_launch and its bundle id, and read the screen with mobile_snapshot.",
+            udid = iphone.sim.udid
+        ),
+        None => format!(
+            "{title} is ready: {system}, screen {width} by {height}. Install an app with mobile_install, start it with mobile_launch, and read the screen with mobile_snapshot."
+        ),
+    };
+    Ok(ToolReply::text(text))
 }
 
 async fn snapshot(live: &Live) -> Result<ToolReply, Error> {
-    let outline = live.device.outline().await?;
+    let outline = live.read_outline(true).await?;
     let (width, height) = live.screen();
     let mut text = format!("Screen {width} by {height}");
     if let Some(package) = &outline.package {
@@ -387,14 +480,29 @@ async fn tap(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
     } else {
         Duration::from_millis(60)
     };
-    let verb = if flag(arguments, "long") { "Long-pressed" } else { "Tapped" };
-    let (point, what) = match (text_arg(arguments, "ref"), number(arguments, "x"), number(arguments, "y")) {
+    let verb = if flag(arguments, "long") {
+        "Long-pressed"
+    } else {
+        "Tapped"
+    };
+    let (point, what) = match (
+        text_arg(arguments, "ref"),
+        number(arguments, "x"),
+        number(arguments, "y"),
+    ) {
         (Some(reference), _, _) => {
             let item = item(live, reference)?;
             (item.bounds.center(), described(&item))
         }
-        (None, Some(x), Some(y)) => (picture_point(live, x, y)?, format!("the point {x:.0}, {y:.0}")),
-        _ => return Err(refused("Give a ref from mobile_snapshot, or x and y from a screenshot.")),
+        (None, Some(x), Some(y)) => (
+            picture_point(live, x, y)?,
+            format!("the point {x:.0}, {y:.0}"),
+        ),
+        _ => {
+            return Err(refused(
+                "Give a ref from mobile_snapshot, or x and y from a screenshot.",
+            ));
+        }
     };
     live.tap(point.0, point.1, hold).await?;
     tokio::time::sleep(SETTLE).await;
@@ -404,7 +512,10 @@ async fn tap(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
 }
 
 async fn type_text(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
-    let text = arguments.get("text").and_then(Value::as_str).unwrap_or_default();
+    let text = arguments
+        .get("text")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     if text.is_empty() && !flag(arguments, "submit") && !flag(arguments, "clear") {
         return Err(refused("Give the text to type."));
     }
@@ -416,23 +527,18 @@ async fn type_text(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
         tokio::time::sleep(Duration::from_millis(400)).await;
         into = format!(" into {}", described(&item));
     }
-    {
-        let mut control = live.control().await;
-        if flag(arguments, "clear") {
-            control.select_all().await?;
-            control.press(key::DELETE_BACK).await?;
-        }
-        control.text(text).await?;
-        if flag(arguments, "submit") {
-            control.press(key::ENTER).await?;
-        }
-    }
+    live.type_text(text, flag(arguments, "clear"), flag(arguments, "submit"))
+        .await?;
     tokio::time::sleep(SETTLE).await;
     let count = text.chars().count();
     Ok(ToolReply::text(format!(
         "Typed {count} character{}{into}{}.",
         if count == 1 { "" } else { "s" },
-        if flag(arguments, "submit") { " and pressed Enter" } else { "" }
+        if flag(arguments, "submit") {
+            " and pressed Enter"
+        } else {
+            ""
+        }
     )))
 }
 
@@ -482,7 +588,9 @@ async fn swipe(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
     };
     live.swipe(from, to, duration).await?;
     tokio::time::sleep(SETTLE).await;
-    Ok(ToolReply::text(format!("{what}. Read the screen again to see what moved.")))
+    Ok(ToolReply::text(format!(
+        "{what}. Read the screen again to see what moved."
+    )))
 }
 
 async fn settings(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
@@ -493,14 +601,14 @@ async fn settings(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
             "light" => Appearance::Light,
             _ => return Err(refused("Appearance is light or dark.")),
         };
-        live.device.set_appearance(appearance).await?;
+        live.set_appearance(appearance).await?;
         done.push(match appearance {
             Appearance::Dark => "The device is in dark mode.".to_owned(),
             Appearance::Light => "The device is in light mode.".to_owned(),
         });
     }
     if let Some(scale) = number(arguments, "text_scale") {
-        live.device.set_text_scale(scale as f32).await?;
+        live.set_text_scale(scale as f32).await?;
         done.push(format!("Text is at {scale:.2} times its usual size."));
     }
     if let Some(orientation) = text_arg(arguments, "orientation") {
@@ -509,20 +617,31 @@ async fn settings(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
             "landscape" => Orientation::Landscape,
             _ => return Err(refused("Orientation is portrait or landscape.")),
         };
-        live.device.set_orientation(orientation).await?;
+        live.set_orientation(orientation).await?;
         done.push(match orientation {
             Orientation::Portrait => "The device is upright.".to_owned(),
             Orientation::Landscape => "The device is on its side.".to_owned(),
         });
     }
-    if let Some(permission) = arguments.get("permission").filter(|value| value.is_object()) {
+    if let Some(permission) = arguments
+        .get("permission")
+        .filter(|value| value.is_object())
+    {
+        let iphone = live.iphone().is_some();
         let package = text_arg(permission, "package")
-            .ok_or_else(|| refused("A permission change names the app's package."))?;
+            .ok_or_else(|| refused("A permission change names the app's package or bundle id."))?;
         let name = text_arg(permission, "name").ok_or_else(|| {
-            refused("A permission change names the permission, like android.permission.CAMERA.")
+            refused(if iphone {
+                "A permission change names the permission, like photos or location."
+            } else {
+                "A permission change names the permission, like android.permission.CAMERA."
+            })
         })?;
-        let granted = permission.get("granted").and_then(Value::as_bool).unwrap_or(true);
-        live.device.set_permission(package, name, granted).await?;
+        let granted = permission
+            .get("granted")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        live.set_permission(package, name, granted).await?;
         done.push(format!(
             "{name} is {} for {package}.",
             if granted { "granted" } else { "taken away" }
@@ -547,10 +666,13 @@ async fn wait_for(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
     let wanted = text.to_lowercase();
     loop {
         // A screen that is moving cannot be read; that is not the answer, so it is asked again.
-        if let Ok(outline) = live.device.outline().await {
+        if let Ok(outline) = live.read_outline(false).await {
             let shows = outline.items.iter().any(|item| {
                 item.name.to_lowercase().contains(&wanted)
-                    || item.value.as_ref().is_some_and(|value| value.to_lowercase().contains(&wanted))
+                    || item
+                        .value
+                        .as_ref()
+                        .is_some_and(|value| value.to_lowercase().contains(&wanted))
             });
             if shows != gone {
                 let rendered = outline.render();
@@ -566,7 +688,11 @@ async fn wait_for(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
             return Err(Error::Device(format!(
                 "\"{}\" {} within {} seconds. Read the screen or take a screenshot to see what is there.",
                 crate::shell::shown(text),
-                if gone { "was still on the screen" } else { "did not appear" },
+                if gone {
+                    "was still on the screen"
+                } else {
+                    "did not appear"
+                },
                 within.as_secs()
             )));
         }
@@ -585,14 +711,38 @@ mod tests {
     fn what_the_pane_shows_never_holds_what_was_typed() {
         let secret = json!({ "text": "hunter2-secret", "ref": "d4", "submit": true });
         assert_eq!(label("mobile_type", &secret), "Typing");
-        assert_eq!(label("mobile_open_link", &json!({ "link": "https://example.com/?token=abc" })), "Opening a link");
-        assert_eq!(label("mobile_install", &json!({ "path": "/home/sam/secret/app.apk" })), "Installing the app");
+        assert_eq!(
+            label(
+                "mobile_open_link",
+                &json!({ "link": "https://example.com/?token=abc" })
+            ),
+            "Opening a link"
+        );
+        assert_eq!(
+            label(
+                "mobile_install",
+                &json!({ "path": "/home/sam/secret/app.apk" })
+            ),
+            "Installing the app"
+        );
         assert_eq!(label("mobile_tap", &json!({ "ref": "d3" })), "Tapping d3");
         assert_eq!(label("mobile_tap", &json!({ "x": 5, "y": 9 })), "Tapping");
-        assert_eq!(label("mobile_swipe", &json!({ "direction": "up" })), "Swiping up");
-        assert_eq!(label("mobile_swipe", &json!({ "direction": "<b>sideways</b>" })), "Swiping");
-        assert_eq!(label("mobile_press", &json!({ "key": "Back" })), "Pressing Back");
-        assert_eq!(label("mobile_press", &json!({ "key": "rm -rf" })), "Pressing a key");
+        assert_eq!(
+            label("mobile_swipe", &json!({ "direction": "up" })),
+            "Swiping up"
+        );
+        assert_eq!(
+            label("mobile_swipe", &json!({ "direction": "<b>sideways</b>" })),
+            "Swiping"
+        );
+        assert_eq!(
+            label("mobile_press", &json!({ "key": "Back" })),
+            "Pressing Back"
+        );
+        assert_eq!(
+            label("mobile_press", &json!({ "key": "rm -rf" })),
+            "Pressing a key"
+        );
         for tool in TOOLS {
             assert!(!label(tool, &secret).contains("hunter2"), "{tool}");
         }
@@ -628,20 +778,37 @@ mod tests {
             if matches!(tool, "mobile_devices" | "mobile_start" | "mobile_stop") {
                 continue;
             }
-            let reply = manager.tool("chat", tool, &json!({ "ref": "d1", "text": "x" })).await;
+            let reply = manager
+                .tool("chat", tool, &json!({ "ref": "d1", "text": "x" }))
+                .await;
             assert!(reply.error, "{tool}");
-            assert_eq!(reply.text, "This chat has no device yet. Call mobile_start first.", "{tool}");
+            assert_eq!(
+                reply.text, "This chat has no device yet. Call mobile_start first.",
+                "{tool}"
+            );
         }
         let unknown = manager.tool("chat", "mobile_format_disk", &json!({})).await;
         assert!(unknown.error);
         assert_eq!(unknown.text, "There is no tool called mobile_format_disk.");
         let listed = manager.tool("chat", "mobile_devices", &json!({})).await;
         assert!(!listed.error);
-        assert!(listed.text.contains("No emulator is set up"), "{}", listed.text);
-        assert!(listed.text.contains("This chat has no device."), "{}", listed.text);
+        assert!(
+            listed.text.contains("No Android emulator is set up"),
+            "{}",
+            listed.text
+        );
+        assert!(
+            listed.text.contains("This chat has no device."),
+            "{}",
+            listed.text
+        );
         let start = manager.tool("chat", "mobile_start", &json!({})).await;
         assert!(start.error);
-        assert!(start.text.starts_with("Android is not set up"), "{}", start.text);
+        assert!(
+            start.text.starts_with("Android is not set up"),
+            "{}",
+            start.text
+        );
         assert!(!manager.tool("chat", "mobile_stop", &json!({})).await.error);
     }
 
@@ -655,22 +822,56 @@ mod tests {
             if matches!(tool, "mobile_devices" | "mobile_stop") {
                 continue;
             }
-            let reply = manager.tool("chat", tool, &json!({ "ref": "d1", "text": "x" })).await;
+            let reply = manager
+                .tool("chat", tool, &json!({ "ref": "d1", "text": "x" }))
+                .await;
             assert!(reply.error, "{tool}");
-            assert!(reply.text.contains("not allowed agents to use"), "{tool}: {}", reply.text);
+            assert!(
+                reply.text.contains("not allowed agents to use"),
+                "{tool}: {}",
+                reply.text
+            );
         }
         // Nor may it reach for a phone its chat does not hold, allowed or not.
         let folder = tempfile::tempdir().unwrap();
         let manager = manager_with_phone(folder.path());
-        let grabbed = manager.tool("mine", "mobile_start", &json!({ "device": "adb:OTHER1" })).await;
+        let grabbed = manager
+            .tool("mine", "mobile_start", &json!({ "device": "adb:OTHER1" }))
+            .await;
         assert!(grabbed.error);
-        assert!(grabbed.text.starts_with("Only the person can choose a phone"), "{}", grabbed.text);
-        assert!(manager.status().chats.iter().all(|held| held.chat_id != "mine"));
+        assert!(
+            grabbed
+                .text
+                .starts_with("Only the person can choose a phone"),
+            "{}",
+            grabbed.text
+        );
+        assert!(
+            manager
+                .status()
+                .chats
+                .iter()
+                .all(|held| held.chat_id != "mine")
+        );
         let listed = manager.tool("other", "mobile_devices", &json!({})).await;
-        assert!(listed.text.contains("Pixel 8 (phone, id adb:OTHER1): running, this chat's device"), "{}", listed.text);
-        assert!(listed.text.contains("they have not allowed agents"), "{}", listed.text);
+        assert!(
+            listed
+                .text
+                .contains("Pixel 8 (phone, id adb:OTHER1): running, this chat's device"),
+            "{}",
+            listed.text
+        );
+        assert!(
+            listed.text.contains("they have not allowed agents"),
+            "{}",
+            listed.text
+        );
         let elsewhere = manager.tool("mine", "mobile_devices", &json!({})).await;
-        assert!(elsewhere.text.contains("in use by another chat"), "{}", elsewhere.text);
+        assert!(
+            elsewhere.text.contains("in use by another chat"),
+            "{}",
+            elsewhere.text
+        );
     }
 
     fn manager_with_phone(folder: &Path) -> Manager {
@@ -685,11 +886,16 @@ mod tests {
         let manager = manager(folder.path());
         hold_phone(&manager, "chat", "R58M");
         manager.agent_doing("chat", Some("Tapping d3".into()));
-        assert_eq!(manager.status().chats[0].agent.as_deref(), Some("Tapping d3"));
+        assert_eq!(
+            manager.status().chats[0].agent.as_deref(),
+            Some("Tapping d3")
+        );
         manager.agent_doing("chat", None);
         assert_eq!(manager.status().chats[0].agent, None);
         // A refused call leaves nothing behind.
-        let _ = manager.tool("chat", "mobile_type", &json!({ "text": "secret" })).await;
+        let _ = manager
+            .tool("chat", "mobile_type", &json!({ "text": "secret" }))
+            .await;
         assert_eq!(manager.status().chats[0].agent, None);
     }
 }
