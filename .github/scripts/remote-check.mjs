@@ -9,10 +9,12 @@
 //     --no-frontend              skip pnpm lint, typecheck and the TypeScript tests
 //     --smoke stream|chat|all    smoke runs of the real app (none)
 //     --browser "<checks>"       browser checks separated by ";" (none)
+//     --ref <branch>             check that branch as GitHub has it (main, say) instead of this one
 //     --watch <run id>           wait for a run already started instead of starting one
 //     --no-wait                  start the run and return
 //
-// The branch must be pushed: the run checks out what GitHub has. Needs `gh`; the bill needs its
+// Without --ref, this checkout's branch must be pushed: the run checks out what GitHub has. A
+// worktree cannot check out main, so `--ref main` refreshes main's build cache. Needs `gh`; the bill needs its
 // `user` scope (`gh auth refresh -h github.com -s user`), and without it the bill is reported as
 // unreadable, never guessed.
 import { execFileSync } from "node:child_process";
@@ -23,7 +25,9 @@ const WORKFLOW = "check.yml";
 const SYSTEMS = ["linux", "windows", "macos"];
 const POLL_MS = 20_000;
 
-const VALUED = new Set(["--os", "--tests", "--smoke", "--browser", "--watch"]);
+const VALUED = new Set(["--os", "--tests", "--smoke", "--browser", "--ref", "--watch"]);
+// A branch name git accepts and a shell or a URL cannot misread.
+const BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/u;
 
 /** The run's settings from the command line. Throws on anything it does not know. */
 export function parseOptions(argv) {
@@ -48,10 +52,14 @@ export function parseOptions(argv) {
       "no-frontend": { type: "boolean", default: false },
       smoke: { type: "string", default: "none" },
       browser: { type: "string", default: "none" },
+      ref: { type: "string" },
       watch: { type: "string" },
       "no-wait": { type: "boolean", default: false },
     },
   });
+  if (values.ref !== undefined && !BRANCH.test(values.ref)) {
+    throw new Error("--ref takes a branch name");
+  }
   if (positionals.length > 0) throw new Error(`Unexpected argument: ${positionals[0]}`);
   if (!SYSTEMS.includes(values.os)) throw new Error(`--os must be one of ${SYSTEMS.join(", ")}`);
   const smoke = values.smoke.trim() || "none";
@@ -70,6 +78,7 @@ export function parseOptions(argv) {
     frontend: !values["no-frontend"],
     smoke,
     browser: values.browser.trim() || "none",
+    ref: values.ref,
     watch: values.watch,
     wait: !values["no-wait"],
   };
@@ -149,12 +158,17 @@ function billLine() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Starts the run for the pushed branch and returns its id. */
+/** Starts the run for the pushed branch (or --ref's) and returns its id. */
 async function start(options) {
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (branch === "HEAD") throw new Error("Check out a branch first: the run checks out a branch.");
-  const head = git(["rev-parse", "HEAD"]);
+  const branch = options.ref ?? git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (branch === "HEAD") {
+    throw new Error(
+      "Check out a branch first, or name one with --ref: the run checks out a branch.",
+    );
+  }
   const pushed = git(["ls-remote", "origin", `refs/heads/${branch}`]).split(/\s+/u)[0];
+  if (options.ref !== undefined && !pushed) throw new Error(`GitHub has no branch ${branch}.`);
+  const head = options.ref === undefined ? git(["rev-parse", "HEAD"]) : pushed;
   if (pushed !== head) {
     throw new Error(
       `Push ${branch} first: GitHub has ${pushed ? pushed.slice(0, 8) : "no such branch"}, this checkout has ${head.slice(0, 8)}.`,
