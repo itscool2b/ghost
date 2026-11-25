@@ -35,7 +35,7 @@ use tokio_tungstenite::{
 };
 
 /// What o7 for iPhone is offered, by name.
-const APP_FEATURES: [&str; 9] = [
+const APP_FEATURES: [&str; 11] = [
     "pickers",
     "inbox",
     "search",
@@ -45,6 +45,8 @@ const APP_FEATURES: [&str; 9] = [
     "screens",
     "tasks",
     "attachments",
+    "push",
+    "activity",
 ];
 
 /// The links these tests make answer what agents ask, as links did before rights were chosen; the
@@ -99,6 +101,8 @@ struct App {
     slow_archive: std::sync::atomic::AtomicBool,
     /// Attachments added to message boxes, numbered from one.
     attached: AtomicUsize,
+    /// What GitHub last said of each chat's pull request, as the app keeps it: an inbox's test.
+    known: Mutex<HashMap<String, o7_remote::PullRequest>>,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -292,6 +296,11 @@ impl Backend for Bound {
             self.admitted()?;
             self.app.pull_request(chat_id).await
         })
+    }
+
+    fn known_pull_request(&self, chat_id: &str) -> Option<o7_remote::PullRequest> {
+        self.admitted().ok()?;
+        self.app.known_pull_request(chat_id)
     }
 
     fn search<'a>(
@@ -521,6 +530,10 @@ impl Backend for App {
                 .push(format!("pull request {chat_id}"));
             Ok(self.pr.lock().expect("pr").clone())
         })
+    }
+
+    fn known_pull_request(&self, chat_id: &str) -> Option<o7_remote::PullRequest> {
+        self.known.lock().expect("known").get(chat_id).cloned()
     }
 
     fn release(&self, owner: &str) {
@@ -1251,6 +1264,44 @@ impl App {
             needs_attention: false,
             title: None,
             updated_at: 3,
+        };
+        let watching: Vec<Statuses> = self
+            .statuses
+            .lock()
+            .expect("statuses")
+            .values()
+            .cloned()
+            .collect();
+        for statuses in watching {
+            statuses(&update);
+        }
+    }
+
+    /// A chat the overview lists stands as given, its history `items` when given (a new one
+    /// starts with none), and everything watching is told.
+    fn stands(&self, id: &str, status: SessionStatus, asks: bool, items: Option<Vec<HistoryItem>>) {
+        {
+            let mut chats = self.listed.lock().expect("listed");
+            match chats.iter_mut().find(|(chat, _)| chat.chat.id == id) {
+                Some((chat, history)) => {
+                    chat.chat.status = status;
+                    chat.chat.needs_attention = asks;
+                    if let Some(items) = items {
+                        *history = Some(items);
+                    }
+                }
+                None => chats.push((
+                    listed(id, status, asks, now_ms()),
+                    Some(items.unwrap_or_default()),
+                )),
+            }
+        }
+        let update = ChatStatusUpdate {
+            chat_id: id.into(),
+            status,
+            needs_attention: asks,
+            title: None,
+            updated_at: now_ms(),
         };
         let watching: Vec<Statuses> = self
             .statuses
@@ -4187,6 +4238,8 @@ async fn the_iphone_app_pairs_on_its_own_path_and_is_offered_more() {
             "features": APP_FEATURES,
             "look": { "theme": "claude", "appearance": "dark" },
             "site": "https://auracode.test",
+            // This relay never said it sends notifications.
+            "notifications": false,
         })
     );
     let paired = phone
@@ -4791,6 +4844,10 @@ fn app_requests() -> Vec<Value> {
         json!({ "op": "upload_chunk", "upload_id": "u", "index": 0, "data": "QQ==" }),
         json!({ "op": "upload_abort", "upload_id": "u" }),
         json!({ "op": "image", "chat_id": "c1", "source": { "type": "stored", "sha256": "ab" } }),
+        json!({ "op": "push_register", "token": "ab".repeat(32), "env": "sandbox" }),
+        json!({ "op": "push_unregister" }),
+        json!({ "op": "push_test" }),
+        json!({ "op": "activity", "token": "cd".repeat(32), "env": "sandbox" }),
     ]
 }
 
@@ -5937,5 +5994,1087 @@ async fn a_task_for_tonight_from_the_phone_waits_and_can_be_taken_off() {
             .request(&mut relay, json!({ "op": "task_cancel", "queued_id": id }))
             .await["error"]["code"],
         "not_found"
+    );
+}
+
+/// This computer's id at the relay, as `remote.json` keeps it: what a notification is bound to.
+fn host_id(rig: &Rig) -> String {
+    let saved: Value =
+        serde_json::from_slice(&std::fs::read(&rig.path).expect("saved")).expect("json");
+    saved["host_id"].as_str().expect("id").to_owned()
+}
+
+/// Until the call-back's watch, which notifications are told from, is on.
+async fn watched(rig: &Rig) {
+    for _ in 0..200 {
+        if rig
+            .app
+            .statuses
+            .lock()
+            .expect("statuses")
+            .contains_key("auracode-remote-callbacks")
+        {
+            // Its first reading of the chats comes right after.
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("the call-back never watched the chats");
+}
+
+/// The next notification the desktop asks the relay to send (`p`), as the relay reads it.
+async fn next_push(relay: &mut Relay) -> Value {
+    loop {
+        let frame = relay.next().await;
+        if let Some(body) = frame.strip_prefix('p') {
+            return serde_json::from_str(body).expect("json");
+        }
+    }
+}
+
+/// The notifications the desktop asks the relay to send in the next `long`.
+async fn pushes_for(relay: &mut Relay, long: Duration) -> Vec<Value> {
+    let until = tokio::time::Instant::now() + long;
+    let mut pushes = Vec::new();
+    loop {
+        let left = until.saturating_duration_since(tokio::time::Instant::now());
+        if left.is_zero() {
+            return pushes;
+        }
+        match tokio::time::timeout(left, relay.socket.next()).await {
+            Err(_) => return pushes,
+            Ok(Some(Ok(Message::Text(text)))) => {
+                let text = text.as_str();
+                if text == "ping" {
+                    relay.send("pong").await;
+                } else if let Some(body) = text.strip_prefix('p') {
+                    pushes.push(serde_json::from_str(body).expect("json"));
+                }
+            }
+            Ok(Some(Ok(_))) => {}
+            Ok(other) => panic!("the desktop's socket: {other:?}"),
+        }
+    }
+}
+
+/// Sends `body` from `phone` and returns its reply, with the notifications that went meanwhile.
+async fn ask(relay: &mut Relay, phone: &mut Browser, body: Value) -> (Value, Vec<Value>) {
+    let id = phone.send(relay, body).await;
+    let mut pushes = Vec::new();
+    loop {
+        let frame = relay.next().await;
+        if let Some(push) = frame.strip_prefix('p') {
+            pushes.push(serde_json::from_str(push).expect("json"));
+            continue;
+        }
+        if frame == format!("a{}", phone.cid) {
+            continue;
+        }
+        let message = phone.open(&frame);
+        if message["re"] == json!(id) {
+            return (message, pushes);
+        }
+        phone.events.push(message);
+    }
+}
+
+/// What a notification says, opened as the phone `device` opens it with its key.
+fn opened(frame: &Value, host: &str, device: &str, key: &[u8; 32]) -> Value {
+    let push_key = o7_remote::push::key(key).expect("key");
+    let plain = o7_remote::push::open(&push_key, host, device, frame["b"].as_str().expect("blob"))
+        .expect("it opens for its device");
+    serde_json::from_slice(&plain).expect("payload")
+}
+
+/// A phone paired on the app's path that turned notifications on with `token` and `prefs`; its
+/// session is closed after, so what reaches it from here on comes through Apple.
+async fn notified_phone(
+    rig: &Rig,
+    relay: &mut Relay,
+    cid: &str,
+    token: &str,
+    prefs: Value,
+) -> (String, [u8; 32]) {
+    let (mut phone, device, key) = pair_app(rig, relay, cid).await;
+    let (registered, _) = ask(
+        relay,
+        &mut phone,
+        json!({ "op": "push_register", "token": token, "env": "sandbox", "prefs": prefs }),
+    )
+    .await;
+    assert_eq!(registered["ok"], true, "{registered}");
+    relay.send(format!("c{cid}")).await;
+    (device, key)
+}
+
+fn turn_started(seq: u32) -> HistoryItem {
+    event(
+        seq,
+        now_ms(),
+        O7Event::TurnStarted {
+            turn_id: "t1".into(),
+            prompt_id: None,
+        },
+    )
+}
+
+fn turn_ended(seq: u32) -> HistoryItem {
+    event(
+        seq,
+        now_ms(),
+        O7Event::TurnEnded {
+            turn_id: "t1".into(),
+            stop_reason: o7_protocol::StopReason::EndTurn,
+            usage: None,
+            duration_ms: Some(1_000),
+            recovered: false,
+        },
+    )
+}
+
+fn words(seq: u32, text: &str) -> HistoryItem {
+    event(
+        seq,
+        now_ms(),
+        O7Event::MessageDelta {
+            message_id: format!("m{seq}"),
+            text: text.into(),
+        },
+    )
+}
+
+/// A permission the agent asks for: to run the tests, once or always, or not.
+fn permission_asked(seq: u32, id: &str) -> HistoryItem {
+    use o7_protocol::{PermissionOption, PermissionOptionKind, PermissionRequest, ToolKind};
+    let option = |id: &str, kind| PermissionOption {
+        option_id: id.into(),
+        kind,
+        label: id.into(),
+    };
+    event(
+        seq,
+        now_ms(),
+        O7Event::PermissionRequested(PermissionRequest {
+            request_id: id.into(),
+            tool_call_id: None,
+            title: "Run `npm test`".into(),
+            kind: Some(ToolKind::Execute),
+            raw_input: None,
+            content: vec![],
+            locations: vec![],
+            options: vec![
+                option("always", PermissionOptionKind::AllowAlways),
+                option("allow", PermissionOptionKind::AllowOnce),
+                option("reject", PermissionOptionKind::RejectOnce),
+            ],
+            truncated: None,
+        }),
+    )
+}
+
+fn permission_resolved(seq: u32, id: &str) -> HistoryItem {
+    event(
+        seq,
+        now_ms(),
+        O7Event::PermissionResolved {
+            request_id: id.into(),
+            decision: o7_protocol::PermissionDecision::Selected {
+                option_id: "allow".into(),
+                plan: None,
+            },
+            by: o7_protocol::ResolvedBy::User,
+        },
+    )
+}
+
+/// The owner's want, 25 November 2026: the phone hears when a chat needs the person. Nothing
+/// goes to a relay that did not say it sends notifications: an older relay ends the desktop's
+/// socket on a frame it does not know, every browser with it. What waited goes once it says so,
+/// sealed for the phone, with what was asked and the answers a notification may give.
+#[tokio::test]
+async fn a_notification_waits_for_a_relay_that_says_it_sends_them() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, device, key) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let token = "AB".repeat(32);
+    let (registered, _) = ask(
+        &mut relay,
+        &mut phone,
+        json!({ "op": "push_register", "token": token, "env": "sandbox" }),
+    )
+    .await;
+    assert_eq!(
+        registered["data"],
+        json!({ "relay": false }),
+        "{registered}"
+    );
+    relay.send("caaaaaaaaaaaaaaaa").await;
+    let status = rig.service.status();
+    assert!(status.devices[0].notifications);
+    assert_eq!(status.devices[0].last_push, None);
+    assert!(!status.notifications, "this relay never said it sends them");
+    watched(&rig).await;
+
+    // A chat starts waiting on the person: nothing goes yet.
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1)]),
+    );
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), permission_asked(2, "p1")]),
+    );
+    assert_eq!(
+        pushes_for(&mut relay, Duration::from_secs(3)).await,
+        Vec::<Value>::new()
+    );
+
+    // The relay says it sends them: what waited goes now.
+    relay.send(r#"f{"push":1}"#).await;
+    let frame = next_push(&mut relay).await;
+    assert_eq!(
+        (
+            &frame["type"],
+            &frame["to"],
+            &frame["env"],
+            &frame["d"],
+            &frame["ttl"],
+            &frame["sound"]
+        ),
+        (
+            &json!("alert"),
+            &json!("ab".repeat(32)),
+            &json!("sandbox"),
+            &json!(device),
+            &json!(900),
+            &json!(true)
+        ),
+        "{frame}"
+    );
+    // One collapse id per chat, which says nothing of the chat to Apple.
+    assert_eq!(frame["collapse"], o7_remote::push::collapse(&key, "a1"));
+    assert!(frame.get("priority").is_none() && frame.get("event").is_none());
+    let said = opened(&frame, &host_id(&rig), &device, &key);
+    assert_eq!(said["v"], 1);
+    assert_eq!(said["host"], "Studio");
+    assert_eq!(said["kind"], "asking");
+    assert_eq!(said["chat"], "a1");
+    assert_eq!(said["title"], "Fix the login form");
+    assert_eq!(said["project"], "app");
+    assert_eq!(said["agent"], "Claude Code");
+    assert_eq!(said["line"], "Run `npm test`");
+    assert_eq!(said["asking_count"], 1);
+    // Allow is the option that allows once, never the one that allows always.
+    assert_eq!(
+        said["request"],
+        json!({ "id": "p1", "type": "permission", "allow": "allow", "deny": "reject" })
+    );
+    assert!(said["id"].as_str().expect("id").len() >= 16);
+    assert!(said["at"].as_i64().expect("at") > now_ms() - 60_000);
+    assert!(rig.service.status().notifications);
+
+    // Apple took it: the device's last notification is now, as Settings shows it.
+    relay
+        .send(format!(
+            "P{}",
+            json!({ "id": frame["id"], "ok": true, "status": 200, "drop": false })
+        ))
+        .await;
+    for _ in 0..100 {
+        if rig.service.status().devices[0].last_push.is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(rig.service.status().devices[0].last_push.is_some());
+
+    // A session's `ready` on the app's path says notifications go; a browser's says nothing.
+    let (_, ready) = Browser::app(&mut relay, "bbbbbbbbbbbbbbbb", "device", &device, &key).await;
+    assert_eq!(ready["notifications"], true);
+    let (_, ready) = Browser::hello(&mut relay, "cccccccccccccccc", "device", &device, &key).await;
+    assert!(ready.get("notifications").is_none(), "{ready}");
+}
+
+/// What waited two minutes for a relay that sends notifications is old news: it never goes.
+#[tokio::test]
+async fn a_notification_that_waited_two_minutes_goes_nowhere() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let token = "cd".repeat(32);
+    let (device, key) =
+        notified_phone(&rig, &mut relay, "aaaaaaaaaaaaaaaa", &token, json!({})).await;
+    watched(&rig).await;
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1)]),
+    );
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), permission_asked(2, "p1")]),
+    );
+    assert!(
+        pushes_for(&mut relay, Duration::from_secs(3))
+            .await
+            .is_empty()
+    );
+    rig.service.sweep_later(Duration::from_secs(121));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    relay.send(r#"f{"push":1}"#).await;
+    assert!(
+        pushes_for(&mut relay, Duration::from_secs(1))
+            .await
+            .is_empty(),
+        "it waited too long"
+    );
+    // Now that the relay sends them, a new one goes.
+    rig.app.stands(
+        "a2",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1)]),
+    );
+    rig.app.stands(
+        "a2",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), permission_asked(2, "p2")]),
+    );
+    let frame = next_push(&mut relay).await;
+    assert_eq!(opened(&frame, &host_id(&rig), &device, &key)["chat"], "a2");
+}
+
+/// Apple said an address no longer reaches the phone: the computer forgets it, but only while
+/// it is still the address the phone gave. One the phone gave since stays. An answer for a
+/// notification this run never sent changes nothing.
+#[tokio::test]
+async fn apples_refusal_forgets_an_address_only_while_it_is_the_one_kept() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    relay.send(r#"f{"push":1}"#).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let (first, second) = ("a1".repeat(32), "b2".repeat(32));
+    let (registered, _) = ask(
+        &mut relay,
+        &mut phone,
+        json!({ "op": "push_register", "token": first, "env": "production" }),
+    )
+    .await;
+    assert_eq!(registered["data"], json!({ "relay": true }));
+    watched(&rig).await;
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1)]),
+    );
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), permission_asked(2, "p1")]),
+    );
+    let (mut pushes, mut asked) = (Vec::new(), None);
+    while asked.is_none() {
+        let frame = relay.next().await;
+        if let Some(body) = frame.strip_prefix('p') {
+            asked = Some(serde_json::from_str::<Value>(body).expect("json"));
+        } else if frame.starts_with("maaaaaaaaaaaaaaaa E") {
+            let message = phone.open(&frame);
+            phone.events.push(message);
+        }
+    }
+    let asked = asked.expect("asked");
+    assert_eq!(asked["to"], first);
+    assert_eq!(asked["env"], "production");
+    // The phone gives a new address, then Apple refuses the old one.
+    let (moved, more) = ask(
+        &mut relay,
+        &mut phone,
+        json!({ "op": "push_register", "token": second, "env": "production" }),
+    )
+    .await;
+    pushes.extend(more);
+    assert_eq!(moved["ok"], true);
+    relay
+        .send(format!(
+            "P{}",
+            json!({ "id": asked["id"], "ok": false, "status": 410, "reason": "Unregistered", "drop": true })
+        ))
+        .await;
+    relay
+        .send(r#"P{"id":"never-sent","ok":false,"status":410,"drop":true}"#)
+        .await;
+    relay
+        .send(r#"P{"id":"","ok":false,"reason":"invalid","drop":false}"#)
+        .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        rig.service.status().devices[0].notifications,
+        "the new address stays"
+    );
+    let saved = std::fs::read_to_string(&rig.path).expect("saved");
+    assert!(saved.contains(&second) && !saved.contains(&first));
+    relay.send("caaaaaaaaaaaaaaaa").await;
+
+    // Apple refuses the address it has: it is forgotten.
+    rig.app.stands(
+        "a2",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1)]),
+    );
+    rig.app.stands(
+        "a2",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), permission_asked(2, "p2")]),
+    );
+    let frame = next_push(&mut relay).await;
+    assert_eq!(frame["to"], second);
+    relay
+        .send(format!(
+            "P{}",
+            json!({ "id": frame["id"], "ok": false, "status": 400, "reason": "BadDeviceToken", "drop": true })
+        ))
+        .await;
+    for _ in 0..100 {
+        if !rig.service.status().devices[0].notifications {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(!rig.service.status().devices[0].notifications);
+    assert!(
+        !std::fs::read_to_string(&rig.path)
+            .expect("saved")
+            .contains(&second)
+    );
+    assert!(pushes.is_empty(), "{pushes:?}");
+}
+
+/// What a chat asked was answered on the computer: each phone it was sent to takes it back
+/// quietly, under the same collapse id, saying where it was answered. The phone that answered
+/// it itself is sent nothing (it took its own away); another is told it was answered on another
+/// device. And a chat is told of once per kind every fifteen seconds at most.
+#[tokio::test]
+async fn what_was_asked_is_taken_back_once_answered_elsewhere() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    relay.send(r#"f{"push":1}"#).await;
+    let host = host_id(&rig);
+    let (first, first_key) = notified_phone(
+        &rig,
+        &mut relay,
+        "aaaaaaaaaaaaaaaa",
+        &"a1".repeat(32),
+        json!({}),
+    )
+    .await;
+    let (second, second_key) = notified_phone(
+        &rig,
+        &mut relay,
+        "bbbbbbbbbbbbbbbb",
+        &"b2".repeat(32),
+        json!({}),
+    )
+    .await;
+    let key_of = |device: &str| {
+        if device == first {
+            first_key
+        } else {
+            second_key
+        }
+    };
+    watched(&rig).await;
+    let ask_on = |chat: &str, request: &str| {
+        rig.app.stands(
+            chat,
+            SessionStatus::Running,
+            false,
+            Some(vec![turn_started(1)]),
+        );
+        rig.app.stands(
+            chat,
+            SessionStatus::Running,
+            true,
+            Some(vec![turn_started(1), permission_asked(2, request)]),
+        );
+    };
+    ask_on("a1", "p1");
+    let mut asked = vec![next_push(&mut relay).await, next_push(&mut relay).await];
+    asked.sort_by_key(|frame| frame["d"].as_str().map(str::to_owned));
+    let devices: Vec<&str> = asked
+        .iter()
+        .filter_map(|frame| frame["d"].as_str())
+        .collect();
+    let mut both = vec![first.as_str(), second.as_str()];
+    both.sort_unstable();
+    assert_eq!(devices, both);
+
+    // Answered on the computer: both take it back, quietly, in its place.
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        false,
+        Some(vec![
+            turn_started(1),
+            permission_asked(2, "p1"),
+            permission_resolved(3, "p1"),
+        ]),
+    );
+    let mut resolved = [next_push(&mut relay).await, next_push(&mut relay).await];
+    resolved.sort_by_key(|frame| frame["d"].as_str().map(str::to_owned));
+    for (resolved, asked) in resolved.iter().zip(&asked) {
+        let device = resolved["d"].as_str().expect("device");
+        assert_eq!(
+            resolved["collapse"], asked["collapse"],
+            "it replaces what asked"
+        );
+        assert_eq!(resolved["sound"], false);
+        let said = opened(resolved, &host, device, &key_of(device));
+        assert_eq!(
+            (&said["kind"], &said["chat"], &said["line"]),
+            (
+                &json!("resolved"),
+                &json!("a1"),
+                &json!("Answered on the computer.")
+            )
+        );
+        assert_eq!(said["asking_count"], 0);
+    }
+
+    // It asks again at once: once per chat and kind every fifteen seconds, so nothing goes.
+    ask_on("a1", "p3");
+    assert!(
+        pushes_for(&mut relay, Duration::from_secs(3))
+            .await
+            .is_empty()
+    );
+
+    // The first phone answers another chat itself: only the second is told it was answered.
+    ask_on("a2", "p2");
+    next_push(&mut relay).await;
+    next_push(&mut relay).await;
+    let (mut session, _) =
+        Browser::app(&mut relay, "cccccccccccccccc", "device", &first, &first_key).await;
+    let (answered, _) = ask(
+        &mut relay,
+        &mut session,
+        json!({ "op": "permission", "chat_id": "a2", "request_id": "p2", "option_id": "allow" }),
+    )
+    .await;
+    assert_eq!(answered["ok"], true, "{answered}");
+    relay.send("ccccccccccccccccc").await;
+    rig.app.stands(
+        "a2",
+        SessionStatus::Running,
+        false,
+        Some(vec![
+            turn_started(1),
+            permission_asked(2, "p2"),
+            permission_resolved(3, "p2"),
+        ]),
+    );
+    let told = pushes_for(&mut relay, Duration::from_secs(3)).await;
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0]["d"], second);
+    assert_eq!(
+        opened(&told[0], &host, &second, &second_key)["line"],
+        "Answered on another device."
+    );
+}
+
+/// Each phone hears what it chose: the kinds it left on, of every chat or only of those it
+/// started, sent to or answered.
+#[tokio::test]
+async fn a_device_hears_what_it_chose_of_the_chats_it_chose() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    relay.send(r#"f{"push":1}"#).await;
+    let host = host_id(&rig);
+    let (quiet, quiet_key) = notified_phone(
+        &rig,
+        &mut relay,
+        "aaaaaaaaaaaaaaaa",
+        &"a1".repeat(32),
+        json!({ "finished": false }),
+    )
+    .await;
+    let (mine, mine_key) = notified_phone(
+        &rig,
+        &mut relay,
+        "bbbbbbbbbbbbbbbb",
+        &"b2".repeat(32),
+        json!({ "scope": "mine" }),
+    )
+    .await;
+    // The second sends to a3 from the app: a3 is one of its own from now on.
+    let (mut session, _) =
+        Browser::app(&mut relay, "cccccccccccccccc", "device", &mine, &mine_key).await;
+    let (sent, _) = ask(
+        &mut relay,
+        &mut session,
+        json!({ "op": "send", "chat_id": "a3", "text": "Run the tests" }),
+    )
+    .await;
+    assert_eq!(sent["ok"], true, "{sent}");
+    // A scope this computer does not know is refused, and nothing changes.
+    let (refused, _) = ask(
+        &mut relay,
+        &mut session,
+        json!({ "op": "push_register", "token": "b2".repeat(32), "env": "sandbox", "prefs": { "scope": "starred" } }),
+    )
+    .await;
+    assert_eq!(refused["error"]["code"], "invalid", "{refused}");
+    for bad in [
+        json!({ "op": "push_register", "token": "b2".repeat(31), "env": "sandbox" }),
+        json!({ "op": "push_register", "token": "zz".repeat(32), "env": "sandbox" }),
+        json!({ "op": "push_register", "token": "b2".repeat(32), "env": "staging" }),
+        json!({ "op": "activity", "token": "b2", "env": "sandbox" }),
+    ] {
+        let (refused, _) = ask(&mut relay, &mut session, bad.clone()).await;
+        assert_eq!(refused["error"]["code"], "invalid", "{bad}: {refused}");
+    }
+    relay.send("ccccccccccccccccc").await;
+    watched(&rig).await;
+    for chat in ["a1", "a3", "a4"] {
+        rig.app.stands(
+            chat,
+            SessionStatus::Running,
+            false,
+            Some(vec![turn_started(1)]),
+        );
+    }
+    let done = |chat: &str, status| {
+        rig.app.stands(
+            chat,
+            status,
+            false,
+            Some(vec![
+                turn_started(1),
+                words(2, "All 12 passed."),
+                turn_ended(3),
+            ]),
+        );
+    };
+    done("a1", SessionStatus::Ready);
+    done("a3", SessionStatus::Ready);
+    done("a4", SessionStatus::Failed);
+    let mut told: Vec<(String, String, String)> = pushes_for(&mut relay, Duration::from_secs(4))
+        .await
+        .iter()
+        .map(|frame| {
+            let device = frame["d"].as_str().expect("device").to_owned();
+            let key = if device == quiet { quiet_key } else { mine_key };
+            let said = opened(frame, &host, &device, &key);
+            (
+                device,
+                said["kind"].as_str().expect("kind").to_owned(),
+                said["chat"].as_str().expect("chat").to_owned(),
+            )
+        })
+        .collect();
+    told.sort();
+    let mut wanted = vec![
+        (mine.clone(), "finished".to_owned(), "a3".to_owned()),
+        (quiet.clone(), "failed".to_owned(), "a4".to_owned()),
+    ];
+    wanted.sort();
+    assert_eq!(told, wanted);
+}
+
+/// The person's own task from the phone: its phone hears when the review is in, about the
+/// task's chat with the reviewer's beside it, and when work queued for tonight could not start,
+/// with why.
+#[tokio::test]
+async fn a_phone_task_tells_its_device_of_its_review_and_of_a_start_that_failed() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    rig.app.second_agent.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    relay.send(r#"f{"push":1}"#).await;
+    let host = host_id(&rig);
+    let (device, key) = notified_phone(
+        &rig,
+        &mut relay,
+        "aaaaaaaaaaaaaaaa",
+        &"a1".repeat(32),
+        json!({}),
+    )
+    .await;
+    let (mut session, _) =
+        Browser::app(&mut relay, "bbbbbbbbbbbbbbbb", "device", &device, &key).await;
+    let (started, _) = ask(
+        &mut relay,
+        &mut session,
+        json!({ "op": "task", "goal": "Fix the login form\nIt rejects valid emails." }),
+    )
+    .await;
+    assert_eq!(started["data"]["chat_id"], "c2", "{started}");
+    relay.send("cbbbbbbbbbbbbbbbb").await;
+    watched(&rig).await;
+    rig.app.made_becomes("c2", SessionStatus::Running);
+    rig.app.made_becomes("c2", SessionStatus::Ready);
+    for _ in 0..100 {
+        if rig.app.sent.lock().expect("sent").len() == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        rig.app.sent.lock().expect("sent").len(),
+        2,
+        "the review started"
+    );
+    rig.app.made_becomes("c3", SessionStatus::Running);
+    rig.app.made_becomes("c3", SessionStatus::Ready);
+    let told = pushes_for(&mut relay, Duration::from_secs(4)).await;
+    assert_eq!(told.len(), 1, "the review alone: {told:?}");
+    let said = opened(&told[0], &host, &device, &key);
+    assert_eq!(
+        (&said["kind"], &said["chat"], &said["review"], &said["line"]),
+        (
+            &json!("reviewed"),
+            &json!("c2"),
+            &json!("c3"),
+            &json!("Finished the work in c3.")
+        )
+    );
+    assert_eq!(told[0]["collapse"], o7_remote::push::collapse(&key, "c2"));
+
+    // Work for tonight whose access cannot be set: it does not start, and the phone hears why.
+    let (mut session, _) =
+        Browser::app(&mut relay, "cccccccccccccccc", "device", &device, &key).await;
+    let (queued, _) = ask(
+        &mut relay,
+        &mut session,
+        json!({ "op": "task", "goal": "Tidy the README\nKeep it short.", "when": "tonight", "access": "full_auto" }),
+    )
+    .await;
+    let id = queued["data"]["queued"]
+        .as_str()
+        .expect("queued")
+        .to_owned();
+    relay.send("ccccccccccccccccc").await;
+    rig.app.refuse_access.store(true, Ordering::Relaxed);
+    *rig.app.hour.lock().expect("hour") = Some(2);
+    rig.service.later_tick().await;
+    let frame = next_push(&mut relay).await;
+    assert!(frame.get("collapse").is_none(), "{frame}");
+    let said = opened(&frame, &host, &device, &key);
+    assert_eq!(
+        (&said["kind"], &said["queued"], &said["title"]),
+        (
+            &json!("queued_failed"),
+            &json!(id),
+            &json!("Tidy the README")
+        )
+    );
+    assert!(said.get("chat").is_none());
+    assert!(
+        said["line"]
+            .as_str()
+            .expect("line")
+            .contains("nothing was sent to it"),
+        "{said}"
+    );
+}
+
+/// A test from the phone or from the computer's Settings: only through a relay that sends
+/// notifications, to a phone that turned them on, at most one every ten seconds, saying which
+/// computer it is from.
+#[tokio::test]
+async fn a_test_notification_goes_at_most_every_ten_seconds() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, device, key) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let (off, _) = ask(&mut relay, &mut phone, json!({ "op": "push_test" })).await;
+    assert_eq!(off["error"]["code"], "not_found", "{off}");
+    ask(
+        &mut relay,
+        &mut phone,
+        json!({ "op": "push_register", "token": "ab".repeat(32), "env": "sandbox" }),
+    )
+    .await;
+    let (no_relay, _) = ask(&mut relay, &mut phone, json!({ "op": "push_test" })).await;
+    assert_eq!(no_relay["error"]["code"], "unavailable", "{no_relay}");
+    assert_eq!(
+        rig.service.test_push(&device),
+        Err("The relay this computer uses does not send notifications yet.".to_owned())
+    );
+    relay.send(r#"f{"push":1}"#).await;
+    let (tested, pushes) = ask(&mut relay, &mut phone, json!({ "op": "push_test" })).await;
+    assert_eq!(tested["data"], json!({}), "{tested}");
+    assert_eq!(pushes.len(), 1, "{pushes:?}");
+    let frame = &pushes[0];
+    assert!(frame.get("collapse").is_none(), "{frame}");
+    assert_eq!(
+        (&frame["ttl"], &frame["sound"]),
+        (&json!(3_600), &json!(true))
+    );
+    let said = opened(frame, &host_id(&rig), &device, &key);
+    assert_eq!(
+        (&said["kind"], &said["line"], &said["host"]),
+        (
+            &json!("test"),
+            &json!("Notifications from Studio arrive here."),
+            &json!("Studio")
+        )
+    );
+    assert!(said.get("chat").is_none());
+    let (again, pushes) = ask(&mut relay, &mut phone, json!({ "op": "push_test" })).await;
+    assert_eq!(again["error"]["code"], "busy", "{again}");
+    assert!(pushes.is_empty());
+    assert!(
+        rig.service.test_push(&device).is_err(),
+        "the computer's too"
+    );
+    assert!(rig.service.test_push("nobody").is_err());
+    // Told nothing more, it is sent nothing more.
+    let (off, _) = ask(&mut relay, &mut phone, json!({ "op": "push_unregister" })).await;
+    assert_eq!(off["data"], json!({}));
+    assert!(!rig.service.status().devices[0].notifications);
+}
+
+/// A phone with a Live Activity is sent the computer's counts as they change, sealed as a
+/// notification is: what works and what leads, then at once and at Apple's high priority when a
+/// chat starts waiting on the person.
+#[tokio::test]
+async fn a_live_activity_follows_the_computers_work() {
+    use o7_protocol::{ToolCall, ToolKind, ToolStatus};
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    relay.send(r#"f{"push":1}"#).await;
+    let (mut phone, device, key) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let token = "ef".repeat(40);
+    let (registered, _) = ask(
+        &mut relay,
+        &mut phone,
+        json!({ "op": "activity", "token": token, "env": "sandbox" }),
+    )
+    .await;
+    assert_eq!(registered["data"], json!({}), "{registered}");
+    relay.send("caaaaaaaaaaaaaaaa").await;
+    watched(&rig).await;
+    let running = event(
+        2,
+        now_ms(),
+        O7Event::ToolCall(ToolCall {
+            tool_call_id: "x2".into(),
+            kind: ToolKind::Execute,
+            title: "Running cargo test".into(),
+            status: ToolStatus::InProgress,
+            locations: vec![],
+            raw_input: None,
+            tool_name: None,
+            content: vec![],
+            truncated: None,
+        }),
+    );
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1), running.clone()]),
+    );
+    let frame = next_push(&mut relay).await;
+    assert_eq!(
+        (
+            &frame["type"],
+            &frame["to"],
+            &frame["d"],
+            &frame["priority"],
+            &frame["event"]
+        ),
+        (
+            &json!("liveactivity"),
+            &json!(token),
+            &json!(device),
+            &json!(5),
+            &json!("update")
+        ),
+        "{frame}"
+    );
+    assert!(frame.get("collapse").is_none() && frame.get("sound").is_none());
+    let state = opened(&frame, &host_id(&rig), &device, &key);
+    assert_eq!(state["asking"], 0);
+    assert_eq!(state["working"], 1);
+    assert_eq!(state["lead"], "Claude Code: Running cargo test");
+    assert!(state["since"].as_i64().is_some(), "{state}");
+    // It asks: at once, at Apple's high priority, in plain words.
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), running, permission_asked(3, "p1")]),
+    );
+    let frame = next_push(&mut relay).await;
+    assert_eq!(frame["priority"], 10, "{frame}");
+    let state = opened(&frame, &host_id(&rig), &device, &key);
+    assert_eq!(
+        (&state["asking"], &state["working"], &state["lead"]),
+        (
+            &json!(1),
+            &json!(0),
+            &json!("Fix the login form: Run npm test")
+        )
+    );
+}
+
+/// A finished chat in the Inbox says what its edits changed, as the window's card counts it,
+/// and its pull request as the computer last heard of it, without asking GitHub again.
+#[tokio::test]
+async fn the_inbox_counts_a_finished_turns_edits_and_its_pull_request() {
+    use o7_protocol::{ToolCall, ToolContent, ToolKind, ToolLocation, ToolStatus};
+    let rig = rig().await;
+    let edit = |seq, path: &str, old: Option<&str>, new: &str| {
+        event(
+            seq,
+            now_ms() - 60_000,
+            O7Event::ToolCall(ToolCall {
+                tool_call_id: format!("e{seq}"),
+                kind: ToolKind::Edit,
+                title: format!("Edit {path}"),
+                status: ToolStatus::Completed,
+                locations: vec![ToolLocation {
+                    path: path.into(),
+                    line: None,
+                }],
+                raw_input: None,
+                tool_name: Some("Edit".into()),
+                content: vec![ToolContent::Diff {
+                    path: path.into(),
+                    old_text: old.map(str::to_owned),
+                    new_text: new.into(),
+                    truncated: None,
+                }],
+                truncated: None,
+            }),
+        )
+    };
+    *rig.app.listed.lock().expect("listed") = vec![
+        (
+            listed("d1", SessionStatus::Ready, false, now_ms() - 30_000),
+            Some(vec![
+                turn_started(1),
+                edit(2, "src/login.ts", Some("a\nb\n"), "a\nB\nc\n"),
+                edit(3, "src/login.test.ts", None, "x\ny\nz\n"),
+                words(4, "Fixed it."),
+                turn_ended(5),
+            ]),
+        ),
+        (
+            listed("d2", SessionStatus::Ready, false, now_ms() - 40_000),
+            Some(vec![
+                turn_started(1),
+                words(2, "Nothing to change."),
+                turn_ended(3),
+            ]),
+        ),
+    ];
+    rig.app.known.lock().expect("known").insert(
+        "d1".into(),
+        o7_remote::PullRequest {
+            number: 12,
+            url: "https://github.com/o/r/pull/12".into(),
+            state: "open".into(),
+            checks: o7_remote::PrChecks::Passed,
+            notes: vec![],
+        },
+    );
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let inbox = phone.request(&mut relay, json!({ "op": "inbox" })).await;
+    let recent = inbox["data"]["recent"].as_array().expect("recent").clone();
+    let of = |id: &str| {
+        recent
+            .iter()
+            .find(|entry| entry["chat_id"] == id)
+            .cloned()
+            .expect(id)
+    };
+    let d1 = of("d1");
+    assert_eq!(
+        (&d1["files"], &d1["added"], &d1["removed"]),
+        (&json!(2), &json!(5), &json!(1)),
+        "{d1}"
+    );
+    assert_eq!(
+        d1["pull_request"],
+        json!({ "number": 12, "state": "open", "checks": "passed" })
+    );
+    // What it does not know is left out, as before.
+    let d2 = of("d2");
+    for key in ["files", "added", "removed", "pull_request"] {
+        assert!(d2.get(key).is_none(), "{key}: {d2}");
+    }
+    // Never a new look at GitHub for it.
+    assert!(
+        !rig.app
+            .answered
+            .lock()
+            .expect("answered")
+            .iter()
+            .any(|asked| asked.starts_with("pull request")),
+        "GitHub was asked"
+    );
+}
+
+/// A phone told a chat asks it something, which chose not to hear when turns finish, is still
+/// told quietly once the chat no longer waits on it: nothing it could answer stays on its lock
+/// screen.
+#[tokio::test]
+async fn a_request_that_ended_with_its_turn_is_taken_back_from_a_phone_told_of_it() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    relay.send(r#"f{"push":1}"#).await;
+    let (device, key) = notified_phone(
+        &rig,
+        &mut relay,
+        "aaaaaaaaaaaaaaaa",
+        &"a1".repeat(32),
+        json!({ "finished": false }),
+    )
+    .await;
+    watched(&rig).await;
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        false,
+        Some(vec![turn_started(1)]),
+    );
+    rig.app.stands(
+        "a1",
+        SessionStatus::Running,
+        true,
+        Some(vec![turn_started(1), permission_asked(2, "p1")]),
+    );
+    let asked = next_push(&mut relay).await;
+    rig.app.stands(
+        "a1",
+        SessionStatus::Ready,
+        false,
+        Some(vec![
+            turn_started(1),
+            permission_asked(2, "p1"),
+            turn_ended(3),
+        ]),
+    );
+    let told = pushes_for(&mut relay, Duration::from_secs(3)).await;
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0]["collapse"], asked["collapse"]);
+    let said = opened(&told[0], &host_id(&rig), &device, &key);
+    assert_eq!(
+        (&said["kind"], &said["line"]),
+        (&json!("resolved"), &json!("No longer waiting on you."))
     );
 }

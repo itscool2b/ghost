@@ -202,6 +202,7 @@ fn hello(
             look: look.as_ref(),
             // The app keeps the site it pairs through, and follows it when it moves.
             site: native.then_some(shared.config.site.as_str()),
+            notifications: native.then(|| super::notify::relays(shared)),
         },
     ) else {
         return Received::Refuse(None);
@@ -642,7 +643,11 @@ async fn perform(
             chat_id,
             text,
             attachments,
-        } => done(app::send(backend, context, &chat_id, text, &attachments).await?),
+        } => {
+            let sent = app::send(backend, context, &chat_id, text, &attachments).await?;
+            app::acted(shared, context, &chat_id, false);
+            done(sent)
+        }
         Op::Interrupt { chat_id } => {
             backend.interrupt(&chat_id).await?;
             done(Data::None {})
@@ -653,6 +658,7 @@ async fn perform(
             option_id,
         } => {
             backend.permission(&chat_id, &request_id, option_id).await?;
+            app::acted(shared, context, &chat_id, true);
             done(Data::None {})
         }
         Op::Answer {
@@ -661,6 +667,7 @@ async fn perform(
             answer,
         } => {
             backend.answer(&chat_id, &request_id, answer).await?;
+            app::acted(shared, context, &chat_id, true);
             done(Data::None {})
         }
         Op::Create {
@@ -668,8 +675,8 @@ async fn perform(
             agent_id,
             text,
             attachments,
-        } => done(
-            app::create(
+        } => {
+            let created = app::create(
                 backend,
                 context,
                 &folder_id,
@@ -677,8 +684,12 @@ async fn perform(
                 text,
                 &attachments,
             )
-            .await?,
-        ),
+            .await?;
+            if let Data::Created { chat, .. } | Data::Unsent { chat, .. } = &created {
+                app::acted(shared, context, &chat.chat.id, false);
+            }
+            done(created)
+        }
         // A paired browser reaches four of the app's actions and no others: what a chat offers,
         // its model, its thinking level, and handing it to another agent. o7 for iPhone reaches
         // a few more by feature (`host/app.rs`). The rest of `Action` (projects from any folder,
@@ -725,7 +736,7 @@ async fn perform(
             Ok(Performed::Forgot)
         }
         // What o7 for iPhone is offered beyond a browser (`host/app.rs`).
-        Op::Inbox => done(app::inbox(backend).await?),
+        Op::Inbox => done(app::inbox(shared, backend, context).await?),
         Op::Search { query, limit } => done(app::search(backend, &query, limit).await?),
         Op::Archived { before, limit } => done(app::archived(backend, before, limit).await?),
         Op::SetAccess { chat_id, access } => done(app::set_access(backend, chat_id, access).await?),
@@ -774,8 +785,8 @@ async fn perform(
             when,
             access,
             attachments,
-        } => done(
-            app::task(
+        } => {
+            let task = app::task(
                 shared,
                 backend,
                 context,
@@ -789,8 +800,12 @@ async fn perform(
                     attachments,
                 },
             )
-            .await?,
-        ),
+            .await?;
+            if let Data::Started(started) = &task {
+                app::acted(shared, context, &started.chat_id, false);
+            }
+            done(task)
+        }
         Op::Tasks => done(app::tasks(shared, context)?),
         Op::TaskCancel { queued_id } => done(app::task_cancel(shared, context, &queued_id)?),
         Op::Image {
@@ -798,6 +813,12 @@ async fn perform(
             source,
             full,
         } => done(app::image(backend, &chat_id, source, full).await?),
+        Op::PushRegister { token, env, prefs } => {
+            done(app::push_register(shared, context, &token, &env, prefs)?)
+        }
+        Op::PushUnregister => done(app::push_unregister(shared, context)?),
+        Op::PushTest => done(app::push_test(shared, context)?),
+        Op::Activity { token, env } => done(app::activity(shared, context, &token, &env)?),
         // Taken at once, in order, as they arrive (`app::upload`): never here.
         Op::UploadBegin { .. } | Op::UploadChunk { .. } | Op::UploadAbort { .. } => {
             Err(unexpected())

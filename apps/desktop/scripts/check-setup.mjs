@@ -145,7 +145,7 @@ try {
         .waitFor();
       assert.equal(
         await page.evaluate(() => localStorage.getItem("o7.legal.accepted")),
-        "2026-11-25",
+        "2026-11-26",
         `${engine}: continuing accepted the Terms and Privacy`,
       );
       // What this computer has leads; every shown row is whole, inside the column and clear of the

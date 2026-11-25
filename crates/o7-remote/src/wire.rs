@@ -4,7 +4,10 @@
 //! connected, `k<cid>` that connection came in on the iPhone app's path (sent right after its
 //! `o`), `c<cid>` it left (or, sent by the desktop, drop it), `m<cid> <payload>` its message,
 //! `a<cid>` the desktop accepted it, `b<json>` a bot's tool call or its answer, `l<json>` the
-//! desktop's bot links, `x` this socket was replaced.
+//! desktop's bot links, `x` this socket was replaced. A relay that sends notifications says
+//! `f{"push":1}` as soon as it accepted the desktop's socket; only then does the desktop send
+//! `p<json>`, a notification for Apple, which the relay answers `P<json>`. An older relay ends
+//! the desktop's socket on any frame it does not know, so `p` never goes where `f` did not come.
 //!
 //! A browser's payload is one letter and a body: `H` its hello, `W` the desktop's welcome, `R` a
 //! refusal, all three in the clear and carrying no secret; and `E`, a message sealed by
@@ -34,6 +37,11 @@ pub enum FromRelay<'a> {
         payload: &'a str,
     },
     Bot(&'a str),
+    /// What the relay does beyond forwarding, said once it accepted this socket (`f`):
+    /// `{"push":1}` when it sends notifications.
+    Features(&'a str),
+    /// How a notification this desktop asked the relay to send went (`P`).
+    Pushed(&'a str),
     Replaced,
     Pong,
 }
@@ -64,8 +72,69 @@ pub fn from_relay(frame: &str) -> Option<FromRelay<'_>> {
             })
         }
         "b" => Some(FromRelay::Bot(rest)),
+        "f" => Some(FromRelay::Features(rest)),
+        "P" => Some(FromRelay::Pushed(rest)),
         _ => None,
     }
+}
+
+/// What the relay said it does (`f`): whether it sends notifications. Anything it does not say,
+/// or says in a way this build does not read, is no.
+pub fn relay_pushes(body: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(body).is_ok_and(|said| {
+        said["push"] == serde_json::json!(1) || said["push"] == serde_json::json!(true)
+    })
+}
+
+/// How a notification went, as the relay answers a `p` (`P`). `id` is the desktop's own for it;
+/// `drop` says Apple no longer delivers to that address. `status` is Apple's answer, and
+/// `reason` Apple's or the relay's own (`invalid`, `off`, `limited`, `unreachable`).
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct PushAnswer {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default)]
+    pub status: Option<u16>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub drop: bool,
+}
+
+/// A notification for the relay to give Apple (`p`). The relay checks every part and builds
+/// what Apple shows itself, in fixed words: the desktop gives only where it goes and the sealed
+/// blob.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PushFrame {
+    /// The desktop's own id for it, said back in the answer.
+    pub id: String,
+    /// The phone's address at Apple, in hex.
+    pub to: String,
+    /// `sandbox` or `production`.
+    pub env: &'static str,
+    /// `alert` or `liveactivity`.
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    /// An alert's collapse id: a newer one with the same id replaces it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collapse: Option<String>,
+    /// The device it was sealed for.
+    pub d: String,
+    /// The sealed payload ([`crate::push`]).
+    pub b: String,
+    /// How long Apple keeps trying, in seconds.
+    pub ttl: u32,
+    /// An alert's sound.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sound: Option<bool>,
+    /// A Live Activity update's priority: 10 when something newly needs the person, else 5.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u8>,
+    /// A Live Activity's `update` or `end`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event: Option<&'static str>,
 }
 
 /// A browser's first message: which credential it holds and its half of the session nonce.
@@ -316,6 +385,44 @@ pub enum Op {
         #[serde(default)]
         full: bool,
     },
+    /// Where Apple delivers this device's notifications: `token` (64 to 200 hex characters),
+    /// `env` (`sandbox` or `production`) and what it wants told (`prefs`, everything when
+    /// unsaid). Answers whether the relay in front of this computer sends notifications.
+    PushRegister {
+        token: String,
+        env: String,
+        #[serde(default)]
+        prefs: Option<PushPrefs>,
+    },
+    /// This device is told nothing more.
+    PushUnregister,
+    /// A notification now, to see that they arrive: at most one every ten seconds.
+    PushTest,
+    /// Where Apple delivers the updates of this computer's Live Activity on this device.
+    Activity {
+        token: String,
+        env: String,
+    },
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// What a device wants to be told ([`Op::PushRegister`]): each kind on unless it says otherwise,
+/// of `scope` `all` chats (the default) or only `mine`, those it started, sent to or answered.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct PushPrefs {
+    #[serde(default = "yes")]
+    pub asking: bool,
+    #[serde(default = "yes")]
+    pub finished: bool,
+    #[serde(default = "yes")]
+    pub failed: bool,
+    #[serde(default = "yes")]
+    pub tasks: bool,
+    #[serde(default)]
+    pub scope: Option<String>,
 }
 
 /// What a device says about itself when it pairs. It is only its word: the computer records o7
@@ -364,6 +471,11 @@ pub const TASKS: &str = "tasks";
 /// [`Op::UploadAbort`], [`Op::Image`], and `attachments` in [`Op::Send`], [`Op::Create`] and
 /// [`Op::Task`].
 pub const ATTACHMENTS: &str = "attachments";
+/// Notifications through Apple, sealed for the phone: [`Op::PushRegister`],
+/// [`Op::PushUnregister`], [`Op::PushTest`].
+pub const PUSH: &str = "push";
+/// The Live Activity's updates through Apple: [`Op::Activity`].
+pub const ACTIVITY: &str = "activity";
 
 /// What this build offers a paired browser beyond the first version's requests, named in
 /// [`Event::Ready`] so a page shows only the controls this desktop answers. A request the build
@@ -384,6 +496,8 @@ pub const APP_FEATURES: &[&str] = &[
     SCREENS,
     TASKS,
     ATTACHMENTS,
+    PUSH,
+    ACTIVITY,
 ];
 
 /// The longest search, in characters, and the most hits one returns.
@@ -440,6 +554,8 @@ impl Op {
             | Self::UploadChunk { .. }
             | Self::UploadAbort { .. }
             | Self::Image { .. } => Some(ATTACHMENTS),
+            Self::PushRegister { .. } | Self::PushUnregister | Self::PushTest => Some(PUSH),
+            Self::Activity { .. } => Some(ACTIVITY),
             Self::Pair { .. }
             | Self::Overview
             | Self::Open { .. }
@@ -520,6 +636,10 @@ pub enum Data {
         complete: bool,
     },
     Image(crate::backend::ImagePreview),
+    /// Whether the relay in front of this computer sends notifications ([`Op::PushRegister`]).
+    Registered {
+        relay: bool,
+    },
 }
 
 /// What a chat lets a person choose from a paired device: its model and its thinking level, and
@@ -767,6 +887,29 @@ pub struct Recent {
     /// What the turn came to, in one line: how it ended, a command still failing, how the
     /// agent's last message begins.
     pub line: String,
+    /// How many files the turn's edits changed, as the window's card under its answer counts
+    /// them. Left out when it changed none its history shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<usize>,
+    /// The lines its edits added and removed, as each edit's own +/− counts them. Left out when
+    /// no edit could be counted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub removed: Option<u64>,
+    /// The chat's pull request as the computer last heard of it, without asking GitHub again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pull_request: Option<RecentPullRequest>,
+}
+
+/// A pull request as the Inbox shows it beside a finished chat.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct RecentPullRequest {
+    pub number: u64,
+    /// `open`, `merged` or `closed`.
+    pub state: String,
+    /// `none`, `pending`, `passed` or `failed`.
+    pub checks: String,
 }
 
 /// What [`Op::Search`] found, best first.
@@ -839,6 +982,10 @@ pub enum Event<'a> {
         /// follows it when it moves. Only on the app's path; a browser is on the site already.
         #[serde(skip_serializing_if = "Option::is_none")]
         site: Option<&'a str>,
+        /// Whether the relay in front of this computer sends notifications now. Only on the
+        /// app's path.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        notifications: Option<bool>,
     },
     /// A chat's status, title or attention changed.
     Chat { update: &'a ChatStatusUpdate },
@@ -914,6 +1061,38 @@ mod tests {
         assert_eq!(from_relay("b{}"), Some(FromRelay::Bot("{}")));
         assert_eq!(from_relay("x"), Some(FromRelay::Replaced));
         assert_eq!(from_relay("pong"), Some(FromRelay::Pong));
+        // What the relay does, and how a notification went.
+        assert_eq!(
+            from_relay(r#"f{"push":1}"#),
+            Some(FromRelay::Features(r#"{"push":1}"#))
+        );
+        assert_eq!(
+            from_relay(r#"P{"id":"a","ok":true,"drop":false}"#),
+            Some(FromRelay::Pushed(r#"{"id":"a","ok":true,"drop":false}"#))
+        );
+        assert!(relay_pushes(r#"{"push":1}"#));
+        assert!(relay_pushes(r#"{"push":true,"later":2}"#));
+        for no in ["", "{}", r#"{"push":0}"#, r#"{"push":"1"}"#, "push", "[1]"] {
+            assert!(!relay_pushes(no), "{no}");
+        }
+        let answer: PushAnswer = serde_json::from_str(
+            r#"{"id":"n1","ok":false,"status":410,"reason":"Unregistered","drop":true}"#,
+        )
+        .expect("answer");
+        assert_eq!(
+            answer,
+            PushAnswer {
+                id: "n1".into(),
+                ok: false,
+                status: Some(410),
+                reason: Some("Unregistered".into()),
+                drop: true,
+            }
+        );
+        // What the relay leaves out, or sends as null, is no.
+        let bare: PushAnswer =
+            serde_json::from_str(r#"{"id":"","ok":false,"status":null}"#).expect("answer");
+        assert!(!bare.ok && !bare.drop && bare.status.is_none() && bare.reason.is_none());
         for bad in [
             "",
             "o",
@@ -1029,7 +1208,9 @@ mod tests {
                 "memory",
                 "screens",
                 "tasks",
-                "attachments"
+                "attachments",
+                "push",
+                "activity"
             ]
         );
         assert!(FEATURES.iter().all(|name| APP_FEATURES.contains(name)));
@@ -1124,6 +1305,16 @@ mod tests {
                 r#"{"id":1,"op":"image","chat_id":"c","source":{"type":"stored","sha256":"x"}}"#,
                 Some("attachments"),
             ),
+            (
+                r#"{"id":1,"op":"push_register","token":"ab","env":"sandbox"}"#,
+                Some("push"),
+            ),
+            (r#"{"id":1,"op":"push_unregister"}"#, Some("push")),
+            (r#"{"id":1,"op":"push_test"}"#, Some("push")),
+            (
+                r#"{"id":1,"op":"activity","token":"ab","env":"sandbox"}"#,
+                Some("activity"),
+            ),
             // Photos ride on the first version's requests, honored by feature.
             (
                 r#"{"id":1,"op":"send","chat_id":"c","text":"","attachments":["u"]}"#,
@@ -1178,6 +1369,7 @@ mod tests {
                 features: FEATURES,
                 look: None,
                 site: None,
+                notifications: None,
             })
             .expect("event"),
             r#"{"ev":"ready","host_name":"Studio","paired":true,"features":["pickers"]}"#
@@ -1193,11 +1385,12 @@ mod tests {
                 features: FEATURES,
                 look: Some(&look),
                 site: None,
+                notifications: None,
             })
             .expect("event"),
             r#"{"ev":"ready","host_name":"Studio","paired":true,"features":["pickers"],"look":{"theme":"claude","appearance":"system"}}"#
         );
-        // The app's names its features and the site.
+        // The app's names its features, the site and whether notifications go.
         assert_eq!(
             serde_json::to_string(&Event::Ready {
                 host_name: "Studio",
@@ -1205,9 +1398,10 @@ mod tests {
                 features: APP_FEATURES,
                 look: Some(&look),
                 site: Some("https://o7.codes"),
+                notifications: Some(true),
             })
             .expect("event"),
-            r#"{"ev":"ready","host_name":"Studio","paired":true,"features":["pickers","inbox","search","control","review","memory","screens","tasks","attachments"],"look":{"theme":"claude","appearance":"system"},"site":"https://o7.codes"}"#
+            r#"{"ev":"ready","host_name":"Studio","paired":true,"features":["pickers","inbox","search","control","review","memory","screens","tasks","attachments","push","activity"],"look":{"theme":"claude","appearance":"system"},"site":"https://o7.codes","notifications":true}"#
         );
         assert_eq!(
             serde_json::to_string(&Event::Reset).expect("event"),
@@ -1226,7 +1420,7 @@ mod tests {
         assert_eq!(paired(None), r#"{"device_id":"d1","device_key":"k1"}"#);
         assert_eq!(
             paired(Some(APP_FEATURES)),
-            r#"{"device_id":"d1","device_key":"k1","features":["pickers","inbox","search","control","review","memory","screens","tasks","attachments"]}"#
+            r#"{"device_id":"d1","device_key":"k1","features":["pickers","inbox","search","control","review","memory","screens","tasks","attachments","push","activity"]}"#
         );
         assert_eq!(
             serde_json::to_string(&Data::Options(Choices {
@@ -1286,12 +1480,32 @@ mod tests {
                 line: "Running cargo test".into(),
                 since: 1_000,
             }],
-            recent: vec![Recent {
-                chat_id: "c5".into(),
-                ended_at: 2_000,
-                duration_ms: Some(900),
-                line: "finished. Done.".into(),
-            }],
+            recent: vec![
+                Recent {
+                    chat_id: "c5".into(),
+                    ended_at: 2_000,
+                    duration_ms: Some(900),
+                    line: "finished. Done.".into(),
+                    files: None,
+                    added: None,
+                    removed: None,
+                    pull_request: None,
+                },
+                Recent {
+                    chat_id: "c6".into(),
+                    ended_at: 1_500,
+                    duration_ms: Some(720_000),
+                    line: "finished. Fixed it.".into(),
+                    files: Some(6),
+                    added: Some(120),
+                    removed: Some(8),
+                    pull_request: Some(RecentPullRequest {
+                        number: 12,
+                        state: "open".into(),
+                        checks: "passed".into(),
+                    }),
+                },
+            ],
         };
         assert_eq!(
             serde_json::to_value(Data::Inbox(Box::new(inbox))).expect("inbox"),
@@ -1308,7 +1522,14 @@ mod tests {
                     { "chat_id": "c3", "request": null },
                 ],
                 "working": [{ "chat_id": "c4", "line": "Running cargo test", "since": 1000 }],
-                "recent": [{ "chat_id": "c5", "ended_at": 2000, "duration_ms": 900, "line": "finished. Done." }],
+                "recent": [
+                    { "chat_id": "c5", "ended_at": 2000, "duration_ms": 900, "line": "finished. Done." },
+                    {
+                        "chat_id": "c6", "ended_at": 1500, "duration_ms": 720000, "line": "finished. Fixed it.",
+                        "files": 6, "added": 120, "removed": 8,
+                        "pull_request": { "number": 12, "state": "open", "checks": "passed" },
+                    },
+                ],
             })
         );
         assert_eq!(
@@ -1465,6 +1686,49 @@ mod tests {
                 attachments: Vec::new()
             }
         );
+        // Notifications: what a device wants is everything unless it says otherwise.
+        assert_eq!(
+            op(r#"{"id":1,"op":"push_register","token":"ab","env":"sandbox"}"#),
+            Op::PushRegister {
+                token: "ab".into(),
+                env: "sandbox".into(),
+                prefs: None
+            }
+        );
+        assert_eq!(
+            op(
+                r#"{"id":1,"op":"push_register","token":"ab","env":"production","prefs":{"finished":false,"scope":"mine"}}"#
+            ),
+            Op::PushRegister {
+                token: "ab".into(),
+                env: "production".into(),
+                prefs: Some(PushPrefs {
+                    asking: true,
+                    finished: false,
+                    failed: true,
+                    tasks: true,
+                    scope: Some("mine".into())
+                })
+            }
+        );
+        assert_eq!(op(r#"{"id":1,"op":"push_unregister"}"#), Op::PushUnregister);
+        assert_eq!(op(r#"{"id":1,"op":"push_test"}"#), Op::PushTest);
+        assert_eq!(
+            op(r#"{"id":1,"op":"activity","token":"ab","env":"sandbox"}"#),
+            Op::Activity {
+                token: "ab".into(),
+                env: "sandbox".into()
+            }
+        );
+        for bad in [
+            r#"{"id":1,"op":"push_register","env":"sandbox"}"#,
+            r#"{"id":1,"op":"push_register","token":"ab"}"#,
+            r#"{"id":1,"op":"push_register","token":"ab","env":"sandbox","prefs":{"asking":"yes"}}"#,
+            r#"{"id":1,"op":"push_register","token":7,"env":"sandbox"}"#,
+            r#"{"id":1,"op":"activity","token":"ab"}"#,
+        ] {
+            assert!(serde_json::from_str::<Request>(bad).is_err(), "{bad}");
+        }
         for bad in [
             r#"{"id":1,"op":"archived","limit":-1}"#,
             r#"{"id":1,"op":"archived","before":"yesterday"}"#,
@@ -1677,6 +1941,53 @@ mod tests {
                 more: false,
             }))),
             serde_json::json!({ "chats": [], "more": false })
+        );
+        assert_eq!(
+            json(Data::Registered { relay: true }),
+            serde_json::json!({ "relay": true })
+        );
+    }
+
+    /// A notification as the relay reads it: where it goes, the sealed blob, and an alert's or a
+    /// Live Activity's own parts only.
+    #[test]
+    fn a_push_frame_has_the_parts_the_relay_reads() {
+        let alert = PushFrame {
+            id: "s1".into(),
+            to: "ab".repeat(32),
+            env: "sandbox",
+            kind: "alert",
+            collapse: Some("Q29sbGFwc2VJZDEy".into()),
+            d: "TW9ja0RldjE".into(),
+            b: "AAAA".into(),
+            ttl: 900,
+            sound: Some(true),
+            priority: None,
+            event: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&alert).expect("json"),
+            serde_json::json!({
+                "id": "s1", "to": "ab".repeat(32), "env": "sandbox", "type": "alert",
+                "collapse": "Q29sbGFwc2VJZDEy", "d": "TW9ja0RldjE", "b": "AAAA", "ttl": 900,
+                "sound": true,
+            })
+        );
+        let live = PushFrame {
+            kind: "liveactivity",
+            collapse: None,
+            sound: None,
+            priority: Some(5),
+            event: Some("end"),
+            ttl: 3_600,
+            ..alert
+        };
+        assert_eq!(
+            serde_json::to_value(&live).expect("json"),
+            serde_json::json!({
+                "id": "s1", "to": "ab".repeat(32), "env": "sandbox", "type": "liveactivity",
+                "d": "TW9ja0RldjE", "b": "AAAA", "ttl": 3600, "priority": 5, "event": "end",
+            })
         );
     }
 }

@@ -389,6 +389,12 @@ pub trait Backend: Send + Sync + 'static {
     ) -> BoxFuture<'a, Result<Option<PullRequest>, BackendError>> {
         Box::pin(async { Ok(None) })
     }
+    /// What [`Backend::pull_request`] last said of `chat_id`'s branch, without asking GitHub
+    /// again: for the iPhone app's Inbox, which is read often. A backend that keeps nothing, or
+    /// has not looked lately, has none.
+    fn known_pull_request(&self, _chat_id: &str) -> Option<PullRequest> {
+        None
+    }
     /// The hour on the computer's own clock (0 to 23), for the night's queue. A backend that
     /// cannot say starts nothing at night.
     fn local_hour(&self) -> Option<u8> {

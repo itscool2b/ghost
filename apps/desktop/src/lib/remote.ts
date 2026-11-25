@@ -9,8 +9,8 @@ import {
 import { inTauri, settle } from "./ipc";
 
 /**
- * Remote access (docs/remote-sessions.md): this computer's chats from a paired browser or a
- * linked bot, through o7's relay. Settings is its only surface in the app.
+ * Remote access (docs/remote-sessions.md): this computer's chats from a paired browser, o7 for
+ * iPhone or a linked bot, through o7's relay. Settings is its only surface in the app.
  */
 export interface RemoteApi {
   readonly status: () => Promise<RemoteStatus>;
@@ -50,6 +50,11 @@ export interface RemoteApi {
   readonly clearBotCallback: (id: string) => Promise<RemoteStatus>;
   /** Sends the address a test message now; the status says how it went. */
   readonly testBotCallback: (id: string) => Promise<RemoteStatus>;
+  /**
+   * Sends o7 for iPhone a test notification now, through the relay and Apple: at most one every
+   * ten seconds. The status says when Apple last took one for it.
+   */
+  readonly testNotification: (id: string) => Promise<RemoteStatus>;
   /** Calls back whenever the status changed (a device paired, connected or left). */
   readonly subscribe: (changed: (status: RemoteStatus) => void) => () => void;
 }
@@ -129,6 +134,7 @@ export const remoteApi: RemoteApi = {
     ),
   clearBotCallback: (id) => settle(commands.remoteClearBotCallback(id)),
   testBotCallback: (id) => settle(commands.remoteTestBotCallback(id)),
+  testNotification: (id) => settle(commands.remoteTestNotification(id)),
   subscribe: (changed) => {
     if (!inTauri()) return () => {};
     let stopped = false;

@@ -312,15 +312,26 @@ export async function checkRemote(browser, url, out, engine) {
     await page.getByText("iPhone (Safari)", { exact: true }).waitFor();
     await page.getByText("Last seen 7 min ago", { exact: true }).waitFor();
     await page.getByText("Grok Bot", { exact: true }).waitFor();
-    // o7 for iPhone says which app it is, and wears the phone by its kind: its name is one the
-    // name's guess would not take for a phone.
+    // o7 for iPhone says which app it is, whether it hears from this computer and when it last
+    // did, and wears the phone by its kind: its name is one the name's guess would not take for
+    // a phone.
     const iphone = page.locator(".settings-row", { hasText: "Travel" });
-    await iphone.getByText("Connected now · o7 for iPhone 1.0", { exact: true }).waitFor();
+    await iphone
+      .getByText(
+        "Connected now · o7 for iPhone 1.0 · Notifications on · Last notification 5 min ago",
+        { exact: true },
+      )
+      .waitFor();
     assert.equal(await iphone.locator("svg.lucide-smartphone").count(), 1, "the app's glyph");
-    // A browser says nothing of an app; its name still chooses its glyph.
+    await iphone.getByRole("button", { name: "Send test notification, Travel" }).waitFor();
+    // A browser says nothing of an app or notifications; its name still chooses its glyph.
     const safari = page.locator(".settings-row", { hasText: "iPhone (Safari)" });
     assert.equal(await safari.getByText("o7 for iPhone", { exact: false }).count(), 0);
+    assert.equal(await safari.getByText("Notifications", { exact: false }).count(), 0);
+    assert.equal(await safari.getByRole("button", { name: /^Send test notification/ }).count(), 0);
     assert.equal(await safari.locator("svg.lucide-smartphone").count(), 1, "the name's glyph");
+    // This relay sends notifications: nothing says otherwise.
+    assert.equal(await page.getByTestId("remote-quiet-relay").count(), 0);
     await settled(page);
     assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
     await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote.png`) });
@@ -351,6 +362,35 @@ export async function checkRemote(browser, url, out, engine) {
     await awake.click();
     await page.waitForFunction(() => window.remoteFixture.calls().at(-1) === "keep-awake:false");
     assert.equal(await awake.isChecked(), false);
+
+    // A test notification goes from the phone's row, through the relay and Apple; the row then
+    // says the last one went just now.
+    await iphone.getByRole("button", { name: "Send test notification, Travel" }).click();
+    await page
+      .getByRole("status")
+      .getByText("A test notification is on its way to Travel. It arrives in a few seconds.")
+      .waitFor();
+    assert.equal((await calls()).at(-1), "test-notification:device-app");
+    await iphone
+      .getByText(
+        "Connected now · o7 for iPhone 1.0 · Notifications on · Last notification just now",
+        { exact: true },
+      )
+      .waitFor();
+    // A relay that does not send notifications is named once, above the devices, and a test
+    // says why it cannot go.
+    await page.evaluate(() => window.remoteFixture.relayPushes(false));
+    await page.getByText("The relay does not send notifications yet.", { exact: true }).waitFor();
+    await settled(page);
+    assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
+    await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-iphone.png`) });
+    await iphone.getByRole("button", { name: "Send test notification, Travel" }).click();
+    await page
+      .getByRole("alert")
+      .getByText("The relay this computer uses does not send notifications yet.")
+      .waitFor();
+    await page.evaluate(() => window.remoteFixture.relayPushes(true));
+    await page.getByTestId("remote-quiet-relay").waitFor({ state: "detached" });
 
     // Automations: the one there says where its tasks start; a new one needs an instruction, is
     // made in the project chosen, and shows its address once, at /hook/.

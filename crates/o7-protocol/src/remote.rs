@@ -23,6 +23,10 @@ pub struct RemoteStatus {
     /// The computer does not sleep on its own while remote access is on and a paired device or a
     /// bot link can reach it. Off unless the person turns it on.
     pub keep_awake: bool,
+    /// The relay this computer is connected to sends notifications to o7 for iPhone. False while
+    /// it is not connected.
+    #[serde(default)]
+    pub notifications: bool,
 }
 
 /// This computer's connection to the relay.
@@ -52,6 +56,12 @@ pub struct RemoteDevice {
     /// The app's version, as o7 for iPhone gave it when it paired. A browser has none.
     #[serde(default)]
     pub app_version: Option<String>,
+    /// o7 for iPhone turned notifications on: this computer knows where Apple delivers them.
+    #[serde(default)]
+    pub notifications: bool,
+    /// When Apple last took a notification for it.
+    #[serde(default)]
+    pub last_push: Option<Millis>,
 }
 
 lenient_enum! {

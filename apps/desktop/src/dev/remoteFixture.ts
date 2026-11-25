@@ -3,8 +3,9 @@ import type { RemoteApi } from "../lib/remote";
 
 /**
  * Remote access for development previews: nothing connects anywhere. `?remote=on` starts with it
- * on, a paired phone's browser, o7 for iPhone and a linked bot; `window.remoteFixture` plays the
- * other side (a device opening the pairing link, the relay going away).
+ * on, a paired phone's browser, o7 for iPhone with notifications on and a linked bot;
+ * `window.remoteFixture` plays the other side (a device opening the pairing link, the relay going
+ * away or not sending notifications).
  */
 export function remoteFixture(): RemoteApi {
   const on = new URLSearchParams(location.search).get("remote") === "on";
@@ -26,6 +27,7 @@ export function remoteFixture(): RemoteApi {
             app_version: null,
           },
           // The iPhone app, under a name its person chose: its kind, not its name, says phone.
+          // It turned notifications on, and the last one went five minutes ago.
           {
             id: "device-app",
             name: "Travel",
@@ -34,9 +36,13 @@ export function remoteFixture(): RemoteApi {
             connected: true,
             kind: "ios",
             app_version: "1.0",
+            notifications: true,
+            last_push: Date.now() - 60_000 * 5,
           },
         ]
       : [],
+    // The relay sends notifications.
+    notifications: on,
     bots: on
       ? [
           {
@@ -108,6 +114,8 @@ export function remoteFixture(): RemoteApi {
           ],
         }),
       offline: (reason: string) => publish({ ...status, link: { state: "offline", reason } }),
+      /** Whether the relay says it sends notifications. */
+      relayPushes: (on: boolean) => publish({ ...status, notifications: on }),
       /** How long the next pairing link opens for. */
       pairingLasts: (ms: number) => {
         pairingMs = ms;
@@ -123,6 +131,8 @@ export function remoteFixture(): RemoteApi {
         enabled,
         link: enabled ? { state: "online" } : { state: "off" },
         pairing_expires_at: enabled ? status.pairing_expires_at : null,
+        // Its relay sends notifications while it is connected.
+        notifications: enabled,
       });
     },
     setKeepAwake: async (on) => {
@@ -298,6 +308,23 @@ export function remoteFixture(): RemoteApi {
                 },
               }
             : bot,
+        ),
+      });
+    },
+    testNotification: async (id) => {
+      calls.push(`test-notification:${id}`);
+      const device = status.devices.find((item) => item.id === id);
+      if (!device?.notifications)
+        throw new Error(
+          "Notifications are not on for this device here. Turn them on in o7 for iPhone.",
+        );
+      if (!status.notifications)
+        throw new Error("The relay this computer uses does not send notifications yet.");
+      // Apple takes it at once.
+      return publish({
+        ...status,
+        devices: status.devices.map((item) =>
+          item.id === id ? { ...item, last_push: Date.now() } : item,
         ),
       });
     },

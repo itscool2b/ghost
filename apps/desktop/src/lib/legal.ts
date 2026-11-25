@@ -10,9 +10,9 @@
  * The documents' effective date. Raise it, with the date in `apps/web/app/legal/*.md`, when either
  * changes materially: every copy then shows the notice once more.
  */
-export const LEGAL_VERSION = "2026-11-25";
+export const LEGAL_VERSION = "2026-11-26";
 /** The same date as people read it. */
-export const LEGAL_DATE = "November 25, 2026";
+export const LEGAL_DATE = "November 26, 2026";
 
 export const TERMS_URL = "https://o7.codes/terms";
 export const PRIVACY_URL = "https://o7.codes/privacy";

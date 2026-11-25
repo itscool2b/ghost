@@ -16,6 +16,7 @@
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { webcrypto } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
@@ -23,7 +24,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { webcrypto } from "node:crypto";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const root = resolve(here, "../../..");
@@ -72,7 +72,8 @@ const relay = new Miniflare(
     // Apple: every notification is kept for the test and accepted.
     outboundService: async (request) => {
       const url = new URL(request.url);
-      if (!url.hostname.endsWith("push.apple.com")) return new Response("not here", { status: 502 });
+      if (!url.hostname.endsWith("push.apple.com"))
+        return new Response("not here", { status: 502 });
       pushes.push({
         url: request.url,
         headers: Object.fromEntries(request.headers),

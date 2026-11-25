@@ -113,6 +113,50 @@ pub struct Device {
     /// The app's version as o7 for iPhone gave it when it paired. None for a browser.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
+    /// Where Apple delivers o7 for iPhone's notifications from this computer, and what it wants
+    /// told. None until the app turns notifications on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub push: Option<Push>,
+    /// Where Apple delivers the updates of this computer's Live Activity on the phone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity: Option<ActivityToken>,
+    /// The chats the app started, sent to or answered, newest last: the ones a device that
+    /// chose "mine" hears of.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub following: Vec<String>,
+    /// When Apple last took a notification for it, in Unix milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_push: Option<i64>,
+}
+
+/// Where a device's notifications go: its address at Apple (hex, as the app gave it, in lower
+/// case), which of Apple's services that address belongs to, what it wants told, and since when.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Push {
+    pub token: String,
+    pub env: crate::push::Env,
+    #[serde(default)]
+    pub prefs: crate::push::Prefs,
+    pub since: i64,
+}
+
+/// Where a device's Live Activity updates go, as [`Push`] without its preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ActivityToken {
+    pub token: String,
+    pub env: crate::push::Env,
+    pub since: i64,
+}
+
+/// A device of the open workspace that can be told something: its id and key, and where Apple
+/// delivers its notifications and its Live Activity's updates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushTarget {
+    pub device: String,
+    pub key: [u8; KEY_BYTES],
+    pub push: Option<Push>,
+    pub activity: Option<ActivityToken>,
+    pub following: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -691,13 +735,18 @@ impl Registry {
     }
 
     /// The tasks whose pull request is watched: the open workspace's, younger than a week,
-    /// with a branch, started by a link that has a call-back, and not merged or closed. Each
-    /// with what was last seen of it.
+    /// with a branch, started by a link that has a call-back or by a device whose notifications
+    /// tell it of its tasks, and not merged or closed. Each with what was last seen of it.
     pub fn watched_tasks(&self, now: i64) -> Vec<(Task, Option<PrSeen>)> {
         let links: Vec<&Bot> = self
             .bots()
             .into_iter()
             .filter(|bot| bot.callback.is_some() && !expired(bot, now))
+            .collect();
+        let phones: Vec<&Device> = self
+            .devices()
+            .into_iter()
+            .filter(|device| device.push.as_ref().is_some_and(|push| push.prefs.tasks))
             .collect();
         self.stored
             .tasks
@@ -706,9 +755,8 @@ impl Registry {
             .filter(|task| now.saturating_sub(task.created_at) <= PR_WATCHED_MS)
             .filter(|task| match task.by {
                 By::Bot => links.iter().any(|bot| bot.id == task.bot),
-                // A device hears of its task's pull request once notifications reach the phone
-                // (push); until then nobody is told, so nothing is looked at.
-                By::Device => false,
+                // Nobody else would be told, so nothing is looked at for anyone else.
+                By::Device => phones.iter().any(|device| device.id == task.bot),
             })
             .map(|task| {
                 let seen = self
@@ -724,6 +772,17 @@ impl Registry {
                     .is_none_or(|seen| !matches!(seen.state.as_str(), "merged" | "closed"))
             })
             .collect()
+    }
+
+    /// What a task's watcher last saw of the pull request of `chat`, when it does the work of a
+    /// task of the open workspace.
+    pub fn pr_seen(&self, chat: &str) -> Option<PrSeen> {
+        self.task_of(chat).filter(|task| task.builder == chat)?;
+        self.stored
+            .prs
+            .iter()
+            .find(|seen| seen.chat == chat)
+            .cloned()
     }
 
     /// Keeps what was seen of a task's pull request.
@@ -948,6 +1007,10 @@ impl Registry {
             site: self.site.clone(),
             kind,
             app_version,
+            push: None,
+            activity: None,
+            following: Vec::new(),
+            last_push: None,
         };
         self.stored.devices.push(device.clone());
         if let Err(error) = self.save() {
@@ -1015,6 +1078,203 @@ impl Registry {
             return Err(error);
         }
         Ok(true)
+    }
+
+    /// The open workspace's device `id`, to change.
+    fn device_here(&mut self, id: &str) -> Option<&mut Device> {
+        let scope = self.scope.clone();
+        self.stored
+            .devices
+            .iter_mut()
+            .find(|device| device.id == id && !scope.is_empty() && device.profile == scope)
+    }
+
+    /// Where Apple delivers the open workspace's device `id`'s notifications, and what it wants
+    /// told. The same address leaves every other device (an earlier pairing of the same phone, in
+    /// any workspace), so a phone hears each thing once. False: no such device here. Nothing is
+    /// written when nothing changed: the app says it again each time it connects.
+    pub fn set_device_push(&mut self, id: &str, push: Push) -> Result<bool, RegistryError> {
+        let before = self.stored.devices.clone();
+        let Some(device) = self.device_here(id) else {
+            return Ok(false);
+        };
+        let same = device.push.as_ref().is_some_and(|kept| {
+            kept.token == push.token && kept.env == push.env && kept.prefs == push.prefs
+        });
+        if !same {
+            device.push = Some(push.clone());
+        }
+        let mut changed = !same;
+        for other in &mut self.stored.devices {
+            if other.id != id
+                && other
+                    .push
+                    .as_ref()
+                    .is_some_and(|kept| kept.token == push.token)
+            {
+                other.push = None;
+                changed = true;
+            }
+        }
+        if changed && let Err(error) = self.save() {
+            self.stored.devices = before;
+            return Err(error);
+        }
+        Ok(true)
+    }
+
+    /// The open workspace's device `id` hears nothing more. False: no such device here.
+    pub fn clear_device_push(&mut self, id: &str) -> Result<bool, RegistryError> {
+        let before = self.stored.devices.clone();
+        let Some(device) = self.device_here(id) else {
+            return Ok(false);
+        };
+        if device.push.take().is_some()
+            && let Err(error) = self.save()
+        {
+            self.stored.devices = before;
+            return Err(error);
+        }
+        Ok(true)
+    }
+
+    /// Where Apple delivers the updates of this computer's Live Activity on the open
+    /// workspace's device `id`. The same address leaves any other device. False: no such device.
+    pub fn set_device_activity(
+        &mut self,
+        id: &str,
+        activity: ActivityToken,
+    ) -> Result<bool, RegistryError> {
+        let before = self.stored.devices.clone();
+        let Some(device) = self.device_here(id) else {
+            return Ok(false);
+        };
+        let same = device
+            .activity
+            .as_ref()
+            .is_some_and(|kept| kept.token == activity.token && kept.env == activity.env);
+        if !same {
+            device.activity = Some(activity.clone());
+        }
+        let mut changed = !same;
+        for other in &mut self.stored.devices {
+            if other.id != id
+                && other
+                    .activity
+                    .as_ref()
+                    .is_some_and(|kept| kept.token == activity.token)
+            {
+                other.activity = None;
+                changed = true;
+            }
+        }
+        if changed && let Err(error) = self.save() {
+            self.stored.devices = before;
+            return Err(error);
+        }
+        Ok(true)
+    }
+
+    /// Apple said `token` no longer reaches device `id` (in any workspace): it is forgotten, for
+    /// the device's notifications or its Live Activity, while the device still has that one. An
+    /// address the app gave since stays. Whether anything was forgotten.
+    pub fn drop_device_push(&mut self, id: &str, token: &str) -> bool {
+        let Some(device) = self
+            .stored
+            .devices
+            .iter_mut()
+            .find(|device| device.id == id)
+        else {
+            return false;
+        };
+        let mut dropped = false;
+        if device.push.as_ref().is_some_and(|push| push.token == token) {
+            device.push = None;
+            dropped = true;
+        }
+        if device
+            .activity
+            .as_ref()
+            .is_some_and(|activity| activity.token == token)
+        {
+            device.activity = None;
+            dropped = true;
+        }
+        if dropped {
+            // A save that fails forgets it for this run; Apple says it again next time.
+            let _ = self.save();
+        }
+        dropped
+    }
+
+    /// Whether any device of the open workspace can be told anything: it has notifications or a
+    /// Live Activity on.
+    pub fn any_push(&self) -> bool {
+        self.devices()
+            .iter()
+            .any(|device| device.push.is_some() || device.activity.is_some())
+    }
+
+    /// The open workspace's devices that can be told anything.
+    pub fn push_targets(&self) -> Vec<PushTarget> {
+        self.devices()
+            .into_iter()
+            .filter(|device| device.push.is_some() || device.activity.is_some())
+            .filter_map(|device| {
+                Some(PushTarget {
+                    device: device.id.clone(),
+                    key: crypto::decode(&device.key)?,
+                    push: device.push.clone(),
+                    activity: device.activity.clone(),
+                    following: device.following.clone(),
+                })
+            })
+            .collect()
+    }
+
+    /// The open workspace's device `id`, as it can be told things, whether or not it can now.
+    pub fn push_target(&self, id: &str) -> Option<PushTarget> {
+        let device = self.devices().into_iter().find(|device| device.id == id)?;
+        Some(PushTarget {
+            device: device.id.clone(),
+            key: crypto::decode(&device.key)?,
+            push: device.push.clone(),
+            activity: device.activity.clone(),
+            following: device.following.clone(),
+        })
+    }
+
+    /// Notes that the app on the open workspace's device `id` started, sent to or answered
+    /// `chat`: a device that chose "mine" hears of it from now on. At most the last forty.
+    pub fn follow_device(&mut self, id: &str, chat: &str) {
+        let Some(device) = self.device_here(id) else {
+            return;
+        };
+        if device.following.last().is_some_and(|last| last == chat) {
+            return;
+        }
+        device.following.retain(|followed| followed != chat);
+        device.following.push(chat.to_owned());
+        let extra = device.following.len().saturating_sub(MAX_FOLLOWING);
+        device.following.drain(..extra);
+        let _ = self.save();
+    }
+
+    /// Apple took a notification for device `id` at `at`. Kept to the minute, as `seen` is: a
+    /// failed save only loses the time.
+    pub fn pushed(&mut self, id: &str, at: i64) {
+        if let Some(device) = self
+            .stored
+            .devices
+            .iter_mut()
+            .find(|device| device.id == id)
+            && device
+                .last_push
+                .is_none_or(|last| at.saturating_sub(last) >= 60_000)
+        {
+            device.last_push = Some(at);
+            let _ = self.save();
+        }
     }
 
     pub fn add_bot(
@@ -1619,7 +1879,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["c1", "c2"]
         );
-        // Nobody hears of the device's pull request until the phone is told things.
+        // A device without notifications is told nothing of its task's pull request, so it is
+        // not looked at.
         let callback = crate::callback::Callback {
             kind: crate::callback::CallbackKind::Webhook,
             url: "https://example.com/hook".into(),
@@ -1679,6 +1940,231 @@ mod tests {
         let mut newer = Registry::load(&path).expect("an owner it does not know");
         newer.set_scope("local");
         assert!(newer.task_of("c1").is_none());
+    }
+
+    fn push(token: &str, prefs: crate::push::Prefs) -> Push {
+        Push {
+            token: token.to_owned(),
+            env: crate::push::Env::Sandbox,
+            prefs,
+            since: 5,
+        }
+    }
+
+    /// Where a phone's notifications go is kept with its device, moves with its address to the
+    /// newest pairing of the same phone, is dropped only while Apple's refusal is about the
+    /// address it has, and goes with the device. A device without notifications reads as it did
+    /// before they existed.
+    #[test]
+    fn a_devices_notifications_are_kept_moved_and_dropped() {
+        let (folder, mut registry) = fresh();
+        let path = folder.path().join("remote.json");
+        let pair = |registry: &mut Registry, name: &str| {
+            let pairing = registry.start_pairing(1).expect("pairing");
+            registry
+                .pair_as(&pairing.id, name, DeviceKind::Ios, Some("1.0"), 1)
+                .expect("pair")
+                .expect("device")
+        };
+        let old = pair(&mut registry, "Old");
+        let phone = pair(&mut registry, "Phone");
+        let browser = {
+            let pairing = registry.start_pairing(1).expect("pairing");
+            registry
+                .pair(&pairing.id, "Tab", 1)
+                .expect("pair")
+                .expect("device")
+        };
+        assert!(!registry.any_push());
+        let token = "ab".repeat(32);
+        assert!(
+            registry
+                .set_device_push(&old.id, push(&token, crate::push::Prefs::default()))
+                .expect("saved")
+        );
+        assert!(registry.any_push());
+        // The same phone paired again: its address moves to the newest pairing.
+        let mine = crate::push::Prefs {
+            finished: false,
+            scope: crate::push::Scope::Mine,
+            ..crate::push::Prefs::default()
+        };
+        assert!(
+            registry
+                .set_device_push(&phone.id, push(&token, mine.clone()))
+                .expect("saved")
+        );
+        assert!(
+            !registry
+                .set_device_push("nobody", push(&token, mine.clone()))
+                .expect("saved")
+        );
+        let targets = registry.push_targets();
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].device, phone.id);
+        assert_eq!(Some(targets[0].key), crypto::decode(&phone.key));
+        assert_eq!(targets[0].push.as_ref().expect("push").prefs, mine);
+        // The app tells it again each time it connects: nothing changes, nothing is written.
+        let written = std::fs::metadata(&path)
+            .and_then(|meta| meta.modified())
+            .ok();
+        let mut again = push(&token, mine.clone());
+        again.since = 99;
+        registry.set_device_push(&phone.id, again).expect("saved");
+        assert_eq!(
+            registry
+                .push_target(&phone.id)
+                .expect("phone")
+                .push
+                .expect("push")
+                .since,
+            5
+        );
+        assert_eq!(
+            std::fs::metadata(&path)
+                .and_then(|meta| meta.modified())
+                .ok(),
+            written
+        );
+
+        // The chats it acted on, newest last, at most forty.
+        registry.follow_device(&phone.id, "c1");
+        registry.follow_device(&phone.id, "c2");
+        registry.follow_device(&phone.id, "c1");
+        assert_eq!(
+            registry.push_target(&phone.id).expect("phone").following,
+            ["c2", "c1"]
+        );
+        for n in 0..MAX_FOLLOWING + 3 {
+            registry.follow_device(&phone.id, &format!("x{n}"));
+        }
+        let following = registry.push_target(&phone.id).expect("phone").following;
+        assert_eq!(following.len(), MAX_FOLLOWING);
+        assert_eq!(following.last().map(String::as_str), Some("x42"));
+        registry.follow_device("nobody", "c1");
+
+        // The Live Activity's address, and the last notification, to the minute.
+        let live = ActivityToken {
+            token: "cd".repeat(40),
+            env: crate::push::Env::Production,
+            since: 6,
+        };
+        assert!(
+            registry
+                .set_device_activity(&phone.id, live.clone())
+                .expect("saved")
+        );
+        registry.pushed(&phone.id, 100_000);
+        registry.pushed(&phone.id, 130_000);
+        let kept = |registry: &Registry| {
+            registry
+                .devices()
+                .into_iter()
+                .find(|device| device.id == phone.id)
+                .cloned()
+                .expect("phone")
+        };
+        assert_eq!(kept(&registry).last_push, Some(100_000));
+        registry.pushed(&phone.id, 160_000);
+        assert_eq!(kept(&registry).last_push, Some(160_000));
+
+        // All of it survives a restart; a device without notifications reads as before.
+        let mut reloaded = Registry::load(&path).expect("reload");
+        reloaded.set_scope("local");
+        assert_eq!(kept(&reloaded), kept(&registry));
+        assert_eq!(kept(&reloaded).activity, Some(live.clone()));
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("file")).expect("json");
+        let record = |id: &str| {
+            saved["devices"]
+                .as_array()
+                .expect("devices")
+                .iter()
+                .find(|device| device["id"] == id)
+                .cloned()
+                .expect("record")
+        };
+        for id in [&old.id, &browser.id] {
+            let record = record(id);
+            for key in ["push", "activity", "following", "last_push"] {
+                assert!(record.get(key).is_none(), "{key}: {record}");
+            }
+        }
+        assert_eq!(
+            record(&phone.id)["push"],
+            serde_json::json!({
+                "token": token, "env": "sandbox",
+                "prefs": { "asking": true, "finished": false, "failed": true, "tasks": true, "scope": "mine" },
+                "since": 5,
+            })
+        );
+
+        // Apple's refusal of an address the device no longer has changes nothing.
+        assert!(!reloaded.drop_device_push(&phone.id, &"ef".repeat(32)));
+        assert!(!reloaded.drop_device_push("nobody", &token));
+        assert!(reloaded.drop_device_push(&phone.id, &token));
+        assert!(kept(&reloaded).push.is_none());
+        assert_eq!(
+            kept(&reloaded).activity,
+            Some(live.clone()),
+            "its own address"
+        );
+        assert!(reloaded.drop_device_push(&phone.id, &live.token));
+        assert!(!reloaded.any_push());
+        assert!(reloaded.push_targets().is_empty());
+
+        // Another workspace reaches none of it.
+        reloaded
+            .set_device_push(&phone.id, push(&token, crate::push::Prefs::default()))
+            .expect("saved");
+        reloaded.set_scope("other");
+        assert!(!reloaded.any_push());
+        assert!(reloaded.push_target(&phone.id).is_none());
+        assert!(
+            !reloaded
+                .set_device_push(&phone.id, push(&token, crate::push::Prefs::default()))
+                .expect("saved")
+        );
+        assert!(!reloaded.clear_device_push(&phone.id).expect("saved"));
+        reloaded.set_scope("local");
+        assert!(reloaded.clear_device_push(&phone.id).expect("saved"));
+        assert!(!reloaded.any_push());
+
+        // A device's task is watched for its pull request only while its notifications tell it
+        // of its tasks; removing the device takes everything with it.
+        reloaded
+            .set_device_push(&phone.id, push(&token, crate::push::Prefs::default()))
+            .expect("saved");
+        reloaded.add_task(Task {
+            bot: phone.id.clone(),
+            builder: "c9".into(),
+            folder_id: "f1".into(),
+            goal: "Fix it".into(),
+            branch: Some("o7/fix-it".into()),
+            path: None,
+            base: None,
+            review_agent: None,
+            reviewer: None,
+            created_at: 1,
+            by: By::Device,
+            access: None,
+        });
+        assert_eq!(reloaded.watched_tasks(2).len(), 1);
+        let quiet = crate::push::Prefs {
+            tasks: false,
+            ..crate::push::Prefs::default()
+        };
+        reloaded
+            .set_device_push(&phone.id, push(&token, quiet))
+            .expect("saved");
+        assert!(reloaded.watched_tasks(2).is_empty());
+        assert!(reloaded.remove_device(&phone.id).expect("removed"));
+        assert!(!reloaded.any_push());
+        assert!(
+            !std::fs::read_to_string(&path)
+                .expect("file")
+                .contains(&token)
+        );
     }
 
     /// Kept awake only when asked, with remote access on, and while a link that has not expired

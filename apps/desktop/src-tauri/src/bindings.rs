@@ -278,6 +278,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::remote::remote_set_bot_callback,
             crate::remote::remote_clear_bot_callback,
             crate::remote::remote_test_bot_callback,
+            crate::remote::remote_test_notification,
             crate::project_tools::git_initialize_preview,
             crate::project_tools::git_initialize_apply,
             crate::project_tools::project_tools_review,
