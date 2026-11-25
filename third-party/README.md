@@ -38,6 +38,17 @@ own computer, after the person has read and accepted Google's SDK licence in the
 drives iPhone simulators on a Mac, is not bundled either: o7 fetches one pinned MIT release from
 its own GitHub release page on an iPhone's first start, checked by size and SHA-256 (`axe.md`).
 
+The iPhone app (`apps/ios`) bundles two more things this repository does not build from its own
+code, pinned in `ios.json`. The first is the Geist and Geist Mono variable fonts from vercel/geist-font's
+v1.9.2 release (OFL-1.1). The record gives the release archive's address, size and SHA-256, then
+each file taken from it with its size and SHA-256. The OFL text is preserved in `upstream/` and
+ships beside the fonts as `Fonts/OFL.txt`. The second is highlight.js 11.12.0 (BSD-3-Clause),
+the lockfile's copy that the desktop already lists, bundled for JavaScriptCore by
+`apps/ios/scripts/write-highlighter.mjs`. Its `--check` fails when the bundle drifts, and the
+bundle's header carries the license. The generator does not read `ios.json` yet. An `ios`
+distribution that reads it, checking the font hashes as it checks the scrcpy server, is still to
+come.
+
 An npm package whose package.json names no license gets the license its own license file states,
 reviewed into `NPM_LICENSES` (khroma, MIT); any other stops the refresh. `NPM_EXCLUDED` lists packages
 a dependency names that o7 does not ship, with why and what keeps them out: elkjs (EPL-2.0 or

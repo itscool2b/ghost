@@ -1,0 +1,43 @@
+{
+  "geist": {
+    "name": "Geist and Geist Mono variable fonts (Geist[wght].ttf, GeistMono[wght].ttf), bundled in the iPhone app",
+    "version": "1.9.2",
+    "license": "OFL-1.1",
+    "license_sha256": "021caa749f89fecd7c2e40a50499de29e84d2bc19251659b47d499c2fbfffc17",
+    "source": "https://github.com/vercel/geist-font/releases/tag/v1.9.2",
+    "archive": {
+      "url": "https://github.com/vercel/geist-font/releases/download/v1.9.2/geist-font-v1.9.2.zip",
+      "size": 8837264,
+      "sha256": "15f066d58dcb99fb10014a49913009fdaf41e464cfb8851a44b44e593c95d3d8"
+    },
+    "files": [
+      {
+        "file": "apps/ios/O7Kit/Sources/O7Marks/Fonts/Geist[wght].ttf",
+        "from": "geist-font/Geist/variable/Geist[wght].ttf",
+        "size": 169056,
+        "sha256": "b34955a09f71d9ac4b67e54cedb1825d3d5264c7992dbbafa0802080d617e241"
+      },
+      {
+        "file": "apps/ios/O7Kit/Sources/O7Marks/Fonts/GeistMono[wght].ttf",
+        "from": "geist-font/GeistMono/variable/GeistMono[wght].ttf",
+        "size": 171200,
+        "sha256": "41d86e19407b1cb271be5d916fed8bb14051402270fb61cc28daf802e1a8ca63"
+      },
+      {
+        "file": "apps/ios/O7Kit/Sources/O7Marks/Fonts/OFL.txt",
+        "from": "geist-font/OFL.txt",
+        "size": 4384,
+        "sha256": "021caa749f89fecd7c2e40a50499de29e84d2bc19251659b47d499c2fbfffc17"
+      }
+    ]
+  },
+  "highlight.js": {
+    "name": "highlight.js (bundled in the iPhone app for code colours)",
+    "version": "11.12.0",
+    "license": "BSD-3-Clause",
+    "license_sha256": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490",
+    "source": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.12.0.tgz",
+    "file": "apps/ios/O7Kit/Sources/O7Highlight/Resources/highlight.js",
+    "built_by": "node apps/ios/scripts/write-highlighter.mjs"
+  }
+}
