@@ -502,9 +502,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         <p>
           A paired browser's session is encrypted end to end: the relay passes it along and cannot
           read it. A bot's calls are not: the relay and the bot's own service read them, and either
-          could act as that bot. Notifications to o7 for iPhone are sealed on this computer for that
-          phone: the relay and Apple pass them on without reading them. Remote access works while o7
-          is open, including in the tray.
+          could act as that bot. Remote access works while o7 is open, including in the tray.
         </p>
       </details>
 
@@ -1029,8 +1027,8 @@ function PairingDialog({
         <>
           <QrCode text={pairing.url} label="Pairing code" />
           <p className="remote-note">
-            Scan it with your phone's camera or with o7 for iPhone, or open the link in the browser
-            of the device you want to pair.
+            Scan it with your phone's camera, or open the link in the browser of the device you want
+            to pair.
           </p>
           <CopyField value={pairing.url} label="Pairing link" />
           <p className="remote-note" data-testid="remote-pairing-time">

@@ -79,9 +79,9 @@ export async function checkRemote(browser, url, out, engine) {
     await dialog.waitFor();
     assert.deepEqual(await calls(), ["enabled:true", "pair"]);
     assert.equal(await toggle.isChecked(), true);
-    // The code is for a phone's camera, o7 for iPhone or a browser alike.
+    // The code is for a phone's camera or a browser alike.
     await dialog
-      .getByText("Scan it with your phone's camera or with o7 for iPhone, or open the link", {
+      .getByText("Scan it with your phone's camera, or open the link in the browser", {
         exact: false,
       })
       .waitFor();
