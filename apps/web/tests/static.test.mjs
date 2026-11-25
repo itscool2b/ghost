@@ -196,7 +196,12 @@ test("the site is for a local app: no account pages, and no page offers one", as
   assert.match(home, /free/);
   assert.match(home, /There is no o7 account/);
   const privacy = await readFile(new URL("privacy/index.html", root), "utf8");
-  assert.match(privacy, /There is no o7 account, no sign-in and no sync/);
+  assert.match(privacy, /There is no o7 account, no sign-in, and no payment/);
+  assert.match(privacy, /BASH\.AI LLC/);
+  const terms = await readFile(new URL("terms/index.html", root), "utf8");
+  assert.match(terms, /Governing law and venue/);
+  // No blank of the drafts is published.
+  assert.doesNotMatch(terms + privacy, /\[(mailing address|effective date|DMCA agent)/);
 });
 test("third-party notices are emitted and linked from every page footer", async () => {
   const text = await readFile(new URL("third-party-notices.txt", root), "utf8");
