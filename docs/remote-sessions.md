@@ -11,12 +11,23 @@ including in the tray.
 ## What a person does
 
 1. **Settings > Remote access > Pair a device.** A dialog shows a code to scan and the same link as text.
-   The link opens once, within ten minutes. Asking for it turns remote access on.
+   The link opens once, within ten minutes. Asking for it turns remote access on. Once a device
+   has paired, **Pair another device** in the same dialog makes the next link at once.
 2. **Open the link on the other device and tap Pair this browser.** `o7.codes/remote` takes
    the key out of the address bar and asks first: opening the link pairs nothing by itself, so a
    program that only opens links (a mail or chat scanner) cannot spend it. After the tap it pairs
    and lists the computer's chats by project. From then on that browser opens the
    page without a link.
+   - A link opened while the page is already open (a code scanned with the page in front, a link
+     pasted into its tab) asks the same question there, over whatever the page shows. "Not now"
+     leaves the page as it was.
+   - A browser keeps every computer it paired. Pairing another one switches to it; the others
+     stay in the computer menu.
+   - Pairing a computer the browser already has says so ("Pair this browser again?"). The new
+     key replaces the old one, and the browser asks the computer to forget the old device, so
+     Settings lists it once. Other tabs of the browser move to the new key.
+   - A link that does not work says why, in the computer's words when it refused (a full list of
+     devices, a closed link), and offers the way back to the computer the page was with.
 3. **Use it.** Open a chat to follow it live, send a message (it queues behind a running turn, as
    in the app), stop a turn, answer a permission request or a question, start a chat in a
    project's folder. "Model and agent" in a chat's header chooses its model and thinking level,

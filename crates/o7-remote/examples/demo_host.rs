@@ -1,7 +1,9 @@
 //! A stand-in desktop for trying remote sessions end to end without the app: the real connection
 //! task and sealed channel, in front of a made-up project whose "agent" follows a script.
 //!
-//!     cargo run -p o7-remote --example demo_host -- ws://127.0.0.1:8799 http://localhost:1437 <folder>
+//!     cargo run -p o7-remote --example demo_host -- ws://127.0.0.1:8799 http://localhost:1437 <folder> [<name>]
+//!
+//! `<name>` is the computer's name (default "Demo computer"), for a test that runs two side by side.
 //!
 //! It turns remote access on, prints `PAIR <link>` and `BOT <address>`, and prints a new pairing
 //! link for every line read from standard input. Each message sent to a chat starts a turn that
@@ -353,7 +355,7 @@ impl Backend for Shared {
                 .collect();
             chats.sort_by_key(|entry| std::cmp::Reverse(entry.chat.updated_at));
             Ok(Overview {
-                host_name: "Demo computer".into(),
+                host_name: host_name().into(),
                 projects: vec![
                     serde_json::from_value(json!({
                         "id": "p1", "name": "demo", "color": null, "default_agent": "demo",
@@ -690,6 +692,14 @@ fn chat(title: &str) -> Chat {
     }
 }
 
+/// The computer's name, as its pairings and overview give it: the fourth argument, so a test can
+/// run two computers side by side, else "Demo computer".
+static HOST_NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+fn host_name() -> &'static str {
+    HOST_NAME.get().map_or("Demo computer", String::as_str)
+}
+
 #[tokio::main]
 async fn main() {
     let mut args = std::env::args().skip(1);
@@ -698,6 +708,9 @@ async fn main() {
         args.next().expect("the site's origin"),
         args.next().expect("a folder for remote.json"),
     );
+    if let Some(name) = args.next() {
+        let _ = HOST_NAME.set(name);
+    }
     std::fs::create_dir_all(&folder).expect("folder");
     let demo = Arc::new(Demo::default());
     {
@@ -732,7 +745,7 @@ async fn main() {
             path: std::path::Path::new(&folder).join("remote.json"),
             relay,
             site,
-            host_name: "Demo computer".into(),
+            host_name: host_name().into(),
             profile: "demo".into(),
             backend: Arc::new(Shared(demo)),
             changed: Arc::new(|| {}),
