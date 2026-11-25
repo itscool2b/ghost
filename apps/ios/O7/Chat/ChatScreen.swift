@@ -162,6 +162,11 @@ private struct ChatContent: View {
         }
         .onAppear {
             if chat == nil { chat = computer.open(chatId) }
+            if let unsent = computer.unsent, unsent.chatId == chatId {
+                draft = unsent.text
+                chat?.problem = "Not sent: \(unsent.reason)"
+                computer.unsent = nil
+            }
         }
         .onDisappear {
             if let chat { computer.close(chat) }

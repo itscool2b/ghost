@@ -5,7 +5,9 @@ import O7Wire
 import Testing
 
 /// The Swift client against the real relay and the desktop's real connection task, through the
-/// relay's app path. Run by `apps/ios/scripts/e2e.mjs`, which starts both; skipped otherwise.
+/// relay's app path. Run by `apps/ios/scripts/e2e.mjs`, which starts both; skipped otherwise. One
+/// at a time: they share the demo computer.
+@Suite(.serialized)
 struct EndToEnd {
     static let relay = ProcessInfo.processInfo.environment["O7_E2E_RELAY"]
     static let control = ProcessInfo.processInfo.environment["O7_E2E_CONTROL"]
@@ -92,6 +94,182 @@ struct EndToEnd {
         try await againWatch.phase(.ready, timeout: .seconds(20))
         _ = try await again.send(.overview, as: Overview.self)
         await again.stop()
+    }
+
+    /// Everything the app does beyond the browser's remote, each through the relay to the desktop's
+    /// real handling and the demo computer's answers. It works in a task chat of its own, so the
+    /// demo's first chats stay as the other test expects them.
+    @Test(.enabled(if: EndToEnd.relay != nil))
+    func everyAppOperationReachesTheComputer() async throws {
+        let link = try #require(PairingLink.parse(try await Self.freshLink(), sites: PairingLink.developmentSites))
+        let connection = Self.connect(.pair(link), name: "iPhone tools")
+        let watcher = Watcher(connection)
+        await connection.start()
+        let paired = try await watcher.wait("paired", timeout: .seconds(20)) {
+            if case .paired = $0 { return true }
+            return false
+        }
+        guard case .paired(_, let features) = paired else { return }
+        for feature in ["control", "review", "memory", "screens", "tasks", "attachments"] {
+            #expect(features.contains(feature), "the app path offers \(feature)")
+        }
+        try await watcher.phase(.ready, timeout: .seconds(20))
+
+        // A task now: a chat on a branch of its own.
+        let started = try await connection.send(
+            .task(
+                goal: "Check what the phone sends", projectId: "p1", agentId: nil, review: true, tonight: false,
+                access: "auto_edit"),
+            as: StartedTask.self, timeout: .slow)
+        let chatId = try #require(started.chatId)
+        #expect(started.branch?.hasPrefix("o7/") == true)
+
+        // What it stands on and what its branch changed.
+        let facts = try await connection.send(.facts(chatId), as: ChatFacts.self)
+        #expect(facts.worktree)
+        #expect(facts.pullRequest?.checks == "passed")
+        let changes = try await connection.send(.changes(chatId, scope: .branch), as: ChangedFiles.self)
+        let file = try #require(changes.files.first { $0.path == "src/login.ts" })
+        #expect(file.kind == "modified")
+        #expect(changes.base != nil)
+        let diff = try await connection.send(.diff(chatId, path: file.path, scope: .branch), as: FileDiff.self)
+        #expect(diff.after != nil)
+        await #expect(throws: RemoteFailure.self) {
+            try await connection.send(.diff(chatId, path: "../secrets.txt", scope: .branch), as: FileDiff.self)
+        }
+
+        // Its browser, and no device.
+        let picture = try await connection.send(.picture(chatId, of: .browser), as: ScreenPicture.self)
+        #expect(Data(base64Encoded: picture.data) != nil)
+        await #expect(throws: RemoteFailure.self) {
+            try await connection.send(.picture(chatId, of: .device), as: ScreenPicture.self)
+        }
+
+        // Access, title, archiving.
+        let choices = try await connection.send(.options(chatId), as: Choices.self)
+        #expect(choices.access?.map(\.value).contains("full_auto") == true)
+        try await connection.perform(.setAccess(chatId, access: "ask"))
+        try await connection.perform(.rename(chatId, title: "Photos from the phone"))
+        var overview = try await connection.send(.overview, as: Overview.self)
+        #expect(overview.chats.first { $0.chat.id == chatId }?.chat.title == "Photos from the phone")
+        try await connection.perform(.archive(chatId, archived: true))
+        let archived = try await connection.send(.archived(), as: ArchivedChats.self)
+        #expect(archived.chats.contains { $0.chat.id == chatId })
+        overview = try await connection.send(.overview, as: Overview.self)
+        #expect(!overview.chats.contains { $0.chat.id == chatId })
+        try await connection.perform(.archive(chatId, archived: false))
+
+        // The project's brief, saved only over the revision it was read at.
+        let brief = try await connection.send(.memory("p1"), as: ProjectBrief.self)
+        let saved = try await connection.send(
+            .setMemory("p1", markdown: brief.markdown + "\nKeep commits small.", base: brief.revision),
+            as: SavedBrief.self)
+        #expect(saved.revision != nil)
+        #expect(saved.revision != brief.revision)
+        if brief.revision != nil {
+            await #expect(throws: RemoteFailure.self) {
+                try await connection.send(.setMemory("p1", markdown: "Stale.", base: brief.revision), as: SavedBrief.self)
+            }
+        }
+
+        // Work for tonight, listed and taken off.
+        let later = try await connection.send(
+            .task(
+                goal: "Update the dependencies", projectId: "p1", agentId: nil, review: false, tonight: true,
+                access: nil),
+            as: StartedTask.self)
+        let queued = try #require(later.queued)
+        var tasks = try await connection.send(.tasks, as: TasksSnapshot.self)
+        #expect(tasks.queued.contains { $0.id == queued })
+        #expect(tasks.tasks.contains { $0.chatId == chatId })
+        try await connection.perform(.taskCancel(queued))
+        tasks = try await connection.send(.tasks, as: TasksSnapshot.self)
+        #expect(!tasks.queued.contains { $0.id == queued })
+
+        // The task's turn waits on a permission, as every demo turn does: stopped, the chat takes
+        // a message again.
+        try await connection.perform(.interrupt(chatId), timeout: .act)
+        try await Self.untilIdle(chatId, connection)
+
+        // A photo, in pieces, then a message with it and no words.
+        let photo = Self.png(width: 300, height: 200)
+        let uploadId = try await connection.upload(photo, name: "photo-1.png", mime: "image/png")
+        let ack = try await connection.send(
+            .send(chatId, text: "", attachments: [uploadId]), as: PromptAck.self, timeout: .act)
+        #expect(!ack.promptId.isEmpty)
+        try await connection.perform(.interrupt(chatId), timeout: .act)
+        try await Self.untilIdle(chatId, connection)
+        // Spent: the same photo does not go twice.
+        await #expect(throws: RemoteFailure.self) {
+            try await connection.send(.send(chatId, text: "Again", attachments: [uploadId]), as: PromptAck.self)
+        }
+
+        // A new chat whose first message is a photo alone.
+        let second = try await connection.upload(Self.png(width: 64, height: 64), name: "photo-2.png", mime: "image/png")
+        let created = try await connection.send(
+            .create(folderId: "f1", agentId: nil, text: "", attachments: [second]), as: Created.self, timeout: .slow)
+        #expect(created.unsent == nil)
+        try? await connection.perform(.interrupt(created.chat.chat.id), timeout: .act)
+        try? await connection.perform(.forget)
+        await connection.stop()
+    }
+
+    /// Waits until a chat no longer runs.
+    static func untilIdle(_ chatId: String, _ connection: HostConnection) async throws {
+        let deadline = ContinuousClock.now + .seconds(15)
+        while ContinuousClock.now < deadline {
+            let overview = try await connection.send(.overview, as: Overview.self)
+            if overview.chats.first(where: { $0.chat.id == chatId })?.chat.status.isWorking == false { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        Issue.record("the chat still runs")
+    }
+
+    /// A plain PNG of the given size, as a photo stands in for one.
+    static func png(width: Int, height: Int) -> Data {
+        // A PNG with one IDAT of stored (uncompressed) deflate blocks: no image library needed.
+        func crc(_ bytes: [UInt8]) -> UInt32 {
+            var table = [UInt32](repeating: 0, count: 256)
+            for n in 0..<256 {
+                var c = UInt32(n)
+                for _ in 0..<8 { c = (c & 1) != 0 ? 0xEDB8_8320 ^ (c >> 1) : c >> 1 }
+                table[n] = c
+            }
+            var c: UInt32 = 0xFFFF_FFFF
+            for byte in bytes { c = table[Int((c ^ UInt32(byte)) & 0xFF)] ^ (c >> 8) }
+            return c ^ 0xFFFF_FFFF
+        }
+        func be(_ value: UInt32) -> [UInt8] { [UInt8(value >> 24), UInt8(value >> 16 & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value & 0xFF)] }
+        func chunk(_ type: String, _ data: [UInt8]) -> [UInt8] {
+            let body = Array(type.utf8) + data
+            return be(UInt32(data.count)) + body + be(crc(body))
+        }
+        var raw: [UInt8] = []
+        for y in 0..<height {
+            raw.append(0)
+            for x in 0..<width { raw += [UInt8(x % 256), UInt8(y % 256), 0x80] }
+        }
+        var deflate: [UInt8] = [0x78, 0x01]
+        var offset = 0
+        while offset < raw.count {
+            let end = min(offset + 65_535, raw.count)
+            let length = UInt16(end - offset)
+            deflate.append(end == raw.count ? 1 : 0)
+            deflate += [UInt8(length & 0xFF), UInt8(length >> 8), UInt8(~length & 0xFF), UInt8(~length >> 8)]
+            deflate += raw[offset..<end]
+            offset = end
+        }
+        var a: UInt32 = 1
+        var b: UInt32 = 0
+        for byte in raw {
+            a = (a + UInt32(byte)) % 65_521
+            b = (b + a) % 65_521
+        }
+        deflate += be(b << 16 | a)
+        let header = be(UInt32(width)) + be(UInt32(height)) + [8, 2, 0, 0, 0]
+        let png: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+            + chunk("IHDR", header) + chunk("IDAT", deflate) + chunk("IEND", [])
+        return Data(png)
     }
 
     @Test(.enabled(if: EndToEnd.relay != nil))

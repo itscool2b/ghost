@@ -21,6 +21,8 @@ final class ComputerStore: Identifiable {
     private(set) var hostName: String
     /// The last thing that went wrong, said plainly; cleared by the next success.
     var problem: String?
+    /// A chat made without its first message: the words go back in its box, with why.
+    var unsent: (chatId: String, text: String, reason: String)?
     /// The chat open on this computer, if any. One per computer, as the protocol has it.
     private(set) var chat: ChatStore?
 
@@ -281,14 +283,17 @@ final class ComputerStore: Identifiable {
         try await connection.perform(.interrupt(chatId), timeout: .act)
     }
 
-    /// Starts a chat with its first message and photos; returns its id.
-    func create(folderId: String, agentId: String?, text: String, photos: [PickedPhoto] = []) async throws -> String {
+    /// Starts a chat with its first message and photos; returns its id, and why the message did
+    /// not go when the chat was made without it.
+    func create(
+        folderId: String, agentId: String?, text: String, photos: [PickedPhoto] = []
+    ) async throws -> (chatId: String, unsent: String?) {
         let ids = photos.isEmpty ? [] : try await upload(photos)
         let created = try await connection.send(
             .create(folderId: folderId, agentId: agentId, text: text, attachments: ids), as: Created.self,
             timeout: .slow)
         await refresh()
-        return created.chat.chat.id
+        return (created.chat.chat.id, created.unsent)
     }
 
     /// Hands work to o7 as a task on its own branch, now or tonight.

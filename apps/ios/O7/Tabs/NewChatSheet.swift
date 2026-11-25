@@ -269,9 +269,11 @@ struct NewChatSheet: View {
                     queuedWords = "It starts tonight. Tonight lists it, and you can cancel it there until it starts."
                 }
             } else {
-                let chatId = try await computer.create(folderId: folder, agentId: agent, text: goal, photos: photos)
+                let made = try await computer.create(folderId: folder, agentId: agent, text: goal, photos: photos)
                 dismiss()
-                opened(ChatRoute(hostId: computer.hostId, chatId: chatId))
+                opened(ChatRoute(hostId: computer.hostId, chatId: made.chatId))
+                // The chat exists without its first message: it opens with the words back in the box.
+                if let unsent = made.unsent { computer.unsent = (made.chatId, goal, unsent) }
             }
         } catch {
             failure = (error as? LocalizedError)?.errorDescription ?? "It did not start."

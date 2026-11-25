@@ -186,6 +186,8 @@ public struct Choices: Codable, Hashable, Sendable {
 public struct Created: Codable, Sendable {
     public var chat: WorkspaceChat
     public var sent: PromptAck?
+    /// The chat was made and its first message was not sent: why, in the computer's words.
+    public var unsent: String?
 }
 
 /// What `switch_agent` returns: the chat the handoff continues in.
