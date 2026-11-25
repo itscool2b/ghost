@@ -155,6 +155,11 @@ pub enum Op {
     Send {
         chat_id: String,
         text: String,
+        /// Photos staged with [`Op::UploadBegin`], sent with the message (at most
+        /// [`MAX_ATTACHMENTS`]). Honored only for a session offered [`ATTACHMENTS`]; with any,
+        /// the text may be empty.
+        #[serde(default)]
+        attachments: Vec<String>,
     },
     Interrupt {
         chat_id: String,
@@ -174,6 +179,9 @@ pub enum Op {
         folder_id: String,
         agent_id: Option<String>,
         text: String,
+        /// As for [`Op::Send`].
+        #[serde(default)]
+        attachments: Vec<String>,
     },
     /// The models and thinking levels a chat offers, and what it is set to.
     Options {
@@ -203,6 +211,110 @@ pub enum Op {
     Search {
         query: String,
         limit: Option<u32>,
+    },
+    /// Archived chats, newest first: at most `limit` (1 to [`MAX_ARCHIVED`], 50 when unsaid) of
+    /// those that last changed before `before` (Unix milliseconds; none: the newest).
+    Archived {
+        before: Option<i64>,
+        limit: Option<u32>,
+    },
+    /// Sets a chat's access level: exactly `ask`, `auto_edit` or `full_auto`.
+    SetAccess {
+        chat_id: String,
+        access: String,
+    },
+    /// Renames a chat: the title trimmed, 1 to [`MAX_TITLE`] characters on one line.
+    Rename {
+        chat_id: String,
+        title: String,
+    },
+    /// Archives a chat, or brings it back.
+    Archive {
+        chat_id: String,
+        archived: bool,
+    },
+    /// Starts a stopped chat's agent without sending anything.
+    StartAgent {
+        chat_id: String,
+    },
+    /// The files a chat changed: in its last turn (`scope` `turn`, the default), or on a branch
+    /// of its own since that branch began (`branch`).
+    Changes {
+        chat_id: String,
+        scope: Option<String>,
+    },
+    /// One of those files, before and after.
+    Diff {
+        chat_id: String,
+        path: String,
+        scope: Option<String>,
+    },
+    /// What a chat stands on: its branch, what is not committed, its agent's usage and its
+    /// pull request.
+    Facts {
+        chat_id: String,
+    },
+    /// A project's brief and its revision.
+    Memory {
+        project_id: String,
+    },
+    /// Saves a project's brief as the person's own edit. With `base_revision`, only while the
+    /// brief is still at that revision.
+    SetMemory {
+        project_id: String,
+        markdown: String,
+        base_revision: Option<String>,
+    },
+    /// A picture of what a chat's browser tab (`of` `browser`) or emulator (`device`) shows.
+    Picture {
+        chat_id: String,
+        of: String,
+    },
+    /// Hands o7 a task: a chat on a branch of its own, then a second agent's review. `when` is
+    /// `now` (the default) or `tonight`.
+    Task {
+        goal: String,
+        project_id: Option<String>,
+        agent_id: Option<String>,
+        review: Option<bool>,
+        when: Option<String>,
+        access: Option<String>,
+        #[serde(default)]
+        attachments: Vec<String>,
+    },
+    /// The tasks handed over lately, the queue for tonight and the night's limits.
+    Tasks,
+    /// Takes a task off the queue for tonight, whoever queued it.
+    TaskCancel {
+        queued_id: String,
+    },
+    /// Starts staging a photo for a message: its name, type (`image/png`, `image/jpeg`,
+    /// `image/webp` or `image/gif`), size in bytes and SHA-256 in hex.
+    UploadBegin {
+        name: String,
+        mime: String,
+        size: u64,
+        sha256: String,
+    },
+    /// The next piece of a staged photo: `index` counts from 0, `data` is standard base64 of at
+    /// most [`UPLOAD_CHUNK`] bytes.
+    UploadChunk {
+        upload_id: String,
+        index: u32,
+        data: String,
+    },
+    /// Drops a staged photo.
+    UploadAbort {
+        upload_id: String,
+    },
+    /// An image of a chat: one it stored (`{"type":"stored","sha256"}`), an attachment of its
+    /// message box (`{"type":"attachment","id"}`) or one a message carried
+    /// (`{"type":"message","context","index"}`). Read as the window's own preview reads it.
+    Image {
+        chat_id: String,
+        source: serde_json::Value,
+        #[serde(default)]
+        full: bool,
     },
 }
 
@@ -235,6 +347,23 @@ pub const PICKERS: &str = "pickers";
 pub const INBOX: &str = "inbox";
 /// [`Op::Search`].
 pub const SEARCH: &str = "search";
+/// A chat's access level, its title, archiving it and the archived chats, starting its agent:
+/// [`Op::Archived`], [`Op::SetAccess`], [`Op::Rename`], [`Op::Archive`], [`Op::StartAgent`], and
+/// the access levels in [`Op::Options`]' answer.
+pub const CONTROL: &str = "control";
+/// What a chat changed and what it stands on: [`Op::Changes`], [`Op::Diff`], [`Op::Facts`].
+pub const REVIEW: &str = "review";
+/// A project's brief: [`Op::Memory`], [`Op::SetMemory`].
+pub const MEMORY: &str = "memory";
+/// What a chat's browser tab or emulator shows: [`Op::Picture`].
+pub const SCREENS: &str = "screens";
+/// Tasks handed over from the phone, and the queue for tonight: [`Op::Task`], [`Op::Tasks`],
+/// [`Op::TaskCancel`].
+pub const TASKS: &str = "tasks";
+/// Photos in a message, and a chat's images: [`Op::UploadBegin`], [`Op::UploadChunk`],
+/// [`Op::UploadAbort`], [`Op::Image`], and `attachments` in [`Op::Send`], [`Op::Create`] and
+/// [`Op::Task`].
+pub const ATTACHMENTS: &str = "attachments";
 
 /// What this build offers a paired browser beyond the first version's requests, named in
 /// [`Event::Ready`] so a page shows only the controls this desktop answers. A request the build
@@ -245,13 +374,47 @@ pub const FEATURES: &[&str] = &[PICKERS];
 /// What o7 for iPhone is offered: a session on the app's path (the relay's `k`) with a pairing
 /// link, or with a device recorded as the app. Each later part of the app adds its name here and
 /// the requests that need it to [`Op::feature`].
-pub const APP_FEATURES: &[&str] = &[PICKERS, INBOX, SEARCH];
+pub const APP_FEATURES: &[&str] = &[
+    PICKERS,
+    INBOX,
+    SEARCH,
+    CONTROL,
+    REVIEW,
+    MEMORY,
+    SCREENS,
+    TASKS,
+    ATTACHMENTS,
+];
 
 /// The longest search, in characters, and the most hits one returns.
 pub const MAX_QUERY: usize = 200;
 pub const MAX_HITS: usize = 50;
 /// How many hits a search returns when it names no limit.
 pub const DEFAULT_HITS: usize = 20;
+/// The most archived chats one page lists, and how many when a request names no limit.
+pub const MAX_ARCHIVED: usize = 100;
+pub const DEFAULT_ARCHIVED: usize = 50;
+/// The longest chat title, in characters.
+pub const MAX_TITLE: usize = 200;
+/// The most files a list of changes names.
+pub const MAX_FILES: usize = 2_000;
+/// The most of each side of a changed file sent, in bytes.
+pub const MAX_SIDE: usize = 160 * 1024;
+/// The longest brief, in bytes: every chat of the project receives it.
+pub const MAX_BRIEF: usize = 4 * 1024;
+/// The most a picture or an image takes in its answer, in bytes, its base64 and all.
+pub const MAX_PICTURE: usize = 420 * 1024;
+/// The size of one piece of a staged photo, in bytes before base64.
+pub const UPLOAD_CHUNK: usize = 48 * 1024;
+/// The most photos one message carries, and the most they take together as the chat keeps
+/// them: what an agent's message may carry.
+pub const MAX_ATTACHMENTS: usize = 8;
+pub const MAX_PHOTOS: usize = 8 * 1024 * 1024;
+/// The most reviews and comments of a pull request sent, and the most characters of each.
+pub const MAX_NOTES: usize = 20;
+pub const MAX_NOTE: usize = 2_000;
+/// How many of the tasks handed over lately are listed.
+pub const MAX_TASKS: usize = 40;
 
 impl Op {
     /// The feature a request needs, or `None` for the first version's requests, which every
@@ -264,6 +427,19 @@ impl Op {
             | Self::SwitchAgent { .. } => Some(PICKERS),
             Self::Inbox => Some(INBOX),
             Self::Search { .. } => Some(SEARCH),
+            Self::Archived { .. }
+            | Self::SetAccess { .. }
+            | Self::Rename { .. }
+            | Self::Archive { .. }
+            | Self::StartAgent { .. } => Some(CONTROL),
+            Self::Changes { .. } | Self::Diff { .. } | Self::Facts { .. } => Some(REVIEW),
+            Self::Memory { .. } | Self::SetMemory { .. } => Some(MEMORY),
+            Self::Picture { .. } => Some(SCREENS),
+            Self::Task { .. } | Self::Tasks | Self::TaskCancel { .. } => Some(TASKS),
+            Self::UploadBegin { .. }
+            | Self::UploadChunk { .. }
+            | Self::UploadAbort { .. }
+            | Self::Image { .. } => Some(ATTACHMENTS),
             Self::Pair { .. }
             | Self::Overview
             | Self::Open { .. }
@@ -303,6 +479,12 @@ pub enum Data {
         chat: Box<WorkspaceChat>,
         sent: PromptAck,
     },
+    /// The chat was made, and its first message could not be sent: why, in words. Only for a
+    /// session offered [`ATTACHMENTS`]; a browser is answered with the error, as before.
+    Unsent {
+        chat: Box<WorkspaceChat>,
+        unsent: String,
+    },
     Options(Choices),
     /// The chat a handoff to another agent left the person with.
     Switched {
@@ -310,16 +492,204 @@ pub enum Data {
     },
     Inbox(Box<Inbox>),
     Search(SearchHits),
+    Archived(Box<ArchivedChats>),
+    Changes(Box<ChangedFiles>),
+    Diff(Box<FileDiff>),
+    Facts(Box<Facts>),
+    Memory(Brief),
+    /// The brief's revision once saved.
+    SavedMemory {
+        revision: Option<String>,
+    },
+    Picture(crate::backend::Picture),
+    Started(TaskStarted),
+    /// The task waits for tonight under this id (`q` and a few letters).
+    Queued {
+        queued: String,
+    },
+    Tasks(Box<TaskList>),
+    UploadBegun {
+        upload_id: String,
+        /// How many bytes each piece carries, before base64.
+        chunk: usize,
+    },
+    UploadProgress {
+        /// The bytes received so far.
+        received: usize,
+        /// All of them arrived and match the SHA-256 given.
+        complete: bool,
+    },
+    Image(crate::backend::ImagePreview),
 }
 
-/// What a chat lets a person choose from a paired browser: its model and its thinking level. A
-/// chat's access level is not offered there.
+/// What a chat lets a person choose from a paired device: its model and its thinking level, and
+/// for a session offered [`CONTROL`] its access level too.
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 pub struct Choices {
     pub models: Vec<Choice>,
     pub model: Option<String>,
     pub thinking: Vec<Choice>,
     pub thinking_level: Option<String>,
+    /// Left out for a browser, so its answer is as it was.
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub access: Option<AccessChoices>,
+}
+
+/// A chat's access levels by the value [`Op::SetAccess`] takes, and its current one.
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+pub struct AccessChoices {
+    pub access: Vec<Choice>,
+    pub access_mode: Option<String>,
+}
+
+/// A page of archived chats ([`Op::Archived`]), newest first.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ArchivedChats {
+    pub chats: Vec<WorkspaceChat>,
+    /// Older archived chats remain: ask again with `before` the last one's `updated_at`.
+    pub more: bool,
+}
+
+/// The files a chat changed ([`Op::Changes`]), at most [`MAX_FILES`].
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ChangedFiles {
+    pub files: Vec<ChangedFile>,
+    /// Why there is nothing to list, in the computer's words.
+    pub unavailable: Option<String>,
+    /// `turn` or `branch`.
+    pub scope: &'static str,
+    /// The commit a branch's changes are counted from; none for a turn's.
+    pub base: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ChangedFile {
+    pub path: String,
+    /// `added`, `modified` or `deleted`.
+    pub kind: String,
+}
+
+/// One changed file ([`Op::Diff`]), each side at most [`MAX_SIDE`]. A side that is none did
+/// not exist.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FileDiff {
+    pub before: Option<String>,
+    pub after: Option<String>,
+    /// There is no text to show.
+    pub binary: bool,
+    /// A side was longer than what is sent: this is its start.
+    pub truncated: bool,
+}
+
+/// What a chat stands on ([`Op::Facts`]); a part that cannot be read is left out.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Facts {
+    pub branch: Option<String>,
+    /// The chat works in a Git worktree of its own.
+    pub worktree: bool,
+    /// Files changed in the folder and not committed.
+    pub uncommitted: Option<usize>,
+    /// The agent's usage limits as it last reported them.
+    pub usage: Vec<Usage>,
+    pub pull_request: Option<PullRequestFacts>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Usage {
+    pub window: String,
+    /// How much of it is used, 0 to 100.
+    pub used: f64,
+}
+
+/// The pull request open from a chat's branch.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PullRequestFacts {
+    pub number: u64,
+    pub url: String,
+    /// `open`, `merged` or `closed`.
+    pub state: String,
+    /// `none`, `pending`, `passed` or `failed`.
+    pub checks: &'static str,
+    /// The checks that failed, by name.
+    pub failed: Vec<String>,
+    /// The newest reviews and comments, oldest first: at most [`MAX_NOTES`] of
+    /// [`MAX_NOTE`] characters each.
+    pub notes: Vec<PullRequestNote>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PullRequestNote {
+    pub author: String,
+    /// `comment`, or the review's state.
+    pub kind: String,
+    /// Empty for an author who is not one of the repository's own people: anyone can comment
+    /// on a public repository.
+    pub body: String,
+    pub trusted: bool,
+}
+
+/// A project's brief ([`Op::Memory`]).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Brief {
+    pub markdown: String,
+    /// What [`Op::SetMemory`] names as `base_revision`; none while no brief was saved.
+    pub revision: Option<String>,
+}
+
+/// A task that started now ([`Op::Task`]).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct TaskStarted {
+    pub chat_id: String,
+    /// Its own branch, where the folder is a Git repository.
+    pub branch: Option<String>,
+    /// The agent that reviews the work once it is done; none, no review.
+    pub review_agent: Option<String>,
+}
+
+/// The tasks handed over lately and the queue for tonight ([`Op::Tasks`]).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct TaskList {
+    /// Newest first, at most [`MAX_TASKS`].
+    pub tasks: Vec<TaskEntry>,
+    /// Oldest first, as they start; one that could not start stays a day, with why.
+    pub queued: Vec<QueuedEntry>,
+    pub night: Night,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct TaskEntry {
+    pub chat_id: String,
+    pub goal: String,
+    pub branch: Option<String>,
+    pub review_agent: Option<String>,
+    /// The review's chat, once it started.
+    pub reviewer_chat: Option<String>,
+    pub created_at: i64,
+    /// `bot` (a bot link or an automation) or `device` (the person, from a paired device).
+    pub by: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct QueuedEntry {
+    pub id: String,
+    pub goal: String,
+    pub project_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub review: Option<bool>,
+    pub created_at: i64,
+    pub failed: Option<String>,
+    pub failed_at: Option<i64>,
+    pub by: &'static str,
+}
+
+/// When queued tasks start, on the computer's clock: from `from` until `to` o'clock, at most
+/// `budget` a night, `started` of them so far tonight.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Night {
+    pub from: u8,
+    pub to: u8,
+    pub budget: usize,
+    pub started: usize,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -575,7 +945,8 @@ mod tests {
             request.op,
             Op::Send {
                 chat_id: "c1".into(),
-                text: "Hi".into()
+                text: "Hi".into(),
+                attachments: Vec::new(),
             }
         );
         let request: Request =
@@ -647,7 +1018,20 @@ mod tests {
     #[test]
     fn each_request_belongs_to_a_feature_offered_by_name() {
         assert_eq!(FEATURES, ["pickers"]);
-        assert_eq!(APP_FEATURES, ["pickers", "inbox", "search"]);
+        assert_eq!(
+            APP_FEATURES,
+            [
+                "pickers",
+                "inbox",
+                "search",
+                "control",
+                "review",
+                "memory",
+                "screens",
+                "tasks",
+                "attachments"
+            ]
+        );
         assert!(FEATURES.iter().all(|name| APP_FEATURES.contains(name)));
         let op = |text: &str| serde_json::from_str::<Request>(text).expect(text).op;
         for (request, feature) in [
@@ -686,6 +1070,69 @@ mod tests {
             ),
             (r#"{"id":1,"op":"inbox"}"#, Some("inbox")),
             (r#"{"id":1,"op":"search","query":"x"}"#, Some("search")),
+            (r#"{"id":1,"op":"archived"}"#, Some("control")),
+            (
+                r#"{"id":1,"op":"set_access","chat_id":"c","access":"ask"}"#,
+                Some("control"),
+            ),
+            (
+                r#"{"id":1,"op":"rename","chat_id":"c","title":"t"}"#,
+                Some("control"),
+            ),
+            (
+                r#"{"id":1,"op":"archive","chat_id":"c","archived":true}"#,
+                Some("control"),
+            ),
+            (
+                r#"{"id":1,"op":"start_agent","chat_id":"c"}"#,
+                Some("control"),
+            ),
+            (r#"{"id":1,"op":"changes","chat_id":"c"}"#, Some("review")),
+            (
+                r#"{"id":1,"op":"diff","chat_id":"c","path":"a"}"#,
+                Some("review"),
+            ),
+            (r#"{"id":1,"op":"facts","chat_id":"c"}"#, Some("review")),
+            (r#"{"id":1,"op":"memory","project_id":"p"}"#, Some("memory")),
+            (
+                r#"{"id":1,"op":"set_memory","project_id":"p","markdown":""}"#,
+                Some("memory"),
+            ),
+            (
+                r#"{"id":1,"op":"picture","chat_id":"c","of":"browser"}"#,
+                Some("screens"),
+            ),
+            (r#"{"id":1,"op":"task","goal":"g"}"#, Some("tasks")),
+            (r#"{"id":1,"op":"tasks"}"#, Some("tasks")),
+            (
+                r#"{"id":1,"op":"task_cancel","queued_id":"q"}"#,
+                Some("tasks"),
+            ),
+            (
+                r#"{"id":1,"op":"upload_begin","name":"a","mime":"image/png","size":1,"sha256":"x"}"#,
+                Some("attachments"),
+            ),
+            (
+                r#"{"id":1,"op":"upload_chunk","upload_id":"u","index":0,"data":""}"#,
+                Some("attachments"),
+            ),
+            (
+                r#"{"id":1,"op":"upload_abort","upload_id":"u"}"#,
+                Some("attachments"),
+            ),
+            (
+                r#"{"id":1,"op":"image","chat_id":"c","source":{"type":"stored","sha256":"x"}}"#,
+                Some("attachments"),
+            ),
+            // Photos ride on the first version's requests, honored by feature.
+            (
+                r#"{"id":1,"op":"send","chat_id":"c","text":"","attachments":["u"]}"#,
+                None,
+            ),
+            (
+                r#"{"id":1,"op":"create","folder_id":"f","text":"","attachments":["u"]}"#,
+                None,
+            ),
         ] {
             let feature_of = op(request).feature();
             assert_eq!(feature_of, feature, "{request}");
@@ -760,7 +1207,7 @@ mod tests {
                 site: Some("https://o7.codes"),
             })
             .expect("event"),
-            r#"{"ev":"ready","host_name":"Studio","paired":true,"features":["pickers","inbox","search"],"look":{"theme":"claude","appearance":"system"},"site":"https://o7.codes"}"#
+            r#"{"ev":"ready","host_name":"Studio","paired":true,"features":["pickers","inbox","search","control","review","memory","screens","tasks","attachments"],"look":{"theme":"claude","appearance":"system"},"site":"https://o7.codes"}"#
         );
         assert_eq!(
             serde_json::to_string(&Event::Reset).expect("event"),
@@ -779,7 +1226,7 @@ mod tests {
         assert_eq!(paired(None), r#"{"device_id":"d1","device_key":"k1"}"#);
         assert_eq!(
             paired(Some(APP_FEATURES)),
-            r#"{"device_id":"d1","device_key":"k1","features":["pickers","inbox","search"]}"#
+            r#"{"device_id":"d1","device_key":"k1","features":["pickers","inbox","search","control","review","memory","screens","tasks","attachments"]}"#
         );
         assert_eq!(
             serde_json::to_string(&Data::Options(Choices {
@@ -790,6 +1237,7 @@ mod tests {
                 model: Some("opus".into()),
                 thinking: Vec::new(),
                 thinking_level: None,
+                access: None,
             }))
             .expect("choices"),
             r#"{"models":[{"value":"opus","name":"Opus 5.5"}],"model":"opus","thinking":[],"thinking_level":null}"#
@@ -885,6 +1333,350 @@ mod tests {
                 { "chat_id": "c1", "title": "Fix the login form", "snippet": "…the login form…", "at": 5 },
                 { "chat_id": "c2", "title": "Login", "snippet": null, "at": 4 },
             ] })
+        );
+    }
+    /// Each of the app's requests reads with its fields and their defaults; one whose fields are
+    /// missing or of the wrong type is outside the protocol. What a value may be (an access
+    /// level, a scope, a source) is the computer's to answer `invalid`, so those read as text.
+    #[test]
+    fn the_apps_requests_read_with_their_fields() {
+        let op = |text: &str| serde_json::from_str::<Request>(text).expect(text).op;
+        assert_eq!(
+            op(r#"{"id":1,"op":"archived"}"#),
+            Op::Archived {
+                before: None,
+                limit: None
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"archived","before":1700000000000,"limit":20}"#),
+            Op::Archived {
+                before: Some(1_700_000_000_000),
+                limit: Some(20)
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"set_access","chat_id":"c","access":"everything"}"#),
+            Op::SetAccess {
+                chat_id: "c".into(),
+                access: "everything".into()
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"archive","chat_id":"c","archived":false}"#),
+            Op::Archive {
+                chat_id: "c".into(),
+                archived: false
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"changes","chat_id":"c"}"#),
+            Op::Changes {
+                chat_id: "c".into(),
+                scope: None
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"diff","chat_id":"c","path":"src/a.ts","scope":"branch"}"#),
+            Op::Diff {
+                chat_id: "c".into(),
+                path: "src/a.ts".into(),
+                scope: Some("branch".into())
+            }
+        );
+        assert_eq!(
+            op(
+                r##"{"id":1,"op":"set_memory","project_id":"p","markdown":"# Brief","base_revision":"r1"}"##
+            ),
+            Op::SetMemory {
+                project_id: "p".into(),
+                markdown: "# Brief".into(),
+                base_revision: Some("r1".into())
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"task","goal":"Fix it"}"#),
+            Op::Task {
+                goal: "Fix it".into(),
+                project_id: None,
+                agent_id: None,
+                review: None,
+                when: None,
+                access: None,
+                attachments: Vec::new()
+            }
+        );
+        assert_eq!(
+            op(
+                r#"{"id":1,"op":"task","goal":"Fix it","project_id":"p1","agent_id":"codex","review":false,"when":"tonight","access":"auto_edit","attachments":["u1"]}"#
+            ),
+            Op::Task {
+                goal: "Fix it".into(),
+                project_id: Some("p1".into()),
+                agent_id: Some("codex".into()),
+                review: Some(false),
+                when: Some("tonight".into()),
+                access: Some("auto_edit".into()),
+                attachments: vec!["u1".into()]
+            }
+        );
+        assert_eq!(op(r#"{"id":1,"op":"tasks"}"#), Op::Tasks);
+        assert_eq!(
+            op(
+                r#"{"id":1,"op":"upload_begin","name":"IMG_1.jpg","mime":"image/jpeg","size":8388608,"sha256":"ab"}"#
+            ),
+            Op::UploadBegin {
+                name: "IMG_1.jpg".into(),
+                mime: "image/jpeg".into(),
+                size: 8_388_608,
+                sha256: "ab".into()
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"upload_chunk","upload_id":"u","index":3,"data":"QUJD"}"#),
+            Op::UploadChunk {
+                upload_id: "u".into(),
+                index: 3,
+                data: "QUJD".into()
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"image","chat_id":"c","source":{"type":"attachment","id":"a1"}}"#),
+            Op::Image {
+                chat_id: "c".into(),
+                source: serde_json::json!({ "type": "attachment", "id": "a1" }),
+                full: false
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"send","chat_id":"c","text":"","attachments":["u1","u2"]}"#),
+            Op::Send {
+                chat_id: "c".into(),
+                text: String::new(),
+                attachments: vec!["u1".into(), "u2".into()]
+            }
+        );
+        assert_eq!(
+            op(r#"{"id":1,"op":"create","folder_id":"f","agent_id":null,"text":"Hi"}"#),
+            Op::Create {
+                folder_id: "f".into(),
+                agent_id: None,
+                text: "Hi".into(),
+                attachments: Vec::new()
+            }
+        );
+        for bad in [
+            r#"{"id":1,"op":"archived","limit":-1}"#,
+            r#"{"id":1,"op":"archived","before":"yesterday"}"#,
+            r#"{"id":1,"op":"set_access","chat_id":"c"}"#,
+            r#"{"id":1,"op":"rename","chat_id":"c"}"#,
+            r#"{"id":1,"op":"archive","chat_id":"c"}"#,
+            r#"{"id":1,"op":"archive","chat_id":"c","archived":"yes"}"#,
+            r#"{"id":1,"op":"diff","chat_id":"c"}"#,
+            r#"{"id":1,"op":"set_memory","project_id":"p"}"#,
+            r#"{"id":1,"op":"picture","chat_id":"c"}"#,
+            r#"{"id":1,"op":"task"}"#,
+            r#"{"id":1,"op":"task","goal":"g","review":"yes"}"#,
+            r#"{"id":1,"op":"task","goal":"g","attachments":"u1"}"#,
+            r#"{"id":1,"op":"task_cancel"}"#,
+            r#"{"id":1,"op":"upload_begin","name":"a","mime":"image/png","size":-1,"sha256":"x"}"#,
+            r#"{"id":1,"op":"upload_begin","name":"a","mime":"image/png","sha256":"x"}"#,
+            r#"{"id":1,"op":"upload_chunk","upload_id":"u","index":-1,"data":""}"#,
+            r#"{"id":1,"op":"upload_chunk","upload_id":"u","data":""}"#,
+            r#"{"id":1,"op":"image","chat_id":"c"}"#,
+            r#"{"id":1,"op":"send","chat_id":"c","text":"x","attachments":[1]}"#,
+        ] {
+            assert!(serde_json::from_str::<Request>(bad).is_err(), "{bad}");
+        }
+    }
+
+    /// What the app reads back from each of its requests, field for field.
+    #[test]
+    fn the_apps_answers_have_the_shape_it_reads() {
+        let json = |data: Data| serde_json::to_value(data).expect("data");
+        let choice = |value: &str, name: &str| Choice {
+            value: value.into(),
+            name: name.into(),
+        };
+        assert_eq!(
+            json(Data::Options(Choices {
+                models: vec![choice("opus", "Opus 5.5")],
+                model: Some("opus".into()),
+                thinking: Vec::new(),
+                thinking_level: None,
+                access: Some(AccessChoices {
+                    access: vec![choice("ask", "Ask"), choice("full_auto", "Full access")],
+                    access_mode: Some("ask".into()),
+                }),
+            })),
+            serde_json::json!({
+                "models": [{ "value": "opus", "name": "Opus 5.5" }], "model": "opus",
+                "thinking": [], "thinking_level": null,
+                "access": [{ "value": "ask", "name": "Ask" }, { "value": "full_auto", "name": "Full access" }],
+                "access_mode": "ask",
+            })
+        );
+        assert_eq!(
+            json(Data::Changes(Box::new(ChangedFiles {
+                files: vec![ChangedFile {
+                    path: "src/login.ts".into(),
+                    kind: "modified".into(),
+                }],
+                unavailable: None,
+                scope: "branch",
+                base: Some("abc123".into()),
+            }))),
+            serde_json::json!({
+                "files": [{ "path": "src/login.ts", "kind": "modified" }],
+                "unavailable": null, "scope": "branch", "base": "abc123",
+            })
+        );
+        assert_eq!(
+            json(Data::Diff(Box::new(FileDiff {
+                before: None,
+                after: Some("new".into()),
+                binary: false,
+                truncated: false,
+            }))),
+            serde_json::json!({ "before": null, "after": "new", "binary": false, "truncated": false })
+        );
+        assert_eq!(
+            json(Data::Facts(Box::new(Facts {
+                branch: Some("o7/fix".into()),
+                worktree: true,
+                uncommitted: Some(2),
+                usage: vec![Usage {
+                    window: "5 hours".into(),
+                    used: 42.0,
+                }],
+                pull_request: Some(PullRequestFacts {
+                    number: 12,
+                    url: "https://github.com/o/r/pull/12".into(),
+                    state: "open".into(),
+                    checks: "failed",
+                    failed: vec!["test".into()],
+                    notes: vec![PullRequestNote {
+                        author: "stranger".into(),
+                        kind: "comment".into(),
+                        body: String::new(),
+                        trusted: false,
+                    }],
+                }),
+            }))),
+            serde_json::json!({
+                "branch": "o7/fix", "worktree": true, "uncommitted": 2,
+                "usage": [{ "window": "5 hours", "used": 42.0 }],
+                "pull_request": {
+                    "number": 12, "url": "https://github.com/o/r/pull/12", "state": "open",
+                    "checks": "failed", "failed": ["test"],
+                    "notes": [{ "author": "stranger", "kind": "comment", "body": "", "trusted": false }],
+                },
+            })
+        );
+        assert_eq!(
+            json(Data::Memory(Brief {
+                markdown: "# Brief".into(),
+                revision: None,
+            })),
+            serde_json::json!({ "markdown": "# Brief", "revision": null })
+        );
+        assert_eq!(
+            json(Data::SavedMemory {
+                revision: Some("r2".into())
+            }),
+            serde_json::json!({ "revision": "r2" })
+        );
+        assert_eq!(
+            json(Data::Picture(crate::backend::Picture {
+                mime: "image/jpeg".into(),
+                data: "QUJD".into(),
+            })),
+            serde_json::json!({ "mime": "image/jpeg", "data": "QUJD" })
+        );
+        assert_eq!(
+            json(Data::Started(TaskStarted {
+                chat_id: "c2".into(),
+                branch: None,
+                review_agent: Some("codex".into()),
+            })),
+            serde_json::json!({ "chat_id": "c2", "branch": null, "review_agent": "codex" })
+        );
+        assert_eq!(
+            json(Data::Queued {
+                queued: "qabc".into()
+            }),
+            serde_json::json!({ "queued": "qabc" })
+        );
+        assert_eq!(
+            json(Data::Tasks(Box::new(TaskList {
+                tasks: vec![TaskEntry {
+                    chat_id: "c2".into(),
+                    goal: "Fix it".into(),
+                    branch: Some("o7/fix-it".into()),
+                    review_agent: None,
+                    reviewer_chat: None,
+                    created_at: 5,
+                    by: "device",
+                }],
+                queued: vec![QueuedEntry {
+                    id: "qabc".into(),
+                    goal: "Tidy".into(),
+                    project_id: Some("p1".into()),
+                    agent_id: None,
+                    review: Some(true),
+                    created_at: 6,
+                    failed: None,
+                    failed_at: None,
+                    by: "bot",
+                }],
+                night: Night {
+                    from: 1,
+                    to: 6,
+                    budget: 3,
+                    started: 0,
+                },
+            }))),
+            serde_json::json!({
+                "tasks": [{
+                    "chat_id": "c2", "goal": "Fix it", "branch": "o7/fix-it", "review_agent": null,
+                    "reviewer_chat": null, "created_at": 5, "by": "device",
+                }],
+                "queued": [{
+                    "id": "qabc", "goal": "Tidy", "project_id": "p1", "agent_id": null,
+                    "review": true, "created_at": 6, "failed": null, "failed_at": null, "by": "bot",
+                }],
+                "night": { "from": 1, "to": 6, "budget": 3, "started": 0 },
+            })
+        );
+        assert_eq!(
+            json(Data::UploadBegun {
+                upload_id: "u1".into(),
+                chunk: UPLOAD_CHUNK,
+            }),
+            serde_json::json!({ "upload_id": "u1", "chunk": 49152 })
+        );
+        assert_eq!(
+            json(Data::UploadProgress {
+                received: 10,
+                complete: true,
+            }),
+            serde_json::json!({ "received": 10, "complete": true })
+        );
+        assert_eq!(
+            json(Data::Image(crate::backend::ImagePreview {
+                mime: "image/png".into(),
+                data: "QUJD".into(),
+                width: 2,
+                height: 1,
+            })),
+            serde_json::json!({ "mime": "image/png", "data": "QUJD", "width": 2, "height": 1 })
+        );
+        assert_eq!(
+            json(Data::Archived(Box::new(ArchivedChats {
+                chats: Vec::new(),
+                more: false,
+            }))),
+            serde_json::json!({ "chats": [], "more": false })
         );
     }
 }

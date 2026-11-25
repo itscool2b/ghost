@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-25
 
+- The iPhone app now does much more. See what an agent changed, file by file, with its pull request and checks; see the page or phone screen an agent is working on; change how much an agent may do without asking; edit a project's brief; rename and archive chats; hand work over as a task on its own branch, reviewed when done, now or tonight; and send photos from your phone into a chat. ([#215](https://github.com/itscool2b/o7/pull/215))
 - o7 now has an iPhone app: pair it by scanning the code in Settings, Remote access, then follow and steer your chats from your phone. It shows what needs you with Allow and Deny right in the list, what is working and what just finished, and each chat as it reads on your computer, in your computer's theme. Settings lists it as o7 for iPhone. ([#214](https://github.com/itscool2b/o7/pull/214))
 - Pairing more than one device is quicker: after a device pairs, Pair another device in the same Settings dialog shows a new code at once. On your phone, a code scanned while the remote page is already open now pairs too, and pairing the same computer again replaces the old entry instead of listing your phone twice. ([#213](https://github.com/itscool2b/o7/pull/213))
 - o7 now has Terms of Service and a Privacy Policy, from BASH.AI LLC. Setup says that continuing accepts them, and if you set up o7 before today it shows them to you once with an OK. Settings > About links both. ([#212](https://github.com/itscool2b/o7/pull/212))

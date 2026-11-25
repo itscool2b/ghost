@@ -68,6 +68,8 @@ pub(super) fn closed(shared: &Shared, backend: &dyn Backend, cid: &str, connecti
     // mark and releases what it attached.
     if let Some(session) = &connection.session {
         session.ended.store(true, Ordering::SeqCst);
+        // Its staged photos go with it: a message being sent keeps only what it holds.
+        lock(&session.uploads).clear();
     }
     backend.release(&owner(cid));
     let Some(session) = connection.session else {
@@ -222,6 +224,10 @@ fn hello(
         follow: Arc::new(AtomicU64::new(0)),
         following: Arc::new(tokio::sync::Mutex::new(())),
         ended: Arc::new(AtomicBool::new(false)),
+        uploads: Arc::new(Mutex::new(super::uploads::Uploads::new(
+            shared.staged.clone(),
+        ))),
+        picturing: Arc::new(AtomicBool::new(false)),
     });
     Received::Send(vec![
         format!("m{cid} W{welcome}"),
@@ -299,7 +305,7 @@ pub(super) fn fit(page: &mut HistoryPage) {
     }
 }
 
-fn text_ok(text: &str) -> Result<(), BackendError> {
+pub(super) fn text_ok(text: &str) -> Result<(), BackendError> {
     if text.trim().is_empty() {
         Err(BackendError::new("empty", "The message is empty."))
     } else if text.len() > MAX_TEXT {
@@ -313,7 +319,7 @@ fn text_ok(text: &str) -> Result<(), BackendError> {
 const MAX_NAME: usize = 256;
 
 /// A value picked from a list the desktop sent: short, and free of control characters.
-fn name_ok(name: &str) -> Result<(), BackendError> {
+pub(super) fn name_ok(name: &str) -> Result<(), BackendError> {
     if name.is_empty() || name.len() > MAX_NAME || name.chars().any(char::is_control) {
         Err(BackendError::new(
             "invalid",
@@ -334,7 +340,7 @@ fn choices(list: Vec<crate::backend::Choice>) -> Vec<wire::Choice> {
 }
 
 /// The app answered an action with something other than what that action returns.
-fn unexpected() -> BackendError {
+pub(super) fn unexpected() -> BackendError {
     BackendError::new("failed", "This computer's o7 answered unexpectedly.")
 }
 
@@ -439,6 +445,12 @@ fn start(
         );
         return Ok(());
     }
+    // A photo arrives in many small pieces: each is taken here, at once and in order, and holds
+    // none of the places for calls.
+    if let Some(result) = super::app::upload(&session.uploads, &request.op) {
+        reply(out, cid, id, result);
+        return Ok(());
+    }
     if session.calls.load(Ordering::Relaxed) >= MAX_CALLS {
         reply(
             out,
@@ -463,6 +475,13 @@ fn start(
     session.calls.fetch_add(1, Ordering::Relaxed);
     let (calls, backlog) = (session.calls.clone(), session.backlog.clone());
     let opening = matches!(request.op, Op::Open { .. });
+    let context = Context {
+        device,
+        scope: session.scope.clone(),
+        features: session.features,
+        uploads: session.uploads.clone(),
+        picturing: session.picturing.clone(),
+    };
     let (shared, backend, out, cid) = (
         shared.clone(),
         backend.clone().bound(&session.scope),
@@ -478,7 +497,7 @@ fn start(
                     Err(BackendError::new("closed", "This session is over."))
                 } else if turn.newest.load(Ordering::SeqCst) == turn.mine {
                     let result =
-                        perform(&shared, &backend, &out, &cid, &device, backlog, request.op).await;
+                        perform(&shared, &backend, &out, &cid, &context, backlog, request.op).await;
                     // The browser left while this ran: nothing may go on following for it.
                     if turn.ended.load(Ordering::SeqCst) {
                         backend.release(&owner(&cid));
@@ -493,7 +512,7 @@ fn start(
                 (result, Some(held))
             }
             None => (
-                perform(&shared, &backend, &out, &cid, &device, backlog, request.op).await,
+                perform(&shared, &backend, &out, &cid, &context, backlog, request.op).await,
                 None,
             ),
         };
@@ -536,15 +555,37 @@ impl Performed {
     }
 }
 
+/// What a request may use of its session, beside the call itself.
+pub(super) struct Context {
+    /// The device the session is.
+    pub(super) device: String,
+    /// The workspace its key was accepted under ([`Session::scope`]): what it reads and keeps
+    /// of tasks and the queue is that workspace's, or nothing.
+    pub(super) scope: String,
+    /// What the session was offered ([`Session::features`]).
+    pub(super) features: &'static [&'static str],
+    /// Its staged photos.
+    pub(super) uploads: Arc<Mutex<super::uploads::Uploads>>,
+    /// A picture is being taken for it.
+    pub(super) picturing: Arc<AtomicBool>,
+}
+
+impl Context {
+    pub(super) fn offered(&self, feature: &str) -> bool {
+        self.features.contains(&feature)
+    }
+}
+
 async fn perform(
     shared: &Arc<Shared>,
     backend: &Arc<dyn Backend>,
     out: &UnboundedSender<Out>,
     cid: &str,
-    device: &str,
+    context: &Context,
     backlog: Arc<AtomicUsize>,
     op: Op,
 ) -> Result<Performed, BackendError> {
+    use super::app;
     let done = |data| Ok(Performed::Data(data));
     match op {
         Op::Pair { .. } => Err(BackendError::new(
@@ -597,10 +638,11 @@ async fn perform(
             fit(&mut page);
             done(Data::History(Box::new(page)))
         }
-        Op::Send { chat_id, text } => {
-            text_ok(&text)?;
-            done(Data::Sent(backend.send(&chat_id, text).await?))
-        }
+        Op::Send {
+            chat_id,
+            text,
+            attachments,
+        } => done(app::send(backend, context, &chat_id, text, &attachments).await?),
         Op::Interrupt { chat_id } => {
             backend.interrupt(&chat_id).await?;
             done(Data::None {})
@@ -625,25 +667,33 @@ async fn perform(
             folder_id,
             agent_id,
             text,
-        } => {
-            text_ok(&text)?;
-            let chat = backend.create(&folder_id, agent_id.as_deref()).await?;
-            let sent = backend.send(&chat.chat.id, text).await?;
-            done(Data::Created {
-                chat: Box::new(chat),
-                sent,
-            })
-        }
+            attachments,
+        } => done(
+            app::create(
+                backend,
+                context,
+                &folder_id,
+                agent_id.as_deref(),
+                text,
+                &attachments,
+            )
+            .await?,
+        ),
         // A paired browser reaches four of the app's actions and no others: what a chat offers,
-        // its model, its thinking level, and handing it to another agent. The rest of
-        // `Action` (projects from any folder, access levels, project memory) stays with a
-        // full-control bot link.
+        // its model, its thinking level, and handing it to another agent. o7 for iPhone reaches
+        // a few more by feature (`host/app.rs`). The rest of `Action` (projects from any folder,
+        // a bot's memory edits) stays with a full-control bot link.
         Op::Options { chat_id } => match backend.act(Action::Options { chat_id }).await? {
             Outcome::Options(options) => done(Data::Options(wire::Choices {
                 models: choices(options.models),
                 model: options.model,
                 thinking: choices(options.thinking),
                 thinking_level: options.thinking_level,
+                // A browser's answer is as it was: it is offered no access level.
+                access: context.offered(wire::CONTROL).then(|| wire::AccessChoices {
+                    access: choices(options.access),
+                    access_mode: options.access_mode,
+                }),
             })),
             _ => Err(unexpected()),
         },
@@ -669,13 +719,88 @@ async fn perform(
         }
         Op::Forget => {
             lock(&shared.registry)
-                .remove_device(device)
+                .remove_device(&context.device)
                 .map_err(|error| BackendError::new("refused", error.to_string()))?;
             (shared.config.changed)();
             Ok(Performed::Forgot)
         }
         // What o7 for iPhone is offered beyond a browser (`host/app.rs`).
-        Op::Inbox => done(super::app::inbox(backend).await?),
-        Op::Search { query, limit } => done(super::app::search(backend, &query, limit).await?),
+        Op::Inbox => done(app::inbox(backend).await?),
+        Op::Search { query, limit } => done(app::search(backend, &query, limit).await?),
+        Op::Archived { before, limit } => done(app::archived(backend, before, limit).await?),
+        Op::SetAccess { chat_id, access } => done(app::set_access(backend, chat_id, access).await?),
+        Op::Rename { chat_id, title } => done(app::rename(backend, chat_id, &title).await?),
+        Op::Archive { chat_id, archived } => {
+            backend.act(Action::Archive { chat_id, archived }).await?;
+            done(Data::None {})
+        }
+        Op::StartAgent { chat_id } => {
+            backend.act(Action::StartAgent { chat_id }).await?;
+            done(Data::None {})
+        }
+        Op::Changes { chat_id, scope } => {
+            done(app::changes(shared, backend, context, &chat_id, scope.as_deref()).await?)
+        }
+        Op::Diff {
+            chat_id,
+            path,
+            scope,
+        } => done(app::diff(shared, backend, context, &chat_id, &path, scope.as_deref()).await?),
+        Op::Facts { chat_id } => done(app::facts(backend, &chat_id).await?),
+        Op::Memory { project_id } => done(app::memory(backend, project_id).await?),
+        Op::SetMemory {
+            project_id,
+            markdown,
+            base_revision,
+        } => done(
+            app::set_memory(
+                shared,
+                backend,
+                context,
+                project_id,
+                markdown,
+                base_revision,
+            )
+            .await?,
+        ),
+        Op::Picture { chat_id, of } => {
+            done(app::picture(backend, &context.picturing, &chat_id, &of).await?)
+        }
+        Op::Task {
+            goal,
+            project_id,
+            agent_id,
+            review,
+            when,
+            access,
+            attachments,
+        } => done(
+            app::task(
+                shared,
+                backend,
+                context,
+                app::TaskAsked {
+                    goal,
+                    project_id,
+                    agent_id,
+                    review,
+                    when,
+                    access,
+                    attachments,
+                },
+            )
+            .await?,
+        ),
+        Op::Tasks => done(app::tasks(shared, context)?),
+        Op::TaskCancel { queued_id } => done(app::task_cancel(shared, context, &queued_id)?),
+        Op::Image {
+            chat_id,
+            source,
+            full,
+        } => done(app::image(backend, &chat_id, source, full).await?),
+        // Taken at once, in order, as they arrive (`app::upload`): never here.
+        Op::UploadBegin { .. } | Op::UploadChunk { .. } | Op::UploadAbort { .. } => {
+            Err(unexpected())
+        }
     }
 }

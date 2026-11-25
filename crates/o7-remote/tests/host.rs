@@ -34,6 +34,19 @@ use tokio_tungstenite::{
     },
 };
 
+/// What o7 for iPhone is offered, by name.
+const APP_FEATURES: [&str; 9] = [
+    "pickers",
+    "inbox",
+    "search",
+    "control",
+    "review",
+    "memory",
+    "screens",
+    "tasks",
+    "attachments",
+];
+
 /// The links these tests make answer what agents ask, as links did before rights were chosen; the
 /// refusals have a test of their own (`a_links_rights_are_checked_on_the_computer`).
 const APPROVING: o7_remote::bot::Rights = o7_remote::bot::Rights {
@@ -74,6 +87,18 @@ struct App {
     listed: Mutex<Vec<(WorkspaceChat, Option<Vec<HistoryItem>>)>>,
     /// What a search finds, when a test sets it.
     found: Mutex<Vec<o7_protocol::search::ChatSearchHit>>,
+    /// The archived chats, when a test sets them.
+    archived: Mutex<Vec<WorkspaceChat>>,
+    /// The project's brief and the number of its revision.
+    brief: Mutex<(String, u32)>,
+    /// A chat's branch changes, when a test sets them.
+    branch: Mutex<Option<o7_remote::BranchChanges>>,
+    /// Setting a chat's access fails: a task's test.
+    refuse_access: std::sync::atomic::AtomicBool,
+    /// Listing archived chats takes a second: a test of what holds a session's places.
+    slow_archive: std::sync::atomic::AtomicBool,
+    /// Attachments added to message boxes, numbered from one.
+    attached: AtomicUsize,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -276,6 +301,87 @@ impl Backend for Bound {
         Box::pin(async move {
             self.admitted()?;
             self.app.search(query).await
+        })
+    }
+
+    fn archived(&self) -> BoxFuture<'_, Result<Vec<WorkspaceChat>, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.archived().await
+        })
+    }
+
+    fn facts<'a>(
+        &'a self,
+        chat_id: &'a str,
+        agent_id: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::ChatFacts, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.facts(chat_id, agent_id).await
+        })
+    }
+
+    fn attach_image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        bytes: Vec<u8>,
+        name: &'a str,
+        mime: &'a str,
+    ) -> BoxFuture<'a, Result<String, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.attach_image(chat_id, bytes, name, mime).await
+        })
+    }
+
+    fn send_input<'a>(
+        &'a self,
+        chat_id: &'a str,
+        text: String,
+        attachments: Vec<String>,
+    ) -> BoxFuture<'a, Result<PromptAck, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.send_input(chat_id, text, attachments).await
+        })
+    }
+
+    fn image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        source: o7_protocol::composer::ChatImageSource,
+        full: bool,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::ImagePreview, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.image(chat_id, source, full, max_bytes).await
+        })
+    }
+
+    fn branch_changes<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        max_files: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::BranchChanges, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.branch_changes(chat_id, base, max_files).await
+        })
+    }
+
+    fn branch_diff<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        path: &'a str,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::Diff, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.branch_diff(chat_id, base, path, max_bytes).await
         })
     }
 }
@@ -545,7 +651,201 @@ impl Backend for App {
                     folder_id: Some("f2".into()),
                 },
                 Action::SwitchAgent { .. } => Outcome::Chat { id: "c9".into() },
+                Action::SetAccess { .. }
+                    if self
+                        .refuse_access
+                        .load(std::sync::atomic::Ordering::Relaxed) =>
+                {
+                    return Err(BackendError::new(
+                        "invalid",
+                        "This agent does not offer that access level.",
+                    ));
+                }
+                Action::Changes { .. } => Outcome::Changes {
+                    files: vec![
+                        ("src/login.ts".into(), "modified".into()),
+                        ("src/login.test.ts".into(), "added".into()),
+                        ("src/escapes.txt".into(), "added".into()),
+                    ],
+                    unavailable: None,
+                },
+                // Each control character takes six bytes once encoded.
+                Action::Diff { path, .. } if path == "src/escapes.txt" => Outcome::Diff {
+                    before: None,
+                    after: Some("\u{1}".repeat(150 * 1024)),
+                    binary: false,
+                    truncated: false,
+                },
+                Action::Diff { path, .. } => Outcome::Diff {
+                    before: (path == "src/login.ts").then(|| "old".to_owned()),
+                    after: Some("x".repeat(200 * 1024)),
+                    binary: false,
+                    truncated: false,
+                },
+                Action::ReadMemory { .. } => {
+                    let brief = self.brief.lock().expect("brief");
+                    Outcome::Memory {
+                        markdown: brief.0.clone(),
+                        revision: (brief.1 > 0).then(|| format!("r{}", brief.1)),
+                    }
+                }
+                Action::SaveMemory {
+                    markdown,
+                    base_revision,
+                    ..
+                } => {
+                    let mut brief = self.brief.lock().expect("brief");
+                    let current = (brief.1 > 0).then(|| format!("r{}", brief.1));
+                    if base_revision.is_some_and(|base| base != current) {
+                        return Err(BackendError::new(
+                            "conflict",
+                            "The brief changed since it was read.",
+                        ));
+                    }
+                    *brief = (markdown.clone(), brief.1 + 1);
+                    Outcome::Memory {
+                        markdown,
+                        revision: Some(format!("r{}", brief.1)),
+                    }
+                }
                 _ => Outcome::Done("Done.".into()),
+            })
+        })
+    }
+
+    fn archived(&self) -> BoxFuture<'_, Result<Vec<WorkspaceChat>, BackendError>> {
+        Box::pin(async move {
+            if self.slow_archive.load(std::sync::atomic::Ordering::Relaxed) {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            Ok(self.archived.lock().expect("archived").clone())
+        })
+    }
+
+    /// Every chat stands on a branch of its own with a pull request.
+    fn facts<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _agent_id: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::ChatFacts, BackendError>> {
+        Box::pin(async move {
+            Ok(o7_remote::ChatFacts {
+                pull_request: self
+                    .pr
+                    .lock()
+                    .expect("pr")
+                    .as_ref()
+                    .map(o7_remote::render::pull_request),
+                branch: Some("aura/fix-the-login-form".into()),
+                worktree: true,
+                uncommitted: Some(1),
+                usage: vec![("5 hours".into(), 42.5), ("Week".into(), 140.0)],
+            })
+        })
+    }
+
+    fn attach_image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        bytes: Vec<u8>,
+        name: &'a str,
+        mime: &'a str,
+    ) -> BoxFuture<'a, Result<String, BackendError>> {
+        Box::pin(async move {
+            let id = format!("a{}", self.attached.fetch_add(1, Ordering::Relaxed) + 1);
+            self.answered.lock().expect("answered").push(format!(
+                "attach {chat_id} {name} {mime} {} as {id}",
+                bytes.len()
+            ));
+            Ok(id)
+        })
+    }
+
+    /// Refuses a message that says "fail".
+    fn send_input<'a>(
+        &'a self,
+        chat_id: &'a str,
+        text: String,
+        attachments: Vec<String>,
+    ) -> BoxFuture<'a, Result<PromptAck, BackendError>> {
+        Box::pin(async move {
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("input {chat_id} {text:?} {attachments:?}"));
+            if text == "fail" {
+                return Err(BackendError::new("queue_full", "The queue is full."));
+            }
+            self.sent.lock().expect("sent").push((chat_id.into(), text));
+            Ok(PromptAck {
+                prompt_id: "prompt-2".into(),
+                queued: false,
+            })
+        })
+    }
+
+    fn image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        source: o7_protocol::composer::ChatImageSource,
+        full: bool,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::ImagePreview, BackendError>> {
+        Box::pin(async move {
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("image {chat_id} {source:?} {full} {max_bytes}"));
+            Ok(o7_remote::ImagePreview {
+                mime: "image/png".into(),
+                data: "QUJD".into(),
+                width: 2,
+                height: 1,
+            })
+        })
+    }
+
+    fn branch_changes<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        max_files: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::BranchChanges, BackendError>> {
+        Box::pin(async move {
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("branch {chat_id} {base:?} {max_files}"));
+            Ok(self
+                .branch
+                .lock()
+                .expect("branch")
+                .clone()
+                .unwrap_or(o7_remote::BranchChanges {
+                    files: Vec::new(),
+                    base: None,
+                    unavailable: Some("This chat has no branch of its own.".into()),
+                }))
+        })
+    }
+
+    fn branch_diff<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        path: &'a str,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::Diff, BackendError>> {
+        Box::pin(async move {
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("branch diff {chat_id} {base:?} {path} {max_bytes}"));
+            Ok(o7_remote::Diff {
+                before: None,
+                after: Some("# Readme".into()),
+                binary: false,
+                truncated: false,
             })
         })
     }
@@ -646,7 +946,8 @@ impl Backend for App {
         })
     }
 
-    /// c1's browser shows a page; it has no device.
+    /// c1's browser shows a page; it has no device. "slow" takes half a second to picture, and
+    /// "huge" is larger than any answer carries.
     fn picture<'a>(
         &'a self,
         chat_id: &'a str,
@@ -657,7 +958,14 @@ impl Backend for App {
                 .lock()
                 .expect("answered")
                 .push(format!("picture {chat_id} {of:?}"));
+            if chat_id == "slow" {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
             match of {
+                o7_remote::PictureOf::Browser if chat_id == "huge" => Ok(o7_remote::Picture {
+                    mime: "image/jpeg".into(),
+                    data: "A".repeat(500 * 1024),
+                }),
                 o7_remote::PictureOf::Browser => Ok(o7_remote::Picture {
                     mime: "image/jpeg".into(),
                     data: "QUJD".into(),
@@ -3876,7 +4184,7 @@ async fn the_iphone_app_pairs_on_its_own_path_and_is_offered_more() {
         ready,
         json!({
             "ev": "ready", "host_name": "Studio", "paired": false,
-            "features": ["pickers", "inbox", "search"],
+            "features": APP_FEATURES,
             "look": { "theme": "claude", "appearance": "dark" },
             "site": "https://auracode.test",
         })
@@ -3891,10 +4199,7 @@ async fn the_iphone_app_pairs_on_its_own_path_and_is_offered_more() {
         )
         .await;
     assert_eq!(paired["ok"], true, "{paired}");
-    assert_eq!(
-        paired["data"]["features"],
-        json!(["pickers", "inbox", "search"])
-    );
+    assert_eq!(paired["data"]["features"], json!(APP_FEATURES));
     let device = paired["data"]["device_id"].as_str().expect("id").to_owned();
     let key =
         crypto::decode(paired["data"]["device_key"].as_str().expect("key")).expect("32 bytes");
@@ -3914,7 +4219,7 @@ async fn the_iphone_app_pairs_on_its_own_path_and_is_offered_more() {
     let (mut again, ready) =
         Browser::app(&mut relay, "bbbbbbbbbbbbbbbb", "device", &device, &key).await;
     assert_eq!(ready["paired"], true);
-    assert_eq!(ready["features"], json!(["pickers", "inbox", "search"]));
+    assert_eq!(ready["features"], json!(APP_FEATURES));
     assert_eq!(ready["site"], "https://auracode.test");
     assert_eq!(
         again.request(&mut relay, json!({ "op": "inbox" })).await["ok"],
@@ -4042,29 +4347,38 @@ async fn a_browser_is_offered_what_it_was_whatever_it_says() {
         "a refused search reached the app"
     );
 
-    // No device may ask for a chat's access level or for project memory: there is no such
-    // request, so asking for one ends the session, as anything outside the protocol does.
+    // A chat's access level is the app's to set (`control`): a browser asking for it is
+    // answered and goes on. A bot's memory write is no device's request at all, so asking for
+    // one ends the session, as anything outside the protocol does.
     let device = paired["data"]["device_id"].as_str().expect("id").to_owned();
     let key =
         crypto::decode(paired["data"]["device_key"].as_str().expect("key")).expect("32 bytes");
-    for (cid, ask) in [
-        (
-            "bbbbbbbbbbbbbbbb",
+    let (mut tab, _) =
+        Browser::hello(&mut relay, "bbbbbbbbbbbbbbbb", "device", &device, &key).await;
+    let refused = tab
+        .request(
+            &mut relay,
             json!({ "op": "set_access", "chat_id": "c1", "access": "full_auto" }),
-        ),
-        (
-            "cccccccccccccccc",
+        )
+        .await;
+    assert_eq!(refused["error"]["code"], "not_offered", "{refused}");
+    assert_eq!(
+        tab.request(&mut relay, json!({ "op": "overview" })).await["ok"],
+        true
+    );
+    let (mut other, _) =
+        Browser::hello(&mut relay, "cccccccccccccccc", "device", &device, &key).await;
+    assert_eq!(
+        other.request(&mut relay, json!({ "op": "overview" })).await["ok"],
+        true
+    );
+    other
+        .send(
+            &mut relay,
             json!({ "op": "write_memory", "project_id": "p1", "markdown": "x" }),
-        ),
-    ] {
-        let (mut tab, _) = Browser::hello(&mut relay, cid, "device", &device, &key).await;
-        assert_eq!(
-            tab.request(&mut relay, json!({ "op": "overview" })).await["ok"],
-            true
-        );
-        tab.send(&mut relay, ask).await;
-        assert_eq!(relay.next().await, format!("c{cid}"));
-    }
+        )
+        .await;
+    assert_eq!(relay.next().await, "ccccccccccccccccc");
     assert_eq!(
         *rig.app.acted.lock().expect("acted"),
         [Action::Options {
@@ -4453,5 +4767,1175 @@ async fn a_search_finds_chats_as_the_window_does() {
         rig.app.answered.lock().expect("answered")[0],
         "search login",
         "the query is sent trimmed"
+    );
+}
+
+/// Every request o7 for iPhone has beyond a browser's, one of each.
+fn app_requests() -> Vec<Value> {
+    vec![
+        json!({ "op": "archived" }),
+        json!({ "op": "set_access", "chat_id": "c1", "access": "ask" }),
+        json!({ "op": "rename", "chat_id": "c1", "title": "New" }),
+        json!({ "op": "archive", "chat_id": "c1", "archived": true }),
+        json!({ "op": "start_agent", "chat_id": "c1" }),
+        json!({ "op": "changes", "chat_id": "c1" }),
+        json!({ "op": "diff", "chat_id": "c1", "path": "src/login.ts" }),
+        json!({ "op": "facts", "chat_id": "c1" }),
+        json!({ "op": "memory", "project_id": "p1" }),
+        json!({ "op": "set_memory", "project_id": "p1", "markdown": "x" }),
+        json!({ "op": "picture", "chat_id": "c1", "of": "browser" }),
+        json!({ "op": "task", "goal": "Fix it" }),
+        json!({ "op": "tasks" }),
+        json!({ "op": "task_cancel", "queued_id": "qabc" }),
+        json!({ "op": "upload_begin", "name": "a.png", "mime": "image/png", "size": 1, "sha256": "00" }),
+        json!({ "op": "upload_chunk", "upload_id": "u", "index": 0, "data": "QQ==" }),
+        json!({ "op": "upload_abort", "upload_id": "u" }),
+        json!({ "op": "image", "chat_id": "c1", "source": { "type": "stored", "sha256": "ab" } }),
+    ]
+}
+
+/// A browser is offered none of the app's requests: each is answered `not_offered`, reaches
+/// nothing, and the session goes on. Photos it names with a message are not taken.
+#[tokio::test]
+async fn a_browser_is_not_offered_what_only_the_app_is() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut tab, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    for ask in app_requests() {
+        let refused = tab.request(&mut relay, ask.clone()).await;
+        assert_eq!(refused["error"]["code"], "not_offered", "{ask}: {refused}");
+    }
+    assert!(rig.app.acted.lock().expect("acted").is_empty());
+    assert!(
+        rig.app.answered.lock().expect("answered").is_empty(),
+        "{:?}",
+        rig.app.answered.lock().expect("answered")
+    );
+    // A message with photos is a message: its text must say something, and nothing is attached.
+    let empty = tab
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "", "attachments": ["u1"] }),
+        )
+        .await;
+    assert_eq!(empty["error"]["code"], "empty", "{empty}");
+    let sent = tab
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "Hi", "attachments": ["u1"] }),
+        )
+        .await;
+    assert_eq!(sent["ok"], true, "{sent}");
+    assert_eq!(
+        *rig.app.sent.lock().expect("sent"),
+        [("c1".to_owned(), "Hi".to_owned())]
+    );
+    // Its pickers are what they were: no access levels.
+    let options = tab
+        .request(&mut relay, json!({ "op": "options", "chat_id": "c1" }))
+        .await;
+    assert_eq!(
+        options["data"]
+            .as_object()
+            .expect("choices")
+            .keys()
+            .collect::<Vec<_>>(),
+        ["models", "model", "thinking", "thinking_level"]
+    );
+    assert_eq!(
+        tab.request(&mut relay, json!({ "op": "overview" })).await["ok"],
+        true
+    );
+    relay.silent().await;
+}
+
+/// What the app asks of a chat reaches the action the window's own control does, checked first:
+/// its access level (exactly one of three), its title, archiving it, starting its agent, its
+/// changes and one file of them (only a file the list names), what it stands on with its pull
+/// request (the newest twenty notes, cut, with no stranger's words), an image of it (never one
+/// by path), and the project's brief (as the person's edit, refused when it moved on).
+#[tokio::test]
+async fn the_apps_controls_reach_the_actions_the_window_takes() {
+    use o7_remote::{PrChecks, PrNote, PullRequest};
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let mut ask = async |body: Value| -> Value { phone.request(&mut relay, body).await };
+    let acted = || rig.app.acted.lock().expect("acted").clone();
+
+    let options = ask(json!({ "op": "options", "chat_id": "c1" })).await;
+    assert_eq!(
+        options["data"]["access"],
+        json!([{ "value": "full_auto", "name": "Full access" }])
+    );
+    assert_eq!(options["data"]["access_mode"], "full_auto");
+    let done = ask(json!({ "op": "set_access", "chat_id": "c1", "access": "auto_edit" })).await;
+    assert_eq!(done["data"], json!({}), "{done}");
+    for access in ["Ask", "everything", "", "full_auto "] {
+        let refused = ask(json!({ "op": "set_access", "chat_id": "c1", "access": access })).await;
+        assert_eq!(refused["error"]["code"], "invalid", "{access:?}");
+    }
+    assert_eq!(
+        ask(json!({ "op": "rename", "chat_id": "c1", "title": "  Fix the form \n" })).await["ok"],
+        true
+    );
+    for title in [String::new(), "   ".into(), "a\nb".into(), "é".repeat(201)] {
+        let refused = ask(json!({ "op": "rename", "chat_id": "c1", "title": title })).await;
+        assert_eq!(refused["error"]["code"], "invalid", "{title:?}");
+    }
+    assert_eq!(
+        ask(json!({ "op": "rename", "chat_id": "c1", "title": "é".repeat(200) })).await["ok"],
+        true,
+        "characters, not bytes"
+    );
+    for ask_for in [
+        json!({ "op": "archive", "chat_id": "c1", "archived": true }),
+        json!({ "op": "start_agent", "chat_id": "c1" }),
+    ] {
+        assert_eq!(ask(ask_for).await["data"], json!({}));
+    }
+    assert_eq!(
+        acted(),
+        [
+            Action::Options {
+                chat_id: "c1".into()
+            },
+            Action::SetAccess {
+                chat_id: "c1".into(),
+                access: "auto_edit".into()
+            },
+            Action::Rename {
+                chat_id: "c1".into(),
+                title: "Fix the form".into()
+            },
+            Action::Rename {
+                chat_id: "c1".into(),
+                title: "é".repeat(200)
+            },
+            Action::Archive {
+                chat_id: "c1".into(),
+                archived: true
+            },
+            Action::StartAgent {
+                chat_id: "c1".into()
+            },
+        ]
+    );
+
+    // The last turn's changes, and one of its files with each side cut to 160 KiB.
+    let changes = ask(json!({ "op": "changes", "chat_id": "c1" })).await;
+    assert_eq!(
+        changes["data"],
+        json!({
+            "files": [
+                { "path": "src/login.ts", "kind": "modified" },
+                { "path": "src/login.test.ts", "kind": "added" },
+                { "path": "src/escapes.txt", "kind": "added" },
+            ],
+            "unavailable": null, "scope": "turn", "base": null,
+        })
+    );
+    // Text whose encoding is far longer than itself is cut until the answer fits one message.
+    let escapes = ask(json!({ "op": "diff", "chat_id": "c1", "path": "src/escapes.txt" })).await;
+    assert_eq!(escapes["ok"], true, "{escapes}");
+    assert_eq!(escapes["data"]["truncated"], true);
+    let kept = escapes["data"]["after"].as_str().expect("after").len();
+    assert!(kept < 150 * 1024 && kept > 0, "{kept}");
+    let diff = ask(json!({ "op": "diff", "chat_id": "c1", "path": "src/login.ts" })).await;
+    assert_eq!(diff["data"]["before"], "old");
+    assert_eq!(
+        diff["data"]["after"].as_str().expect("after").len(),
+        160 * 1024
+    );
+    assert_eq!(diff["data"]["truncated"], true);
+    assert_eq!(diff["data"]["binary"], false);
+    // A file the list does not name is never read, whatever its path.
+    let before = acted().len();
+    for path in ["README.md", "../../.ssh/id_rsa", "/etc/passwd"] {
+        let refused = ask(json!({ "op": "diff", "chat_id": "c1", "path": path })).await;
+        assert_eq!(refused["error"]["code"], "not_found", "{path}");
+    }
+    assert!(
+        acted()[before..]
+            .iter()
+            .all(|action| matches!(action, Action::Changes { .. })),
+        "{:?}",
+        &acted()[before..]
+    );
+    for refused in [
+        ask(json!({ "op": "diff", "chat_id": "c1", "path": "a\u{0}b" })).await,
+        ask(json!({ "op": "changes", "chat_id": "c1", "scope": "week" })).await,
+    ] {
+        assert_eq!(refused["error"]["code"], "invalid", "{refused}");
+    }
+    // A chat without a branch of its own says so; a task's chat is counted from its base.
+    let branch = ask(json!({ "op": "changes", "chat_id": "c1", "scope": "branch" })).await;
+    assert_eq!(
+        branch["data"],
+        json!({
+            "files": [], "unavailable": "This chat has no branch of its own.",
+            "scope": "branch", "base": null,
+        })
+    );
+    // A list whose paths would not fit one answer is cut until it does.
+    *rig.app.branch.lock().expect("branch") = Some(o7_remote::BranchChanges {
+        files: (0..2000)
+            .map(|n| (format!("{}/{n}", "deep".repeat(100)), "added".to_owned()))
+            .collect(),
+        base: Some("abc123".into()),
+        unavailable: None,
+    });
+    let long = ask(json!({ "op": "changes", "chat_id": "c1", "scope": "branch" })).await;
+    let listed = long["data"]["files"].as_array().expect("files").len();
+    assert!((1..2000).contains(&listed), "{listed}");
+    *rig.app.branch.lock().expect("branch") = Some(o7_remote::BranchChanges {
+        files: vec![("README.md".into(), "modified".into())],
+        base: Some("abc123".into()),
+        unavailable: None,
+    });
+    let branch =
+        ask(json!({ "op": "diff", "chat_id": "c1", "path": "README.md", "scope": "branch" })).await;
+    assert_eq!(
+        branch["data"],
+        json!({ "before": null, "after": "# Readme", "binary": false, "truncated": false })
+    );
+    let answered = rig.app.answered.lock().expect("answered").clone();
+    assert!(
+        answered.contains(&"branch c1 None 2000".to_owned()),
+        "{answered:?}"
+    );
+    assert!(
+        answered.contains(&"branch diff c1 Some(\"abc123\") README.md 163840".to_owned()),
+        "{answered:?}"
+    );
+
+    // What the chat stands on, with its pull request's newest twenty notes.
+    *rig.app.pr.lock().expect("pr") = Some(PullRequest {
+        number: 12,
+        url: "https://github.com/o/r/pull/12".into(),
+        state: "open".into(),
+        checks: PrChecks::Failed(vec!["test".into()]),
+        notes: (0..25)
+            .map(|n| PrNote {
+                author: format!("person{n}"),
+                kind: "comment".into(),
+                body: format!("{n}{}", "x".repeat(3000)),
+                trusted: n % 2 == 0,
+            })
+            .collect(),
+    });
+    let facts = ask(json!({ "op": "facts", "chat_id": "c1" })).await;
+    let data = &facts["data"];
+    assert_eq!(data["branch"], "aura/fix-the-login-form");
+    assert_eq!(data["worktree"], true);
+    assert_eq!(data["uncommitted"], 1);
+    assert_eq!(
+        data["usage"],
+        json!([{ "window": "5 hours", "used": 42.5 }, { "window": "Week", "used": 100.0 }])
+    );
+    let pr = &data["pull_request"];
+    assert_eq!(
+        (&pr["number"], &pr["state"], &pr["checks"], &pr["failed"]),
+        (
+            &json!(12),
+            &json!("open"),
+            &json!("failed"),
+            &json!(["test"])
+        )
+    );
+    let notes = pr["notes"].as_array().expect("notes");
+    assert_eq!(notes.len(), 20);
+    assert_eq!(notes[0]["author"], "person5", "the newest twenty");
+    assert_eq!(notes[0]["body"], "", "a stranger's words are not passed on");
+    assert_eq!(
+        notes[1]["body"].as_str().expect("body").chars().count(),
+        2000
+    );
+    assert_eq!(
+        ask(json!({ "op": "facts", "chat_id": "c9" })).await["error"]["code"],
+        "not_found"
+    );
+
+    // An image the chat holds, never a file by its path.
+    let image = ask(json!({
+        "op": "image", "chat_id": "c1", "source": { "type": "stored", "sha256": "ab" }, "full": true,
+    }))
+    .await;
+    assert_eq!(
+        image["data"],
+        json!({ "mime": "image/png", "data": "QUJD", "width": 2, "height": 1 })
+    );
+    for source in [
+        json!({ "type": "project", "path": "/etc/passwd" }),
+        json!({ "type": "url", "url": "https://example.com/a.png" }),
+        json!("a.png"),
+    ] {
+        let refused = ask(json!({ "op": "image", "chat_id": "c1", "source": source })).await;
+        assert_eq!(refused["error"]["code"], "invalid", "{source}");
+    }
+    let images: Vec<String> = rig
+        .app
+        .answered
+        .lock()
+        .expect("answered")
+        .iter()
+        .filter(|line| line.starts_with("image"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        images,
+        [format!(
+            "image c1 Stored {{ sha256: \"ab\" }} true {}",
+            420 * 1024 - 1024
+        )]
+    );
+
+    // The brief: read with its revision, saved as the person's from this device, refused when
+    // it moved on or is too long for every chat to receive. An empty base says the device read
+    // no brief: saved while there is none, refused once there is one.
+    let brief = ask(json!({ "op": "memory", "project_id": "p1" })).await;
+    assert_eq!(brief["data"], json!({ "markdown": "", "revision": null }));
+    let saved = ask(json!({
+        "op": "set_memory", "project_id": "p1", "markdown": "# One", "base_revision": "",
+    }))
+    .await;
+    assert_eq!(saved["data"], json!({ "revision": "r1" }), "{saved}");
+    let saved = ask(json!({
+        "op": "set_memory", "project_id": "p1", "markdown": "# Two", "base_revision": "r1",
+    }))
+    .await;
+    assert_eq!(saved["data"], json!({ "revision": "r2" }));
+    for base in ["r1", ""] {
+        let stale = ask(json!({
+            "op": "set_memory", "project_id": "p1", "markdown": "# Three", "base_revision": base,
+        }))
+        .await;
+        assert_eq!(stale["error"]["code"], "conflict", "{base:?}: {stale}");
+    }
+    let before = acted().len();
+    for (markdown, base, code) in [
+        ("x".repeat(4097), json!(null), "too_large"),
+        ("x".into(), json!("r\n1"), "invalid"),
+        ("x".into(), json!("r".repeat(257)), "invalid"),
+    ] {
+        let refused = ask(json!({
+            "op": "set_memory", "project_id": "p1", "markdown": markdown, "base_revision": base,
+        }))
+        .await;
+        assert_eq!(refused["error"]["code"], code);
+    }
+    assert_eq!(acted().len(), before, "refused before the app saw them");
+    let saves: Vec<Action> = acted()
+        .into_iter()
+        .filter(|action| matches!(action, Action::SaveMemory { .. }))
+        .collect();
+    assert_eq!(
+        saves[0],
+        Action::SaveMemory {
+            project_id: "p1".into(),
+            markdown: "# One".into(),
+            base_revision: Some(None),
+            reason: "Edited from iPhone".into(),
+        }
+    );
+    // With no base it saves over whatever is there.
+    let saved = ask(json!({ "op": "set_memory", "project_id": "p1", "markdown": "# Four" })).await;
+    assert_eq!(saved["data"], json!({ "revision": "r3" }));
+    assert_eq!(
+        ask(json!({ "op": "memory", "project_id": "p1" })).await["data"],
+        json!({ "markdown": "# Four", "revision": "r3" })
+    );
+}
+
+/// Archived chats, newest first, a page at a time: a page ends between chats that changed at
+/// different times only, so asking for what came before its last one misses none.
+#[tokio::test]
+async fn archived_chats_come_a_page_at_a_time() {
+    let rig = rig().await;
+    *rig.app.archived.lock().expect("archived") = [("a1", 50), ("a2", 40), ("a3", 40), ("a4", 30)]
+        .iter()
+        .map(|(id, at)| {
+            let mut chat = listed(id, SessionStatus::Stopped, false, *at);
+            chat.archived = true;
+            chat
+        })
+        .chain(std::iter::once(listed(
+            "open",
+            SessionStatus::Ready,
+            false,
+            60,
+        )))
+        .collect();
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let ids = |page: &Value| -> (Vec<String>, bool) {
+        (
+            page["data"]["chats"]
+                .as_array()
+                .expect("chats")
+                .iter()
+                .map(|chat| chat["chat"]["id"].as_str().expect("id").to_owned())
+                .collect(),
+            page["data"]["more"].as_bool().expect("more"),
+        )
+    };
+    let first = phone
+        .request(&mut relay, json!({ "op": "archived", "limit": 2 }))
+        .await;
+    assert_eq!(
+        ids(&first),
+        (vec!["a1".into(), "a2".into(), "a3".into()], true)
+    );
+    let next = phone
+        .request(
+            &mut relay,
+            json!({ "op": "archived", "limit": 2, "before": 40 }),
+        )
+        .await;
+    assert_eq!(ids(&next), (vec!["a4".into()], false));
+    let all = phone
+        .request(&mut relay, json!({ "op": "archived", "limit": 500 }))
+        .await;
+    assert_eq!(ids(&all).0.len(), 4, "at most 100, and never an open chat");
+    let one = phone
+        .request(&mut relay, json!({ "op": "archived", "limit": 0 }))
+        .await;
+    assert_eq!(ids(&one), (vec!["a1".into()], true));
+}
+
+/// A picture of a chat's browser: only of a chat this workspace lists, one at a time, and one
+/// too large for an answer is refused while the connection and the session go on.
+#[tokio::test]
+async fn a_picture_is_taken_one_at_a_time_and_never_too_large() {
+    let rig = rig().await;
+    *rig.app.listed.lock().expect("listed") = vec![
+        (listed("huge", SessionStatus::Ready, false, 1), Some(vec![])),
+        (listed("slow", SessionStatus::Ready, false, 1), Some(vec![])),
+    ];
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let seen = phone
+        .request(
+            &mut relay,
+            json!({ "op": "picture", "chat_id": "c1", "of": "browser" }),
+        )
+        .await;
+    assert_eq!(
+        seen["data"],
+        json!({ "mime": "image/jpeg", "data": "QUJD" })
+    );
+    for (ask, code) in [
+        (
+            json!({ "op": "picture", "chat_id": "c9", "of": "browser" }),
+            "not_found",
+        ),
+        (
+            json!({ "op": "picture", "chat_id": "c1", "of": "screen" }),
+            "invalid",
+        ),
+        // The app says this chat has no device.
+        (
+            json!({ "op": "picture", "chat_id": "c1", "of": "device" }),
+            "invalid",
+        ),
+    ] {
+        let refused = phone.request(&mut relay, ask.clone()).await;
+        assert_eq!(refused["error"]["code"], code, "{ask}: {refused}");
+    }
+    let id = phone
+        .send(
+            &mut relay,
+            json!({ "op": "picture", "chat_id": "huge", "of": "browser" }),
+        )
+        .await;
+    let frame = relay.next().await;
+    assert!(
+        frame.len() < 1024,
+        "{} bytes went to the relay",
+        frame.len()
+    );
+    let refused = phone.open(&frame);
+    assert_eq!(refused["re"], id);
+    assert_eq!(refused["error"]["code"], "too_large", "{refused}");
+    // One at a time: a second picture while one is taken waits for none.
+    let slow = phone
+        .send(
+            &mut relay,
+            json!({ "op": "picture", "chat_id": "slow", "of": "browser" }),
+        )
+        .await;
+    let busy = phone
+        .request(
+            &mut relay,
+            json!({ "op": "picture", "chat_id": "c1", "of": "browser" }),
+        )
+        .await;
+    assert_eq!(busy["error"]["code"], "busy", "{busy}");
+    assert_eq!(phone.reply(&mut relay, slow).await["ok"], true);
+    assert_eq!(
+        phone
+            .request(
+                &mut relay,
+                json!({ "op": "picture", "chat_id": "c1", "of": "browser" }),
+            )
+            .await["ok"],
+        true,
+        "free again"
+    );
+    let pictured: Vec<String> = rig
+        .app
+        .answered
+        .lock()
+        .expect("answered")
+        .iter()
+        .filter(|line| line.starts_with("picture"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        pictured,
+        [
+            "picture c1 Browser",
+            "picture c1 Device",
+            "picture huge Browser",
+            "picture slow Browser",
+            "picture c1 Browser"
+        ],
+        "a chat the workspace does not list is never pictured"
+    );
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    sha2::Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn base64(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+/// Stages `photo` in pieces and answers its id.
+async fn stage(phone: &mut Browser, relay: &mut Relay, name: &str, photo: &[u8]) -> String {
+    let begun = phone
+        .request(
+            relay,
+            json!({
+                "op": "upload_begin", "name": name, "mime": "image/jpeg",
+                "size": photo.len(), "sha256": sha256_hex(photo),
+            }),
+        )
+        .await;
+    assert_eq!(begun["data"]["chunk"], 49152, "{begun}");
+    let id = begun["data"]["upload_id"].as_str().expect("id").to_owned();
+    for (index, piece) in photo.chunks(49152).enumerate() {
+        let got = phone
+            .request(
+                relay,
+                json!({ "op": "upload_chunk", "upload_id": id, "index": index, "data": base64(piece) }),
+            )
+            .await;
+        assert_eq!(got["ok"], true, "{got}");
+    }
+    id
+}
+
+/// Photos arrive in order, in pieces, checked against their SHA-256, within a session's and the
+/// computer's room, and outside the session's places for calls. A message takes them: each is
+/// added to the chat's message box, then the message is sent with them, and only then do they
+/// leave the stage. One nothing touched for ten minutes goes, and so does everything when the
+/// session ends.
+#[tokio::test]
+async fn photos_arrive_in_order_and_go_with_their_message() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, device, key) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let photo: Vec<u8> = (0..60_000u32).map(|n| (n % 253) as u8).collect();
+    let begun = phone
+        .request(
+            &mut relay,
+            json!({
+                "op": "upload_begin", "name": "IMG_0001.jpg", "mime": "image/jpeg",
+                "size": photo.len(), "sha256": sha256_hex(&photo),
+            }),
+        )
+        .await;
+    assert_eq!(begun["data"]["chunk"], 49152);
+    let id = begun["data"]["upload_id"].as_str().expect("id").to_owned();
+    assert_eq!(id.len(), 12);
+    let (first, rest) = photo.split_at(49152);
+    let chunk = |index: u32, data: &[u8]| json!({ "op": "upload_chunk", "upload_id": id, "index": index, "data": base64(data) });
+    let early = phone.request(&mut relay, chunk(1, rest)).await;
+    assert_eq!(early["error"]["code"], "invalid", "out of order: {early}");
+    assert_eq!(
+        phone.request(&mut relay, chunk(0, first)).await["data"],
+        json!({ "received": 49152, "complete": false })
+    );
+    assert_eq!(
+        phone.request(&mut relay, chunk(1, rest)).await["data"],
+        json!({ "received": 60000, "complete": true })
+    );
+    // Not as it was sent: dropped.
+    let wrong = phone
+        .request(
+            &mut relay,
+            json!({
+                "op": "upload_begin", "name": "x.png", "mime": "image/png", "size": 3,
+                "sha256": sha256_hex(b"abc"),
+            }),
+        )
+        .await;
+    let wrong = wrong["data"]["upload_id"].as_str().expect("id").to_owned();
+    let corrupt = phone
+        .request(
+            &mut relay,
+            json!({ "op": "upload_chunk", "upload_id": wrong, "index": 0, "data": base64(b"abd") }),
+        )
+        .await;
+    assert_eq!(corrupt["error"]["code"], "corrupt", "{corrupt}");
+    for (ask, code) in [
+        (
+            json!({ "op": "upload_begin", "name": "a", "mime": "image/heic", "size": 1, "sha256": sha256_hex(b"a") }),
+            "invalid",
+        ),
+        (
+            json!({ "op": "upload_begin", "name": "a", "mime": "image/png", "size": 8 * 1024 * 1024 + 1, "sha256": sha256_hex(b"a") }),
+            "too_large",
+        ),
+        (
+            json!({ "op": "upload_chunk", "upload_id": wrong, "index": 1, "data": "QQ==" }),
+            "not_found",
+        ),
+    ] {
+        let refused = phone.request(&mut relay, ask.clone()).await;
+        assert_eq!(refused["error"]["code"], code, "{ask}: {refused}");
+    }
+
+    // A message that fails keeps its photos staged; one that goes takes them.
+    let failed = phone
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "fail", "attachments": [id] }),
+        )
+        .await;
+    assert_eq!(failed["error"]["code"], "queue_full", "{failed}");
+    let sent = phone
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "", "attachments": [id] }),
+        )
+        .await;
+    assert_eq!(sent["data"]["prompt_id"], "prompt-2", "{sent}");
+    let gone = phone
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "Again", "attachments": [id] }),
+        )
+        .await;
+    assert_eq!(gone["error"]["code"], "not_found", "{gone}");
+    let answered: Vec<String> = rig
+        .app
+        .answered
+        .lock()
+        .expect("answered")
+        .iter()
+        .filter(|line| line.starts_with("attach") || line.starts_with("input"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        answered,
+        [
+            "attach c1 IMG_0001.jpg image/jpeg 60000 as a1",
+            "input c1 \"fail\" [\"a1\"]",
+            "attach c1 IMG_0001.jpg image/jpeg 60000 as a2",
+            "input c1 \"\" [\"a2\"]",
+        ],
+        "each attached before the message that carries it"
+    );
+
+    // A new chat with a photo whose first message fails: the chat is said, with why.
+    let photo_id = stage(&mut phone, &mut relay, "IMG_0002.jpg", b"small photo").await;
+    let created = phone
+        .request(
+            &mut relay,
+            json!({ "op": "create", "folder_id": "f1", "agent_id": null, "text": "fail", "attachments": [photo_id] }),
+        )
+        .await;
+    assert_eq!(created["data"]["chat"]["chat"]["id"], "c2", "{created}");
+    assert_eq!(created["data"]["unsent"], "The queue is full.");
+    assert!(created["data"].get("sent").is_none());
+    let sent = phone
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c2", "text": "Look", "attachments": [photo_id] }),
+        )
+        .await;
+    assert_eq!(sent["ok"], true, "still staged: {sent}");
+
+    // Four arrive at once; a fifth waits.
+    let begin = |n: u32| {
+        json!({
+            "op": "upload_begin", "name": format!("{n}.jpg"), "mime": "image/jpeg", "size": 10,
+            "sha256": sha256_hex(b"0123456789"),
+        })
+    };
+    let mut open = Vec::new();
+    for n in 0..4 {
+        let begun = phone.request(&mut relay, begin(n)).await;
+        open.push(begun["data"]["upload_id"].as_str().expect("id").to_owned());
+    }
+    assert_eq!(
+        phone.request(&mut relay, begin(4)).await["error"]["code"],
+        "busy"
+    );
+    assert_eq!(
+        phone
+            .request(
+                &mut relay,
+                json!({ "op": "upload_abort", "upload_id": open[0] })
+            )
+            .await["data"],
+        json!({})
+    );
+    let again = phone.request(&mut relay, begin(5)).await;
+    assert_eq!(again["ok"], true, "{again}");
+
+    // Pieces are taken at once, whatever holds the session's places for calls.
+    rig.app.slow_archive.store(true, Ordering::Relaxed);
+    let waiting: Vec<u32> = {
+        let mut ids = Vec::new();
+        for _ in 0..16 {
+            ids.push(phone.send(&mut relay, json!({ "op": "archived" })).await);
+        }
+        ids
+    };
+    let busy = phone.request(&mut relay, json!({ "op": "overview" })).await;
+    assert_eq!(busy["error"]["code"], "busy", "{busy}");
+    let piece = phone
+        .request(
+            &mut relay,
+            json!({ "op": "upload_chunk", "upload_id": open[1], "index": 0, "data": base64(b"0123456789") }),
+        )
+        .await;
+    assert_eq!(
+        piece["data"],
+        json!({ "received": 10, "complete": true }),
+        "{piece}"
+    );
+    for id in waiting {
+        assert_eq!(phone.reply(&mut relay, id).await["ok"], true);
+    }
+    rig.app.slow_archive.store(false, Ordering::Relaxed);
+
+    // Ten minutes untouched: gone.
+    rig.service.sweep_later(Duration::from_secs(11 * 60));
+    // The sweep arrives by the service's own channel, beside the relay's: let it land first.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let expired = phone
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "", "attachments": [open[1]] }),
+        )
+        .await;
+    assert_eq!(expired["error"]["code"], "not_found", "{expired}");
+
+    // A session's photos end with it; a new session of the same device stages afresh.
+    let kept = stage(&mut phone, &mut relay, "IMG_0003.jpg", b"kept").await;
+    relay.send("caaaaaaaaaaaaaaaa").await;
+    let (mut next, _) = Browser::app(&mut relay, "bbbbbbbbbbbbbbbb", "device", &device, &key).await;
+    let ended = next
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "", "attachments": [kept] }),
+        )
+        .await;
+    assert_eq!(ended["error"]["code"], "not_found", "{ended}");
+    for n in 0..4 {
+        let begun = next.request(&mut relay, begin(10 + n)).await;
+        assert_eq!(begun["ok"], true, "the old session's room is free: {begun}");
+    }
+}
+
+/// Photos are measured as the chat will keep them before anything is made with them: more than
+/// 8 MiB together is refused, and no attachment, chat, worktree or task is made. They stay
+/// staged for a message that carries fewer.
+#[tokio::test]
+async fn photos_too_large_together_make_nothing() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let half: Vec<u8> = (0..4_500_000u32).map(|n| (n % 241) as u8).collect();
+    let first = stage(&mut phone, &mut relay, "first.jpg", &half).await;
+    let second = stage(&mut phone, &mut relay, "second.jpg", &half[1..]).await;
+    for ask in [
+        json!({ "op": "send", "chat_id": "c1", "text": "", "attachments": [first, second] }),
+        json!({ "op": "create", "folder_id": "f1", "agent_id": null, "text": "", "attachments": [first, second] }),
+        json!({ "op": "task", "goal": "Fix what these show", "attachments": [first, second] }),
+    ] {
+        let refused = phone.request(&mut relay, ask.clone()).await;
+        assert_eq!(
+            refused["error"],
+            json!({
+                "code": "too_large",
+                "message": "These photos are more than 8 MB together. Send fewer at a time.",
+            }),
+            "{ask}"
+        );
+    }
+    let answered = rig.app.answered.lock().expect("answered").clone();
+    assert!(
+        answered.iter().all(|line| !line.starts_with("attach")
+            && !line.starts_with("create")
+            && !line.starts_with("worktree")),
+        "{answered:?}"
+    );
+    assert!(rig.app.made.lock().expect("made").is_empty());
+    let sent = phone
+        .request(
+            &mut relay,
+            json!({ "op": "send", "chat_id": "c1", "text": "One", "attachments": [first] }),
+        )
+        .await;
+    assert_eq!(sent["ok"], true, "still staged: {sent}");
+}
+
+/// The owner's want, 25 November 2026: a task handed over from the phone is built on a branch
+/// of its own, set to the access the person chose before its brief is sent (and nothing sent
+/// when that fails), told it came from the phone, with the person's photos; then reviewed by a
+/// second agent held to the same access. It is the device's: listed in its tasks, told to no
+/// bot.
+#[tokio::test]
+async fn a_task_from_the_phone_is_built_then_reviewed() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    rig.app.second_agent.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let started = phone
+        .request(
+            &mut relay,
+            json!({ "op": "task", "goal": "Fix the login form\nIt rejects valid emails.", "access": "auto_edit" }),
+        )
+        .await;
+    assert_eq!(
+        started["data"],
+        json!({ "chat_id": "c2", "branch": "aura/fix-the-login-form", "review_agent": "codex" }),
+        "{started}"
+    );
+    let acted = || rig.app.acted.lock().expect("acted").clone();
+    assert_eq!(
+        acted(),
+        [Action::SetAccess {
+            chat_id: "c2".into(),
+            access: "auto_edit".into()
+        }],
+        "the person's access, set before anything was sent"
+    );
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].0, "c2");
+    assert!(
+        sent[0]
+            .1
+            .starts_with("Fix the login form\nIt rejects valid emails.\n\n---\nThis is a task the person handed to you from o7 on their phone."),
+        "{}",
+        sent[0].1
+    );
+    let tasks = phone.request(&mut relay, json!({ "op": "tasks" })).await;
+    let task = &tasks["data"]["tasks"][0];
+    assert_eq!(
+        (
+            &task["chat_id"],
+            &task["by"],
+            &task["review_agent"],
+            &task["reviewer_chat"]
+        ),
+        (
+            &json!("c2"),
+            &json!("device"),
+            &json!("codex"),
+            &json!(null)
+        )
+    );
+    assert_eq!(
+        tasks["data"]["night"],
+        json!({ "from": 1, "to": 6, "budget": 3, "started": 0 })
+    );
+
+    // The review waits for the work, then starts held to the same access.
+    for _ in 0..200 {
+        if rig
+            .app
+            .statuses
+            .lock()
+            .expect("statuses")
+            .contains_key("auracode-remote-callbacks")
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    rig.app.made_becomes("c2", SessionStatus::Running);
+    rig.app.made_becomes("c2", SessionStatus::Ready);
+    for _ in 0..100 {
+        if rig.app.sent.lock().expect("sent").len() == 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert_eq!(sent.len(), 2, "{sent:?}");
+    assert_eq!(sent[1].0, "c3");
+    assert!(
+        sent[1]
+            .1
+            .starts_with("Review the work just done for a task, without changing any file."),
+        "{}",
+        sent[1].1
+    );
+    assert_eq!(
+        acted()[1..],
+        [Action::SetAccess {
+            chat_id: "c3".into(),
+            access: "auto_edit".into()
+        }]
+    );
+    let tasks = phone.request(&mut relay, json!({ "op": "tasks" })).await;
+    assert_eq!(tasks["data"]["tasks"][0]["reviewer_chat"], "c3");
+    rig.app.made_becomes("c3", SessionStatus::Running);
+    rig.app.made_becomes("c3", SessionStatus::Ready);
+    tokio::time::sleep(std::time::Duration::from_millis(2600)).await;
+    assert!(
+        rig.told.lock().expect("told").is_empty(),
+        "no bot hears of the person's task"
+    );
+
+    // An access the chat cannot take: the chat is made and nothing is sent to it.
+    rig.app.refuse_access.store(true, Ordering::Relaxed);
+    let refused = phone
+        .request(
+            &mut relay,
+            json!({ "op": "task", "goal": "Tidy", "access": "full_auto", "review": false }),
+        )
+        .await;
+    assert_eq!(refused["error"]["code"], "failed", "{refused}");
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .expect("message")
+            .contains("so nothing was sent to it"),
+        "{refused}"
+    );
+    assert_eq!(rig.app.sent.lock().expect("sent").len(), 2);
+    rig.app.refuse_access.store(false, Ordering::Relaxed);
+
+    // With a photo, and no access chosen: the project's own, nothing set.
+    let photo = stage(&mut phone, &mut relay, "IMG_0004.jpg", b"the error").await;
+    let before = acted().len();
+    let started = phone
+        .request(
+            &mut relay,
+            json!({ "op": "task", "goal": "Fix what this shows", "review": false, "attachments": [photo] }),
+        )
+        .await;
+    assert_eq!(started["data"]["review_agent"], json!(null), "{started}");
+    let chat = started["data"]["chat_id"]
+        .as_str()
+        .expect("chat")
+        .to_owned();
+    assert_eq!(acted().len(), before, "no access set");
+    let answered: Vec<String> = rig
+        .app
+        .answered
+        .lock()
+        .expect("answered")
+        .iter()
+        .filter(|line| line.starts_with("attach") || line.starts_with("input"))
+        .cloned()
+        .collect();
+    assert_eq!(answered.len(), 2, "{answered:?}");
+    assert_eq!(
+        answered[0],
+        format!("attach {chat} IMG_0004.jpg image/jpeg 9 as a1")
+    );
+    assert!(
+        answered[1].starts_with(&format!("input {chat} \"Fix what this shows\\n\\n---\\n")),
+        "{}",
+        answered[1]
+    );
+    assert!(answered[1].ends_with("[\"a1\"]"), "{}", answered[1]);
+    for (ask, code) in [
+        (json!({ "op": "task", "goal": "   " }), "empty"),
+        (
+            json!({ "op": "task", "goal": "x".repeat(64 * 1024 + 1) }),
+            "too_large",
+        ),
+        (
+            json!({ "op": "task", "goal": "Fix", "when": "later" }),
+            "invalid",
+        ),
+        (
+            json!({ "op": "task", "goal": "Fix", "access": "everything" }),
+            "invalid",
+        ),
+        (
+            json!({ "op": "task", "goal": "Fix", "attachments": [photo] }),
+            "not_found",
+        ),
+    ] {
+        let refused = phone.request(&mut relay, ask.clone()).await;
+        assert_eq!(refused["error"]["code"], code, "{refused}");
+    }
+}
+
+/// The person queues a task for tonight from the phone: listed with the queue (a bot's too),
+/// taken off by the person whoever queued it, and started at night as the device's, set to the
+/// access they chose.
+#[tokio::test]
+async fn a_task_for_tonight_from_the_phone_waits_and_can_be_taken_off() {
+    let rig = rig().await;
+    rig.app.keeps.store(true, Ordering::Relaxed);
+    let mut relay = online(&rig).await;
+    let made = rig
+        .service
+        .create_bot("Grok Bot", o7_remote::bot::Rights::CHATS)
+        .expect("bot");
+    relay.next().await;
+    let (bot, token) = made
+        .url
+        .rsplit_once('/')
+        .and_then(|(_, reference)| reference.split_once('.'))
+        .map(|(bot, token)| (bot.to_owned(), token.to_owned()))
+        .expect("id.token");
+    relay
+        .send(format!(
+            "b{}",
+            json!({ "rid": "n1", "bot": bot, "token": token, "tool": "task", "args": { "goal": "The bot's", "when": "tonight" } })
+        ))
+        .await;
+    let answer: Value =
+        serde_json::from_str(relay.next().await.strip_prefix('b').expect("answer")).expect("json");
+    assert_eq!(answer["error"], false, "{answer}");
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    // Longer than a list shows: it waits whole, and starts whole.
+    let goal = format!("Tidy the README.{}", " Keep it short.".repeat(200));
+    let queued = phone
+        .request(
+            &mut relay,
+            json!({ "op": "task", "goal": goal, "when": "tonight", "access": "ask" }),
+        )
+        .await;
+    let id = queued["data"]["queued"]
+        .as_str()
+        .expect("queued")
+        .to_owned();
+    assert!(id.starts_with('q'), "{queued}");
+    // One of the person's own, taken off before night: it never starts.
+    let second = phone
+        .request(
+            &mut relay,
+            json!({ "op": "task", "goal": "Never mind", "when": "tonight" }),
+        )
+        .await;
+    let second = second["data"]["queued"]
+        .as_str()
+        .expect("queued")
+        .to_owned();
+    assert_eq!(
+        phone
+            .request(
+                &mut relay,
+                json!({ "op": "task_cancel", "queued_id": second })
+            )
+            .await["data"],
+        json!({})
+    );
+    let photo = stage(&mut phone, &mut relay, "a.jpg", b"x").await;
+    let refused = phone
+        .request(
+            &mut relay,
+            json!({ "op": "task", "goal": "With a photo", "when": "tonight", "attachments": [photo] }),
+        )
+        .await;
+    assert_eq!(refused["error"]["code"], "invalid", "{refused}");
+    let list = phone.request(&mut relay, json!({ "op": "tasks" })).await;
+    let queue = list["data"]["queued"].as_array().expect("queued").clone();
+    assert_eq!(queue.len(), 2, "{list}");
+    assert_eq!(
+        (&queue[0]["goal"], &queue[0]["by"]),
+        (&json!("The bot's"), &json!("bot"))
+    );
+    assert_eq!(
+        (
+            &queue[1]["id"],
+            &queue[1]["goal"],
+            &queue[1]["project_id"],
+            &queue[1]["review"],
+            &queue[1]["by"],
+            &queue[1]["failed"],
+        ),
+        (
+            &json!(id),
+            &json!(goal.chars().take(2000).collect::<String>()),
+            &json!("p1"),
+            &json!(true),
+            &json!("device"),
+            &json!(null),
+        )
+    );
+    assert_eq!(
+        phone
+            .request(
+                &mut relay,
+                json!({ "op": "task_cancel", "queued_id": "qnothing" })
+            )
+            .await["error"]["code"],
+        "not_found"
+    );
+    // The bot's goes, taken off by the person.
+    let bots = queue[0]["id"].as_str().expect("id").to_owned();
+    assert_eq!(
+        phone
+            .request(
+                &mut relay,
+                json!({ "op": "task_cancel", "queued_id": bots })
+            )
+            .await["data"],
+        json!({})
+    );
+
+    // At night the person's starts, as theirs, with the access they chose.
+    *rig.app.hour.lock().expect("hour") = Some(2);
+    rig.service.later_tick().await;
+    let sent = rig.app.sent.lock().expect("sent").clone();
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert!(
+        sent[0].1.starts_with(&format!(
+            "{goal}\n\n---\nThis is a task the person handed to you from o7 on their phone."
+        )),
+        "{}",
+        sent[0].1
+    );
+    assert_eq!(
+        *rig.app.acted.lock().expect("acted"),
+        [Action::SetAccess {
+            chat_id: "c2".into(),
+            access: "ask".into()
+        }]
+    );
+    let list = phone.request(&mut relay, json!({ "op": "tasks" })).await;
+    assert_eq!(list["data"]["queued"], json!([]));
+    assert_eq!(list["data"]["tasks"][0]["chat_id"], "c2");
+    assert_eq!(list["data"]["tasks"][0]["by"], "device");
+    assert_eq!(list["data"]["night"]["started"], 1);
+    // Gone from the queue, it cannot be taken off.
+    assert_eq!(
+        phone
+            .request(&mut relay, json!({ "op": "task_cancel", "queued_id": id }))
+            .await["error"]["code"],
+        "not_found"
     );
 }

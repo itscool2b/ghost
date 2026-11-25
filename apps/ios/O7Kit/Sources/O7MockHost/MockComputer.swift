@@ -10,7 +10,7 @@ public actor MockComputer {
     public nonisolated let hostId: String
     public nonisolated let hostName: String
     public var look = Look(theme: "claude", appearance: "dark")
-    public var features = ["pickers", "inbox", "search"]
+    public var features = ["pickers", "inbox", "search", "control", "review", "memory", "screens", "tasks", "attachments"]
     /// Seconds between the scripted agent's steps.
     public var pace: Duration
     /// While false, the relay says the computer is away.
@@ -18,7 +18,8 @@ public actor MockComputer {
 
     private var pairing: (id: String, key: Data)?
     private var devices: [String: Data] = [:]
-    private var chats: [MockChat]
+    var chats: [MockChat]
+    var state = MockState()
     private var sessions: [Int: Session] = [:]
     private var nextSession = 0
     private var turns = 0
@@ -154,11 +155,11 @@ public actor MockComputer {
         session.link.deliver("mE" + sealed)
     }
 
-    private func reply(_ re: Double, _ data: JSONValue, to id: Int) {
+    func reply(_ re: Double, _ data: JSONValue, to id: Int) {
         send(.object(["re": .number(re), "ok": .bool(true), "data": data]), to: id)
     }
 
-    private func refuse(_ re: Double, _ code: String, _ message: String, to id: Int) {
+    func refuse(_ re: Double, _ code: String, _ message: String, to id: Int) {
         send(
             .object([
                 "re": .number(re), "ok": .bool(false),
@@ -254,6 +255,12 @@ public actor MockComputer {
                         .object(["value": .string("high"), "name": .string("High")]),
                     ]),
                     "thinking_level": .string("high"),
+                    "access": .array([
+                        .object(["value": .string("ask"), "name": .string("Ask first")]),
+                        .object(["value": .string("auto_edit"), "name": .string("Edit without asking")]),
+                        .object(["value": .string("full_auto"), "name": .string("Full access")]),
+                    ]),
+                    "access_mode": .string(state.access[chatId] ?? "ask"),
                 ]), to: id)
         case "set_model", "set_thinking":
             reply(re, .object([:]), to: id)
@@ -280,8 +287,32 @@ public actor MockComputer {
             reply(re, .object([:]), to: id)
             sessions[id]?.link.closeFromServer()
         default:
-            refuse(re, "not_offered", "This computer's o7 does not offer that.", to: id)
+            if !control(op, request, re: re, session: id) {
+                refuse(re, "not_offered", "This computer's o7 does not offer that.", to: id)
+            }
         }
+    }
+
+    /// Tells every session a chat changed, as a status update does.
+    func announce(_ chatId: String) {
+        if let chat = chats.first(where: { $0.id == chatId }) {
+            status(chatId, chat.summary.chat.status, attention: chat.summary.chat.needsAttention)
+        } else {
+            refetchAll()
+        }
+    }
+
+    /// A chat left the list: every session reads the overview again (a status for a chat it does
+    /// not know makes it do so).
+    private func refetchAll() {
+        let event: JSONValue = .object([
+            "ev": .string("chat"),
+            "update": .object([
+                "chat_id": .string("gone-\(Int.random(in: 0...1_000_000))"), "status": .string("stopped"),
+                "needs_attention": .bool(false), "title": .null, "updated_at": .number(0),
+            ]),
+        ])
+        for (id, session) in sessions where session.ready && session.device != nil { send(event, to: id) }
     }
 
     func overview() -> Overview {
@@ -324,7 +355,7 @@ public actor MockComputer {
         return .object(["asking": .array(asking), "working": .array(working), "recent": .array(recent)])
     }
 
-    private func newChat(folder: String, agent: String?) -> WorkspaceChat {
+    func newChat(folder: String, agent: String?) -> WorkspaceChat {
         let id = "c\(chats.count + 1)"
         let agentId = agent ?? "claude-code"
         let name = Script.agents.first { $0.id == agentId }?.name ?? agentId
@@ -341,7 +372,7 @@ public actor MockComputer {
 
     private func index(_ chatId: String) -> Int? { chats.firstIndex { $0.id == chatId } }
 
-    private func status(_ chatId: String, _ status: SessionStatus, attention: Bool) {
+    func status(_ chatId: String, _ status: SessionStatus, attention: Bool) {
         guard let at = index(chatId) else { return }
         chats[at].summary.chat.status = status
         chats[at].summary.chat.needsAttention = attention

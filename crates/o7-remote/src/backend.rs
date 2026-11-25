@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub use futures::future::BoxFuture;
 use o7_protocol::{
     EventBatch, UiAnswer,
+    composer::ChatImageSource,
     search::ChatSearchHit,
     session::{ChatAttach, ChatStatusUpdate, HistoryPage, PromptAck},
     workspace::WorkspaceChat,
@@ -102,6 +103,18 @@ pub enum Action {
         project_id: String,
         markdown: String,
     },
+    /// The person's own edit of a project's brief, from a paired device: saved as theirs, not
+    /// as a bot's, and whatever the switch for agents' memory edits says. `base_revision` is the
+    /// revision the edit was made on: none saves over whatever is there; `Some(None)` saves only
+    /// while there is no brief yet, and `Some(Some(revision))` only while the brief is at that
+    /// revision (`conflict` otherwise). `reason` is what the brief's history shows for it
+    /// ("Edited from iPhone").
+    SaveMemory {
+        project_id: String,
+        markdown: String,
+        base_revision: Option<Option<String>>,
+        reason: String,
+    },
 }
 
 /// One thing a chat lets a person choose, as the app names it.
@@ -148,9 +161,52 @@ pub enum Outcome {
         binary: bool,
         truncated: bool,
     },
+    /// A project's brief, read or as saved. `revision` is what a save names as its base; none
+    /// while no brief was saved, or from a backend that cannot say.
     Memory {
         markdown: String,
+        revision: Option<String>,
     },
+}
+
+/// What a chat's own branch changed ([`Backend::branch_changes`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BranchChanges {
+    /// Path and `added`, `modified` or `deleted`, sorted by path.
+    pub files: Vec<(String, String)>,
+    /// The commit the changes are counted from.
+    pub base: Option<String>,
+    /// Why there is nothing to list: the chat has no branch of its own, or the computer could
+    /// not read it.
+    pub unavailable: Option<String>,
+}
+
+/// One changed file, before and after. A side that is none did not exist.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Diff {
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub binary: bool,
+    pub truncated: bool,
+}
+
+/// A photo as a chat's message box will keep it ([`Backend::prepare_image`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedImage {
+    pub bytes: Vec<u8>,
+    /// Its name, with the extension of what it is now.
+    pub name: String,
+    pub mime: String,
+}
+
+/// An image of a chat for a paired device ([`Backend::image`]): its type, its bytes in standard
+/// base64, and its size in pixels.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ImagePreview {
+    pub mime: String,
+    pub data: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// How a pull request's checks stand, all of them together.
@@ -372,6 +428,135 @@ pub trait Backend: Send + Sync + 'static {
             Err(BackendError::new(
                 "unavailable",
                 "Search is not available on this computer.",
+            ))
+        })
+    }
+    /// The workspace's archived chats, in any order: what [`Backend::overview`] leaves out. A
+    /// backend that cannot list them refuses.
+    fn archived(&self) -> BoxFuture<'_, Result<Vec<WorkspaceChat>, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "Archived chats are not available on this computer.",
+            ))
+        })
+    }
+    /// What [`Backend::picture`] shows, small enough that its base64 is at most `max_bytes`. A
+    /// backend that can make it smaller does; one it cannot fit is refused `too_large`.
+    fn picture_within<'a>(
+        &'a self,
+        chat_id: &'a str,
+        of: PictureOf,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<Picture, BackendError>> {
+        Box::pin(async move {
+            let picture = self.picture(chat_id, of).await?;
+            if picture.data.len() > max_bytes {
+                return Err(BackendError::new(
+                    "too_large",
+                    "The picture is too large to send to this device.",
+                ));
+            }
+            Ok(picture)
+        })
+    }
+    /// A photo a paired device sent, as `chat_id`'s message box will keep it once
+    /// [`Backend::attach_image`] adds it, so a message's photos are measured before anything is
+    /// made with them. `bytes` are a PNG, JPEG, WebP or GIF, whole and matching the SHA-256 the
+    /// device gave; `mime` is the type it named. A backend that keeps photos as they come
+    /// answers them unchanged.
+    fn prepare_image<'a>(
+        &'a self,
+        bytes: Vec<u8>,
+        name: &'a str,
+        mime: &'a str,
+    ) -> BoxFuture<'a, Result<PreparedImage, BackendError>> {
+        Box::pin(async move {
+            Ok(PreparedImage {
+                bytes,
+                name: name.to_owned(),
+                mime: mime.to_owned(),
+            })
+        })
+    }
+    /// Adds a photo [`Backend::prepare_image`] answered to `chat_id`'s message box, and answers
+    /// its attachment id for [`Backend::send_input`]. A backend without attachments refuses.
+    fn attach_image<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _bytes: Vec<u8>,
+        _name: &'a str,
+        _mime: &'a str,
+    ) -> BoxFuture<'a, Result<String, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "Photos are not available on this computer.",
+            ))
+        })
+    }
+    /// Sends `text` with the attachments [`Backend::attach_image`] answered, as the window's
+    /// message box does; the text may be empty when attachments go with it. A backend without
+    /// attachments refuses.
+    fn send_input<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _text: String,
+        _attachments: Vec<String>,
+    ) -> BoxFuture<'a, Result<PromptAck, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "Photos are not available on this computer.",
+            ))
+        })
+    }
+    /// An image of `chat_id`, as the window's preview reads it (`full`: the larger one), its
+    /// base64 at most `max_bytes`. The source is one the chat holds; the caller never passes a
+    /// file by path. A backend without images refuses.
+    fn image<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _source: ChatImageSource,
+        _full: bool,
+        _max_bytes: usize,
+    ) -> BoxFuture<'a, Result<ImagePreview, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "Images are not available on this computer.",
+            ))
+        })
+    }
+    /// What `chat_id`'s own branch changed since `base` (the commit its task started from, when
+    /// known; otherwise the backend finds the branch's own), at most `max_files` files. A chat
+    /// without a branch of its own, or a backend that cannot say, answers why in `unavailable`.
+    fn branch_changes<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _base: Option<&'a str>,
+        _max_files: usize,
+    ) -> BoxFuture<'a, Result<BranchChanges, BackendError>> {
+        Box::pin(async {
+            Ok(BranchChanges {
+                unavailable: Some("This computer's o7 cannot read a chat's branch.".into()),
+                ..BranchChanges::default()
+            })
+        })
+    }
+    /// One file of [`Backend::branch_changes`], before and after, each side at most `max_bytes`.
+    /// A path that is not among those changes is `not_found`, and nothing else is read.
+    fn branch_diff<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _base: Option<&'a str>,
+        _path: &'a str,
+        _max_bytes: usize,
+    ) -> BoxFuture<'a, Result<Diff, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "This computer's o7 cannot read a chat's branch.",
             ))
         })
     }

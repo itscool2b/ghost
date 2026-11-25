@@ -36,16 +36,20 @@ pub fn read(dir: &Path, hash: &str, limit: usize) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// A saved image as base64 for a vendor: a PNG, or a JPEG, either one the composer decoded and
+/// made again (a phone's photo stays a JPEG), whose first bytes say it is what it claims.
 pub fn image(dir: Option<&Path>, hash: &str, mime: &str) -> Result<String, String> {
-    if mime != "image/png" {
-        return Err("The attachment must be a normalized PNG image.".into());
-    }
+    let magic: &[u8] = match mime {
+        "image/png" => b"\x89PNG\r\n\x1a\n",
+        "image/jpeg" => &[0xFF, 0xD8, 0xFF],
+        _ => return Err("The attachment must be a normalized PNG or JPEG image.".into()),
+    };
     let bytes = read(
         dir.ok_or("This session cannot access saved attachments.")?,
         hash,
         MAX_IMAGE_BYTES,
     )?;
-    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+    if !bytes.starts_with(magic) {
         return Err("The saved image has an invalid format.".into());
     }
     Ok(STANDARD.encode(bytes))
@@ -149,6 +153,31 @@ mod tests {
                 .expect("object")
                 .contains_key("images")
         );
+    }
+
+    /// A saved PNG or JPEG is read as what it is; a type outside the two, or bytes that do not
+    /// start as the type says, are refused.
+    #[test]
+    fn a_saved_png_or_jpeg_is_read_as_what_it_is() {
+        let dir = tempfile::tempdir().expect("dir");
+        let save = |bytes: &[u8]| {
+            let hash = format!("{:x}", Sha256::digest(bytes));
+            fs::write(dir.path().join(&hash), bytes).expect("saved");
+            hash
+        };
+        let png = save(b"\x89PNG\r\n\x1a\nrest");
+        let jpeg = save(&[0xFF, 0xD8, 0xFF, 0xE0, 1, 2]);
+        assert_eq!(
+            image(Some(dir.path()), &png, "image/png").expect("png"),
+            STANDARD.encode(b"\x89PNG\r\n\x1a\nrest")
+        );
+        assert_eq!(
+            image(Some(dir.path()), &jpeg, "image/jpeg").expect("jpeg"),
+            STANDARD.encode([0xFF, 0xD8, 0xFF, 0xE0, 1, 2])
+        );
+        assert!(image(Some(dir.path()), &jpeg, "image/png").is_err());
+        assert!(image(Some(dir.path()), &png, "image/jpeg").is_err());
+        assert!(image(Some(dir.path()), &png, "image/webp").is_err());
     }
 
     #[test]

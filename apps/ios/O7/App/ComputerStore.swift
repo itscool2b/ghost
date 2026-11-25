@@ -21,6 +21,8 @@ final class ComputerStore: Identifiable {
     private(set) var hostName: String
     /// The last thing that went wrong, said plainly; cleared by the next success.
     var problem: String?
+    /// A chat made without its first message: the words go back in its box, with why.
+    var unsent: (chatId: String, text: String, reason: String)?
     /// The chat open on this computer, if any. One per computer, as the protocol has it.
     private(set) var chat: ChatStore?
 
@@ -245,6 +247,12 @@ final class ComputerStore: Identifiable {
     }
 
     var offersPickers: Bool { features.contains("pickers") }
+    var offersControl: Bool { features.contains("control") }
+    var offersReview: Bool { features.contains("review") }
+    var offersMemory: Bool { features.contains("memory") }
+    var offersScreens: Bool { features.contains("screens") }
+    var offersTasks: Bool { features.contains("tasks") }
+    var offersPhotos: Bool { features.contains("attachments") }
 
     // MARK: Acting
 
@@ -275,12 +283,32 @@ final class ComputerStore: Identifiable {
         try await connection.perform(.interrupt(chatId), timeout: .act)
     }
 
-    /// Starts a chat with its first message; returns its id.
-    func create(folderId: String, agentId: String?, text: String) async throws -> String {
+    /// Starts a chat with its first message and photos; returns its id, and why the message did
+    /// not go when the chat was made without it.
+    func create(
+        folderId: String, agentId: String?, text: String, photos: [PickedPhoto] = []
+    ) async throws -> (chatId: String, unsent: String?) {
+        let ids = photos.isEmpty ? [] : try await upload(photos)
         let created = try await connection.send(
-            .create(folderId: folderId, agentId: agentId, text: text), as: Created.self, timeout: .slow)
+            .create(folderId: folderId, agentId: agentId, text: text, attachments: ids), as: Created.self,
+            timeout: .slow)
         await refresh()
-        return created.chat.chat.id
+        return (created.chat.chat.id, created.unsent)
+    }
+
+    /// Hands work to o7 as a task on its own branch, now or tonight.
+    func startTask(
+        goal: String, projectId: String?, agentId: String?, review: Bool, tonight: Bool, access: String?,
+        photos: [PickedPhoto] = []
+    ) async throws -> StartedTask {
+        let ids = photos.isEmpty ? [] : try await upload(photos)
+        let started = try await connection.send(
+            .task(
+                goal: goal, projectId: projectId, agentId: agentId, review: review, tonight: tonight, access: access,
+                attachments: ids),
+            as: StartedTask.self, timeout: .slow)
+        if !tonight { await refresh() }
+        return started
     }
 
     /// Unpairs: the computer forgets this phone and this phone its key.

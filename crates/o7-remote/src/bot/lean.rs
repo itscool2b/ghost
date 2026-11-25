@@ -468,16 +468,29 @@ fn pick_project<'a>(
         .ok_or_else(|| Answer::failed(format!("Name the project: {}.", names())))
 }
 
+/// Who handed a task over, as its brief says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HandedBy {
+    /// A bot link or an automation.
+    Assistant,
+    /// The person, from o7 on their phone.
+    Phone,
+}
+
 /// The brief a task's agent is given: the goal, then how to go about it.
-fn brief(goal: &str, branch: Option<&str>) -> String {
+fn brief(goal: &str, branch: Option<&str>, by: HandedBy) -> String {
     let place = match branch {
         Some(branch) => format!(
             "your own Git worktree on the new branch `{branch}`. It is a fresh checkout: dependencies are not installed, so install what the project's checks need"
         ),
         None => "the project folder itself, which others may use too".to_owned(),
     };
+    let handed = match by {
+        HandedBy::Assistant => "This is a task handed to you through o7 by the person's assistant.",
+        HandedBy::Phone => "This is a task the person handed to you from o7 on their phone.",
+    };
     format!(
-        "{goal}\n\n---\nThis is a task handed to you through o7 by the person's assistant. Work on it end to end, without waiting for more instructions:\n- You are in {place}.\n- Plan briefly, then make the change.\n- Run the project's own checks (its tests, type checks and linters) and fix what fails.\n- Commit your work{} with a clear message. Do not push, merge or open a pull request unless the task asks for it.\n- Finish with a short summary: what changed, how you checked it, and anything left or uncertain.",
+        "{goal}\n\n---\n{handed} Work on it end to end, without waiting for more instructions:\n- You are in {place}.\n- Plan briefly, then make the change.\n- Run the project's own checks (its tests, type checks and linters) and fix what fails.\n- Commit your work{} with a clear message. Do not push, merge or open a pull request unless the task asks for it.\n- Finish with a short summary: what changed, how you checked it, and anything left or uncertain.",
         if branch.is_some() {
             " on this branch"
         } else {
@@ -519,7 +532,7 @@ async fn task(
         args.project.as_deref(),
         args.agent.as_deref(),
         args.review,
-        super::Most::of(rights),
+        Handover::by_link(super::Most::of(rights)),
     )
     .await?;
     let mut text = started.text;
@@ -545,11 +558,41 @@ async fn queue(
     args: &TaskArgs,
     later: &dyn super::Later,
 ) -> Result<Answer, Answer> {
+    let (id, project) = queue_task(
+        backend,
+        goal,
+        args.project.as_deref(),
+        args.agent.as_deref(),
+        args.review,
+        None,
+        later,
+    )
+    .await?;
+    Ok(Answer::ok(format!(
+        "Queued for tonight as {id}: \"{}\" in {project}. o7 starts it between {} and {} in the morning, computer time, as a task now starts (its own branch, then a review), one at a time and at most {NIGHT_BUDGET} a night. If this link has a call back, o7 tells you when each is done. inbox lists the queue; task with cancel {id} takes it off.",
+        render::cut(goal.lines().next().unwrap_or("Task").trim(), 60),
+        NIGHT_HOURS.start,
+        NIGHT_HOURS.end,
+    )))
+}
+
+/// Leaves a task for tonight with `later`, which names who queued it. Its project and agent are
+/// checked now, so a wrong name is said while whoever asked is still there. `access` is what the
+/// person chose for it, set when it starts. Answers its id and its project's name.
+pub(crate) async fn queue_task(
+    backend: &Arc<dyn Backend>,
+    goal: &str,
+    project: Option<&str>,
+    agent: Option<&str>,
+    review: Option<bool>,
+    access: Option<String>,
+    later: &dyn super::Later,
+) -> Result<(String, String), Answer> {
     message(goal)?;
     let overview = backend.overview().await?;
-    let project = pick_project(&overview, args.project.as_deref())?;
-    if let Some(agent) = &args.agent
-        && !overview.agents.iter().any(|known| &known.id == agent)
+    let project = pick_project(&overview, project)?;
+    if let Some(agent) = agent
+        && !overview.agents.iter().any(|known| known.id == agent)
     {
         return Err(Answer::failed(format!(
             "There is no agent \"{agent}\" here. projects lists them."
@@ -567,22 +610,19 @@ async fn queue(
         .queue(crate::registry::Queued {
             id: id.clone(),
             bot: String::new(),
-            goal: goal.chars().take(GOAL_KEPT).collect(),
+            // Whole (at most 64 KiB, as a message): it is the brief the task starts with.
+            goal: goal.to_owned(),
             project: Some(project.id.clone()),
-            agent: args.agent.clone(),
-            review: args.review,
+            agent: agent.map(str::to_owned),
+            review,
             created_at: 0,
             failed: None,
             failed_at: None,
+            by: crate::registry::By::Bot,
+            access,
         })
         .map_err(Answer::failed)?;
-    Ok(Answer::ok(format!(
-        "Queued for tonight as {id}: \"{}\" in {}. o7 starts it between {} and {} in the morning, computer time, as a task now starts (its own branch, then a review), one at a time and at most {NIGHT_BUDGET} a night. If this link has a call back, o7 tells you when each is done. inbox lists the queue; task with cancel {id} takes it off.",
-        render::cut(goal.lines().next().unwrap_or("Task").trim(), 60),
-        project.name,
-        NIGHT_HOURS.start,
-        NIGHT_HOURS.end,
-    )))
+    Ok((id, project.name.clone()))
 }
 
 /// A task, started: what the bot is told, its chat, and what the service keeps for its review.
@@ -592,8 +632,34 @@ pub(crate) struct Started {
     pub task: crate::registry::Task,
 }
 
+/// How a task is handed over, beyond its goal.
+pub(crate) struct Handover<'a> {
+    /// Who handed it over, as its brief says.
+    pub by: HandedBy,
+    /// The most its chat may do without asking: no more than what started it may approve.
+    pub most: super::Most,
+    /// The access level the person chose (`ask`, `auto_edit` or `full_auto`), set before the
+    /// brief is sent; none, the project's own.
+    pub access: Option<&'a str>,
+    /// Photos a paired device staged, sent with the brief.
+    pub images: &'a [crate::backend::PreparedImage],
+}
+
+impl Handover<'_> {
+    /// A task a bot link or an automation hands over, held to `most`.
+    pub(crate) fn by_link(most: super::Most) -> Self {
+        Self {
+            by: HandedBy::Assistant,
+            most,
+            access: None,
+            images: &[],
+        }
+    }
+}
+
 /// Starts a task, now or from the queue at night: a chat on a branch of its own, held to
-/// `most` (what started it may approve), its brief, and who reviews it. `project` is a
+/// what started it may approve and set to the access the person chose, its brief, and who
+/// reviews it. When the chat cannot be held or set, nothing is sent to it. `project` is a
 /// project's name or id, or none.
 pub(crate) async fn start_task(
     backend: &Arc<dyn Backend>,
@@ -601,7 +667,7 @@ pub(crate) async fn start_task(
     project: Option<&str>,
     agent: Option<&str>,
     review: Option<bool>,
-    most: super::Most,
+    handover: Handover<'_>,
 ) -> Result<Started, Answer> {
     message(goal)?;
     let overview = backend.overview().await?;
@@ -622,7 +688,21 @@ pub(crate) async fn start_task(
     let title: String = render::cut(goal.lines().next().unwrap_or("Task").trim(), 60);
     let made = backend.create_task_chat(&folder.id, agent, &title).await?;
     let chat_id = made.chat.chat.id.clone();
-    super::hold_access(backend, &chat_id, most).await?;
+    super::hold_access(backend, &chat_id, handover.most).await?;
+    if let Some(access) = handover.access {
+        backend
+            .act(Action::SetAccess {
+                chat_id: chat_id.clone(),
+                access: access.to_owned(),
+            })
+            .await
+            .map_err(|error| {
+                Answer::failed(format!(
+                    "Chat {chat_id} was made, but its access could not be set to {access}, so nothing was sent to it: {}",
+                    error.message
+                ))
+            })?;
+    }
     let builder_agent = made.chat.chat.agent_id.clone();
     // The review: by another agent where one is ready, so a second vendor looks at the work; and
     // only where the work is on a branch of its own, which the reviewer can read with Git.
@@ -635,16 +715,18 @@ pub(crate) async fn start_task(
                 .find(|agent| o7_like(&agent.id) != o7_like(&builder_agent))
         })
         .flatten();
-    let ack = backend
-        .send(&chat_id, brief(goal, made.branch.as_deref()))
-        .await
-        .map_err(|error| {
-            Answer::failed(format!(
-                "Chat {chat_id} was made, but the task could not be sent to it: {}",
-                error.message
-            ))
-        })?;
-    let _ = ack;
+    let brief = brief(goal, made.branch.as_deref(), handover.by);
+    let sent = if handover.images.is_empty() {
+        backend.send(&chat_id, brief).await
+    } else {
+        crate::host::send_with(backend, &chat_id, brief, handover.images).await
+    };
+    sent.map_err(|error| {
+        Answer::failed(format!(
+            "Chat {chat_id} was made, but the task could not be sent to it: {}",
+            error.message
+        ))
+    })?;
     let mut text = format!(
         "Started task {chat_id} in {} with {}",
         project.name, made.chat.chat.agent_name
@@ -679,6 +761,8 @@ pub(crate) async fn start_task(
             review_agent: reviewer.map(|agent| agent.id.clone()),
             reviewer: None,
             created_at: 0,
+            by: crate::registry::By::Bot,
+            access: handover.access.map(str::to_owned),
         },
     })
 }

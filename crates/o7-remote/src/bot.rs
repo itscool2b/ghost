@@ -8,7 +8,7 @@
 
 mod lean;
 
-pub(crate) use lean::{NIGHT_BUDGET, NIGHT_HOURS, start_task};
+pub(crate) use lean::{HandedBy, Handover, NIGHT_BUDGET, NIGHT_HOURS, queue_task, start_task};
 
 use std::{sync::Arc, time::Duration};
 
@@ -550,7 +550,7 @@ fn outcome(outcome: Outcome) -> String {
                 }
             )
         }
-        Outcome::Memory { markdown } => {
+        Outcome::Memory { markdown, .. } => {
             if markdown.trim().is_empty() {
                 "This project's memory is empty.".into()
             } else {

@@ -40,8 +40,14 @@ final class ChatStore {
         let text: String
         /// How many user messages with this text were already in the transcript when it was sent.
         let before: Int
+        /// How many turns the transcript had when it was sent: a message of photos alone has no
+        /// words to find, so its turn starting settles it.
+        let turns: Int
+        var photos: [PickedPhoto] = []
         var queued = false
     }
+    /// Photos this phone sent, by the message they went with: the transcript carries words only.
+    private(set) var sentPhotos: [String: [PickedPhoto]] = [:]
 
     /// Every entry, oldest first: an earlier page rebuilds the transcript from them.
     private var entries: [Entry] = []
@@ -215,21 +221,28 @@ final class ChatStore {
 
     // MARK: Acting
 
-    /// Sends a message. It shows at once; a refused one hands its text back.
-    func send(_ text: String) async -> String? {
+    /// Sends a message, with photos sent first. It shows at once; a refused one hands its words
+    /// and photos back.
+    func send(_ text: String, photos: [PickedPhoto] = []) async -> (String, [PickedPhoto])? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let entry = Sending(text: trimmed, before: userCount(trimmed))
+        guard !trimmed.isEmpty || !photos.isEmpty else { return nil }
+        if let tooMany = PickedPhoto.overBudget(photos) {
+            problem = tooMany
+            return (text, photos)
+        }
+        let entry = Sending(text: trimmed, before: userCount(trimmed), turns: turnCount, photos: photos)
         sending.append(entry)
         do {
-            let ack = try await computer.connection.send(.send(chatId, text: trimmed), as: PromptAck.self, timeout: .act)
+            let ids = photos.isEmpty ? [] : try await computer.upload(photos)
+            let ack = try await computer.connection.send(
+                .send(chatId, text: trimmed, attachments: ids), as: PromptAck.self, timeout: .act)
             if ack.queued, let at = sending.firstIndex(where: { $0.id == entry.id }) { sending[at].queued = true }
             problem = nil
             return nil
         } catch {
             sending.removeAll { $0.id == entry.id }
             problem = (error as? LocalizedError)?.errorDescription ?? "Not sent."
-            return text
+            return (text, photos)
         }
     }
 
@@ -257,13 +270,26 @@ final class ChatStore {
         }
     }
 
-    /// A sent message leaves "Sending" once the transcript shows it.
+    /// A sent message leaves "Sending" once the transcript shows it; its photos stay with it.
     private func settleSending() {
-        sending.removeAll { userCount($0.text) > $0.before }
+        let users = transcript.users
+        let turns = turnCount
+        sending.removeAll { entry in
+            let matching = users.filter { $0.text == entry.text }
+            let shown = matching.count > entry.before
+            guard shown || (entry.text.isEmpty && turns > entry.turns) else { return false }
+            if !entry.photos.isEmpty {
+                let key = shown ? matching[entry.before].key : users.last?.key
+                if let key { sentPhotos[key] = entry.photos }
+            }
+            return true
+        }
     }
 
+    private var turnCount: Int { segments.count { $0.turnId != nil } }
+
     private func userCount(_ text: String) -> Int {
-        transcript.userMessages.filter { $0 == text }.count
+        transcript.users.count { $0.text == text }
     }
 }
 
@@ -275,9 +301,9 @@ extension Entry {
 
 extension Transcript {
     /// The person's messages, in order, as the transcript shows them.
-    var userMessages: [String] {
+    var users: [UserItem] {
         items.orderedValues.compactMap { item in
-            if case .user(let user) = item { return user.text }
+            if case .user(let user) = item { return user }
             return nil
         }
     }

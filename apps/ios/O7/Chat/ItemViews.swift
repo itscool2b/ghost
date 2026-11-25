@@ -12,7 +12,7 @@ struct ItemView: View {
     var body: some View {
         switch item.content {
         case .user(let user):
-            UserBubble(text: user.text, steering: user.steering?.state)
+            UserBubble(text: user.text, photos: chat.sentPhotos[user.key] ?? [], steering: user.steering?.state)
         case .message(let message):
             MessageView(message: message)
         case .thought(let thought, let thinking):
@@ -42,19 +42,44 @@ struct ItemView: View {
 struct UserBubble: View {
     @Environment(\.style) private var style
     let text: String
+    /// The photos it carried, when this phone sent them.
+    var photos: [PickedPhoto] = []
     var steering: SteeringState?
     var pending: String?
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Text(text)
-                .o7Font(.prose)
-                .foregroundStyle(style.onPaper)
-                .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(style.paper, in: .rect(cornerRadius: 18))
+            if !photos.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(photos) { photo in
+                        Image(uiImage: photo.image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: photos.count == 1 ? 180 : 88, height: photos.count == 1 ? 180 : 88)
+                            .clipShape(.rect(cornerRadius: 14))
+                            .accessibilityLabel("Photo")
+                    }
+                }
                 .opacity(pending == nil ? 1 : 0.6)
+            }
+            if !text.isEmpty {
+                Text(text)
+                    .o7Font(.prose)
+                    .foregroundStyle(style.onPaper)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(style.paper, in: .rect(cornerRadius: 18))
+                    .opacity(pending == nil ? 1 : 0.6)
+            } else if photos.isEmpty {
+                // Images sent from the computer: the history carries words only.
+                Label("Images", systemImage: "photo")
+                    .o7Font(.meta)
+                    .foregroundStyle(style.onPaper)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(style.paper, in: .rect(cornerRadius: 18))
+            }
             if let pending {
                 Text(pending).o7Font(.small).foregroundStyle(style.fg3)
             } else if let steering, steering != .accepted {

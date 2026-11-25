@@ -44,7 +44,9 @@ use crate::{
 
 mod app;
 mod session;
+mod uploads;
 use session::{Received, bot_answer, bot_links, closed, receive, refusal, seal};
+pub(crate) use uploads::send_with;
 
 /// Browsers connected at once, proven or not.
 const MAX_CONNECTIONS: usize = 32;
@@ -107,6 +109,8 @@ enum Control {
     Refresh,
     /// Another profile was opened: every followed chat is gone.
     Reset,
+    /// Sweep now, as if this much later than now (tests: staged photos expiring).
+    Sweep(Duration),
     Shutdown,
 }
 
@@ -127,6 +131,8 @@ struct Shared {
     hook_turns: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Bot calls running, from the relay and the door on this computer together.
     bot_calls: Arc<AtomicUsize>,
+    /// Bytes promised to photos staged by every session ([`uploads::COMPUTER_BYTES`] at most).
+    staged: Arc<AtomicUsize>,
     config: Config,
 }
 
@@ -169,6 +175,7 @@ impl Service {
             closing: AtomicBool::new(false),
             hook_turns: Mutex::new(HashMap::new()),
             bot_calls: Arc::new(AtomicUsize::new(0)),
+            staged: Arc::new(AtomicUsize::new(0)),
             config,
         });
         let (control, receiver) = unbounded_channel();
@@ -190,6 +197,13 @@ impl Service {
     #[doc(hidden)]
     pub async fn later_tick(&self) {
         later_tick(&self.shared).await;
+    }
+
+    /// One sweep of the connections, as if `later` from now, as the service takes every five
+    /// seconds; for tests of what expires.
+    #[doc(hidden)]
+    pub fn sweep_later(&self, later: Duration) {
+        let _ = self.control.send(Control::Sweep(later));
     }
 
     pub fn status(&self) -> RemoteStatus {
@@ -597,7 +611,7 @@ async fn trigger(
         Some(&hook.project),
         None,
         None,
-        bot::Most::Ask,
+        bot::Handover::by_link(bot::Most::Ask),
     )
     .await
     {
@@ -650,7 +664,47 @@ impl bot::Later for LinkLater {
     }
 }
 
-/// Starts what bots left for tonight, a minute at a time, until the service closes.
+/// The queue for tonight as the person reaches it from a paired device: what they queue is the
+/// device's, and they may take off anything queued in the workspace, a bot's too. Only while
+/// `scope`, the workspace the device's session was accepted under, is the open one.
+struct DeviceLater {
+    shared: Arc<Shared>,
+    device: String,
+    scope: String,
+}
+
+impl DeviceLater {
+    /// The registry, while the device's workspace is the open one.
+    fn here(&self) -> Option<MutexGuard<'_, Registry>> {
+        Some(lock(&self.shared.registry)).filter(|registry| registry.scope() == self.scope)
+    }
+}
+
+impl bot::Later for DeviceLater {
+    fn queue(&self, mut item: crate::registry::Queued) -> Result<(), String> {
+        item.bot = self.device.clone();
+        item.by = crate::registry::By::Device;
+        item.created_at = now();
+        self.here()
+            .ok_or_else(|| "Another workspace is open on this computer.".to_owned())?
+            .queue(item)
+            .map_err(|error| error.to_string())
+    }
+
+    fn cancel(&self, id: &str) -> bool {
+        self.here()
+            .is_some_and(|mut registry| registry.cancel_any_queued(id))
+    }
+
+    fn queued(&self) -> Vec<crate::registry::Queued> {
+        self.here()
+            .map(|registry| registry.queued_here(now()))
+            .unwrap_or_default()
+    }
+}
+
+/// Starts what bots and the person left for tonight, a minute at a time, until the service
+/// closes.
 async fn tonight(shared: Arc<Shared>) {
     while !shared.closing.load(Ordering::Relaxed) {
         tokio::time::sleep(LATER_CHECK).await;
@@ -660,8 +714,9 @@ async fn tonight(shared: Arc<Shared>) {
 
 /// Starts the next task left for tonight, when it is night on the computer's clock, remote
 /// access is on, the night's budget allows, and the night's last task and its review no longer
-/// work. One that cannot start stays listed a day with why, and its bot is told if it has a call
-/// back.
+/// work. A bot's task may approve no more than its link; the person's is set to the access they
+/// chose. One that cannot start stays listed a day with why, and its bot is told if it has a
+/// call back.
 async fn later_tick(shared: &Arc<Shared>) {
     let backend = shared.config.backend.clone();
     let Some(hour) = backend.local_hour() else {
@@ -700,32 +755,51 @@ async fn later_tick(shared: &Arc<Shared>) {
     if working {
         return;
     }
-    // Started for its link, it may approve no more than the link may, as now.
-    let most = bot::Most::of(lock(&shared.registry).bot_rights(&next.bot));
+    let handover = match next.by {
+        // Started for its link, it may approve no more than the link may, as now.
+        crate::registry::By::Bot => {
+            bot::Handover::by_link(bot::Most::of(lock(&shared.registry).bot_rights(&next.bot)))
+        }
+        // The person queued it: the access they chose, or the project's own.
+        crate::registry::By::Device => bot::Handover {
+            by: bot::HandedBy::Phone,
+            most: bot::Most::Anything,
+            access: next.access.as_deref(),
+            images: &[],
+        },
+    };
     match bot::start_task(
         &bound,
         &next.goal,
         next.project.as_deref(),
         next.agent.as_deref(),
         next.review,
-        most,
+        handover,
     )
     .await
     {
         Ok(started) => {
             let mut task = started.task;
             task.bot = next.bot.clone();
+            task.by = next.by;
             task.created_at = at;
             let mut registry = lock(&shared.registry);
             registry.add_task(task);
-            registry.follow(&next.bot, &started.chat);
+            if next.by == crate::registry::By::Bot {
+                registry.follow(&next.bot, &started.chat);
+            }
             registry.started_queued(&next.id, &started.chat, at);
         }
         Err(answer) => {
             let callback = {
                 let mut registry = lock(&shared.registry);
                 registry.failed_queued(&next.id, &answer.text, at);
-                registry.callback_of(&next.bot)
+                // A device hears that its task could not start once notifications reach the
+                // phone (push, `queued_failed`); until then the person reads why in `tasks`.
+                match next.by {
+                    crate::registry::By::Bot => registry.callback_of(&next.bot),
+                    crate::registry::By::Device => None,
+                }
             };
             let title = crate::render::cut(next.goal.lines().next().unwrap_or("Task").trim(), 60);
             if let (Some((bot_name, callback)), Ok(id)) = (callback, crypto::random::<12>()) {
@@ -949,6 +1023,10 @@ async fn tell_later(
             })
             .collect()
     };
+    // The review of the person's own task (`By::Device`) is done when `task.reviewer` is this
+    // chat: here its device is to hear of it once notifications reach the phone (push,
+    // `reviewed`, with the builder and the reviewer). No link follows such a task, so until
+    // then nothing is told.
     if told.is_empty() {
         return;
     }
@@ -1003,9 +1081,10 @@ async fn tell_later(
 
 /// Starts the review of a task whose work is done: a chat of the reviewing agent in the project
 /// folder, held to what started the task may approve (an automation's always asks: the brief
-/// carries what a service outside sent), told to read the task's branch with Git and change
-/// nothing. The link that started the task follows the review from now on, and is told when it
-/// is done. When the chat cannot be held, nothing is sent to it.
+/// carries what a service outside sent) or, for the person's own task, set to the access they
+/// chose for it; told to read the task's branch with Git and change nothing. The link that
+/// started the task follows the review from now on, and is told when it is done. When the chat
+/// cannot be held or set, nothing is sent to it.
 async fn start_review(
     shared: &Arc<Shared>,
     backend: &Arc<dyn Backend>,
@@ -1015,21 +1094,42 @@ async fn start_review(
         .create(&task.folder_id, task.review_agent.as_deref())
         .await?;
     let id = reviewer.chat.id.clone();
-    let most = {
+    let (most, access) = {
         let registry = lock(&shared.registry);
-        if registry.hook_of(&task.bot).is_some() {
-            bot::Most::Ask
-        } else {
-            bot::Most::of(registry.bot_rights(&task.bot))
+        match task.by {
+            crate::registry::By::Device => (bot::Most::Anything, task.access.clone()),
+            crate::registry::By::Bot if registry.hook_of(&task.bot).is_some() => {
+                (bot::Most::Ask, None)
+            }
+            crate::registry::By::Bot => (bot::Most::of(registry.bot_rights(&task.bot)), None),
         }
     };
     bot::hold_access(backend, &id, most)
         .await
         .map_err(|answer| BackendError::new("failed", answer.text))?;
+    if let Some(access) = access {
+        backend
+            .act(crate::backend::Action::SetAccess {
+                chat_id: id.clone(),
+                access,
+            })
+            .await
+            .map_err(|error| {
+                BackendError::new(
+                    "failed",
+                    format!(
+                        "The review's chat {id} was made, but its access could not be set, so nothing was sent to it: {}",
+                        error.message
+                    ),
+                )
+            })?;
+    }
     {
         let mut registry = lock(&shared.registry);
         registry.set_reviewer(&task.builder, &id);
-        registry.follow(&task.bot, &id);
+        if task.by == crate::registry::By::Bot {
+            registry.follow(&task.bot, &id);
+        }
     }
     backend.send(&id, callback::review_brief(task)).await?;
     Ok(())
@@ -1060,6 +1160,10 @@ struct Session {
     following: Arc<tokio::sync::Mutex<()>>,
     /// The session is over: an open still waiting its turn must not start following for it.
     ended: Arc<AtomicBool>,
+    /// Photos it staged for a message, freed when it ends.
+    uploads: Arc<Mutex<uploads::Uploads>>,
+    /// A picture is being taken for it: one at a time.
+    picturing: Arc<AtomicBool>,
 }
 
 struct Connection {
@@ -1251,6 +1355,10 @@ async fn serve(
                     ended
                 }
                 Some(Control::Refresh) => state.refresh(),
+                Some(Control::Sweep(later)) => {
+                    state.sweep_at(std::time::Instant::now() + later);
+                    None
+                }
             },
             _ = ping.tick() => {
                 if heard.elapsed() > SILENCE {
@@ -1822,8 +1930,21 @@ impl Serving {
         }
     }
 
-    /// Ends connections that never proved they hold a key.
+    /// Ends connections that never proved they hold a key, and drops staged photos nothing
+    /// touched for ten minutes.
     fn sweep(&mut self) {
+        self.sweep_at(std::time::Instant::now());
+    }
+
+    /// [`Serving::sweep`], with photos aged as of `now`.
+    fn sweep_at(&mut self, now: std::time::Instant) {
+        for session in self
+            .connections
+            .values()
+            .filter_map(|connection| connection.session.as_ref())
+        {
+            lock(&session.uploads).expire(now);
+        }
         let late: Vec<String> = self
             .connections
             .iter()

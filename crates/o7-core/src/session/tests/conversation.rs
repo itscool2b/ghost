@@ -533,6 +533,76 @@ async fn a_chat_saved_on_the_adapter_keeps_resuming_through_it_across_handoffs()
     );
 }
 
+/// A photo the person sends from the phone stays a JPEG in the chat's message box, goes to the
+/// agent as one with no words beside it, and the window's preview reads it by its hash.
+#[tokio::test]
+async fn a_photo_from_the_phone_reaches_the_agent_as_a_jpeg() {
+    let (first, h1) = turn_driver("photo", "answer");
+    let rig = rig(vec![first], WriterConfig::STANDARD, Knobs::STANDARD);
+    let chat = rig
+        .manager
+        .create_chat("mock", &rig.folder)
+        .await
+        .expect("chat");
+    status(&rig, &chat.id, SessionStatus::Ready).await;
+    let mut jpeg = Vec::new();
+    image::RgbImage::from_pixel(30, 20, image::Rgb([200, 10, 10]))
+        .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+            &mut jpeg, 90,
+        ))
+        .expect("fixture JPEG");
+    let attachment = rig
+        .manager
+        .composer_photo(&chat.id, jpeg, "IMG_0001.HEIC".into())
+        .await
+        .expect("photo");
+    assert_eq!(
+        (
+            attachment.name.as_str(),
+            attachment.mime.as_str(),
+            attachment.image
+        ),
+        ("IMG_0001.jpg", "image/jpeg", true)
+    );
+    rig.manager
+        .composer_send(
+            &chat.id,
+            o7_protocol::composer::ComposerInput {
+                text: String::new(),
+                attachments: vec![attachment.id],
+                mentions: vec![],
+            },
+        )
+        .await
+        .expect("a photo with no words");
+    h1.wait_for(CommandMatch::Prompt).await;
+    let parts = h1
+        .commands()
+        .into_iter()
+        .find_map(|command| match command {
+            LoggedCommand::Prompt { parts, .. } => Some(parts),
+            _ => None,
+        })
+        .expect("prompt");
+    let blob = parts
+        .iter()
+        .find_map(|part| match part {
+            PromptPart::Image { blob, mime } if mime == "image/jpeg" => Some(blob.clone()),
+            _ => None,
+        })
+        .expect("the photo, as a JPEG");
+    let preview = rig
+        .manager
+        .chat_image_preview(
+            &chat.id,
+            o7_protocol::composer::ChatImageSource::Stored { sha256: blob },
+            false,
+        )
+        .await
+        .expect("previewed by its hash");
+    assert_eq!((preview.width, preview.height), (30, 20));
+}
+
 #[tokio::test]
 async fn fork_copies_only_selected_image_metadata_and_missing_metadata_rolls_back() {
     let (first, h1) = turn_driver("image-source", "answer");
