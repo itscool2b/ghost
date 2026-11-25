@@ -16,6 +16,12 @@
 //! stands on (a branch and a pull request whose checks passed); the project's brief, with
 //! revisions; a picture of a chat's browser; tasks now (each on a branch of its own, reviewed by
 //! the other agent) and for tonight; and photos in a message.
+//!
+//! Notifications too, as the real service sends them: a phone that turned them on
+//! (`push_register`) is sent a sealed `asking`, with Allow once and Deny, a moment after a turn
+//! asks for its permission, and `finished` when the turn ends. They go only on a socket whose
+//! relay said it sends notifications (`f`), so an end-to-end test that mocks Apple at the relay
+//! can open what it captured with the phone's key and answer from it.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stdout)]
 

@@ -169,6 +169,9 @@ pub fn digest(items: &[HistoryItem]) -> Digest {
                     if let Some(content) = &update.content {
                         call.content.clone_from(content);
                     }
+                    if let Some(locations) = &update.locations {
+                        call.locations.clone_from(locations);
+                    }
                 }
             }
             O7Event::PermissionRequested(request) => {
@@ -530,6 +533,144 @@ pub fn last_turn(items: &[HistoryItem]) -> LastTurn {
         }
     }
     last
+}
+
+/// What a page's last turn changed with its edits, for an inbox: the files, as the window's card
+/// under the answer lists them (the paths of each edit, deletion or move that did not fail), and
+/// the lines those edits added and removed, as each edit's own +/− counts them. The lines are
+/// unknown (`None`) when the turn made no diff to count, or one too large to count.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Edits {
+    pub files: usize,
+    pub added: Option<u64>,
+    pub removed: Option<u64>,
+}
+
+/// The longest stretch of a diff, on either side, compared line by line, as the window's own
+/// diff compares it (`apps/desktop/src/lib/diff.ts`).
+const MAX_DIFF_LINES: usize = 2_000;
+/// How many line comparisons one page's edits may cost in all.
+const DIFF_BUDGET: usize = 4_000_000;
+
+pub fn last_turn_edits(items: &[HistoryItem]) -> Edits {
+    let digest = digest(items);
+    let Some(turn) = digest.turns.last() else {
+        return Edits::default();
+    };
+    let mut paths: Vec<&str> = Vec::new();
+    let (mut added, mut removed) = (0_u64, 0_u64);
+    let (mut counted, mut whole) = (false, true);
+    let mut budget = DIFF_BUDGET;
+    for call in &turn.calls {
+        if call.status == ToolStatus::Failed
+            || !matches!(
+                call.kind,
+                o7_protocol::ToolKind::Edit
+                    | o7_protocol::ToolKind::Delete
+                    | o7_protocol::ToolKind::Move
+            )
+        {
+            continue;
+        }
+        for location in &call.locations {
+            if !location.path.is_empty() && !paths.contains(&location.path.as_str()) {
+                paths.push(&location.path);
+            }
+        }
+        for content in &call.content {
+            let o7_protocol::ToolContent::Diff {
+                old_text,
+                new_text,
+                truncated,
+                ..
+            } = content
+            else {
+                continue;
+            };
+            // A diff too large for the event keeps empty texts until it is loaded: nothing to
+            // count, as in the window.
+            if truncated.is_some()
+                && new_text.is_empty()
+                && old_text.as_deref().is_none_or(str::is_empty)
+            {
+                continue;
+            }
+            match line_delta(old_text.as_deref(), new_text, &mut budget) {
+                Some((plus, minus)) => {
+                    added += plus;
+                    removed += minus;
+                    counted = true;
+                }
+                None => whole = false,
+            }
+        }
+    }
+    let known = counted && whole;
+    Edits {
+        files: paths.len(),
+        added: known.then_some(added),
+        removed: known.then_some(removed),
+    }
+}
+
+/// Lines of `text`, without the empty one a final newline would add.
+fn lines_of(text: &str) -> Vec<&str> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+    let mut lines: Vec<&str> = text.split('\n').collect();
+    if lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+    lines
+}
+
+/// The lines `new` adds to `old` and removes from it, as the window's diff counts them: the
+/// lines both start and end with are set aside, and the rest compared line by line. `None` when
+/// that rest is longer on either side than the window compares, or costs more than `budget`
+/// still allows.
+pub fn line_delta(old: Option<&str>, new: &str, budget: &mut usize) -> Option<(u64, u64)> {
+    let before = lines_of(old.unwrap_or(""));
+    let after = lines_of(new);
+    let head = before
+        .iter()
+        .zip(&after)
+        .take_while(|(old, new)| old == new)
+        .count();
+    let tail = before[head..]
+        .iter()
+        .rev()
+        .zip(after[head..].iter().rev())
+        .take_while(|(old, new)| old == new)
+        .count();
+    let old = &before[head..before.len() - tail];
+    let new = &after[head..after.len() - tail];
+    let count = |lines: usize| u64::try_from(lines).unwrap_or(u64::MAX);
+    // Lines only added or only removed are counted without comparing anything.
+    if old.is_empty() || new.is_empty() {
+        return Some((count(new.len()), count(old.len())));
+    }
+    let cells = old.len().saturating_mul(new.len());
+    if old.len() > MAX_DIFF_LINES || new.len() > MAX_DIFF_LINES || cells > *budget {
+        return None;
+    }
+    *budget -= cells;
+    // The longest run of lines both keep in order, one row of the table at a time.
+    let mut row = vec![0_usize; new.len() + 1];
+    for line in old {
+        let mut diagonal = 0;
+        for (at, other) in new.iter().enumerate() {
+            let above = row[at + 1];
+            row[at + 1] = if line == other {
+                diagonal + 1
+            } else {
+                above.max(row[at])
+            };
+            diagonal = above;
+        }
+    }
+    let kept = row[new.len()];
+    Some((count(new.len() - kept), count(old.len() - kept)))
 }
 
 /// What a working chat is doing, in one line: the latest step of its turn, else how the agent's
@@ -1360,5 +1501,147 @@ mod tests {
             "starting"
         );
         assert_eq!(doing(&chat, &[]), "working");
+    }
+
+    fn edit(id: &str, path: &str, old: Option<&str>, new: &str, status: ToolStatus) -> O7Event {
+        O7Event::ToolCall(ToolCall {
+            tool_call_id: id.into(),
+            kind: ToolKind::Edit,
+            title: format!("Edit {path}"),
+            status,
+            locations: vec![o7_protocol::ToolLocation {
+                path: path.into(),
+                line: None,
+            }],
+            raw_input: None,
+            tool_name: Some("Edit".into()),
+            content: vec![o7_protocol::ToolContent::Diff {
+                path: path.into(),
+                old_text: old.map(str::to_owned),
+                new_text: new.into(),
+                truncated: None,
+            }],
+            truncated: None,
+        })
+    }
+
+    /// A finished turn's edits as an inbox counts them: the files the window's card under the
+    /// answer lists, and the lines as each edit's own +/− counts them. A failed edit changed
+    /// nothing; an earlier turn's is not this one's.
+    #[test]
+    fn a_turns_edits_count_their_files_and_lines() {
+        let page = items(vec![
+            started("t0"),
+            edit("e0", "old.rs", None, "a\n", ToolStatus::Completed),
+            ended("t0", StopReason::EndTurn),
+            started("t1"),
+            looked("r1", "Read src/login.ts"),
+            edit(
+                "e1",
+                "src/login.ts",
+                Some("a\nb\nc\n"),
+                "a\nB\nc\nd\n",
+                ToolStatus::Completed,
+            ),
+            edit(
+                "e2",
+                "src/login.test.ts",
+                None,
+                "x\ny\n",
+                ToolStatus::Completed,
+            ),
+            edit(
+                "e3",
+                "src/login.ts",
+                Some("a\nB\nc\nd\n"),
+                "a\nB\nc\n",
+                ToolStatus::Completed,
+            ),
+            edit(
+                "e4",
+                "src/broken.ts",
+                Some("q\n"),
+                "r\n",
+                ToolStatus::Failed,
+            ),
+            ended("t1", StopReason::EndTurn),
+        ]);
+        assert_eq!(
+            last_turn_edits(&page),
+            Edits {
+                files: 2,
+                added: Some(4),
+                removed: Some(2)
+            }
+        );
+        assert_eq!(last_turn_edits(&[]), Edits::default());
+
+        // A path an update names counts; a diff too large to compare makes the lines unknown
+        // rather than wrong.
+        let big_old: String = (0..2_100).map(|n| format!("o{n}\n")).collect();
+        let big_new: String = (0..2_100).map(|n| format!("n{n}\n")).collect();
+        let page = items(vec![
+            started("t1"),
+            O7Event::ToolCall(ToolCall {
+                tool_call_id: "m1".into(),
+                kind: ToolKind::Move,
+                title: "Move".into(),
+                status: ToolStatus::InProgress,
+                locations: vec![],
+                raw_input: None,
+                tool_name: None,
+                content: vec![],
+                truncated: None,
+            }),
+            O7Event::ToolUpdate(ToolUpdate {
+                tool_call_id: "m1".into(),
+                status: Some(ToolStatus::Completed),
+                title: None,
+                kind: None,
+                locations: Some(vec![o7_protocol::ToolLocation {
+                    path: "b.rs".into(),
+                    line: None,
+                }]),
+                raw_input: None,
+                tool_name: None,
+                content: None,
+                truncated: None,
+            }),
+            edit(
+                "e1",
+                "big.rs",
+                Some(&big_old),
+                &big_new,
+                ToolStatus::Completed,
+            ),
+        ]);
+        assert_eq!(
+            last_turn_edits(&page),
+            Edits {
+                files: 2,
+                added: None,
+                removed: None
+            }
+        );
+
+        // Lines only added or only removed are counted however many; a comparison costs its
+        // lines times lines, and one past the budget is not made.
+        let mut budget = 4;
+        assert_eq!(
+            line_delta(Some("a\nb\n"), "a\nb\n", &mut budget),
+            Some((0, 0))
+        );
+        assert_eq!(
+            line_delta(Some("x\ny\nz\n"), "x\n", &mut budget),
+            Some((0, 2))
+        );
+        assert_eq!(line_delta(None, &big_new, &mut budget), Some((2_100, 0)));
+        assert_eq!(budget, 4);
+        assert_eq!(
+            line_delta(Some("a\nb\n"), "c\nd\n", &mut budget),
+            Some((2, 2))
+        );
+        assert_eq!(budget, 0);
+        assert_eq!(line_delta(Some("a\n"), "b\n", &mut budget), None);
     }
 }

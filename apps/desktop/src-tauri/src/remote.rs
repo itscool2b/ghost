@@ -68,6 +68,9 @@ fn pull_request(view: o7_core::gitworkspaces::PullRequestView) -> o7_remote::Pul
 /// How long a reading reuses what GitHub CLI said of a chat's pull request: a bot reads often,
 /// and each look is a call to GitHub.
 const PR_FRESH: std::time::Duration = std::time::Duration::from_secs(120);
+/// How long what GitHub CLI said is kept for o7 for iPhone's Inbox, which shows it beside a chat
+/// that finished in the last day and never asks GitHub itself.
+const PR_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
 /// What GitHub CLI last said of each chat's pull request, and when, by chat: a bot's reading
 /// names it in one line, and o7 for iPhone shows its parts, from the same look.
@@ -96,17 +99,28 @@ async fn pull_request_of(
         return Ok(said);
     }
     let said = sessions.pull_request(chat_id).await?.map(pull_request);
+    keep_pull_request(chat_id, said.clone());
+    Ok(said)
+}
+
+/// Keeps what GitHub CLI said of `chat_id`'s pull request. What is a day old goes, so the cache
+/// holds only the chats looked at in the last day.
+fn keep_pull_request(chat_id: &str, said: Option<o7_remote::PullRequest>) {
     let mut kept = pr_said()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // What is no longer fresh is never read again: it goes, so the cache holds only the chats
-    // looked at in the last two minutes.
-    kept.retain(|_, (at, _)| at.elapsed() < PR_FRESH);
-    kept.insert(
-        chat_id.to_owned(),
-        (std::time::Instant::now(), said.clone()),
-    );
-    Ok(said)
+    kept.retain(|_, (at, _)| at.elapsed() < PR_KEPT);
+    kept.insert(chat_id.to_owned(), (std::time::Instant::now(), said));
+}
+
+/// What GitHub CLI last said of `chat_id`'s pull request in the last day, without asking again.
+fn known_pull_request(chat_id: &str) -> Option<o7_remote::PullRequest> {
+    pr_said()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(chat_id)
+        .filter(|(at, _)| at.elapsed() < PR_KEPT)
+        .and_then(|(_, said)| said.clone())
 }
 
 /// The words the remote service uses for how a file changed.
@@ -658,6 +672,20 @@ pub async fn remote_test_bot_callback(
         .ok_or_else(|| AppError::invalid_argument("Set where to tell this bot first."))?;
     let told = crate::remote_callback::send(delivery).await;
     service.note_told(&id, told.ok, told.detail);
+    Ok(service.status())
+}
+
+/// Sends o7 for iPhone `id` a test notification now, through the relay and Apple, as its row's
+/// "Send test notification" does: at most one every ten seconds, and only through a relay that
+/// sends notifications. The status says when Apple last took one for it.
+#[tauri::command]
+#[specta::specta]
+pub fn remote_test_notification(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<RemoteStatus, AppError> {
+    let service = service(&app)?;
+    service.test_push(&id).map_err(AppError::invalid_argument)?;
     Ok(service.status())
 }
 
@@ -1469,6 +1497,13 @@ impl Backend for AppBackend {
         })
     }
 
+    /// What GitHub CLI said of the chat's pull request in the last day, only while this
+    /// backend's profile is the open one. It asks GitHub nothing.
+    fn known_pull_request(&self, chat_id: &str) -> Option<o7_remote::PullRequest> {
+        drop(self.sessions().ok()?);
+        known_pull_request(chat_id)
+    }
+
     /// The chat's browser tab or emulator as a JPEG, only while this backend's profile is the
     /// open one. The chat is one of its own: the tool found it in the overview.
     fn picture<'a>(
@@ -1822,6 +1857,25 @@ impl Backend for AppBackend {
 #[cfg(test)]
 mod tests {
     use super::on_this_computer;
+
+    /// What GitHub CLI said of a chat's pull request is kept for the iPhone app's Inbox, and read
+    /// back without a new look; a chat it never looked at has none, and neither has one whose
+    /// branch had no pull request.
+    #[test]
+    fn a_pull_request_once_read_is_known_without_asking_again() {
+        let said = o7_remote::PullRequest {
+            number: 12,
+            url: "https://github.com/o/r/pull/12".into(),
+            state: "open".into(),
+            checks: o7_remote::PrChecks::Passed,
+            notes: vec![],
+        };
+        super::keep_pull_request("known-chat", Some(said.clone()));
+        super::keep_pull_request("no-pull-request", None);
+        assert_eq!(super::known_pull_request("known-chat"), Some(said));
+        assert_eq!(super::known_pull_request("no-pull-request"), None);
+        assert_eq!(super::known_pull_request("never-read"), None);
+    }
 
     /// The clock's hour is one of the day's.
     #[test]

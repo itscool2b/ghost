@@ -247,17 +247,19 @@ or for tonight, on a branch of its own, with a second agent's review. What diffe
 - **Queue.** A device may leave ten tasks for tonight, as a link may. They start at night as a
   bot's do, set to the access chosen when they were queued. The person may take any queued task
   off, a bot's too (`task_cancel`); a link takes off only its own.
-- **Telling.** No bot follows the person's task, so nobody is told when its review is done or
-  when a queued one could not start. Notifications on the phone come next: `tell_later` and
-  `later_tick` (`host.rs`) are where the device hears of both, and its task's pull request is
-  watched from then on (`watched_tasks`). Until then `tasks` lists what happened.
+- **Telling.** No bot follows the person's task: its phone is told instead, if it chose to hear
+  of its tasks ("Notifications on the phone"). It hears `reviewed` when the review is done, about
+  the task's own chat with the reviewer's beside it, `queued_failed` when a task for tonight
+  could not start, with why, and `pull_request` when its pull request has news (it is watched for
+  a week while the phone hears of its tasks). `tasks` lists what happened too.
 
 ### A task's pull request
 
 When a task's agent opens a pull request (because the bot asked it to), o7 watches it for the
-link that started the task, if that link has a call-back: every five minutes, for a week, with
-GitHub CLI as the person is signed in (`gh pr view` in the task's own folder; nothing is
-written to GitHub). The bot is told, once each:
+link that started the task, if that link has a call-back, or for the phone that started it, if
+that phone hears of its tasks: every five minutes, for a week, with GitHub CLI as the person is
+signed in (`gh pr view` in the task's own folder; nothing is written to GitHub). The bot or the
+phone is told, once each (`callback::pull_request_news`):
 
 - the checks failed (with their names), or passed after that;
 - a new review or comment: its author, and its words only when the author owns the repository,
@@ -382,12 +384,108 @@ the computer sends the message itself.
 and a line of the agent's last words. That is the tradeoff of being told: it is the same
 service the bot's calls already pass through, but it is one more place the words go.
 
+### Notifications on the phone
+
+o7 for iPhone is told what needs the person while the app is closed (25 November 2026), through
+the relay and Apple's push service. What a notification says is sealed on this computer for one
+phone: neither the relay nor Apple can read it. The parts are `crates/o7-remote/src/push.rs`
+(sealing, words, limits) and `host/notify.rs` (who hears what, and the frames).
+
+- **Turning them on.** The app asks Apple for its address (a token of 64 to 200 hex characters)
+  and gives it with `push_register`, with which of Apple's services it belongs to (`sandbox` for a
+  development build, `production` for the App Store's) and what the person wants told (`prefs`).
+  The computer keeps them with the device in `remote.json` (`push`, in lower case, with when),
+  and the same address leaves any other device record (an earlier pairing of the same phone).
+  `push_unregister` forgets it, and removing the device forgets everything kept with it. A
+  device without notifications reads in `remote.json` as it did before them.
+- **Sealed for one phone.** The push key is HKDF-SHA256 of the device key, with no salt and the
+  label `o7 push v1`; the phone's notification extension holds only that key, never the device
+  key. Each notification is sealed with AES-256-GCM under a fresh 12-byte nonce, with
+  `o7 push v1|<computer id>|<device id>` as associated data, and travels as the unpadded base64url
+  of the nonce, the ciphertext and the tag. `crates/o7-remote/tests/push-vectors.json` holds
+  vectors the phone's tests read too; `O7_WRITE_VECTORS=1 cargo test -p o7-remote push::vectors`
+  writes them anew.
+- **What it says** (`push::Payload`, at most 2,400 bytes once encoded): `{ v: 1, id, at, host,
+  kind, chat, title, project, agent, line, asking_count, request: { id, type, allow, deny },
+  review, queued }`, each part left out when it is not known. `kind` is `asking`, `finished`,
+  `failed`, `reviewed`, `pull_request`, `queued_failed`, `resolved` or `test`. `id` is new each
+  time and `at` is when it went (Unix milliseconds), so the phone drops a repeat or one older than
+  the last it showed. `asking_count` is how many chats on the computer wait on the person now, for
+  the badge. `request.type` is `permission`, or the question's kind (`confirm`, `select`, `input`,
+  `form` or `questions`); `allow` is the option of a permission that allows once, never one that
+  allows always, and `deny` the one that rejects once. A longer payload loses the end of its line
+  (all of it, if need be), then of its title, then its other parts one at a time; never its
+  version, id, time, computer, kind or chat.
+- **One per chat.** A chat's notifications on a phone share a collapse id: the first 12 bytes of
+  HMAC-SHA256, under the device key, of `o7 push collapse v1|<chat id>`, in unpadded base64url. A
+  newer one replaces the older, and Apple never learns which chat it is. A notification about no
+  chat (a test, work queued for tonight) has none.
+- **The frames.** A relay that sends notifications says `f{"push":1}` as soon as it accepts the
+  computer's socket. Only on such a socket does the computer send `p{ id, to, env, type: "alert",
+  collapse, d, b, ttl, sound }` or `p{ id, to, env, type: "liveactivity", d, b, ttl, priority,
+  event }`: `id` its own for the send, `to` the address, `d` the device the blob is sealed for,
+  `b` the blob, `ttl` how long Apple keeps trying (an hour, 15 minutes for one that asks). An older
+  relay ends the computer's socket on a frame it does not know, every browser with it, so frames
+  wait, at most 32 and at most two minutes, for a socket whose relay said `f`, and are then
+  dropped. The relay answers each with `P{ id, ok, status, reason, drop }`, on whichever socket is
+  open by then, and the computer matches it by `id` (an id it did not send is ignored). `ok` sets
+  the device's last notification, which Settings shows. `drop` (Apple answered 410,
+  `BadDeviceToken` or `DeviceTokenNotForTopic`) forgets the address, while the device still has
+  that one. A refusal (the relay's `invalid`, `off`, `limited` or `unreachable`, or Apple's reason)
+  is not tried again.
+- **When.** From the chats the call-back's watch already follows (`host.rs`, `tell`):
+  - `asking`: a chat starts waiting on the person, two seconds after, if it still does, with its
+    request when the phone can answer it and what it asks as the line.
+  - `resolved`: it works again and that phone did not answer it. It replaces the notification that
+    asked, quietly and under the same collapse id, with the line "Answered on the computer."
+    ("Answered on another device." when another phone answered). The phone that answered takes
+    its own away. A phone told that a chat asks, which will not hear how the turn ended (it chose
+    not to), is told "No longer waiting on you." when the turn ends.
+  - `finished` and `failed`: a turn ended, with what it came to in a line (how it ended when it
+    did not simply finish, the agent's last words, a command still failing), or why its agent
+    stopped.
+  - `reviewed`: the review of a task from the phone is done. Its phone hears of it about the
+    task's own chat (`chat`), with the reviewer's chat beside it (`review`) and the reviewer's
+    last words; any other phone hears that the review's chat finished.
+  - `queued_failed`: a task the phone queued for tonight could not start. Its phone hears why,
+    with the queued id.
+  - `pull_request`: news on a phone's task's pull request, as a bot is told it, to its phone. The
+    words of reviewers and commenters go only when they are the repository's own people.
+  - `test`: `push_test`, or Settings' **Send test notification**: "Notifications from <computer>
+    arrive here."
+- **What each phone hears.** `prefs.asking` (asking and resolved), `finished`, `failed` and
+  `tasks` (reviewed, queued_failed and pull_request), each on unless the phone says otherwise, and
+  `scope`: `all` chats, or `mine`, those the app started, sent to or answered (`following` in
+  `remote.json`, the last 40). The computer always sends; the phone hides what is about the chat
+  on its screen.
+- **Limits.** Per device: one per chat and kind every 15 seconds (a resolved one and a test
+  aside), 30 every ten minutes and 300 a day, and a test at most every ten seconds (`busy`). The
+  relay has its own: 60 a minute and 600 an hour per computer, 30 a minute per phone, 32 phones
+  an hour.
+- **The Live Activity.** The app gives the token of the computer's Live Activity with `activity`.
+  While something works or waits, the computer sends its state, sealed the same way, as the
+  content-state `{ "d": <device id>, "b": <blob> }`; sealed in it is `{ asking, working, lead,
+  since }`: how many chats ask and work, the one that leads in plain words (the first that asks,
+  by its title and what it asks; else the first that works, by its agent and what it does), and
+  when that work began. At most one update every ten seconds per device, at once and at Apple's
+  high priority (10) when more chats ask than it shows, else priority 5, and `end` once nothing
+  worked or waited for five minutes.
+- **What the relay and Apple learn.** The phone's address at Apple, the device id a notification
+  is sealed for, its collapse id, its size and when it went; never what it says. The relay wraps
+  every alert in the same fixed words, "o7" and "Something changed on your computer.", and the
+  phone writes the sealed words over them once it opens them. The relay keeps, for its limits,
+  when the computer's notifications went out in the last hour, by a hash of each phone's address.
+- **Settings.** A phone's row says "o7 for iPhone 1.0", whether its notifications are on and when
+  the last went, with **Send test notification**. Connected to a relay that does not send them,
+  the page says "The relay does not send notifications yet." `RemoteStatus.notifications` says
+  whether the relay does, and each device's `notifications` and `last_push` how it stands.
+
 ## The parts
 
 | Part | Where | What it does |
 |---|---|---|
 | Relay | `apps/relay` (Worker `o7-relay`, route `o7.codes/api/remote/*`) | One Durable Object per computer holds its host socket and the sockets of browsers and o7 for iPhone, and forwards between them. Serves MCP to bots. |
-| Service | `crates/o7-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser or app (`host.rs`, `host/session.rs`, what only the app asks for in `host/app.rs`, and its staged photos in `host/uploads.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
+| Service | `crates/o7-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser or app (`host.rs`, `host/session.rs`, what only the app asks for in `host/app.rs`, and its staged photos in `host/uploads.rs`), notifications for the app (sealed in `push.rs`, sent from `host/notify.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
 | App | `apps/desktop/src-tauri/src/remote.rs` | Starts the service, gives it the open profile's chats through the same lease a window's commands take, and exposes the commands Settings uses. |
 | Settings page | `apps/desktop/src/components/settings/RemotePanel.tsx` | The switch, devices, bots, and the two dialogs that show a secret once. |
 | Remote page | `apps/web/app/pages/remote.tsx`, `apps/web/app/remote/` | The browser's session (`client.ts`), its half of the channel (`channel.ts`), where device keys are kept (`storage.ts`). |
@@ -485,8 +583,13 @@ it.
 ### What the relay stores and limits
 
 Per computer: a mark that it has an owner, when it was last connected, the hashes of its bot
-tokens, and what each link may do (read only, full control) and which tool set it was made for. No D1, R2, KV or secrets. A room no computer has connected to for
-thirty days forgets all of it; the computer sends its bot links again whenever it connects.
+tokens, what each link may do (read only, full control) and which tool set it was made for, and,
+for its limits on notifications, when its notifications went out in the last hour, by a hash of
+each phone's address at Apple. No D1, R2 or KV. A room no computer has connected to for thirty
+days forgets all of it; the computer sends its bot links again whenever it connects. The relay
+holds one secret, Apple's push key (`APNS_KEY`, set by the owner), and one more Durable Object
+(`Apns`) keeps the token it signs for Apple with. Without the key it sends no notifications and
+never says it does.
 
 - A computer's id is the first sixteen bytes of a SHA-256 over a fixed label and its key
   (`crypto::host_id`), so only the key can claim the id. The Worker checks that before a request
@@ -614,6 +717,8 @@ The rest belong to a feature, and a session may ask only for what it was offered
 | `screens` | `picture` | the app |
 | `tasks` | `task`, `tasks`, `task_cancel` | the app |
 | `attachments` | `upload_begin`, `upload_chunk`, `upload_abort`, `image`, and photos in `send`, `create` and `task` | the app |
+| `push` | `push_register`, `push_unregister`, `push_test` | the app |
+| `activity` | `activity` | the app |
 
 A browser reaches four of a full-control link's actions, the pickers. What they name (a model,
 a level, an agent) is a short value from a list the computer sent, checked for length and
@@ -630,8 +735,9 @@ is sent has not changed. The app is offered every feature above, but only on a s
 marked as the app's (`k`), and only with a pairing link or a device recorded as `ios`: a
 browser's word that it is the app is not enough, and neither is the app's path with a browser's
 key. On the app's path `ready` also carries `site` (`https://o7.codes`), so the app follows the
-site if it moves, and the answer to an `ios` pairing carries `features`, so the app knows what
-it has before its next `ready`.
+site if it moves, and `notifications`, whether the relay in front of the computer sends them now;
+the answer to an `ios` pairing carries `features`, so the app knows what it has before its next
+`ready`.
 
 - A request the computer does not know ends the session, as anything outside the protocol does.
 - A request it knows but did not offer this session is answered `not_offered` ("This computer
@@ -647,11 +753,17 @@ What only the app asks for runs in `crates/o7-remote/src/host/app.rs`:
   with `request` as `{ id, kind: "permission", title, options }` or
   `{ id, kind: "question", title, prompt }`, and `null` when the chat waits on something its
   newest history does not show yet; `working`, `{ chat_id, line, since }`, its latest step and
-  when its turn began; and `recent`, `{ chat_id, ended_at, duration_ms, line }`, each turn that
-  ended in the last day, newest first, with the bot's one-line brief. At most 40 of each. It
-  reads the overview and the newest page of history (up to 256 KiB) of each chat it lists, at
-  most 120 pages and in practice a few, so the app asks for it again when a `chat` event says
-  something changed, a moment after the last such event, and never on a timer.
+  when its turn began; and `recent`, `{ chat_id, ended_at, duration_ms, line, files, added,
+  removed, pull_request }`, each turn that ended in the last day, newest first, with the bot's
+  one-line brief. `files` is how many files the turn's edits changed, as the window's card under
+  the answer counts them (each edit, deletion or move that did not fail, by its paths); `added`
+  and `removed` are the lines those edits added and removed, as each edit's own +/− counts them,
+  left out when an edit was too large to count; `pull_request` is `{ number, state, checks }` as
+  the computer last heard of it in the last day (what GitHub CLI said to a reading of the chat,
+  or what a task's watcher saw), never a new look. Each is left out when unknown. At most 40 of
+  each part. It reads the overview and the newest page of history (up to 256 KiB) of each chat
+  it lists, at most 120 pages and in practice a few, so the app asks for it again when a `chat`
+  event says something changed, a moment after the last such event, and never on a timer.
 - **`search`** takes `query` (1 to 200 characters, one line) and `limit` (at most 50, 20 when
   unsaid) and answers `{ hits: [{ chat_id, title, snippet, at }] }`, best first: the window's
   own search of the open chats' titles, projects, agents and finished messages
@@ -745,12 +857,23 @@ What only the app asks for runs in `crates/o7-remote/src/host/app.rs`:
   `{ type: "stored", sha256 }`, `{ type: "attachment", id }` or
   `{ type: "message", context, index }`; a project file by its path is never read (`invalid`).
   A PNG that would not fit 420 KiB comes as a smaller JPEG.
+- **`push_register`** takes `token` (64 to 200 hex characters, kept in lower case), `env`
+  (`sandbox` or `production`) and `prefs` (`{ asking, finished, failed, tasks, scope }`, each
+  `true` and `scope` `all` when unsaid; `scope` is `all` or `mine`), and answers `{ relay }`:
+  whether the relay in front of the computer sends notifications now. The app may send it on
+  every connection; nothing is written when nothing changed. **`push_unregister`** answers `{}`
+  and the device is told nothing more. **`push_test`** answers `{}` and sends a test now; at
+  most one every ten seconds per device (`busy`), only to a device that registered (`not_found`)
+  and through a relay that sends notifications (`unavailable`). **`activity`** takes the
+  `token` and `env` of the computer's Live Activity on the phone, and answers `{}`. See
+  "Notifications on the phone".
 
 Besides `not_offered` and `too_large`, the app's requests are answered with these codes:
 `invalid` (a value outside what the request takes), `empty`, `not_found` (no such chat, file,
-photo or queued task), `busy` (a picture already being taken, too many photos staged or
-arriving), `corrupt`, `conflict`, and `failed` with the computer's words (a task that could not
-start, for one).
+photo or queued task, or no notifications to test), `busy` (a picture already being taken, too
+many photos staged or arriving, a test too soon), `unavailable` (no relay that sends
+notifications), `corrupt`, `conflict`, and `failed` with the computer's words (a task that could
+not start, for one).
 
 The computer pushes `chat` (a status changed), `frame` (live events of the followed chat), `lost`
 (open the chat again) and `reset` (another profile was opened: start over).
@@ -768,7 +891,10 @@ The computer pushes `chat` (a status changed), `frame` (live events of the follo
     path and its mark included. CI runs it.
   - `cargo test -p o7-remote`: the service against a relay on this machine, with a simulated
     browser, iPhone app and bot: every request of the app reaching the action it should, a
-    browser refused each of them, photos, pictures, and the phone's tasks now and tonight.
+    browser refused each of them, photos, pictures, the phone's tasks now and tonight, and its
+    notifications (nothing before `f`, waiting and dropped after two minutes, `drop`, what each
+    phone chose, `resolved`, reviews and queued work, the test's rate, the Live Activity), with
+    the sealed vectors (`tests/push-vectors.json`).
   - `corepack pnpm --filter @o7/web test`: the browser's channel against the shared
     vectors, and the page's headers.
   - `apps/desktop/scripts/check-remote.mjs` (part of `check:settings`): the Settings page.
@@ -839,8 +965,6 @@ Features:
 - **Telling a bot through MCP itself.** A link is told through its assistant's own webhook
   ("Telling a bot when a chat is done"). The MCP Events extension would let a bot subscribe
   without its person copying an address and a key; too few assistants take it yet.
-- Notifications on the phone when a chat needs an answer, a task's review is done or a queued
-  task could not start.
 - A read-only level for a paired device (bot links have one).
 - New chats in a worktree, attachments, images, the queue's controls and the access level from
   the page. o7 for iPhone has them (features `control`, `review`, `memory`, `screens`, `tasks`

@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct O7App: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
 
@@ -26,7 +27,12 @@ struct O7App: App {
         }
         .onChange(of: scenePhase) { _, phase in
             // Back in front: every session checks itself at once instead of waiting out its ping.
-            if phase == .active { model.wakeAll() }
+            if phase == .active {
+                model.wakeAll()
+                Task { await model.push.refreshStatus() }
+            }
+            // Leaving: the widgets, the badge and the Live Activity take what the app last knew.
+            if phase == .background { model.writeSnapshot() }
         }
     }
 }
@@ -34,6 +40,19 @@ struct O7App: App {
 extension AppModel {
     /// A link the system handed the app.
     func open(_ url: URL) {
+        // o7://inbox and o7://chat/<computer>/<chat>, from the widgets and the Live Activity.
+        if url.scheme == "o7", url.host() == "inbox" {
+            route = nil
+            return
+        }
+        if url.scheme == "o7", url.host() == "chat" {
+            let parts = url.pathComponents.filter { $0 != "/" }
+            if parts.count == 2, computers.contains(where: { $0.hostId == parts[0] }) {
+                select(parts[0])
+                route = ChatRoute(hostId: parts[0], chatId: parts[1])
+            }
+            return
+        }
         if url.scheme == "o7" {
             #if O7_DEV_TOOLS
                 // o7://pair?link=<a pairing link>, for a simulator, which cannot open Universal Links

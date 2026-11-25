@@ -25,6 +25,7 @@ let package = Package(
         .library(name: "O7Markdown", targets: ["O7Markdown"]),
         .library(name: "O7Highlight", targets: ["O7Highlight"]),
         .library(name: "O7MockHost", targets: ["O7MockHost"]),
+        .library(name: "O7Push", targets: ["O7Push"]),
     ],
     targets: [
         // The remote protocol's messages, as the desktop's `bindings.ts` and `wire.rs` give them.
@@ -68,6 +69,11 @@ let package = Package(
             dependencies: ["O7Wire", "O7Crypto", "O7Client"],
             swiftSettings: strict
         ),
+        // Sealed notifications opened on the phone, their words, the keys the notification
+        // extension shares with the app, and what the widgets and the Live Activity read. Light
+        // enough for an extension: no network, no SwiftUI views, no JavaScript.
+        .target(name: "O7Push", dependencies: ["O7Wire", "O7Crypto"], swiftSettings: strict),
+        .testTarget(name: "O7PushTests", dependencies: ["O7Push", "O7Wire", "O7Crypto"]),
         .testTarget(
             name: "O7WireTests",
             dependencies: ["O7Wire"],

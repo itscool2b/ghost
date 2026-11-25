@@ -327,66 +327,102 @@ pub fn reviewed_text(
     out
 }
 
+/// One thing that changed on a task's pull request ([`pull_request_news`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrNews<'a> {
+    Merged,
+    Closed,
+    /// The names of the checks that failed.
+    ChecksFailed(&'a [String]),
+    ChecksPassed,
+    /// A new review or comment.
+    Note(&'a crate::backend::PrNote),
+    /// How many more new reviews and comments there are than are told one by one.
+    More(usize),
+}
+
+/// How many new reviews and comments are told one by one.
+const NOTES_TOLD: usize = 3;
+
+/// What changed on a task's pull request since `before` (none: first seen), each thing once.
+/// First seen, only failed checks, notes or a merge are news; after that, checks that settle
+/// differently, new reviews and comments, and a merge or close. A task's bot is told it in
+/// [`pull_request_text`], and a task's phone in a notification (`host/notify.rs`).
+pub fn pull_request_news<'a>(
+    pr: &'a crate::backend::PullRequest,
+    before: Option<&crate::registry::PrSeen>,
+) -> Vec<PrNews<'a>> {
+    use crate::backend::PrChecks;
+    let mut news = Vec::new();
+    let state_was = before.map(|seen| seen.state.as_str());
+    match pr.state.as_str() {
+        "merged" if state_was != Some("merged") => news.push(PrNews::Merged),
+        "closed" if state_was != Some("closed") => news.push(PrNews::Closed),
+        _ => {}
+    }
+    let checks_were = before.map(|seen| seen.checks.as_str());
+    match &pr.checks {
+        PrChecks::Failed(names) if checks_were != Some("failed") => {
+            news.push(PrNews::ChecksFailed(names));
+        }
+        PrChecks::Passed if before.is_some() && checks_were != Some("passed") => {
+            news.push(PrNews::ChecksPassed);
+        }
+        _ => {}
+    }
+    let seen = before.map_or(0, |seen| seen.notes);
+    let fresh: Vec<&crate::backend::PrNote> = pr.notes.iter().skip(seen).collect();
+    news.extend(fresh.iter().take(NOTES_TOLD).map(|note| PrNews::Note(note)));
+    if fresh.len() > NOTES_TOLD {
+        news.push(PrNews::More(fresh.len() - NOTES_TOLD));
+    }
+    news
+}
+
 /// What a task's bot is told when its pull request changed since `before` (none: first seen),
-/// or nothing when no change is worth a message. First seen, only failed checks, notes or a
-/// merge are; after that, checks that settle differently, new reviews and comments, and a merge
-/// or close. Reviewers' and commenters' words are quoted, cut and named as theirs.
+/// or nothing when no change is worth a message ([`pull_request_news`]). Reviewers' and
+/// commenters' words are quoted, cut and named as theirs.
 pub fn pull_request_text(
     chat: &str,
     project: &str,
     pr: &crate::backend::PullRequest,
     before: Option<&crate::registry::PrSeen>,
 ) -> Option<String> {
-    use crate::backend::PrChecks;
-    let mut news = Vec::new();
-    let state_was = before.map(|seen| seen.state.as_str());
-    match pr.state.as_str() {
-        "merged" if state_was != Some("merged") => news.push("It was merged.".to_owned()),
-        "closed" if state_was != Some("closed") => {
-            news.push("It was closed without merging.".to_owned())
-        }
-        _ => {}
-    }
-    let checks_were = before.map(|seen| seen.checks.as_str());
-    match &pr.checks {
-        PrChecks::Failed(names) if checks_were != Some("failed") => {
-            let names: Vec<String> = names.iter().take(5).map(|name| quoted(name, 60)).collect();
-            news.push(format!("Its checks failed: {}.", names.join(", ")));
-        }
-        PrChecks::Passed if before.is_some() && checks_were != Some("passed") => {
-            news.push("Its checks passed.".to_owned())
-        }
-        _ => {}
-    }
-    let seen = before.map_or(0, |seen| seen.notes);
-    let fresh: Vec<&crate::backend::PrNote> = pr.notes.iter().skip(seen).collect();
-    for note in fresh.iter().take(3) {
-        let what = if note.kind == "comment" {
-            "A new comment".to_owned()
-        } else {
-            format!("A new review ({})", render::cut(&note.kind, 30))
-        };
-        if !note.trusted {
-            news.push(format!(
-                "{what} by {}, who is not one of the repository's own people; o7 does not pass on its words.",
-                quoted(&note.author, 40)
-            ));
-        } else if note.body.trim().is_empty() {
-            news.push(format!("{what} by {}.", quoted(&note.author, 40)));
-        } else {
-            news.push(format!(
-                "{what} by {}, in their own words (not o7's): {}",
-                quoted(&note.author, 40),
-                quoted(&note.body, SAID)
-            ));
-        }
-    }
-    if fresh.len() > 3 {
-        news.push(format!(
-            "And {} more; they are on the pull request.",
-            fresh.len() - 3
-        ));
-    }
+    let news: Vec<String> = pull_request_news(pr, before)
+        .into_iter()
+        .map(|item| match item {
+            PrNews::Merged => "It was merged.".to_owned(),
+            PrNews::Closed => "It was closed without merging.".to_owned(),
+            PrNews::ChecksFailed(names) => {
+                let names: Vec<String> =
+                    names.iter().take(5).map(|name| quoted(name, 60)).collect();
+                format!("Its checks failed: {}.", names.join(", "))
+            }
+            PrNews::ChecksPassed => "Its checks passed.".to_owned(),
+            PrNews::Note(note) => {
+                let what = if note.kind == "comment" {
+                    "A new comment".to_owned()
+                } else {
+                    format!("A new review ({})", render::cut(&note.kind, 30))
+                };
+                if !note.trusted {
+                    format!(
+                        "{what} by {}, who is not one of the repository's own people; o7 does not pass on its words.",
+                        quoted(&note.author, 40)
+                    )
+                } else if note.body.trim().is_empty() {
+                    format!("{what} by {}.", quoted(&note.author, 40))
+                } else {
+                    format!(
+                        "{what} by {}, in their own words (not o7's): {}",
+                        quoted(&note.author, 40),
+                        quoted(&note.body, SAID)
+                    )
+                }
+            }
+            PrNews::More(more) => format!("And {more} more; they are on the pull request."),
+        })
+        .collect();
     if news.is_empty() {
         return None;
     }

@@ -485,6 +485,12 @@ export const commands = {
 	remoteClearBotCallback: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_clear_bot_callback", { id })),
 	/**  Sends the bot link `id`'s address a test message now and answers with how it went. */
 	remoteTestBotCallback: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_test_bot_callback", { id })),
+	/**
+	 *  Sends o7 for iPhone `id` a test notification now, through the relay and Apple, as its row's
+	 *  "Send test notification" does: at most one every ten seconds, and only through a relay that
+	 *  sends notifications. The status says when Apple last took one for it.
+	 */
+	remoteTestNotification: (id: string) => typedError<RemoteStatus, AppError>(__TAURI_INVOKE("remote_test_notification", { id })),
 	gitInitializePreview: (chatId: string, initialBranch: string) => typedError<GitInitializePreview, AppError>(__TAURI_INVOKE("git_initialize_preview", { chatId, initialBranch })),
 	gitInitializeApply: (chatId: string, token: string) => typedError<GitWorkspace, AppError>(__TAURI_INVOKE("git_initialize_apply", { chatId, token })),
 	projectToolsReview: (chatId: string) => typedError<ProjectToolsReview, AppError>(__TAURI_INVOKE("project_tools_review", { chatId })),
@@ -3701,6 +3707,10 @@ export type RemoteDevice = {
 	kind?: RemoteDeviceKind,
 	/**  The app's version, as o7 for iPhone gave it when it paired. A browser has none. */
 	app_version?: string | null,
+	/**  o7 for iPhone turned notifications on: this computer knows where Apple delivers them. */
+	notifications?: boolean,
+	/**  When Apple last took a notification for it. */
+	last_push?: number | null,
 };
 
 /**
@@ -3741,6 +3751,11 @@ export type RemoteStatus = {
 	 *  bot link can reach it. Off unless the person turns it on.
 	 */
 	keep_awake: boolean,
+	/**
+	 *  The relay this computer is connected to sends notifications to o7 for iPhone. False while
+	 *  it is not connected.
+	 */
+	notifications?: boolean,
 };
 
 export type RemoteTold = {

@@ -230,13 +230,26 @@ public struct InboxSnapshot: Codable, Hashable, Sendable {
         }
     }
     public struct Recent: Codable, Hashable, Sendable {
+        /// The chat's pull request, as the computer last heard of it.
+        public struct PullRequest: Codable, Hashable, Sendable {
+            public var number: Int
+            public var state: String?
+            /// `none`, `pending`, `passed` or `failed`.
+            public var checks: String?
+        }
         public var chatId: String
         public var endedAt: Int64?
         public var durationMs: Int64?
         public var line: String?
+        /// What the last turn changed: files, and lines added and removed.
+        public var files: Int?
+        public var added: Int?
+        public var removed: Int?
+        public var pullRequest: PullRequest?
         enum CodingKeys: String, CodingKey {
-            case line
+            case line, files, added, removed
             case chatId = "chat_id", endedAt = "ended_at", durationMs = "duration_ms"
+            case pullRequest = "pull_request"
         }
     }
     public var asking: [Asking]

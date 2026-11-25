@@ -23,7 +23,7 @@ marked. The relay Workers, the release bucket and the website Workers are curren
 | Email Sending domain | `auracode.si`, `84273eb1ef3c4b108b774bc0e0a000ed` | Passwordless sign-in sender | Deleted 2026-11-17 |
 | Preview D1 database | `auracode-preview`, `11d6fa29-5c39-49c5-a85b-1ecc7645dbd5` | Isolated acceptance data, US jurisdiction | Deleted 2026-11-17 |
 | Preview R2 bucket | `auracode-preview-blobs` | Private acceptance ciphertext | Deleted 2026-11-17 |
-| Worker | `auracode-relay`, routes `o7.codes/api/remote/*` and, for copies of the app from before the move, `auracode.si/api/remote/*` | Remote sessions relay: one Durable Object (`Room`, SQLite-backed) per computer. Stores key and token hashes only | Current |
+| Worker | `auracode-relay`, routes `o7.codes/api/remote/*` and, for copies of the app from before the move, `auracode.si/api/remote/*` | Remote sessions relay: one Durable Object (`Room`, SQLite-backed) per computer, and one more (`Apns`) that signs the iPhone app's notifications for Apple. Stores key and token hashes, and when each computer's recent notifications went out. Its one secret is Apple's push key (`APNS_KEY`), which the owner sets; without it no notification is sent | Current |
 | Preview Worker | `auracode-relay-preview`, route `preview.o7.codes/api/remote/*` | The same relay for the preview site | Current |
 
 The zone has one rate limiting rule, added on 2026-11-19 before the repository was opened (ruleset

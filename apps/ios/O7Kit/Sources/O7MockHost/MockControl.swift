@@ -39,6 +39,8 @@ struct MockState {
     var uploads: [String: (size: Int, sha256: String, received: Data)] = [:]
     /// Uploads that arrived whole and matched their hash, by id.
     var completed: [String: Data] = [:]
+    /// Where the phone said its notifications go.
+    var pushToken: String?
     /// The next queued task's number: ids are never reused.
     var nextQueued = 3
     var access: [String: String] = [:]
@@ -243,6 +245,20 @@ extension MockComputer {
                 to: id)
         case "upload_abort":
             state.uploads[request["upload_id"]?.string ?? ""] = nil
+            reply(re, .object([:]), to: id)
+        case "push_register":
+            let token = request["token"]?.string ?? ""
+            guard (64...200).contains(token.count), token.allSatisfy(\.isHexDigit) else {
+                refuse(re, "invalid", "That is not a notification token.", to: id)
+                return true
+            }
+            state.pushToken = token
+            // The demo has no relay to send through.
+            reply(re, .object(["relay": .bool(false)]), to: id)
+        case "push_unregister":
+            state.pushToken = nil
+            reply(re, .object([:]), to: id)
+        case "push_test", "activity":
             reply(re, .object([:]), to: id)
         default:
             return false

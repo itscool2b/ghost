@@ -57,6 +57,8 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   const [automating, setAutomating] = useState(false);
   /** An automation's new address, shown once after renewing it. */
   const [readdressed, setReaddressed] = useState<RemoteBotLink | null>(null);
+  /** Which phone a test notification was last sent to, for the list to say. */
+  const [tested, setTested] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -129,6 +131,18 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
     setLinking({ bot });
   };
 
+  /** A test notification to a phone now, through the relay and Apple. */
+  const testNotification = async (device: RemoteDevice) => {
+    setError(null);
+    setTested(null);
+    try {
+      setStatus(await api.testNotification(device.id));
+      setTested(device.name);
+    } catch (failure) {
+      setError(message(failure));
+    }
+  };
+
   const enabled = status?.enabled ?? false;
   const devices = status?.devices ?? [];
   const bots = status?.bots ?? [];
@@ -138,6 +152,12 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   const paired = pairing
     ? (status?.devices.find((device) => !before.includes(device.id)) ?? null)
     : null;
+  // Connected to a relay that never said it sends notifications, with a phone that wants them.
+  const quietRelay =
+    enabled &&
+    status?.link.state === "online" &&
+    status.notifications !== true &&
+    devices.some((device) => device.kind === "ios");
 
   return (
     <>
@@ -215,6 +235,11 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
           Your phone, or any browser you open the link in. A pairing link opens once, within ten
           minutes.
         </p>
+        {quietRelay ? (
+          <p className="settings-lead" data-testid="remote-quiet-relay">
+            The relay does not send notifications yet.
+          </p>
+        ) : null}
         {devices.length ? (
           <div className="settings-group">
             {devices.map((device) => (
@@ -234,23 +259,38 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                     <State tone="green">
                       Connected now
                       {deviceApp(device)}
+                      {deviceNotifications(device, now)}
                     </State>
                   ) : (
                     <State tone="off">
                       Last seen {ago(device.last_seen_at, now)}
                       {deviceApp(device)}
+                      {deviceNotifications(device, now)}
                     </State>
                   )
                 }
               >
-                <button
-                  className="g-button g-button-ghost g-button-28"
-                  type="button"
-                  aria-label={`Remove ${device.name}`}
-                  onClick={() => void run(() => api.removeDevice(device.id))}
-                >
-                  Remove
-                </button>
+                <div className="remote-row-actions">
+                  {device.kind === "ios" && device.notifications ? (
+                    <button
+                      className="g-button g-button-ghost g-button-28"
+                      type="button"
+                      data-testid="remote-test-notification"
+                      aria-label={`Send test notification, ${device.name}`}
+                      onClick={() => void testNotification(device)}
+                    >
+                      Send test notification
+                    </button>
+                  ) : null}
+                  <button
+                    className="g-button g-button-ghost g-button-28"
+                    type="button"
+                    aria-label={`Remove ${device.name}`}
+                    onClick={() => void run(() => api.removeDevice(device.id))}
+                  >
+                    Remove
+                  </button>
+                </div>
               </Row>
             ))}
           </div>
@@ -260,6 +300,11 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
             Pair your phone to read your chats, send messages and answer requests from it.
           </p>
         )}
+        {tested ? (
+          <p className="settings-lead" role="status">
+            A test notification is on its way to {tested}. It arrives in a few seconds.
+          </p>
+        ) : null}
       </section>
 
       <section className="settings-section" aria-labelledby="settings-remote-bots">
@@ -457,7 +502,9 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         <p>
           A paired browser's session is encrypted end to end: the relay passes it along and cannot
           read it. A bot's calls are not: the relay and the bot's own service read them, and either
-          could act as that bot. Remote access works while o7 is open, including in the tray.
+          could act as that bot. Notifications to o7 for iPhone are sealed on this computer for that
+          phone: the relay and Apple pass them on without reading them. Remote access works while o7
+          is open, including in the tray.
         </p>
       </details>
 
@@ -762,6 +809,21 @@ const handheld = (name: string): boolean =>
 export function deviceApp(device: Pick<RemoteDevice, "kind" | "app_version">): string {
   if (device.kind !== "ios") return "";
   return device.app_version ? ` · o7 for iPhone ${device.app_version}` : " · o7 for iPhone";
+}
+
+/**
+ * Whether o7 for iPhone hears from this computer, after which app it is: " · Notifications on ·
+ * Last notification 5 min ago", or " · Notifications off". Nothing for a browser.
+ */
+export function deviceNotifications(
+  device: Pick<RemoteDevice, "kind" | "notifications" | "last_push">,
+  now: number,
+): string {
+  if (device.kind !== "ios") return "";
+  if (!device.notifications) return " · Notifications off";
+  return typeof device.last_push === "number"
+    ? ` · Notifications on · Last notification ${ago(device.last_push, now)}`
+    : " · Notifications on";
 }
 
 /** A QR code as one SVG path: dark modules on white, whatever the app's appearance. */

@@ -21,6 +21,8 @@ struct ChatScreen: View {
         }
         .navigationTransition(.zoom(sourceID: route.chatId, in: zoom))
         .toolbarVisibility(.hidden, for: .tabBar)
+        .onAppear { model.visibleChat = route }
+        .onDisappear { if model.visibleChat == route { model.visibleChat = nil } }
     }
 }
 
@@ -86,8 +88,29 @@ private struct ChatContent: View {
         .photoSources($photos, picking: $picking, shooting: $shooting)
         .navigationTitle(summary?.title ?? "Untitled chat")
         .navigationSubtitle(subtitle(summary))
+        .toolbarTitleMenu {
+            if computer.offersControl {
+                Button("Rename", systemImage: "pencil") {
+                    newTitle = summary?.title ?? ""
+                    renaming = true
+                }
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if computer.offersReview {
+                ToolbarItem(placement: .topBarTrailing) {
+                    // What the last turn changed, counted from the transcript itself.
+                    let files = chat?.segments.last(where: { $0.turnId != nil }).map(changedFiles)?.count ?? 0
+                    Button {
+                        showingChanges = (facts?.worktree ?? false) ? .branch : .turn
+                    } label: {
+                        Image(systemName: "plus.forwardslash.minus")
+                    }
+                    .badge(files)
+                    .accessibilityLabel(files == 0 ? "Changes" : "Changes, \(files) file\(files == 1 ? "" : "s")")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if computer.offersPickers {

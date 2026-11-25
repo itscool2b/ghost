@@ -72,7 +72,7 @@ struct PasteLinkButton: View {
 
     var body: some View {
         PasteButton(payloadType: String.self) { strings in
-            Task { @MainActor in model.propose(strings.first ?? "") }
+            Task { @MainActor in model.propose(strings.first ?? "", pasted: true) }
         }
         .labelStyle(.titleAndIcon)
         .buttonBorderShape(.capsule)

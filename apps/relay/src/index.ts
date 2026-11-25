@@ -7,9 +7,14 @@
  *   (docs/remote-sessions.md). The relay forwards opaque text and cannot read or forge it.
  * - A bot speaks MCP over HTTPS, so its calls are readable here in passing. The relay turns each
  *   tool call into one request to the desktop, which checks the bot's token itself.
+ * - A desktop's notifications for o7 for iPhone go to Apple from here. The desktop seals what
+ *   they say; the relay wraps that in fixed outer words and signs for Apple with its one secret,
+ *   Apple's push key (`APNS_KEY`), which the owner sets. Without it the relay sends none.
  *
  * One Durable Object per desktop holds its sockets. Its only stored state is the hash of the
- * desktop's key and the hashes of its bot tokens.
+ * desktop's key, the hashes of its bot tokens and when its recent notifications went out, by a
+ * hash of each phone's address. One more, `Apns`, signs for the whole relay and keeps the token
+ * it signs with.
  */
 import { DurableObject } from "cloudflare:workers";
 import TOOLS from "./tools.json";
@@ -115,6 +120,8 @@ const LATEST_TOOLS = 3;
 
 export interface Env {
   readonly ROOMS: DurableObjectNamespace<Room>;
+  /** The one object that signs notifications for Apple (`Apns`). */
+  readonly APNS?: DurableObjectNamespace<Apns>;
   /** The website's origin: the origin a browser socket comes from. */
   readonly APP_ORIGIN: string;
   /**
@@ -122,8 +129,18 @@ export interface Env {
    * browsers paired before the move. Unset once that page is gone.
    */
   readonly FORMER_ORIGIN?: string;
+  /** What Apple delivers notifications to: the iPhone app's bundle id, `codes.o7.mobile`. */
+  readonly APNS_TOPIC?: string;
+  /** Apple's push key, a PKCS#8 PEM: the relay's one secret, set by the owner. */
+  readonly APNS_KEY?: string;
+  /** The push key's id, from Apple. Empty means push is off. */
+  readonly APNS_KEY_ID?: string;
+  /** The Apple team the push key belongs to. Empty means push is off. */
+  readonly APNS_TEAM_ID?: string;
   /** Tests only: how long a desktop may go without a keep-alive, in ms (`HOST_SILENT_MS`). */
   readonly HOST_SILENT_MS?: string;
+  /** Tests only: how old a token Apple refused must be before another is made, in ms (`RENEW_MS`). */
+  readonly APNS_RENEW_MS?: string;
 }
 
 const PREFIX = "/api/remote/v1/";
@@ -180,6 +197,52 @@ const HEARD_NOTE_MS = 5_000;
  * long turn costs a bot a few calls and not one every half minute.
  */
 const BOT_CALL_MS = 250_000;
+
+/**
+ * Notifications. A desktop asks for one with `p`: where it goes, and what it says, sealed for
+ * the phone. The relay wraps that in Apple's outer words, always these: a host key is self-made,
+ * so a host's own words could reach any phone whose address it learned.
+ */
+const APPLE = {
+  production: "https://api.push.apple.com",
+  sandbox: "https://api.sandbox.push.apple.com",
+} as const;
+const OUTER_WORDS = { title: "o7", body: "Something changed on your computer." };
+/** A `p` frame's largest size: each of its parts at its longest, with room to spare. */
+const PUSH_FRAME_BYTES = 8 * 1024;
+const PUSH_ID_LENGTH = 64;
+/** A phone's address at Apple (its device token), in hex. */
+const DEVICE_TOKEN = /^[0-9a-fA-F]{64,200}$/;
+const COLLAPSE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const DEVICE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** What the desktop sealed for the phone: a payload of up to 2,400 bytes, sealed, in base64url. */
+const SEALED = /^[A-Za-z0-9_-]{1,3400}$/;
+/** How long Apple may keep trying, at most: a day. */
+const TTL_MAX_SECONDS = 86_400;
+/**
+ * What one computer may send: 60 notifications a minute and 600 an hour, 30 a minute to one
+ * phone, to at most 32 phones an hour. A desktop gone wrong cannot flood a phone, or get the
+ * relay's key throttled by Apple.
+ */
+const PUSHES_A_MINUTE = 60;
+const PUSHES_AN_HOUR = 600;
+const PUSHES_TO_ONE_A_MINUTE = 30;
+const PHONES_AN_HOUR = 32;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+/** How long a token is shown to Apple. Apple refuses one older than an hour. */
+const TOKEN_MS = 50 * MINUTE_MS;
+/**
+ * A token Apple refused is made again only once it is this old: Apple refuses new ones made more
+ * often (`TooManyProviderTokenUpdates`).
+ */
+const RENEW_MS = 20 * MINUTE_MS;
+/** How long Apple has to answer one notification. After that it is unreachable. */
+const APPLE_WAIT_MS = 30_000;
+/** Apple's answers that the token is stale: a new one may pass. */
+const STALE_TOKEN = new Set(["ExpiredProviderToken", "InvalidProviderToken"]);
+/** Apple's answers, with a 400, that the phone's address is no good: the desktop forgets it. */
+const GONE_ADDRESS = new Set(["BadDeviceToken", "DeviceTokenNotForTopic"]);
 
 const MCP_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 /** How long ago `ms` was, in words a bot can pass on. */
@@ -242,7 +305,12 @@ async function hostIdOf(key: string): Promise<string | null> {
   input.set(label);
   input.set(raw, label.length);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input)).slice(0, 16);
-  return btoa(String.fromCharCode(...digest))
+  return base64url(digest);
+}
+
+/** Bytes as unpadded base64url. */
+function base64url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replaceAll("=", "");
@@ -277,6 +345,7 @@ export default {
         second_full_tools: setFor(2).full.length,
         first_tools: FIRST.chat.length,
         first_full_tools: FIRST.full.length,
+        push: pushes(env),
       });
     if (!hostId || !HOST_ID.test(hostId)) return notFound();
     const origin = request.headers.get("Origin");
@@ -368,19 +437,12 @@ interface RpcMessage {
 }
 
 function randomId(bytes: number): string {
-  const raw = crypto.getRandomValues(new Uint8Array(bytes));
-  return btoa(String.fromCharCode(...raw))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  return base64url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
 async function sha256(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  return base64url(new Uint8Array(digest));
 }
 
 /** Whether the desktop's current socket accepted a browser, or still may within its grace time. */
@@ -414,6 +476,11 @@ export class Room extends DurableObject<Env> {
    * written to the socket's attachment, at most every few seconds, so it outlives hibernation.
    */
   #heard = 0;
+  /**
+   * The notifications this room sent in the last hour (`Sent`). Stored as well, so a room that
+   * sleeps between bursts is still held to its limits.
+   */
+  #sent?: Promise<Sent>;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -478,6 +545,9 @@ export class Room extends DurableObject<Env> {
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1], ["host"]);
     pair[1].serializeAttachment({ role: "host", since: Date.now() } satisfies Attachment);
+    // This relay sends notifications. A desktop sends `p` only on a socket that heard so, since
+    // an older relay ends the host socket on a frame it does not know.
+    if (pushes(this.env)) pair[1].send('f{"push":1}');
     for (const socket of earlier) end(socket, 4000, "replaced");
     // The new socket knows none of the open browsers: each starts its session again.
     for (const client of this.#clients()) {
@@ -558,7 +628,10 @@ export class Room extends DurableObject<Env> {
     else socket.send("h0");
   }
 
-  /** Nobody has used this room for a long time: forget its bot links and its owner's mark. */
+  /**
+   * Nobody has used this room for a long time: forget its bot links, when its notifications went
+   * out, and its owner's mark.
+   */
   override async alarm() {
     if (this.#host() === null) await this.ctx.storage.deleteAll();
   }
@@ -575,12 +648,13 @@ export class Room extends DurableObject<Env> {
   }
 
   async #fromHost(socket: WebSocket, message: string) {
-    if (message.length > HOST_MESSAGE_BYTES) return socket.close(1009, "too large");
+    const kind = message[0];
+    // A notification is answered whatever it holds, and never ends the socket (`#notify`).
+    if (message.length > HOST_MESSAGE_BYTES && kind !== "p") return socket.close(1009, "too large");
     const now = Date.now();
     if (now - this.#heard > HEARD_NOTE_MS)
       socket.serializeAttachment({ role: "host", since: now } satisfies Attachment);
     this.#heard = now;
-    const kind = message[0];
     if (kind === "m" || kind === "c" || kind === "a") {
       const cid = message.slice(1, 1 + CID_LENGTH);
       const client = this.ctx.getWebSockets(`c:${cid}`)[0];
@@ -611,6 +685,7 @@ export class Room extends DurableObject<Env> {
       }
       return;
     }
+    if (kind === "p") return this.#notify(socket, message.slice(1));
     let body: unknown;
     try {
       body = JSON.parse(message.slice(1));
@@ -629,6 +704,70 @@ export class Room extends DurableObject<Env> {
       return;
     }
     socket.close(1008, "unexpected");
+  }
+
+  /**
+   * A notification the desktop asks this relay to send (`p`). It is always answered (`P`), and
+   * never ends the socket, whatever it holds: the desktop's browsers stay connected.
+   */
+  async #notify(socket: WebSocket, text: string) {
+    const answer = (id: string, pushed: Pushed) => {
+      try {
+        socket.send(`P${JSON.stringify({ id, ...pushed })}`);
+      } catch {
+        // The desktop's socket closed.
+      }
+    };
+    let body: unknown = null;
+    try {
+      if (text.length <= PUSH_FRAME_BYTES) body = JSON.parse(text);
+    } catch {
+      // Not JSON: invalid.
+    }
+    const push = pushOf(body);
+    if (!push) return answer(idIn(body), { ok: false, reason: "invalid", drop: false });
+    const env = this.env;
+    if (!pushes(env)) return answer(push.id, { ok: false, reason: "off", drop: false });
+    // Counted by a hash of the phone's address, so the room keeps no address.
+    const phone = await sha256(push.to.toLowerCase());
+    // One map for every ask, changed in place with no wait between the check and the count.
+    const sent = await this.#pushesSent();
+    const now = Date.now();
+    forgetOld(sent, now);
+    if (!allows(sent, phone, now))
+      return answer(push.id, { ok: false, reason: "limited", drop: false });
+    sent.set(phone, [...(sent.get(phone) ?? []), now]);
+    void this.ctx.storage.put("pushes", sent);
+    this.ctx.waitUntil(this.#deliver(push, env));
+  }
+
+  /** What this room sent in the last hour, read from storage once. */
+  #pushesSent(): Promise<Sent> {
+    this.#sent ??= this.ctx.storage
+      .get<Sent>("pushes")
+      .then((stored) => (stored instanceof Map ? stored : new Map()))
+      .catch(() => new Map());
+    return this.#sent;
+  }
+
+  /** Sends `push` to Apple and tells the desktop how it went. */
+  async #deliver(push: Push, env: Pushing) {
+    let pushed: Pushed;
+    try {
+      pushed = await sendToApple(push, env);
+    } catch {
+      // No answer from Apple: the network failed, or no token could be made.
+      pushed = { ok: false, reason: "unreachable", drop: false };
+    }
+    // The desktop's socket as it is now: one that took over from the one that asked hears it.
+    const host = this.ctx
+      .getWebSockets("host")
+      .find((socket) => socket.readyState === WebSocket.OPEN);
+    try {
+      host?.send(`P${JSON.stringify({ id: push.id, ...pushed })}`);
+    } catch {
+      // The desktop's socket closed.
+    }
   }
 
   /**
@@ -935,4 +1074,296 @@ function rpcResult(id: unknown, result: unknown) {
 
 function rpcError(id: unknown, code: number, message: string) {
   return { jsonrpc: "2.0", id, error: { code, message } };
+}
+
+/** What sending notifications takes: Apple's key, its id, the team's, the topic and the signer. */
+type Pushing = Env & {
+  readonly APNS: DurableObjectNamespace<Apns>;
+  readonly APNS_TOPIC: string;
+  readonly APNS_KEY: string;
+  readonly APNS_KEY_ID: string;
+  readonly APNS_TEAM_ID: string;
+};
+
+/** Whether this relay sends notifications: only once the owner gave it Apple's key and its ids. */
+function pushes(env: Env): env is Pushing {
+  return !!(env.APNS && env.APNS_TOPIC && env.APNS_KEY && env.APNS_KEY_ID && env.APNS_TEAM_ID);
+}
+
+/** A notification the desktop asked for (`p`), checked. */
+interface Push {
+  /** The desktop's own name for it, said back with the answer. */
+  readonly id: string;
+  /** The phone's address at Apple, in hex. */
+  readonly to: string;
+  readonly env: keyof typeof APPLE;
+  readonly type: "alert" | "liveactivity";
+  /** An alert's collapse id: a newer alert with the same one replaces it on the phone. */
+  readonly collapse?: string;
+  /** The device the desktop sealed it for. */
+  readonly d: string;
+  /** What the desktop sealed. */
+  readonly b: string;
+  /** How long Apple keeps trying, in seconds. Unset: once, now. */
+  readonly ttl?: number;
+  /** An alert's sound: on unless the desktop says false. */
+  readonly sound: boolean;
+  /** A Live Activity's priority and event. */
+  readonly priority: 5 | 10;
+  readonly event: "update" | "end";
+}
+
+/** How a notification went, as the desktop is told (`P`). */
+interface Pushed {
+  readonly ok: boolean;
+  /** Apple's HTTP status, when Apple answered. */
+  readonly status?: number;
+  /** Apple's reason, or the relay's own: invalid, off, limited or unreachable. */
+  readonly reason?: string;
+  /** The phone's address is no good any more: the desktop forgets it. */
+  readonly drop: boolean;
+}
+
+/** A `p` frame's notification, or null when any part of it is not one this relay sends. */
+function pushOf(body: unknown): Push | null {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return null;
+  const frame = body as Record<string, unknown>;
+  const { id, to, env, type, collapse, d, b, ttl, sound, priority, event } = frame;
+  // A part the desktop leaves out may also come as null.
+  const unset = (value: unknown) => value === undefined || value === null;
+  if (typeof id !== "string" || id.length > PUSH_ID_LENGTH) return null;
+  if (typeof to !== "string" || !DEVICE_TOKEN.test(to)) return null;
+  if (env !== "production" && env !== "sandbox") return null;
+  if (type !== "alert" && type !== "liveactivity") return null;
+  if (!unset(collapse) && !(typeof collapse === "string" && COLLAPSE_ID.test(collapse)))
+    return null;
+  if (typeof d !== "string" || !DEVICE_ID.test(d)) return null;
+  if (typeof b !== "string" || !SEALED.test(b)) return null;
+  if (
+    !unset(ttl) &&
+    !(typeof ttl === "number" && Number.isInteger(ttl) && ttl >= 0 && ttl <= TTL_MAX_SECONDS)
+  )
+    return null;
+  if (!unset(sound) && typeof sound !== "boolean") return null;
+  if (!unset(priority) && priority !== 5 && priority !== 10) return null;
+  if (!unset(event) && event !== "update" && event !== "end") return null;
+  return {
+    id,
+    to,
+    env,
+    type,
+    ...(typeof collapse === "string" ? { collapse } : {}),
+    d,
+    b,
+    ...(typeof ttl === "number" ? { ttl } : {}),
+    sound: sound !== false,
+    priority: priority === 5 ? 5 : 10,
+    event: event === "end" ? "end" : "update",
+  };
+}
+
+/** The id an invalid `p` is answered with: its own when it has one, so the desktop can match it. */
+function idIn(body: unknown): string {
+  const id = body !== null && typeof body === "object" ? (body as { id?: unknown }).id : undefined;
+  return typeof id === "string" && id.length <= PUSH_ID_LENGTH ? id : "";
+}
+
+/** When a room's notifications went out in the last hour, by a hash of each phone's address. */
+type Sent = Map<string, number[]>;
+
+/** Drops from `sent` what is an hour old at `now`. */
+function forgetOld(sent: Sent, now: number) {
+  for (const [phone, times] of sent) {
+    const recent = times.filter((at) => now - at < HOUR_MS);
+    if (recent.length > 0) sent.set(phone, recent);
+    else sent.delete(phone);
+  }
+}
+
+/** Whether one more notification, to `phone`, keeps a room within its limits. */
+function allows(sent: Sent, phone: string, now: number): boolean {
+  const all = [...sent.values()].flat();
+  const lastMinute = (times: number[]) => times.filter((at) => now - at < MINUTE_MS).length;
+  return (
+    lastMinute(all) < PUSHES_A_MINUTE &&
+    all.length < PUSHES_AN_HOUR &&
+    lastMinute(sent.get(phone) ?? []) < PUSHES_TO_ONE_A_MINUTE &&
+    (sent.has(phone) || sent.size < PHONES_AN_HOUR)
+  );
+}
+
+/** What goes to Apple for `push`, all but the token. `now` is in seconds. */
+function forApple(push: Push, topic: string, now: number) {
+  const alert = push.type === "alert";
+  const headers: Record<string, string> = {
+    "apns-topic": alert ? topic : `${topic}.push-type.liveactivity`,
+    "apns-push-type": push.type,
+    "apns-priority": alert ? "10" : String(push.priority),
+    // 0: Apple tries once, now, and keeps nothing.
+    "apns-expiration": String(push.ttl === undefined ? 0 : now + push.ttl),
+    "content-type": "application/json",
+  };
+  if (alert && push.collapse !== undefined) headers["apns-collapse-id"] = push.collapse;
+  // Never a category: the phone sets its buttons only once it opened the sealed words.
+  const body = alert
+    ? {
+        aps: {
+          alert: OUTER_WORDS,
+          ...(push.sound ? { sound: "default" } : {}),
+          "mutable-content": 1,
+        },
+        o7: { v: 1, d: push.d, b: push.b },
+      }
+    : {
+        aps: {
+          timestamp: now,
+          event: push.event,
+          "content-state": { d: push.d, b: push.b },
+          ...(push.event === "end" ? { "dismissal-date": now } : {}),
+        },
+      };
+  return { url: `${APPLE[push.env]}/3/device/${push.to}`, headers, body: JSON.stringify(body) };
+}
+
+/** One request to Apple with the token `jwt`: Apple's status, and its reason when it gave one. */
+async function askApple(
+  request: ReturnType<typeof forApple>,
+  jwt: string,
+): Promise<{ status: number; reason?: string }> {
+  const response = await fetch(request.url, {
+    method: "POST",
+    headers: { authorization: `bearer ${jwt}`, ...request.headers },
+    body: request.body,
+    // Apple never redirects; the token goes nowhere else.
+    redirect: "manual",
+    signal: AbortSignal.timeout(APPLE_WAIT_MS),
+  });
+  const said = await response.text().catch(() => "");
+  let reason: unknown;
+  try {
+    reason = (JSON.parse(said) as { reason?: unknown } | null)?.reason;
+  } catch {
+    // No body, as when Apple took the notification.
+  }
+  return typeof reason === "string"
+    ? { status: response.status, reason }
+    : { status: response.status };
+}
+
+/**
+ * Sends `push` to Apple and says how it went. When Apple calls the token expired or invalid, a
+ * newer one is asked for, and the notification goes once more with it.
+ */
+async function sendToApple(push: Push, env: Pushing): Promise<Pushed> {
+  const signer = env.APNS.get(env.APNS.idFromName("apns"));
+  const request = forApple(push, env.APNS_TOPIC, Math.floor(Date.now() / 1000));
+  const jwt = await signer.token();
+  let heard = await askApple(request, jwt);
+  if (heard.status === 403 && STALE_TOKEN.has(heard.reason ?? "")) {
+    const fresh = await signer.renew(jwt);
+    if (fresh !== null && fresh !== jwt) heard = await askApple(request, fresh);
+  }
+  return {
+    ok: heard.status === 200,
+    status: heard.status,
+    ...(heard.reason === undefined ? {} : { reason: heard.reason }),
+    drop: heard.status === 410 || (heard.status === 400 && GONE_ADDRESS.has(heard.reason ?? "")),
+  };
+}
+
+/** The token the relay shows Apple, and when it was made (`iat`, in seconds). */
+interface Token {
+  readonly jwt: string;
+  readonly iat: number;
+}
+
+/**
+ * A new token: an ES256 JWT of the push key's id, the team's and the time, signed with Apple's
+ * push key. WebCrypto's ECDSA signature is already r and s side by side, as a JWT has it.
+ */
+async function signed(env: Env): Promise<Token> {
+  const iat = Math.floor(Date.now() / 1000);
+  // The key as Apple gives it, a PEM: the base64 between its two marker lines. A key pasted with
+  // its line breaks written out as "\n" reads the same.
+  const pem = (env.APNS_KEY ?? "").replace(/-----[A-Z ]+-----|\\n|\s/g, "");
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    Uint8Array.from(atob(pem), (char) => char.charCodeAt(0)),
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
+  const part = (value: unknown) => base64url(new TextEncoder().encode(JSON.stringify(value)));
+  const header = part({ alg: "ES256", kid: env.APNS_KEY_ID });
+  const claims = part({ iss: env.APNS_TEAM_ID, iat });
+  const input = `${header}.${claims}`;
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    key,
+    new TextEncoder().encode(input),
+  );
+  return { jwt: `${input}.${base64url(new Uint8Array(signature))}`, iat };
+}
+
+/**
+ * The relay's one signer for Apple: a single object for the whole relay (`idFromName("apns")`).
+ * Apple wants one token at a time, made at most every 20 minutes and shown for at most an hour;
+ * a token for each computer would be refused (`TooManyProviderTokenUpdates`). The token is kept
+ * in storage, so a restart does not make another.
+ */
+export class Apns extends DurableObject<Env> {
+  /** The token kept, once storage was read (`#load`). */
+  #kept?: Token;
+  #loaded?: Promise<void>;
+  /** The token being made: every ask while it is made waits for this one. */
+  #making?: Promise<Token>;
+
+  /** The token to send with: the one kept, until it is 50 minutes old. */
+  async token(): Promise<string> {
+    await this.#load();
+    if (this.#making) return (await this.#making).jwt;
+    const kept = this.#kept;
+    if (kept && Date.now() - kept.iat * 1000 < TOKEN_MS) return kept.jwt;
+    return (await this.#make()).jwt;
+  }
+
+  /**
+   * Apple refused `refused` as expired or invalid: the token to send with once more. That is the
+   * newer one when there is one, or a new one once `refused` is 20 minutes old. Null before then,
+   * since Apple refuses tokens made more often.
+   */
+  async renew(refused: string): Promise<string | null> {
+    await this.#load();
+    if (this.#making) return (await this.#making).jwt;
+    const kept = this.#kept;
+    if (kept && kept.jwt !== refused) return kept.jwt;
+    const renewAfter = Number(this.env.APNS_RENEW_MS) || RENEW_MS;
+    if (kept && Date.now() - kept.iat * 1000 < renewAfter) return null;
+    return (await this.#make()).jwt;
+  }
+
+  /** Reads the kept token from storage, once. */
+  #load(): Promise<void> {
+    this.#loaded ??= this.ctx.storage
+      .get<Token>("token")
+      .then((stored) => {
+        this.#kept ??= stored;
+      })
+      .catch(() => {});
+    return this.#loaded;
+  }
+
+  /** Makes a new token and keeps it, in memory and in storage. */
+  #make(): Promise<Token> {
+    this.#making ??= signed(this.env)
+      .then(async (token) => {
+        this.#kept = token;
+        await this.ctx.storage.put("token", token);
+        return token;
+      })
+      .finally(() => {
+        this.#making = undefined;
+      });
+    return this.#making;
+  }
 }

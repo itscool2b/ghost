@@ -18,6 +18,10 @@ on:
         description: Also run the client end to end against the relay and demo_host
         type: boolean
         default: false
+      screenshots:
+        description: Also take screenshots of every theme, light and dark, at two text sizes
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -121,3 +125,33 @@ jobs:
           cargo build -p o7-remote --example demo_host
       - name: The app's client against them
         run: node apps/ios/scripts/e2e.mjs
+
+  screenshots:
+    name: Screenshots (Xcode ${{ inputs.xcode }})
+    if: inputs.screenshots
+    runs-on: ${{ inputs.xcode == '27' && 'xcode-27' || 'macos-26' }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: XcodeGen
+        run: .github/scripts/fetch-xcodegen.sh
+      - name: Generate the project
+        run: apps/ios/scripts/project.sh
+      - name: Every theme on the main screens
+        env:
+          TEST_RUNNER_O7_SCREENSHOTS: "1"
+        run: |
+          destination="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,l in sorted(d.items(), reverse=True) if "iOS" in k for v in l if v["name"].startswith("iPhone")))')"
+          xcodebuild test -project apps/ios/O7.xcodeproj -scheme O7 \
+            -destination "id=$destination" -only-testing:O7UITests/ScreenshotTests \
+            -resultBundlePath "$RUNNER_TEMP/Screenshots.xcresult" | tail -n 100
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-screenshots-xcode-${{ inputs.xcode }}
+          path: ${{ runner.temp }}/Screenshots.xcresult
+          if-no-files-found: ignore

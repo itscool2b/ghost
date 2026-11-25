@@ -43,6 +43,7 @@ use crate::{
 };
 
 mod app;
+mod notify;
 mod session;
 mod uploads;
 use session::{Received, bot_answer, bot_links, closed, receive, refusal, seal};
@@ -109,7 +110,8 @@ enum Control {
     Refresh,
     /// Another profile was opened: every followed chat is gone.
     Reset,
-    /// Sweep now, as if this much later than now (tests: staged photos expiring).
+    /// Sweep now, as if this much later than now (tests: staged photos and waiting
+    /// notifications expiring).
     Sweep(Duration),
     Shutdown,
 }
@@ -133,6 +135,13 @@ struct Shared {
     bot_calls: Arc<AtomicUsize>,
     /// Bytes promised to photos staged by every session ([`uploads::COMPUTER_BYTES`] at most).
     staged: Arc<AtomicUsize>,
+    /// Notifications to o7 for iPhone: the socket they go out on, whether its relay sends them,
+    /// what waits for one that does, what was sent and is not yet answered, and what each
+    /// device was sent ([`notify`]).
+    push: Mutex<notify::State>,
+    /// Wakes the call-back's watch when a device turns notifications on, rather than at its next
+    /// look.
+    tell_wake: tokio::sync::Notify,
     config: Config,
 }
 
@@ -176,6 +185,8 @@ impl Service {
             hook_turns: Mutex::new(HashMap::new()),
             bot_calls: Arc::new(AtomicUsize::new(0)),
             staged: Arc::new(AtomicUsize::new(0)),
+            push: Mutex::new(notify::State::default()),
+            tell_wake: tokio::sync::Notify::new(),
             config,
         });
         let (control, receiver) = unbounded_channel();
@@ -225,6 +236,8 @@ impl Service {
                     connected: connected.get(&device.id).is_some_and(|count| *count > 0),
                     kind: device.kind,
                     app_version: device.app_version.clone(),
+                    notifications: device.push.is_some(),
+                    last_push: device.last_push,
                 })
                 .collect(),
             automations: registry
@@ -278,7 +291,15 @@ impl Service {
                 .collect(),
             pairing_expires_at: registry.pairing(now()).map(|pairing| pairing.expires_at),
             keep_awake: registry.keep_awake(),
+            notifications: notify::relays(&self.shared),
         }
+    }
+
+    /// Sends o7 for iPhone `id` a test notification now, as its Settings' button and the
+    /// computer's do: at most one every ten seconds, through a relay that sends notifications.
+    /// Why not, in a sentence, when it cannot.
+    pub fn test_push(&self, id: &str) -> Result<(), String> {
+        notify::test(&self.shared, id).map_err(|why| why.message().to_owned())
     }
 
     fn refresh(&self) {
@@ -334,6 +355,7 @@ impl Service {
 
     pub fn remove_device(&self, id: &str) -> Result<(), RegistryError> {
         lock(&self.shared.registry).remove_device(id)?;
+        notify::forget(&self.shared, id);
         self.refresh();
         Ok(())
     }
@@ -785,8 +807,10 @@ async fn later_tick(shared: &Arc<Shared>) {
             task.created_at = at;
             let mut registry = lock(&shared.registry);
             registry.add_task(task);
-            if next.by == crate::registry::By::Bot {
-                registry.follow(&next.bot, &started.chat);
+            match next.by {
+                crate::registry::By::Bot => registry.follow(&next.bot, &started.chat),
+                // The person's own task is among the chats its phone acted on.
+                crate::registry::By::Device => registry.follow_device(&next.bot, &started.chat),
             }
             registry.started_queued(&next.id, &started.chat, at);
         }
@@ -794,13 +818,23 @@ async fn later_tick(shared: &Arc<Shared>) {
             let callback = {
                 let mut registry = lock(&shared.registry);
                 registry.failed_queued(&next.id, &answer.text, at);
-                // A device hears that its task could not start once notifications reach the
-                // phone (push, `queued_failed`); until then the person reads why in `tasks`.
                 match next.by {
                     crate::registry::By::Bot => registry.callback_of(&next.bot),
                     crate::registry::By::Device => None,
                 }
             };
+            // The person's phone hears why, if it chose to hear of its tasks; `tasks` lists it
+            // too, for a day.
+            if next.by == crate::registry::By::Device {
+                notify::queued_failed(
+                    shared,
+                    &next.bot,
+                    &next.id,
+                    &next.goal,
+                    &answer.text,
+                    Some(notify::asking(&overview)),
+                );
+            }
             let title = crate::render::cut(next.goal.lines().next().unwrap_or("Task").trim(), 60);
             if let (Some((bot_name, callback)), Ok(id)) = (callback, crypto::random::<12>()) {
                 (shared.config.deliver)(Delivery {
@@ -831,8 +865,9 @@ async fn pulls(shared: Arc<Shared>) {
 }
 
 /// Looks at each watched task's pull request (a task of the open workspace, younger than a week,
-/// whose link has a call-back) and tells its bot what changed: checks that failed or passed, a
-/// new review or comment, a merge or a close. What was seen is kept, so nothing is told twice.
+/// whose link has a call-back or whose phone hears of its tasks) and tells its bot or its phone
+/// what changed: checks that failed or passed, a new review or comment, a merge or a close. What
+/// was seen is kept, so nothing is told twice.
 async fn pr_tick(shared: &Arc<Shared>) {
     let (watched, scope) = {
         let registry = lock(&shared.registry);
@@ -862,6 +897,34 @@ async fn pr_tick(shared: &Arc<Shared>) {
             })
             .map_or_else(String::new, |project| project.name.clone());
         let text = callback::pull_request_text(&task.builder, &project, &pr, before.as_ref());
+        let news = callback::pull_request_news(&pr, before.as_ref());
+        if task.by == crate::registry::By::Device && !news.is_empty() {
+            let about = overview
+                .as_ref()
+                .and_then(|overview| {
+                    let entry = overview
+                        .chats
+                        .iter()
+                        .find(|entry| entry.chat.id == task.builder)?;
+                    Some(notify::About::of(overview, entry))
+                })
+                .unwrap_or_else(|| notify::About {
+                    chat: task.builder.clone(),
+                    title: crate::render::cut(
+                        task.goal.lines().next().unwrap_or("Task").trim(),
+                        120,
+                    ),
+                    project: (!project.is_empty()).then(|| project.clone()),
+                    agent: None,
+                    asking: overview.as_ref().map(notify::asking),
+                });
+            notify::pull_request(
+                shared,
+                &task.bot,
+                &about,
+                &notify::pull_request_line(pr.number, &news),
+            );
+        }
         let told = {
             let mut registry = lock(&shared.registry);
             registry.saw_pr(crate::registry::PrSeen {
@@ -897,12 +960,16 @@ async fn tell(shared: Arc<Shared>) {
         let scope = {
             let registry = lock(&shared.registry);
             (registry.enabled()
-                && (registry.any_callback() || registry.reviews_pending())
+                && (registry.any_callback() || registry.reviews_pending() || registry.any_push())
                 && !registry.scope().is_empty())
             .then(|| registry.scope().to_owned())
         };
         let Some(scope) = scope else {
-            tokio::time::sleep(TELL_CHECK).await;
+            // A device that turns notifications on wakes it at once.
+            tokio::select! {
+                () = tokio::time::sleep(TELL_CHECK) => {}
+                () = shared.tell_wake.notified() => {}
+            }
             continue;
         };
         let backend = shared.config.backend.clone().bound(&scope);
@@ -928,35 +995,63 @@ async fn tell(shared: Arc<Shared>) {
                 // The watch ended: another workspace opened, or the app is closing.
                 Ok(None) => break,
                 Err(_) => {
-                    let registry = lock(&shared.registry);
-                    if shared.closing.load(Ordering::Relaxed)
-                        || !registry.enabled()
-                        || !(registry.any_callback() || registry.reviews_pending())
-                        || registry.scope() != scope
                     {
-                        break;
+                        let registry = lock(&shared.registry);
+                        if shared.closing.load(Ordering::Relaxed)
+                            || !registry.enabled()
+                            || !(registry.any_callback()
+                                || registry.reviews_pending()
+                                || registry.any_push())
+                            || registry.scope() != scope
+                        {
+                            break;
+                        }
                     }
+                    follow_activity(&shared, &backend, &stages);
                     continue;
                 }
             };
             let stage = Stage::of(update.status, update.needs_attention);
             let before = stages.insert(update.chat_id.clone(), stage);
+            follow_activity(&shared, &backend, &stages);
+            // What a chat asked was answered and it works again: the phones it was sent to take
+            // it back.
+            if before == Some(Stage::Asking)
+                && stage == Stage::Busy
+                && notify::asked_anywhere(&shared, &update.chat_id)
+            {
+                tokio::spawn(resolve_later(
+                    shared.clone(),
+                    backend.clone(),
+                    update.chat_id.clone(),
+                ));
+            }
+            // A bot is told of a change from working, or from asking; a phone also of a chat
+            // that starts asking from anywhere else.
+            let bots = match (before, stage) {
+                (Some(Stage::Busy), Stage::Asking) => Some(CallbackEvent::Asking),
+                (Some(Stage::Busy | Stage::Asking), Stage::Rest) => Some(CallbackEvent::Finished),
+                (Some(Stage::Busy | Stage::Asking), Stage::Failed) => Some(CallbackEvent::Failed),
+                _ => None,
+            };
             let event = match (before, stage) {
-                (Some(Stage::Busy), Stage::Asking) => CallbackEvent::Asking,
-                (Some(Stage::Busy | Stage::Asking), Stage::Rest) => CallbackEvent::Finished,
-                (Some(Stage::Busy | Stage::Asking), Stage::Failed) => CallbackEvent::Failed,
-                _ => continue,
+                (before, Stage::Asking) if before != Some(Stage::Asking) => CallbackEvent::Asking,
+                _ => match bots {
+                    Some(event) => event,
+                    None => continue,
+                },
             };
             {
                 let registry = lock(&shared.registry);
-                // Told to a link that follows the chat, or a task's work to review.
+                // Told to a link that follows the chat, a phone, or a task's work to review.
                 let reviewing = event == CallbackEvent::Finished
                     && registry.task_of(&update.chat_id).is_some_and(|task| {
                         task.builder == update.chat_id
                             && task.review_agent.is_some()
                             && task.reviewer.is_none()
                     });
-                if registry.told_of(&update.chat_id).is_empty() && !reviewing {
+                let linked = bots.is_some() && !registry.told_of(&update.chat_id).is_empty();
+                if !linked && !reviewing && !registry.any_push() {
                     continue;
                 }
             }
@@ -966,6 +1061,7 @@ async fn tell(shared: Arc<Shared>) {
                 update.chat_id,
                 stage,
                 event,
+                bots.is_some(),
                 now(),
             ));
         }
@@ -973,15 +1069,58 @@ async fn tell(shared: Arc<Shared>) {
     }
 }
 
+/// Keeps the open workspace's Live Activities in step with how its chats stand: reads and sends
+/// one, beside the watch, when [`notify::activity_due`] says so.
+fn follow_activity(
+    shared: &Arc<Shared>,
+    backend: &Arc<dyn Backend>,
+    stages: &HashMap<String, Stage>,
+) {
+    let asking = stages
+        .values()
+        .filter(|stage| **stage == Stage::Asking)
+        .count();
+    let working = stages
+        .values()
+        .filter(|stage| **stage == Stage::Busy)
+        .count();
+    if notify::activity_due(shared, asking, working) {
+        tokio::spawn(notify::activity(shared.clone(), backend.clone()));
+    }
+}
+
+/// What `chat_id` asked was answered, a moment ago, and it works again: unless it asks again by
+/// then, the phones told it asked are told, quietly, that it was answered elsewhere.
+async fn resolve_later(shared: Arc<Shared>, backend: Arc<dyn Backend>, chat_id: String) {
+    tokio::time::sleep(TELL_AFTER).await;
+    let Ok(overview) = backend.overview().await else {
+        return;
+    };
+    let about = match overview.chats.iter().find(|entry| entry.chat.id == chat_id) {
+        Some(entry) if entry.chat.needs_attention => return,
+        Some(entry) => notify::About::of(&overview, entry),
+        None => notify::About {
+            chat: chat_id,
+            title: "Untitled chat".into(),
+            project: None,
+            agent: None,
+            asking: Some(notify::asking(&overview)),
+        },
+    };
+    notify::resolved(&shared, &about);
+}
+
 /// Tells the links that follow `chat_id` of `event`, a moment after it happened: unless the chat
 /// has moved on by then (a later change tells of that), and not a link whose bot has heard of
-/// this state from a call of its own meanwhile.
+/// this state from a call of its own meanwhile. `bots`: the change is one links are told of. The
+/// phones that chose to hear of it are told too ([`notify`]).
 async fn tell_later(
     shared: Arc<Shared>,
     backend: Arc<dyn Backend>,
     chat_id: String,
     stage: Stage,
     event: CallbackEvent,
+    bots: bool,
     settled_at: i64,
 ) {
     tokio::time::sleep(TELL_AFTER).await;
@@ -994,7 +1133,8 @@ async fn tell_later(
     if Stage::of(entry.chat.status, entry.chat.needs_attention) != stage {
         return;
     }
-    // A task's work is done: its review starts, and its bot is told once, when that is done too.
+    // A task's work is done: its review starts, and its bot (or its phone) is told once, when
+    // that is done too.
     let task = lock(&shared.registry).task_of(&chat_id);
     let mut note = None;
     if let Some(task) = task.as_ref().filter(|task| {
@@ -1009,7 +1149,7 @@ async fn tell_later(
             Err(error) => note = Some(format!("The review could not start: {}", error.message)),
         }
     }
-    let told: Vec<_> = {
+    let told: Vec<_> = if bots {
         let heard = lock(&shared.heard);
         lock(&shared.registry)
             .told_of(&chat_id)
@@ -1022,17 +1162,30 @@ async fn tell_later(
                     .is_none_or(|at| *at <= settled_at)
             })
             .collect()
+    } else {
+        Vec::new()
     };
-    // The review of the person's own task (`By::Device`) is done when `task.reviewer` is this
-    // chat: here its device is to hear of it once notifications reach the phone (push,
-    // `reviewed`, with the builder and the reviewer). No link follows such a task, so until
-    // then nothing is told.
-    if told.is_empty() {
+    let phones = lock(&shared.registry).any_push();
+    if told.is_empty() && !phones {
         return;
     }
     let Ok(page) = backend.history(&chat_id, u32::MAX).await else {
         return;
     };
+    if phones {
+        tell_phones(
+            &shared,
+            &overview,
+            entry,
+            &page.items,
+            event,
+            task.as_ref(),
+            note.as_deref(),
+        );
+    }
+    if told.is_empty() {
+        return;
+    }
     let project = overview
         .projects
         .iter()
@@ -1076,6 +1229,89 @@ async fn tell_later(
             text,
             at: now(),
         });
+    }
+}
+
+/// What the phones that chose to hear of it are told of `entry`'s `event`: that it asks (with
+/// what, and the request when the phone can answer it), what its turn came to, or why its agent
+/// stopped. The review of a phone's own task tells that phone `reviewed`, about the task's own
+/// chat; any other phone hears that the review's chat finished.
+fn tell_phones(
+    shared: &Shared,
+    overview: &wire::Overview,
+    entry: &o7_protocol::workspace::WorkspaceChat,
+    items: &[o7_protocol::session::HistoryItem],
+    event: CallbackEvent,
+    task: Option<&crate::registry::Task>,
+    note: Option<&str>,
+) {
+    use crate::push::Kind;
+    let about = notify::About::of(overview, entry);
+    match event {
+        CallbackEvent::Asking => {
+            let digest = crate::render::digest(items);
+            let (line, request) = digest
+                .waiting
+                .last()
+                .map(notify::request_of)
+                .map_or((None, None), |(line, request)| (Some(line), request));
+            notify::chat_event(shared, &about, Kind::Asking, line.as_deref(), request, None);
+        }
+        CallbackEvent::Finished => {
+            let brief = crate::render::brief_parts(&entry.chat, items);
+            let verdict = brief.said.clone();
+            let line = match (notify::finished_line(brief), note) {
+                (Some(line), Some(note)) => Some(format!("{line} {note}")),
+                (None, Some(note)) => Some(note.to_owned()),
+                (line, None) => line,
+            };
+            let reviewed = task.filter(|task| {
+                task.by == crate::registry::By::Device
+                    && task.reviewer.as_deref() == Some(entry.chat.id.as_str())
+            });
+            if let Some(task) = reviewed {
+                let mut builder = overview
+                    .chats
+                    .iter()
+                    .find(|chat| chat.chat.id == task.builder)
+                    .map_or_else(
+                        || notify::About {
+                            chat: task.builder.clone(),
+                            title: crate::render::cut(
+                                task.goal.lines().next().unwrap_or("Task").trim(),
+                                120,
+                            ),
+                            project: about.project.clone(),
+                            agent: None,
+                            asking: about.asking,
+                        },
+                        |builder| notify::About::of(overview, builder),
+                    );
+                // Who reviewed it.
+                builder.agent.clone_from(&about.agent);
+                notify::reviewed(
+                    shared,
+                    &task.bot,
+                    &builder,
+                    &entry.chat.id,
+                    verdict.as_deref(),
+                );
+            }
+            notify::chat_event(
+                shared,
+                &about,
+                Kind::Finished,
+                line.as_deref(),
+                None,
+                reviewed.map(|task| task.bot.as_str()),
+            );
+        }
+        CallbackEvent::Failed => {
+            let line =
+                notify::failed_line(&entry.chat, crate::render::brief_parts(&entry.chat, items));
+            notify::chat_event(shared, &about, Kind::Failed, Some(&line), None, None);
+        }
+        CallbackEvent::Test | CallbackEvent::PullRequest => {}
     }
 }
 
@@ -1200,6 +1436,8 @@ enum Out {
         rid: String,
         answer: bot::Answer,
     },
+    /// A notification for the relay to give Apple (`p`), for a socket whose relay sends them.
+    Push(notify::Sending),
 }
 
 enum Ended {
@@ -1282,6 +1520,8 @@ async fn serve(
 ) -> Ended {
     let (mut sink, mut stream) = socket.split();
     let (out, mut finished) = unbounded_channel::<Out>();
+    // Notifications wait until this socket's relay says it sends them.
+    notify::opened(shared, out.clone());
     let backend = shared.config.backend.clone();
     let mut state = Serving {
         shared: shared.clone(),
@@ -1377,6 +1617,8 @@ async fn serve(
             break ended;
         }
     };
+    // Notifications this socket was given and never wrote wait for the next one.
+    notify::closed(shared, &mut finished);
     for (cid, connection) in state.connections.drain() {
         closed(shared, &*backend, &cid, connection);
     }
@@ -1499,6 +1741,13 @@ impl Serving {
                 }
             }
             FromRelay::Bot(body) => self.bot(body),
+            // The relay sends notifications: what waited for it goes now, and Settings says so.
+            FromRelay::Features(body) => {
+                let waited = notify::features(&self.shared, body);
+                self.outbox.extend(waited);
+                (self.shared.config.changed)();
+            }
+            FromRelay::Pushed(body) => notify::answered(&self.shared, body),
             FromRelay::Message { cid, payload } => {
                 let Some(connection) = self.connections.get_mut(cid) else {
                     self.outbox.push(format!("c{cid}"));
@@ -1871,6 +2120,10 @@ impl Serving {
                     answer.image.as_deref(),
                 ));
             }
+            Out::Push(sending) => {
+                let frame = notify::written(&self.shared, sending);
+                self.outbox.push(frame);
+            }
         }
     }
 
@@ -1936,8 +2189,9 @@ impl Serving {
         self.sweep_at(std::time::Instant::now());
     }
 
-    /// [`Serving::sweep`], with photos aged as of `now`.
+    /// [`Serving::sweep`], with photos and notifications aged as of `now`.
     fn sweep_at(&mut self, now: std::time::Instant) {
+        notify::sweep(&self.shared, now);
         for session in self
             .connections
             .values()

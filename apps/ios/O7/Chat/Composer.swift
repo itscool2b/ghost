@@ -53,7 +53,7 @@ struct Composer: View {
                     }
                     HStack(alignment: .bottom, spacing: 8) {
                         if offersPhotos {
-                            PhotoButton(picking: $picking, shooting: $shooting)
+                            PhotoButton(picking: $picking, shooting: $shooting) { photos.append($0) }
                                 .disabled(photos.count >= photoLimit)
                                 .padding(.leading, 4)
                                 .padding(.bottom, 1)

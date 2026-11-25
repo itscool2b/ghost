@@ -52,6 +52,71 @@ targets:
           - O7Markdown
           - O7Highlight
           - O7MockHost
+          - O7Push
+      - target: O7NotificationService
+        embed: true
+      - target: O7Widgets
+        embed: true
+  # Opens each sealed notification on the phone (Notification Service Extension).
+  O7NotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: O7NotificationService
+        excludes:
+          - Info.plist
+          - O7NotificationService.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: codes.o7.mobile.notifications
+        PRODUCT_NAME: O7NotificationService
+        INFOPLIST_FILE: O7NotificationService/Info.plist
+        CODE_SIGN_ENTITLEMENTS: O7NotificationService/O7NotificationService.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0"
+    dependencies:
+      - package: O7Kit
+        products:
+          - O7Wire
+          - O7Crypto
+          - O7Push
+  # The widgets and the Live Activity.
+  O7Widgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: O7Widgets
+        excludes:
+          - Info.plist
+          - O7Widgets.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: codes.o7.mobile.widgets
+        PRODUCT_NAME: O7Widgets
+        INFOPLIST_FILE: O7Widgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: O7Widgets/O7Widgets.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0"
+    dependencies:
+      - package: O7Kit
+        products:
+          - O7Wire
+          - O7Crypto
+          - O7Push
+          - O7Theme
+          - O7Marks
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
   O7Tests:
     type: bundle.unit-test
     platform: iOS

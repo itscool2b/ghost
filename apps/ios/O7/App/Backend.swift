@@ -2,6 +2,7 @@ import Foundation
 import O7Client
 import O7Crypto
 import O7MockHost
+import O7Push
 import O7Store
 
 /// Where the app's computers are: the real relay, or a computer in a box for UI tests, previews
@@ -23,12 +24,12 @@ struct Backend: Sendable {
     static func current(arguments: [String] = ProcessInfo.processInfo.arguments) -> Backend {
         let defaults = UserDefaults.standard
         if arguments.contains("-O7Backend"), defaults.string(forKey: "O7Backend") == "mock" {
-            let computer = MockComputer(hostName: "Studio")
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
-                "o7-mock-\(ProcessInfo.processInfo.processIdentifier)")
+            let computer = MockComputer(hostName: "Studio", hostId: MockComputer.demoHostId)
+            // The App Group's folder, so the notification extension reads the demo's name and
+            // device as it would a real computer's. Its key stays in memory.
             return Backend(
                 transport: MockTransport(computer: computer),
-                computers: Computers(folder: folder, secrets: MemorySecretStore()),
+                computers: Computers(folder: Computers.defaultFolder(), secrets: MemorySecretStore()),
                 sites: PairingLink.developmentSites, relayOverride: nil, mock: computer)
         }
         #if O7_DEV_TOOLS
@@ -42,6 +43,7 @@ struct Backend: Sendable {
         // The Keychain keeps items across a reinstall; a fresh install starts with no computer.
         if !defaults.bool(forKey: "installed") {
             secrets.deleteAll()
+            KeychainPushKeys().deleteAll()
             defaults.set(true, forKey: "installed")
         }
         return Backend(

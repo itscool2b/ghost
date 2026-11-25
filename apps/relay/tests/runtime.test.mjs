@@ -1,7 +1,9 @@
 // The relay in the Workers runtime: real Durable Object sockets, no network.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
@@ -20,31 +22,146 @@ const idOf = (key) =>
     .subarray(0, 16)
     .toString("base64url");
 const hash = (text) => createHash("sha256").update(text).digest("base64url");
+/** Where Apple delivers o7's notifications, and the push key's id and its team's. */
+const TOPIC = "codes.o7.mobile";
+const KEY_ID = "ABC123DEFG";
+const TEAM_ID = "DEF123GHIJ";
 let runtime;
+/** The relay with Apple's push key, made here as Apple gives one, and Apple played by `apple`. */
+let pushing;
+/** The push key: its PEM, as the relay is given it, and its public half, to check tokens with. */
+let signing;
+/** When the tests began, in seconds: no token the relay shows Apple is older. */
+let started;
+
+/**
+ * Apple, as the relay's requests reach it: each one kept, and each answered with the next answer
+ * a test gave (200 when there is none). As a Node handler it can also drop the connection
+ * ("lost"), as a network that fails does.
+ */
+function appleMock() {
+  const requests = [];
+  const answers = [];
+  const next = () => answers.shift() ?? { status: 200 };
+  const body = ({ reason, text }) =>
+    reason === undefined ? (text ?? "") : JSON.stringify({ reason });
+  return {
+    requests,
+    answer: (...given) => answers.push(...given),
+    async fetch(request) {
+      requests.push({
+        method: request.method,
+        url: request.url,
+        headers: Object.fromEntries(request.headers),
+        body: await request.text(),
+      });
+      const answer = next();
+      return new Response(body(answer) || null, { status: answer.status });
+    },
+    node(request, response) {
+      let text = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        text += chunk;
+      });
+      request.on("end", () => {
+        requests.push({
+          method: request.method,
+          url: `https://${request.headers.host}${request.url}`,
+          headers: { ...request.headers },
+          body: text,
+        });
+        const answer = next();
+        if (answer === "lost") return request.socket.destroy();
+        response.writeHead(answer.status).end(body(answer));
+      });
+    },
+  };
+}
+const apple = appleMock();
+/** Apple for the relay without a key: nothing may reach it. */
+const offline = appleMock();
+
+/** The relay's built Worker, as the runtime loads it. */
+async function built() {
+  return [
+    {
+      type: "ESModule",
+      path: "index.js",
+      contents: await readFile(
+        fileURLToPath(new URL("../build/index.js", import.meta.url)),
+        "utf8",
+      ),
+    },
+  ];
+}
+
+/** A relay that has Apple's push key, with Apple played by `outboundService`. */
+async function withKey(outboundService, bindings = {}, options = {}) {
+  const relay = new Miniflare(
+    convertV4MiniflareOptions({
+      ...options,
+      modules: await built(),
+      compatibilityDate: "2026-10-26",
+      durableObjects: {
+        ROOMS: { className: "Room", useSQLite: true },
+        APNS: { className: "Apns", useSQLite: true },
+      },
+      bindings: {
+        APP_ORIGIN: ORIGIN,
+        APNS_TOPIC: TOPIC,
+        APNS_KEY_ID: KEY_ID,
+        APNS_TEAM_ID: TEAM_ID,
+        APNS_KEY: signing.pem,
+        ...bindings,
+      },
+      outboundService,
+    }),
+  );
+  await relay.ready;
+  return relay;
+}
 
 before(async () => {
+  started = Math.floor(Date.now() / 1000);
   runtime = new Miniflare(
     convertV4MiniflareOptions({
-      modules: [
-        {
-          type: "ESModule",
-          path: "index.js",
-          contents: await readFile(
-            fileURLToPath(new URL("../build/index.js", import.meta.url)),
-            "utf8",
-          ),
-        },
-      ],
+      modules: await built(),
       compatibilityDate: "2026-10-26",
-      durableObjects: { ROOMS: { className: "Room", useSQLite: true } },
-      bindings: { APP_ORIGIN: ORIGIN, FORMER_ORIGIN: FORMER },
+      durableObjects: {
+        ROOMS: { className: "Room", useSQLite: true },
+        APNS: { className: "Apns", useSQLite: true },
+      },
+      // As deployed before the owner sets Apple's push key: push is off.
+      bindings: {
+        APP_ORIGIN: ORIGIN,
+        FORMER_ORIGIN: FORMER,
+        APNS_TOPIC: TOPIC,
+        APNS_KEY_ID: "",
+        APNS_TEAM_ID: "",
+      },
+      outboundService: offline.fetch,
     }),
   );
   await runtime.ready;
+  // An ECDSA P-256 key as Apple gives one, a PKCS#8 PEM (a .p8 file).
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ]);
+  const der = Buffer.from(await crypto.subtle.exportKey("pkcs8", pair.privateKey)).toString(
+    "base64",
+  );
+  signing = {
+    publicKey: pair.publicKey,
+    pem: `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join("\n")}\n-----END PRIVATE KEY-----\n`,
+  };
+  pushing = await withKey(apple.fetch);
 });
 
 after(async () => {
   await runtime?.dispose();
+  await pushing?.dispose();
 });
 
 /** A socket with its messages queued, so a test reads them in order. */
@@ -104,20 +221,20 @@ function reader(socket) {
   };
 }
 
-async function upgrade(path, headers = {}) {
-  return runtime.dispatchFetch(`${BASE}/${path}`, {
+async function upgrade(path, headers = {}, on = runtime) {
+  return on.dispatchFetch(`${BASE}/${path}`, {
     headers: { Upgrade: "websocket", ...headers },
   });
 }
 
-async function host(hostId, key) {
-  const response = await upgrade(`host/${hostId}`, { Authorization: `Bearer ${key}` });
+async function host(hostId, key, on = runtime) {
+  const response = await upgrade(`host/${hostId}`, { Authorization: `Bearer ${key}` }, on);
   assert.equal(response.status, 101);
   return reader(response.webSocket);
 }
 
-async function client(hostId) {
-  const response = await upgrade(`client/${hostId}`, { Origin: ORIGIN });
+async function client(hostId, on = runtime) {
+  const response = await upgrade(`client/${hostId}`, { Origin: ORIGIN }, on);
   assert.equal(response.status, 101);
   return reader(response.webSocket);
 }
@@ -148,6 +265,7 @@ test("reports health and hides everything else", async () => {
     second_full_tools: 11,
     first_tools: 8,
     first_full_tools: 21,
+    push: false,
   });
   assert.equal(health.headers.get("cache-control"), "no-store");
   for (const path of ["", "nothing", "host", "host/short", `other/${id(16)}`])
@@ -1263,4 +1381,560 @@ test("sockets that prove nothing cannot keep a paired browser out", async () => 
   while (!seen.startsWith(`m${paired.cid}`)) seen = await back.message();
   assert.equal(seen, `m${paired.cid} Eafter the flood`);
   back.close();
+});
+
+// Notifications for o7 for iPhone. Apple is played here, through the runtime's outbound fetch,
+// so nothing leaves the machine.
+
+/** A phone's address at Apple: 32 bytes in hex, as iOS gives one. */
+const deviceToken = () => randomBytes(32).toString("hex");
+/** A notification as a desktop asks for one (`p`), with what a test changes. */
+const notification = (fields = {}) => ({
+  id: id(9),
+  to: deviceToken(),
+  env: "production",
+  type: "alert",
+  d: id(8),
+  b: id(300),
+  ...fields,
+});
+const p = (fields) => `p${JSON.stringify(fields)}`;
+
+/** The relay's next answer to a notification (`P`). */
+async function answer(desk) {
+  const frame = await desk.message();
+  assert.equal(frame[0], "P", frame);
+  return JSON.parse(frame.slice(1));
+}
+
+/** The relay's next `count` answers, by the notification each answers: they come as Apple does. */
+async function answers(desk, count) {
+  const found = new Map();
+  for (let at = 0; at < count; at += 1) {
+    const said = await answer(desk);
+    found.set(said.id, said);
+  }
+  return found;
+}
+
+/** A desktop's socket on the relay with Apple's key: the first it hears is that the relay sends. */
+async function pushHost(hostId, key, on = pushing) {
+  const desk = await host(hostId, key, on);
+  assert.equal(await desk.message(), 'f{"push":1}');
+  return desk;
+}
+
+/** The headers the relay put on a request to Apple: all but those the runtime adds. */
+function appleHeaders(request) {
+  const {
+    host: _host,
+    "content-length": _length,
+    "cf-worker": _worker,
+    ...headers
+  } = request.headers;
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => !name.startsWith("mf-")));
+}
+
+/**
+ * The token on a request to Apple, checked against the push key's public half (a signature that
+ * is r and s side by side, as a JWT has it), and opened: its header and claims as written.
+ */
+async function provider(authorization) {
+  const [scheme, jwt, ...more] = authorization.split(" ");
+  assert.equal(scheme, "bearer");
+  assert.equal(more.length, 0);
+  const [header, claims, signature, ...extra] = jwt.split(".");
+  assert.equal(extra.length, 0);
+  const verified = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" },
+    signing.publicKey,
+    Buffer.from(signature, "base64url"),
+    new TextEncoder().encode(`${header}.${claims}`),
+  );
+  assert.ok(verified, "the token does not verify with the push key");
+  const text = (part) => Buffer.from(part, "base64url").toString();
+  const { iss, iat } = JSON.parse(text(claims));
+  return { header: text(header), claims: text(claims), iss, iat };
+}
+
+/** Checks that `value` is from `low` to `high`. */
+function within(value, low, high, what) {
+  assert.ok(low <= value && value <= high, `${what}: ${value} is not within ${low} and ${high}`);
+}
+
+test("a relay without Apple's key tells no desktop it sends notifications, and sends none", async () => {
+  assert.equal((await (await runtime.dispatchFetch(`${BASE}/health`)).json()).push, false);
+  const key = id(32);
+  const hostId = idOf(key);
+  const desk = await host(hostId, key);
+  await desk.quiet();
+  // Nor a socket that replaces it.
+  const replacement = await host(hostId, key);
+  assert.equal(await desk.message(), "x");
+  await replacement.quiet();
+  // A desktop that asks anyway is told so, and stays connected.
+  const asked = notification();
+  replacement.send(p(asked));
+  assert.deepEqual(await answer(replacement), {
+    id: asked.id,
+    ok: false,
+    reason: "off",
+    drop: false,
+  });
+  replacement.send("ping");
+  assert.equal(await replacement.message(), "pong");
+  assert.deepEqual(offline.requests, []);
+  replacement.close();
+});
+
+test("a relay with Apple's key tells each desktop socket so, and its health says so", async () => {
+  assert.equal((await (await pushing.dispatchFetch(`${BASE}/health`)).json()).push, true);
+  const key = id(32);
+  const hostId = idOf(key);
+  const desk = await pushHost(hostId, key);
+  const phone = await client(hostId, pushing);
+  assert.equal(await phone.message(), "h1");
+  const cid = (await desk.message()).slice(1);
+  // A socket that replaces it hears so first, then of the browsers there.
+  const replacement = await host(hostId, key, pushing);
+  assert.equal(await desk.message(), "x");
+  assert.equal(await replacement.message(), 'f{"push":1}');
+  assert.equal(await replacement.message(), `o${cid}`);
+  await replacement.quiet();
+  assert.equal(await phone.message(), "h0");
+  assert.equal(await phone.message(), "h1");
+  // So does one that comes back after the desktop was away.
+  replacement.close();
+  assert.equal(await phone.message(), "h0");
+  const back = await pushHost(hostId, key);
+  assert.equal(await back.message(), `o${cid}`);
+  assert.equal(await phone.message(), "h1");
+  back.close();
+});
+
+test("a notification the relay cannot send is answered invalid, and the desktop stays connected", async () => {
+  const key = id(32);
+  const hostId = idOf(key);
+  const desk = await pushHost(hostId, key);
+  const phone = await client(hostId, pushing);
+  assert.equal(await phone.message(), "h1");
+  const cid = (await desk.message()).slice(1);
+  const good = notification();
+  const sentBefore = apple.requests.length;
+  // Each with the id it is answered with: its own when it has one, so the desktop can match it.
+  const wrong = [
+    ["{nope", ""],
+    ["[]", ""],
+    ["null", ""],
+    ['"text"', ""],
+    [JSON.stringify({ ...good, id: undefined }), ""],
+    [JSON.stringify({ ...good, id: 7 }), ""],
+    [JSON.stringify({ ...good, id: "i".repeat(65) }), ""],
+    // Too large to read at all.
+    [JSON.stringify({ ...good, b: "b".repeat(9000) }), ""],
+    ...[
+      { to: undefined },
+      { to: "a".repeat(63) },
+      { to: "a".repeat(201) },
+      { to: `${"a".repeat(63)}g` },
+      { to: 12 },
+      { env: "development" },
+      { env: undefined },
+      { type: "background" },
+      { type: undefined },
+      { collapse: "c".repeat(65) },
+      { collapse: "a+b" },
+      { collapse: "" },
+      { collapse: 5 },
+      { d: undefined },
+      { d: "" },
+      { d: "d".repeat(65) },
+      { d: "a/b" },
+      { b: undefined },
+      { b: "" },
+      { b: "b".repeat(3401) },
+      { b: "QUJD==" },
+      { ttl: -1 },
+      { ttl: 86_401 },
+      { ttl: 1.5 },
+      { ttl: "60" },
+      { sound: "yes" },
+      { type: "liveactivity", priority: 1 },
+      { type: "liveactivity", priority: "10" },
+      { type: "liveactivity", event: "start" },
+    ].map((change) => [JSON.stringify({ ...good, ...change }), good.id]),
+  ];
+  for (const [frame, id] of wrong) {
+    desk.send(`p${frame}`);
+    assert.deepEqual(
+      await answer(desk),
+      { id, ok: false, reason: "invalid", drop: false },
+      frame.slice(0, 120),
+    );
+  }
+  assert.equal(apple.requests.length, sentBefore, "an invalid notification reached Apple");
+  // The socket is still there, and so is the browser on it.
+  desk.send("ping");
+  assert.equal(await desk.message(), "pong");
+  desk.send(`m${cid} Estill here`);
+  assert.equal(await phone.message(), "mEstill here");
+  // A valid one goes to Apple. What a part may be at its longest, and a part left out as null.
+  const longest = notification({
+    id: "i".repeat(64),
+    to: "A".repeat(200),
+    collapse: "c".repeat(64),
+    d: "d".repeat(64),
+    b: "b".repeat(3400),
+    ttl: 86_400,
+    sound: null,
+  });
+  for (const asked of [good, longest]) {
+    desk.send(p(asked));
+    assert.deepEqual(await answer(desk), { id: asked.id, ok: true, status: 200, drop: false });
+  }
+  assert.equal(apple.requests.length, sentBefore + 2);
+  assert.equal(apple.requests.at(-2).url, `https://api.push.apple.com/3/device/${good.to}`);
+  assert.equal(apple.requests.at(-1).url, `https://api.push.apple.com/3/device/${"A".repeat(200)}`);
+  assert.match(apple.requests.at(-1).body, /"sound":"default"/);
+  await phone.quiet();
+  desk.close();
+});
+
+test("a notification goes to Apple as Apple takes one, signed with the relay's one token", async () => {
+  const key = id(32);
+  const desk = await pushHost(idOf(key), key);
+  const sent = async (fields) => {
+    const asked = notification(fields);
+    const from = Math.floor(Date.now() / 1000);
+    desk.send(p(asked));
+    assert.deepEqual(await answer(desk), { id: asked.id, ok: true, status: 200, drop: false });
+    const request = apple.requests.at(-1);
+    assert.equal(request.method, "POST");
+    return {
+      asked,
+      request,
+      headers: appleHeaders(request),
+      from,
+      to: Math.floor(Date.now() / 1000),
+    };
+  };
+  const words = '"alert":{"title":"o7","body":"Something changed on your computer."}';
+
+  // An alert, in production: Apple's fixed words, then what the desktop sealed. Never a category.
+  const alert = await sent({ collapse: "Q2hhdDE", ttl: 3600 });
+  assert.equal(alert.request.url, `https://api.push.apple.com/3/device/${alert.asked.to}`);
+  const { authorization, "apns-expiration": expires, ...rest } = alert.headers;
+  assert.deepEqual(rest, {
+    "apns-topic": TOPIC,
+    "apns-push-type": "alert",
+    "apns-priority": "10",
+    "apns-collapse-id": "Q2hhdDE",
+    "content-type": "application/json",
+  });
+  within(Number(expires), alert.from + 3600, alert.to + 3600, "apns-expiration");
+  assert.equal(
+    alert.request.body,
+    `{"aps":{${words},"sound":"default","mutable-content":1},"o7":{"v":1,"d":"${alert.asked.d}","b":"${alert.asked.b}"}}`,
+  );
+  // The token: ES256 with the push key's id, the team and when it was made, signed by the key.
+  const token = await provider(authorization);
+  assert.equal(token.header, `{"alg":"ES256","kid":"${KEY_ID}"}`);
+  assert.equal(token.claims, `{"iss":"${TEAM_ID}","iat":${token.iat}}`);
+  within(token.iat, started, alert.to, "iat");
+
+  // An alert to a phone that runs a development build, without a sound. What only a Live
+  // Activity takes changes nothing; Apple is told to try once, now. Each notification here goes
+  // with the same token as the first: the relay made one.
+  const quiet = await sent({ env: "sandbox", sound: false, priority: 5, event: "end" });
+  assert.equal(quiet.request.url, `https://api.sandbox.push.apple.com/3/device/${quiet.asked.to}`);
+  assert.deepEqual(quiet.headers, {
+    authorization,
+    "apns-topic": TOPIC,
+    "apns-push-type": "alert",
+    "apns-priority": "10",
+    "apns-expiration": "0",
+    "content-type": "application/json",
+  });
+  assert.equal(
+    quiet.request.body,
+    `{"aps":{${words},"mutable-content":1},"o7":{"v":1,"d":"${quiet.asked.d}","b":"${quiet.asked.b}"}}`,
+  );
+
+  // A Live Activity's update: its own topic and push type, and the sealed state. What only an
+  // alert takes changes nothing.
+  const update = await sent({ type: "liveactivity", collapse: "Q2hhdDE", sound: true });
+  assert.equal(update.request.url, `https://api.push.apple.com/3/device/${update.asked.to}`);
+  assert.deepEqual(update.headers, {
+    authorization,
+    "apns-topic": `${TOPIC}.push-type.liveactivity`,
+    "apns-push-type": "liveactivity",
+    "apns-priority": "10",
+    "apns-expiration": "0",
+    "content-type": "application/json",
+  });
+  const updated = JSON.parse(update.request.body).aps.timestamp;
+  within(updated, update.from, update.to, "timestamp");
+  assert.equal(
+    update.request.body,
+    `{"aps":{"timestamp":${updated},"event":"update","content-state":{"d":"${update.asked.d}","b":"${update.asked.b}"}}}`,
+  );
+
+  // Its end, at the lower priority: Apple takes it off the phone at once.
+  const ended = await sent({
+    type: "liveactivity",
+    env: "sandbox",
+    event: "end",
+    priority: 5,
+    ttl: 600,
+  });
+  assert.equal(ended.request.url, `https://api.sandbox.push.apple.com/3/device/${ended.asked.to}`);
+  const { "apns-expiration": endExpires, ...endHeaders } = ended.headers;
+  assert.deepEqual(endHeaders, {
+    authorization,
+    "apns-topic": `${TOPIC}.push-type.liveactivity`,
+    "apns-push-type": "liveactivity",
+    "apns-priority": "5",
+    "content-type": "application/json",
+  });
+  within(Number(endExpires), ended.from + 600, ended.to + 600, "apns-expiration");
+  const endedAt = JSON.parse(ended.request.body).aps.timestamp;
+  within(endedAt, ended.from, ended.to, "timestamp");
+  assert.equal(
+    ended.request.body,
+    `{"aps":{"timestamp":${endedAt},"event":"end","content-state":{"d":"${ended.asked.d}","b":"${ended.asked.b}"},"dismissal-date":${endedAt}}}`,
+  );
+  desk.close();
+});
+
+test("the desktop hears how Apple answered, and when to forget a phone's address", async () => {
+  const key = id(32);
+  const desk = await pushHost(idOf(key), key);
+  const told = async (status, reason, text) => {
+    apple.answer({ status, reason, text });
+    const asked = notification();
+    const sentBefore = apple.requests.length;
+    desk.send(p(asked));
+    const { id: answered, ...said } = await answer(desk);
+    assert.equal(answered, asked.id);
+    assert.equal(apple.requests.length, sentBefore + 1, `${status} ${reason}: sent more than once`);
+    return said;
+  };
+  assert.deepEqual(await told(200), { ok: true, status: 200, drop: false });
+  assert.deepEqual(await told(410, "Unregistered"), {
+    ok: false,
+    status: 410,
+    reason: "Unregistered",
+    drop: true,
+  });
+  for (const reason of ["BadDeviceToken", "DeviceTokenNotForTopic"])
+    assert.deepEqual(await told(400, reason), { ok: false, status: 400, reason, drop: true });
+  // Any other refusal keeps the address.
+  assert.deepEqual(await told(400, "BadCollapseId"), {
+    ok: false,
+    status: 400,
+    reason: "BadCollapseId",
+    drop: false,
+  });
+  assert.deepEqual(await told(429, "TooManyRequests"), {
+    ok: false,
+    status: 429,
+    reason: "TooManyRequests",
+    drop: false,
+  });
+  assert.deepEqual(await told(503, undefined, "Service Unavailable"), {
+    ok: false,
+    status: 503,
+    drop: false,
+  });
+  // A token Apple calls expired is not made again while it is young: Apple would refuse that.
+  assert.deepEqual(await told(403, "ExpiredProviderToken"), {
+    ok: false,
+    status: 403,
+    reason: "ExpiredProviderToken",
+    drop: false,
+  });
+  // Every notification so far went with one token.
+  assert.equal(new Set(apple.requests.map((request) => request.headers.authorization)).size, 1);
+  desk.close();
+});
+
+test("a desktop is held to its limits, and what is over them goes nowhere", async () => {
+  const room = async () => {
+    const key = id(32);
+    return pushHost(idOf(key), key);
+  };
+  const delivered = async (desk, list) => {
+    for (const asked of list) desk.send(p(asked));
+    const said = await answers(desk, list.length);
+    for (const asked of list)
+      assert.deepEqual(said.get(asked.id), { id: asked.id, ok: true, status: 200, drop: false });
+  };
+  const limited = async (desk, asked) => {
+    const sentBefore = apple.requests.length;
+    desk.send(p(asked));
+    assert.deepEqual(await answer(desk), {
+      id: asked.id,
+      ok: false,
+      reason: "limited",
+      drop: false,
+    });
+    await desk.quiet(100);
+    assert.equal(apple.requests.length, sentBefore, "a notification over a limit reached Apple");
+  };
+
+  // Thirty a minute to one phone, however its address is written.
+  const one = await room();
+  const phone = deviceToken();
+  await delivered(
+    one,
+    Array.from({ length: 30 }, () => notification({ to: phone })),
+  );
+  await limited(one, notification({ to: phone }));
+  await limited(one, notification({ to: phone.toUpperCase() }));
+  await delivered(one, [notification()]);
+  one.close();
+
+  // Sixty a minute from one computer.
+  const busy = await room();
+  const three = [deviceToken(), deviceToken(), deviceToken()];
+  const sixty = Array.from({ length: 60 }, (_, at) => notification({ to: three[at % 3] }));
+  await delivered(busy, sixty);
+  await limited(busy, notification({ to: three[0] }));
+  await limited(busy, notification());
+  // Another computer has limits of its own.
+  const other = await room();
+  await delivered(other, [notification({ to: three[0] })]);
+  other.close();
+  busy.close();
+
+  // Thirty-two phones an hour; one already sent to this hour still hears.
+  const many = await room();
+  const phones = Array.from({ length: 32 }, deviceToken);
+  await delivered(
+    many,
+    phones.map((to) => notification({ to })),
+  );
+  await limited(many, notification());
+  await delivered(many, [notification({ to: phones[0] })]);
+  many.close();
+});
+
+test("the relay makes one token at a time, and a new one when Apple calls it expired", async () => {
+  const played = appleMock();
+  // A relay of its own, where a token Apple refused may be made again at once, and where Apple
+  // can be made unreachable.
+  const relay = await withKey({ node: played.node }, { APNS_RENEW_MS: "1" });
+  try {
+    const key = id(32);
+    const desk = await pushHost(idOf(key), key, relay);
+    const tokenOf = (request) => request.headers.authorization;
+
+    // Three at once, before there is any token: all three wait for the same one.
+    const first = Array.from({ length: 3 }, () => notification());
+    for (const asked of first) desk.send(p(asked));
+    const said = await answers(desk, 3);
+    for (const asked of first) assert.equal(said.get(asked.id)?.ok, true, asked.id);
+    assert.equal(played.requests.length, 3);
+    const made = tokenOf(played.requests[0]);
+    assert.deepEqual(played.requests.map(tokenOf), [made, made, made]);
+    const old = await provider(made);
+
+    // Apple calls it expired: another is made, and the notification goes once more with it.
+    played.answer({ status: 403, reason: "ExpiredProviderToken" });
+    const again = notification();
+    desk.send(p(again));
+    assert.deepEqual(await answer(desk), { id: again.id, ok: true, status: 200, drop: false });
+    assert.equal(played.requests.length, 5);
+    const [refused, retried] = played.requests.slice(3);
+    assert.equal(tokenOf(refused), made);
+    assert.notEqual(tokenOf(retried), made);
+    assert.equal(retried.body, refused.body);
+    const renewed = await provider(tokenOf(retried));
+    assert.equal(renewed.header, old.header);
+    assert.equal(renewed.claims, `{"iss":"${TEAM_ID}","iat":${renewed.iat}}`);
+    assert.ok(renewed.iat >= old.iat);
+    // The new one is kept for what follows.
+    const next = notification();
+    desk.send(p(next));
+    assert.equal((await answer(desk)).ok, true);
+    assert.equal(tokenOf(played.requests[5]), tokenOf(retried));
+
+    // Once only: refused again with a new token, the desktop hears what Apple said.
+    played.answer(
+      { status: 403, reason: "InvalidProviderToken" },
+      { status: 403, reason: "InvalidProviderToken" },
+    );
+    const twice = notification();
+    desk.send(p(twice));
+    assert.deepEqual(await answer(desk), {
+      id: twice.id,
+      ok: false,
+      status: 403,
+      reason: "InvalidProviderToken",
+      drop: false,
+    });
+    assert.equal(played.requests.length, 8);
+    assert.notEqual(tokenOf(played.requests[7]), tokenOf(played.requests[6]));
+
+    // A network that fails: Apple is unreachable.
+    played.answer("lost");
+    const lost = notification();
+    desk.send(p(lost));
+    assert.deepEqual(await answer(desk), {
+      id: lost.id,
+      ok: false,
+      reason: "unreachable",
+      drop: false,
+    });
+    desk.close();
+  } finally {
+    await relay.dispose();
+  }
+});
+
+test("a room that starts again, as after it slept, keeps its limits and the relay its token", async () => {
+  // What the relay stores goes to a folder, so a second runtime starts from it, memory empty.
+  const folder = await mkdtemp(join(tmpdir(), "o7-relay-stored-"));
+  const played = appleMock();
+  const key = id(32);
+  const phone = deviceToken();
+  const run = async (work) => {
+    const relay = await withKey(played.fetch, {}, { resourcePersistencePath: folder });
+    try {
+      const desk = await pushHost(idOf(key), key, relay);
+      await work(desk);
+      desk.close();
+    } finally {
+      await relay.dispose();
+    }
+  };
+  try {
+    await run(async (desk) => {
+      const thirty = Array.from({ length: 30 }, () => notification({ to: phone }));
+      for (const asked of thirty) desk.send(p(asked));
+      const said = await answers(desk, 30);
+      for (const asked of thirty) assert.equal(said.get(asked.id)?.ok, true, asked.id);
+    });
+    await run(async (desk) => {
+      const over = notification({ to: phone });
+      desk.send(p(over));
+      assert.deepEqual(await answer(desk), {
+        id: over.id,
+        ok: false,
+        reason: "limited",
+        drop: false,
+      });
+      const other = notification();
+      desk.send(p(other));
+      assert.equal((await answer(desk)).ok, true);
+    });
+    assert.equal(played.requests.length, 31);
+    assert.equal(
+      new Set(played.requests.map((request) => request.headers.authorization)).size,
+      1,
+      "the relay made another token when it started again",
+    );
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
 });

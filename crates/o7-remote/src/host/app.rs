@@ -5,12 +5,13 @@
 use super::*;
 use crate::{
     backend::{Action, Diff, Outcome, PictureOf, PrChecks, PullRequest},
-    registry::By,
+    push::{Env, Prefs, Scope},
+    registry::{ActivityToken, By, Push},
     render::{self, Waiting},
     wire::{
         ArchivedChats, Asked, Asking, Brief, ChangedFile, ChangedFiles, Facts, FileDiff, Inbox,
-        MAX_INBOX, Night, PullRequestFacts, PullRequestNote, QueuedEntry, Recent, SearchHit,
-        SearchHits, TaskEntry, TaskList, TaskStarted, Usage, Working,
+        MAX_INBOX, Night, PullRequestFacts, PullRequestNote, QueuedEntry, Recent,
+        RecentPullRequest, SearchHit, SearchHits, TaskEntry, TaskList, TaskStarted, Usage, Working,
     },
 };
 use o7_protocol::composer::ChatImageSource;
@@ -19,13 +20,19 @@ use uploads::{Held, Uploads, prepare};
 
 /// What needs the person, as the app's Inbox shows it ([`wire::Op::Inbox`]): the requests chats
 /// wait on, with what each asks and its choices; the chats working, with what each does now; and
-/// the chats whose last turn ended in the last day, with what it came to. The chats are the ones
-/// the bot's `inbox` reads ([`render::sorted`]).
+/// the chats whose last turn ended in the last day, with what it came to, what its edits changed
+/// and its pull request as the computer last heard of it. The chats are the ones the bot's
+/// `inbox` reads ([`render::sorted`]).
 ///
 /// It reads the overview, then the newest page of history of each chat it lists, as the bot's
 /// `inbox` does for the chats it reads into: at most [`MAX_INBOX`] chats in each part, so at most
-/// 120 pages, and in practice a few, since chats ask and work a few at a time.
-pub(super) async fn inbox(backend: &Arc<dyn Backend>) -> Result<Data, BackendError> {
+/// 120 pages, and in practice a few, since chats ask and work a few at a time. A pull request
+/// costs no call to GitHub: what the computer already knows of it, or nothing.
+pub(super) async fn inbox(
+    shared: &Shared,
+    backend: &Arc<dyn Backend>,
+    context: &Context,
+) -> Result<Data, BackendError> {
     let overview = backend.overview().await?;
     let now = now();
     let sorted = render::sorted(&overview.chats, now);
@@ -83,17 +90,46 @@ pub(super) async fn inbox(backend: &Arc<dyn Backend>) -> Result<Data, BackendErr
         else {
             continue;
         };
+        let edits = render::last_turn_edits(&page.items);
         inbox.recent.push(Recent {
             chat_id: entry.chat.id.clone(),
             ended_at,
             duration_ms: turn.duration_ms,
             line: render::brief(&entry.chat, &page.items),
+            files: (edits.files > 0).then_some(edits.files),
+            added: edits.added,
+            removed: edits.removed,
+            pull_request: known_pull_request(shared, backend, context, &entry.chat.id),
         });
     }
     inbox
         .recent
         .sort_by_key(|recent| std::cmp::Reverse(recent.ended_at));
     Ok(Data::Inbox(Box::new(inbox)))
+}
+
+/// A chat's pull request as the computer last heard of it: what GitHub said lately to a reading
+/// of the chat ([`Backend::known_pull_request`]), else what its task's watcher last saw. Never a
+/// new look.
+fn known_pull_request(
+    shared: &Shared,
+    backend: &Arc<dyn Backend>,
+    context: &Context,
+    chat_id: &str,
+) -> Option<RecentPullRequest> {
+    if let Some(pr) = backend.known_pull_request(chat_id) {
+        return Some(RecentPullRequest {
+            number: pr.number,
+            state: pr.state,
+            checks: pr.checks.word().to_owned(),
+        });
+    }
+    let seen = registry_here(shared, context).ok()?.pr_seen(chat_id)?;
+    Some(RecentPullRequest {
+        number: seen.number,
+        state: seen.state,
+        checks: seen.checks,
+    })
 }
 
 /// A chat's newest page of history, or none when the chat went in the moment since the overview
@@ -966,6 +1002,129 @@ pub(super) async fn image(
         ));
     }
     Ok(Data::Image(preview))
+}
+
+/// The app on this session's device started, sent to or answered `chat_id` (`answered`: it
+/// answered what the chat asked). Only for a session offered notifications: what the device
+/// acted on is what "mine" means to it.
+pub(super) fn acted(shared: &Shared, context: &Context, chat_id: &str, answered: bool) {
+    if context.offered(wire::PUSH) {
+        super::notify::acted(shared, &context.device, &context.scope, chat_id, answered);
+    }
+}
+
+/// A phone's address at Apple and which of Apple's services it belongs to, as the app gives
+/// them: 64 to 200 hex characters, kept in lower case, and `sandbox` or `production`.
+fn address(token: &str, env: &str) -> Result<(String, Env), BackendError> {
+    if !crate::push::token_ok(token) {
+        return Err(invalid(
+            "That is not a notification token: 64 to 200 hex characters.",
+        ));
+    }
+    let env = Env::parse(env).ok_or_else(|| invalid("The service is sandbox or production."))?;
+    Ok((token.to_ascii_lowercase(), env))
+}
+
+/// The device went in the moment between: its session ends at its next request.
+fn gone() -> BackendError {
+    BackendError::new("not_found", "This device is no longer paired here.")
+}
+
+fn unsaved(error: crate::registry::RegistryError) -> BackendError {
+    BackendError::new("failed", error.to_string())
+}
+
+/// Where Apple delivers this device's notifications, and what it wants told
+/// ([`wire::Op::PushRegister`]): everything, of every chat, unless it says otherwise. Answers
+/// whether the relay in front of this computer sends notifications now.
+pub(super) fn push_register(
+    shared: &Shared,
+    context: &Context,
+    token: &str,
+    env: &str,
+    prefs: Option<wire::PushPrefs>,
+) -> Result<Data, BackendError> {
+    let (token, env) = address(token, env)?;
+    let prefs = match prefs {
+        None => Prefs::default(),
+        Some(asked) => Prefs {
+            asking: asked.asking,
+            finished: asked.finished,
+            failed: asked.failed,
+            tasks: asked.tasks,
+            scope: match asked.scope.as_deref() {
+                None => Scope::All,
+                Some(scope) => {
+                    Scope::parse(scope).ok_or_else(|| invalid("The scope is all or mine."))?
+                }
+            },
+        },
+    };
+    let push = Push {
+        token,
+        env,
+        prefs,
+        since: now(),
+    };
+    if !registry_here(shared, context)?
+        .set_device_push(&context.device, push)
+        .map_err(unsaved)?
+    {
+        return Err(gone());
+    }
+    // The call-back's watch starts now, if this is the first device it tells.
+    shared.tell_wake.notify_one();
+    (shared.config.changed)();
+    Ok(Data::Registered {
+        relay: super::notify::relays(shared),
+    })
+}
+
+/// This device is told nothing more ([`wire::Op::PushUnregister`]).
+pub(super) fn push_unregister(shared: &Shared, context: &Context) -> Result<Data, BackendError> {
+    if !registry_here(shared, context)?
+        .clear_device_push(&context.device)
+        .map_err(unsaved)?
+    {
+        return Err(gone());
+    }
+    super::notify::forget(shared, &context.device);
+    (shared.config.changed)();
+    Ok(Data::None {})
+}
+
+/// A test notification to this device now ([`wire::Op::PushTest`]): at most one every ten
+/// seconds, else `busy`.
+pub(super) fn push_test(shared: &Shared, context: &Context) -> Result<Data, BackendError> {
+    // Only while this session's workspace is still the open one.
+    drop(registry_here(shared, context)?);
+    super::notify::test(shared, &context.device)
+        .map_err(|why| BackendError::new(why.code(), why.message()))?;
+    Ok(Data::None {})
+}
+
+/// Where Apple delivers the updates of this computer's Live Activity on this device
+/// ([`wire::Op::Activity`]).
+pub(super) fn activity(
+    shared: &Shared,
+    context: &Context,
+    token: &str,
+    env: &str,
+) -> Result<Data, BackendError> {
+    let (token, env) = address(token, env)?;
+    let activity = ActivityToken {
+        token,
+        env,
+        since: now(),
+    };
+    if !registry_here(shared, context)?
+        .set_device_activity(&context.device, activity)
+        .map_err(unsaved)?
+    {
+        return Err(gone());
+    }
+    shared.tell_wake.notify_one();
+    Ok(Data::None {})
 }
 
 /// A piece of a staged photo ([`wire::Op::UploadBegin`], [`wire::Op::UploadChunk`],

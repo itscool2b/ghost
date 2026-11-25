@@ -272,6 +272,83 @@ struct EndToEnd {
         return Data(png)
     }
 
+    /// A notification, end to end: the phone registers, the demo agent asks, the computer seals
+    /// what it asks for this phone alone, the relay hands Apple only the fixed words and the sealed
+    /// blob, and the phone opens it with the key derived from its device key and answers from it.
+    @Test(.enabled(if: EndToEnd.relay != nil))
+    func aNotificationIsSealedForThisPhoneAndAnsweredFromIt() async throws {
+        let link = try #require(PairingLink.parse(try await Self.freshLink(), sites: PairingLink.developmentSites))
+        let connection = Self.connect(.pair(link), name: "iPhone notifications")
+        let watcher = Watcher(connection)
+        await connection.start()
+        let paired = try await watcher.wait("paired", timeout: .seconds(20)) {
+            if case .paired = $0 { return true }
+            return false
+        }
+        guard case .paired(let device, let features) = paired else { return }
+        #expect(features.contains("push"))
+        try await watcher.phase(.ready, timeout: .seconds(20))
+
+        let token = String(repeating: "ab", count: 32)
+        let registered = try await connection.send(
+            .pushRegister(token: token, env: "sandbox", prefs: .all), as: PushRegistered.self)
+        #expect(registered.relay, "the relay announced that it sends notifications")
+
+        // A new chat: every demo turn asks for a permission.
+        let created = try await connection.send(
+            .create(folderId: "f1", agentId: nil, text: "Run the tests"), as: Created.self, timeout: .slow)
+        let chatId = created.chat.chat.id
+        let push = try await Self.push(to: token, of: "alert")
+        #expect(push.url == "https://api.sandbox.push.apple.com/3/device/\(token)")
+        #expect(push.headers["apns-topic"] == "codes.o7.mobile")
+        #expect(push.headers["authorization"]?.hasPrefix("bearer ") == true)
+        // Apple sees the fixed words and a blob, never what was asked.
+        let body = try #require(try JSONSerialization.jsonObject(with: Data(push.body.utf8)) as? [String: Any])
+        let alert = try #require((body["aps"] as? [String: Any])?["alert"] as? [String: String])
+        #expect(alert == ["title": "o7", "body": "Something changed on your computer."])
+        #expect(!push.body.contains("Run the tests"))
+        let envelope = try #require(PushEnvelope(userInfo: body))
+        #expect(envelope.device == device.deviceId)
+
+        let key = PushSeal.key(deviceKey: device.key)
+        let plain = try #require(
+            PushSeal.open(envelope.blob, key: key, hostId: device.hostId, deviceId: device.deviceId))
+        let payload = try JSONDecoder().decode(PushPayload.self, from: plain)
+        #expect(payload.kind == .asking)
+        #expect(payload.chat == chatId)
+        let request = try #require(payload.request)
+        let allow = try #require(request.allow, "a permission offers Allow once")
+        // Answered from the notification, as the phone's button does.
+        try await connection.perform(.permission(chatId, request: request.id, option: allow), timeout: .act)
+
+        try await connection.perform(.pushUnregister)
+        try? await connection.perform(.forget)
+        await connection.stop()
+    }
+
+    struct CapturedPush: Decodable {
+        var url: String
+        var headers: [String: String]
+        var body: String
+    }
+
+    /// The first notification the relay sent Apple for `token`, waiting for it.
+    static func push(to token: String, of type: String) async throws -> CapturedPush {
+        let deadline = ContinuousClock.now + .seconds(20)
+        while ContinuousClock.now < deadline {
+            let (data, _) = try await URLSession.shared.data(from: URL(string: control! + "/pushes")!)
+            let pushes = try JSONDecoder().decode([CapturedPush].self, from: data)
+            if let found = pushes.first(where: {
+                $0.url.hasSuffix("/3/device/\(token)") && $0.headers["apns-push-type"] == type
+            }) {
+                return found
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        Issue.record("no \(type) notification for the phone within 20 s")
+        throw CancellationError()
+    }
+
     @Test(.enabled(if: EndToEnd.relay != nil))
     func theAppPathRefusesAWebPage() async throws {
         let link = try #require(PairingLink.parse(Self.first!, sites: PairingLink.developmentSites))

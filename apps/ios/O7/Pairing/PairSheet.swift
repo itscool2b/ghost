@@ -83,6 +83,7 @@ struct PairSheet: View {
 
 /// The pairing as it happens: each step turns from a loader into a check, then the computer.
 private struct Progress: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.style) private var style
     let store: ComputerStore
     let onDone: () -> Void
@@ -124,8 +125,36 @@ private struct Progress: View {
             Text("Its chats are on this iPhone now. Nothing more to pair: this iPhone opens them without another code.")
                 .o7Font(.prose)
                 .foregroundStyle(style.fg2)
+            if model.pastedLink {
+                // The link is spent, but it named this computer: nothing else needs it now.
+                QuietButton(title: "Clear the copied link", systemImage: "doc.on.clipboard") {
+                    UIPasteboard.general.items = []
+                    model.pastedLink = false
+                }
+            }
             Spacer()
-            ProminentButton(title: "Open \(store.hostName)", systemImage: "arrow.right", action: onDone)
+            if model.push.status == .notDetermined {
+                // Asked once, here, when it means something: the computer can now say when an
+                // agent waits.
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Know when an agent needs you", systemImage: "bell.badge")
+                        .o7Font(.rowTitle)
+                        .foregroundStyle(style.fg1)
+                    Text("A notification when a chat waits on you, finishes or fails. \(store.hostName) seals what it says for this iPhone alone.")
+                        .o7Font(.meta)
+                        .foregroundStyle(style.fg3)
+                }
+                .padding(.bottom, 8)
+                ProminentButton(title: "Turn on notifications", systemImage: "bell") {
+                    Task {
+                        await model.push.turnOn()
+                        onDone()
+                    }
+                }
+                QuietButton(title: "Not now", action: onDone)
+            } else {
+                ProminentButton(title: "Open \(store.hostName)", systemImage: "arrow.right", action: onDone)
+            }
         }
         .sensoryFeedback(.success, trigger: store.isPaired)
     }
