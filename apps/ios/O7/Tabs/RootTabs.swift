@@ -62,7 +62,7 @@ struct RootTabs: View {
             }
             Tab(value: AppTab.search, role: .search) {
                 NavigationStack(path: $searchPath) {
-                    SearchView(query: query, zoom: zoom) { searchPath.append($0) }
+                    SearchView(query: $query, zoom: zoom) { searchPath.append($0) }
                         .navigationDestination(for: ChatRoute.self) { route in
                             ChatScreen(route: route, zoom: zoom)
                         }

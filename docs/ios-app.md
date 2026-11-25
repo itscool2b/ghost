@@ -19,9 +19,33 @@ and every part of o7 reachable from the phone. Android is a later, separate app.
    step it is on), and what ended today. A chat reads as it does on the computer: messages, steps,
    thoughts, plans, requests, the working line. Send, queue, stop, answer, start a chat, choose the
    model, thinking level or agent.
-4. **More computers.** "Pair another computer" from the title's menu. Every paired computer keeps a
+4. **Look at the work.** In a chat, **Changes** lists the files the last turn changed, or for a chat
+   on its own branch everything the branch changed; each opens as a diff (hunks with their line
+   numbers, unchanged stretches folded, the changed words marked, the code in the theme's colours).
+   Above them: the branch, what is not committed, the pull request with its checks and the reviews
+   of people the repository trusts, and the agent's usage. **Screen** shows the chat's browser page or
+   device, taken again every 3 seconds while it is open.
+5. **Steer it.** From a chat's menu: the access level (loosening it asks first, and with "Face ID to
+   allow" on, asks for Face ID), rename, archive (archived chats are under the project's
+   **Archived**), start a stopped agent. A project's **Brief** edits the part of its memory every chat
+   there receives, at most 4 KB, saved as the person's own; if it changed on the computer meanwhile,
+   the app says so and lets the person keep theirs or take the computer's.
+6. **Hand work over.** **New work** starts a chat, or with **Own branch** a task in a worktree of its
+   own, reviewed by a second agent when done, started now or **tonight** (between 1 and 6 in the
+   morning on the computer's clock). **Tonight** lists what is queued, what could not start and why,
+   and the tasks handed over; a swipe cancels a queued one.
+7. **Photos.** The composer's **+** (and New work's) adds photos from the library or the camera, up
+   to 8 a message. Each goes as a JPEG at most 1,600 points on its longer side, without its
+   location, in chunks the relay's limits allow, and is checked against its SHA-256 on the computer.
+   The message shows them at once and keeps them; the history the computer sends carries words only,
+   so photos sent from the computer show as "Images".
+8. **More computers.** "Pair another computer" from the title's menu. Every paired computer keeps a
    session while the app is in front; the switcher says which need you.
-5. **Forget a computer** in Settings: its key is deleted here and the computer stops accepting it.
+9. **Forget a computer** in Settings: its key is deleted here and the computer stops accepting it.
+
+Each of these needs the computer's o7 to offer it (`ready.features`: `control`, `review`, `memory`,
+`screens`, `tasks`, `attachments`). With an older o7 the app leaves the control out and never sends
+the operation.
 
 Pairing a computer the phone already has says so ("Pair this iPhone again?"); the new key replaces
 the old one, and the app asks the computer to forget the old device, so its Settings lists the
@@ -56,10 +80,12 @@ tabs) and o7's own solid layers, type and marks for everything inside, in the co
 
 - `swift test --package-path apps/ios/O7Kit`: the channel against the desktop's vectors, the
   session against the computer in a box (pairing, a spent link, a refused key, a computer that goes
-  away and comes back, a live turn answered, a quiet socket replaced, an operation not offered),
-  the transcript goldens, markdown, the theme's contrast.
+  away and comes back, a live turn answered, a quiet socket replaced, an operation not offered, a
+  photo uploaded in chunks, a brief saved only over the version it was read from, tonight's queue,
+  rename and archive, changes and diffs), the transcript goldens, markdown, the theme's contrast.
 - `node apps/ios/scripts/e2e.mjs`: the Swift client against the relay in the Workers runtime and
   the desktop's real connection task (`demo_host`), through the app path.
 - The app on a simulator: `apps/ios/scripts/project.sh`, then build and run the `O7` scheme; the UI
-  tests run against the computer in a box.
+  tests run against the computer in a box (pairing, answering, sending, queueing and cancelling
+  tonight's work, changes and a diff, renaming, editing a brief, and the accessibility audit).
 - `.github/workflows/ios-app.yml` (by hand): all of the above on GitHub's Macs.

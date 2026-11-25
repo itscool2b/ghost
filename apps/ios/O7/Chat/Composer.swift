@@ -48,56 +48,56 @@ struct Composer: View {
                     .accessibilityLabel("Model and agent: \(chip)")
                 }
                 VStack(alignment: .leading, spacing: 0) {
-                if !photos.isEmpty {
-                    PhotoStrip(photos: $photos)
-                }
-                HStack(alignment: .bottom, spacing: 8) {
-                    if offersPhotos {
-                        PhotoButton(picking: $picking, shooting: $shooting)
-                            .disabled(photos.count >= photoLimit)
-                            .padding(.leading, 4)
-                            .padding(.bottom, 1)
+                    if !photos.isEmpty {
+                        PhotoStrip(photos: $photos)
                     }
-                    TextField(running ? "Add to the queue" : "Message the agent", text: $text, axis: .vertical)
-                        .o7Font(.composer)
-                        .foregroundStyle(style.fg1)
-                        .lineLimit(1...6)
-                        .focused($focused)
-                        .submitLabel(.return)
-                        .padding(.leading, offersPhotos ? 0 : 16)
-                        .padding(.vertical, 11)
-                        .accessibilityLabel("Message")
-                    if running {
-                        Button(action: onStop) {
-                            Image(systemName: "stop.fill")
-                                .font(.subheadline.weight(.bold))
-                                .frame(width: 36, height: 36)
+                    HStack(alignment: .bottom, spacing: 8) {
+                        if offersPhotos {
+                            PhotoButton(picking: $picking, shooting: $shooting)
+                                .disabled(photos.count >= photoLimit)
+                                .padding(.leading, 4)
+                                .padding(.bottom, 1)
                         }
-                        .buttonStyle(.glassProminent)
-                        .buttonBorderShape(.circle)
-                        .tint(style.red)
-                        .glassEffectID("stop", in: glass)
-                        .accessibilityLabel("Stop")
-                        .padding(.bottom, 5)
-                        .padding(.trailing, empty ? 5 : 0)
-                    }
-                    if !running || !empty {
-                        Button(action: onSend) {
-                            Image(systemName: "arrow.up")
-                                .font(.body.weight(.bold))
-                                .foregroundStyle(style.onPrimary)
-                                .frame(width: 36, height: 36)
+                        TextField(running ? "Add to the queue" : "Message the agent", text: $text, axis: .vertical)
+                            .o7Font(.composer)
+                            .foregroundStyle(style.fg1)
+                            .lineLimit(1...6)
+                            .focused($focused)
+                            .submitLabel(.return)
+                            .padding(.leading, offersPhotos ? 0 : 16)
+                            .padding(.vertical, 11)
+                            .accessibilityLabel("Message")
+                        if running {
+                            Button(action: onStop) {
+                                Image(systemName: "stop.fill")
+                                    .font(.subheadline.weight(.bold))
+                                    .frame(width: 36, height: 36)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .buttonBorderShape(.circle)
+                            .tint(style.red)
+                            .glassEffectID("stop", in: glass)
+                            .accessibilityLabel("Stop")
+                            .padding(.bottom, 5)
+                            .padding(.trailing, empty ? 5 : 0)
                         }
-                        .buttonStyle(.glassProminent)
-                        .buttonBorderShape(.circle)
-                        .tint(style.primary)
-                        .disabled(empty || !enabled)
-                        .glassEffectID("send", in: glass)
-                        .accessibilityLabel(running ? "Queue" : "Send")
-                        .padding(.trailing, 5)
-                        .padding(.bottom, 5)
+                        if !running || !empty {
+                            Button(action: onSend) {
+                                Image(systemName: "arrow.up")
+                                    .font(.body.weight(.bold))
+                                    .foregroundStyle(style.onPrimary)
+                                    .frame(width: 36, height: 36)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .buttonBorderShape(.circle)
+                            .tint(style.primary)
+                            .disabled(empty || !enabled)
+                            .glassEffectID("send", in: glass)
+                            .accessibilityLabel(running ? "Queue" : "Send")
+                            .padding(.trailing, 5)
+                            .padding(.bottom, 5)
+                        }
                     }
-                }
                 }
                 .glassEffect(
                     .regular.tint(style.accent.opacity(waiting ? 0.22 : 0.08)).interactive(),
