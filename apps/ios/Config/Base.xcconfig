@@ -1,0 +1,9 @@
+// Shared by every configuration. No team is set here: simulator builds are signed ad hoc, and the
+// owner's team goes in Signing.local.xcconfig (not committed), for builds on a phone.
+IPHONEOS_DEPLOYMENT_TARGET = 26.1
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+SWIFT_STRICT_CONCURRENCY = complete
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+#include? "Signing.local.xcconfig"

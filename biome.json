@@ -13,7 +13,17 @@
       "!crates/o7-drivers/tests/schemas",
       "!**/pnpm-lock.yaml",
       "!docs/spikes/**/target",
-      "!packages/ui/src/graphite/bot-logos/hermes.svg"
+      "!packages/ui/src/graphite/bot-logos/hermes.svg",
+      "!apps/ios/**/*.xcassets",
+      "!apps/ios/**/*.xcstrings",
+      "!apps/ios/**/*.xctestplan",
+      "!apps/ios/**/*.xcworkspace",
+      "!apps/ios/**/*.xcodeproj",
+      "!apps/ios/**/*.icon",
+      "!apps/ios/**/Package.resolved",
+      "!apps/ios/O7Kit/Sources/O7Highlight/Resources",
+      "!apps/ios/O7Kit/Tests/**/Goldens",
+      "!apps/ios/O7Kit/Tests/**/Fixtures"
     ]
   },
   "formatter": {

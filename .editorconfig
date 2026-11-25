@@ -11,6 +11,13 @@ indent_size = 2
 [*.rs]
 indent_size = 4
 
+[*.swift]
+indent_size = 4
+
+# Xcode writes property lists and entitlements with tabs.
+[*.{plist,entitlements}]
+indent_style = tab
+
 [*.md]
 trim_trailing_whitespace = false
 
