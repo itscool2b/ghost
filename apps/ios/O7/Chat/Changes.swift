@@ -276,7 +276,6 @@ struct BranchStrip: View {
                         Text(detailLine)
                             .o7Font(.small)
                             .foregroundStyle(style.fg3)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)

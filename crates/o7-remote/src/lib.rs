@@ -16,8 +16,9 @@ pub mod render;
 pub mod wire;
 
 pub use backend::{
-    Action, Backend, BackendError, BoxFuture, ChatFacts, ChatOptions, Choice, Frames, Outcome,
-    Picture, PictureOf, PrChecks, PrNote, PullRequest, Statuses, TaskChat,
+    Action, Backend, BackendError, BoxFuture, BranchChanges, ChatFacts, ChatOptions, Choice, Diff,
+    Frames, ImagePreview, Outcome, Picture, PictureOf, PrChecks, PrNote, PreparedImage,
+    PullRequest, Statuses, TaskChat,
 };
 pub use callback::{Callback, CallbackEvent, CallbackKind, Delivery};
 pub use host::{Config, Service};

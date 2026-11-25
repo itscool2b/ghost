@@ -45,6 +45,42 @@ pub enum RegistryError {
     NoWorkspace,
     #[error("This link has {MAX_QUEUED} tasks queued for tonight already. Take one off first.")]
     TooManyQueued,
+    #[error("This device has {MAX_QUEUED} tasks queued for tonight already. Take one off first.")]
+    TooManyQueuedByDevice,
+}
+
+/// Who handed a task over or queued it: a bot link (an automation is one), or the person from a
+/// paired device. A kind a newer build wrote reads as a bot's, the owner offered least: its id
+/// names no link, so its task is left alone.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum By {
+    #[default]
+    Bot,
+    Device,
+}
+
+impl By {
+    pub fn is_bot(&self) -> bool {
+        *self == Self::Bot
+    }
+
+    /// As it is written: `bot` or `device`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Bot => "bot",
+            Self::Device => "device",
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for By {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "device" => Self::Device,
+            _ => Self::Bot,
+        })
+    }
 }
 
 impl From<crypto::CryptoError> for RegistryError {
@@ -211,13 +247,15 @@ pub struct PrSeen {
 /// How long after a task starts its pull request is watched.
 pub const PR_WATCHED_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
-/// A task a bot link left for tonight.
+/// A task a bot link, or the person from a paired device, left for tonight.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Queued {
     /// `q` and a few letters, what the bot is told and cancels it by.
     pub id: String,
-    /// The bot link that queued it; set by the service.
+    /// The bot link that queued it, or the device for one the person queued (`by`); set by the
+    /// service.
     pub bot: String,
+    /// The whole goal (at most 64 KiB, as a message): the task's brief starts with it.
     pub goal: String,
     /// The project's id, found when it was queued.
     pub project: Option<String>,
@@ -229,6 +267,13 @@ pub struct Queued {
     pub failed: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failed_at: Option<i64>,
+    /// Who queued it. Left out for a bot link's, so its record reads as before.
+    #[serde(default, skip_serializing_if = "By::is_bot")]
+    pub by: By,
+    /// The access level the person chose for it (`ask`, `auto_edit` or `full_auto`), set before
+    /// its brief is sent; none, the project's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<String>,
 }
 
 /// A task started from the queue.
@@ -245,10 +290,12 @@ pub const NIGHT_MS: i64 = 12 * 60 * 60 * 1000;
 /// How long a queued task that could not start stays listed.
 const FAILED_KEPT_MS: i64 = 24 * 60 * 60 * 1000;
 
-/// A task a bot link started: its chat, where its work is, and its review.
+/// A task a bot link, or the person from a paired device, started: its chat, where its work is,
+/// and its review.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Task {
-    /// The bot link that started it; set by the service.
+    /// The bot link that started it, or the device for one the person started (`by`); set by
+    /// the service.
     pub bot: String,
     /// The chat doing the work.
     pub builder: String,
@@ -262,6 +309,13 @@ pub struct Task {
     /// The review's chat, once it started.
     pub reviewer: Option<String>,
     pub created_at: i64,
+    /// Who started it. Left out for a bot link's, so its record reads as before.
+    #[serde(default, skip_serializing_if = "By::is_bot")]
+    pub by: By,
+    /// The access level the person chose for it, which its review is held to as well; none,
+    /// the project's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<String>,
 }
 
 /// How many tasks are kept; the oldest goes first.
@@ -447,27 +501,34 @@ impl Registry {
         Ok(())
     }
 
-    /// Queues `item` for tonight. A link may leave at most [`MAX_QUEUED`].
+    /// Queues `item` for tonight. Each owner (a link, or a device) may leave at most
+    /// [`MAX_QUEUED`].
     pub fn queue(&mut self, item: Queued) -> Result<(), RegistryError> {
         let waiting = self
             .stored
             .queued
             .iter()
-            .filter(|queued| queued.bot == item.bot && queued.failed.is_none())
+            .filter(|queued| {
+                queued.by == item.by && queued.bot == item.bot && queued.failed.is_none()
+            })
             .count();
         if waiting >= MAX_QUEUED {
-            return Err(RegistryError::TooManyQueued);
+            return Err(match item.by {
+                By::Bot => RegistryError::TooManyQueued,
+                By::Device => RegistryError::TooManyQueuedByDevice,
+            });
         }
         self.stored.queued.push(item);
         self.save()
     }
 
-    /// Takes `bot`'s queued `id` off the queue; false when it has none such.
+    /// Takes `bot`'s queued `id` off the queue; false when it has none such. A link takes off
+    /// only what it queued itself.
     pub fn cancel_queued(&mut self, bot: &str, id: &str) -> bool {
         let before = self.stored.queued.len();
         self.stored
             .queued
-            .retain(|queued| !(queued.bot == bot && queued.id == id));
+            .retain(|queued| !(queued.by == By::Bot && queued.bot == bot && queued.id == id));
         let gone = self.stored.queued.len() < before;
         if gone {
             let _ = self.save();
@@ -475,12 +536,28 @@ impl Registry {
         gone
     }
 
+    /// The person takes `id` off the queue, whoever queued it: a link of the open workspace or a
+    /// device of it. False when the open workspace has none such.
+    pub fn cancel_any_queued(&mut self, id: &str) -> bool {
+        let Some(index) = self
+            .stored
+            .queued
+            .iter()
+            .position(|queued| queued.id == id && self.owner_open(queued.by, &queued.bot))
+        else {
+            return false;
+        };
+        self.stored.queued.remove(index);
+        let _ = self.save();
+        true
+    }
+
     /// What `bot` left for tonight, oldest first, with what could not start in the last day.
     pub fn queued_of(&self, bot: &str, now: i64) -> Vec<Queued> {
         self.stored
             .queued
             .iter()
-            .filter(|queued| queued.bot == bot)
+            .filter(|queued| queued.by == By::Bot && queued.bot == bot)
             .filter(|queued| {
                 queued
                     .failed_at
@@ -490,14 +567,40 @@ impl Registry {
             .collect()
     }
 
-    /// The next queued task that may start: the oldest whose link belongs to the open workspace
-    /// and still works. A link that is gone takes its queue with it, and what failed a day ago
-    /// is forgotten.
+    /// Everything left for tonight in the open workspace, by its links and its devices, oldest
+    /// first, with what could not start in the last day.
+    pub fn queued_here(&self, now: i64) -> Vec<Queued> {
+        self.stored
+            .queued
+            .iter()
+            .filter(|queued| self.owner_open(queued.by, &queued.bot))
+            .filter(|queued| {
+                queued
+                    .failed_at
+                    .is_none_or(|at| now.saturating_sub(at) <= FAILED_KEPT_MS)
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// The next queued task that may start: the oldest whose owner belongs to the open
+    /// workspace and still works (a link that has not expired, or a paired device). A link or a
+    /// device that is gone takes its queue with it, and what failed a day ago is forgotten.
     pub fn next_queued(&mut self, now: i64) -> Option<Queued> {
         let before = self.stored.queued.len();
         let links: Vec<String> = self.stored.bots.iter().map(|bot| bot.id.clone()).collect();
+        let devices: Vec<String> = self
+            .stored
+            .devices
+            .iter()
+            .map(|device| device.id.clone())
+            .collect();
         self.stored.queued.retain(|queued| {
-            links.contains(&queued.bot)
+            let owned = match queued.by {
+                By::Bot => links.contains(&queued.bot),
+                By::Device => devices.contains(&queued.bot),
+            };
+            owned
                 && queued
                     .failed_at
                     .is_none_or(|at| now.saturating_sub(at) <= FAILED_KEPT_MS)
@@ -510,11 +613,27 @@ impl Registry {
             .into_iter()
             .filter(|bot| !expired(bot, now))
             .collect();
+        let paired: Vec<&Device> = self.devices();
         self.stored
             .queued
             .iter()
-            .find(|queued| queued.failed.is_none() && open.iter().any(|bot| bot.id == queued.bot))
+            .find(|queued| {
+                queued.failed.is_none()
+                    && match queued.by {
+                        By::Bot => open.iter().any(|bot| bot.id == queued.bot),
+                        By::Device => paired.iter().any(|device| device.id == queued.bot),
+                    }
+            })
             .cloned()
+    }
+
+    /// Whether `owner` (a link's id, or a device's for `by` [`By::Device`]) belongs to the open
+    /// workspace.
+    fn owner_open(&self, by: By, owner: &str) -> bool {
+        match by {
+            By::Bot => self.bots().iter().any(|bot| bot.id == owner),
+            By::Device => self.devices().iter().any(|device| device.id == owner),
+        }
     }
 
     /// `id` started as `chat`: off the queue, and counted against the night.
@@ -585,7 +704,12 @@ impl Registry {
             .iter()
             .filter(|task| task.branch.is_some())
             .filter(|task| now.saturating_sub(task.created_at) <= PR_WATCHED_MS)
-            .filter(|task| links.iter().any(|bot| bot.id == task.bot))
+            .filter(|task| match task.by {
+                By::Bot => links.iter().any(|bot| bot.id == task.bot),
+                // A device hears of its task's pull request once notifications reach the phone
+                // (push); until then nobody is told, so nothing is looked at.
+                By::Device => false,
+            })
             .map(|task| {
                 let seen = self
                     .stored
@@ -1084,9 +1208,9 @@ impl Registry {
         self.bots().iter().any(|bot| bot.callback.is_some())
     }
 
-    /// Keeps a task a bot link of the open workspace started.
+    /// Keeps a task a bot link or a device of the open workspace started.
     pub fn add_task(&mut self, task: Task) {
-        if !self.bots().iter().any(|bot| bot.id == task.bot) {
+        if !self.owner_open(task.by, &task.bot) {
             return;
         }
         self.stored
@@ -1098,18 +1222,36 @@ impl Registry {
         let _ = self.save();
     }
 
-    /// The task `chat` works on or reviews, of a bot link of the open workspace.
+    /// The task `chat` works on or reviews, of a bot link or a device of the open workspace.
     pub fn task_of(&self, chat: &str) -> Option<Task> {
-        let bots: Vec<&str> = self.bots().iter().map(|bot| bot.id.as_str()).collect();
         self.stored
             .tasks
             .iter()
             .rev()
             .find(|task| {
-                bots.contains(&task.bot.as_str())
-                    && (task.builder == chat || task.reviewer.as_deref() == Some(chat))
+                (task.builder == chat || task.reviewer.as_deref() == Some(chat))
+                    && self.owner_open(task.by, &task.bot)
             })
             .cloned()
+    }
+
+    /// The tasks the open workspace's links and devices started, oldest first: at most the
+    /// last [`MAX_TASKS`] kept.
+    pub fn tasks_here(&self) -> Vec<Task> {
+        self.stored
+            .tasks
+            .iter()
+            .filter(|task| self.owner_open(task.by, &task.bot))
+            .cloned()
+            .collect()
+    }
+
+    /// What the open workspace's device `id` is called, if it has one such.
+    pub fn device_name(&self, id: &str) -> Option<String> {
+        self.devices()
+            .into_iter()
+            .find(|device| device.id == id)
+            .map(|device| device.name.clone())
     }
 
     /// Notes the review chat of the task `builder` works on.
@@ -1126,13 +1268,13 @@ impl Registry {
         }
     }
 
-    /// Whether a task of the open workspace still waits for its review to start.
+    /// Whether a task of the open workspace, a link's or a device's, still waits for its review
+    /// to start.
     pub fn reviews_pending(&self) -> bool {
-        let bots: Vec<&str> = self.bots().iter().map(|bot| bot.id.as_str()).collect();
         self.stored.tasks.iter().any(|task| {
-            bots.contains(&task.bot.as_str())
-                && task.review_agent.is_some()
+            task.review_agent.is_some()
                 && task.reviewer.is_none()
+                && self.owner_open(task.by, &task.bot)
         })
     }
 
@@ -1234,6 +1376,8 @@ mod tests {
             created_at: 1,
             failed: None,
             failed_at: None,
+            by: By::Bot,
+            access: None,
         }
     }
 
@@ -1301,6 +1445,8 @@ mod tests {
                 review_agent: None,
                 reviewer: None,
                 created_at: 11,
+                by: By::Bot,
+                access: None,
             });
         }
         assert_eq!(registry.hook_chats(&hook.id, 12), ["c5"]);
@@ -1396,6 +1542,145 @@ mod tests {
         );
     }
 
+    /// The person's tasks are the device's: kept, found and reviewed as a link's are, queued at
+    /// most ten for the device, taken off by the person whoever queued them, started at night
+    /// while the device is paired, and gone with it. A link's records read as they did before
+    /// owners were recorded, and an owner a newer build wrote reads as a link's.
+    #[test]
+    fn the_persons_tasks_and_queue_are_the_devices() {
+        let (folder, mut registry) = fresh();
+        let path = folder.path().join("remote.json");
+        let pairing = registry.start_pairing(1).expect("pairing");
+        let phone = registry
+            .pair_as(&pairing.id, "", DeviceKind::Ios, Some("1.0"), 1)
+            .expect("pair")
+            .expect("device");
+        let grok = registry
+            .add_bot("Grok", crate::bot::Rights::CHATS, 1)
+            .expect("bot")
+            .id;
+        let mine = |id: &str| Queued {
+            by: By::Device,
+            access: Some("auto_edit".into()),
+            ..queued(id, &phone.id)
+        };
+        for n in 0..MAX_QUEUED {
+            registry.queue(mine(&format!("p{n}"))).expect("queued");
+        }
+        assert!(matches!(
+            registry.queue(mine("p99")),
+            Err(RegistryError::TooManyQueuedByDevice)
+        ));
+        // Ten each: the device's ten leave the link its own.
+        registry.queue(queued("g1", &grok)).expect("the link's");
+        registry.queue(queued("g2", &grok)).expect("the link's");
+        assert_eq!(
+            registry.queued_of(&grok, 2).len(),
+            2,
+            "a link lists its own"
+        );
+        assert_eq!(registry.queued_here(2).len(), MAX_QUEUED + 2);
+        assert!(!registry.cancel_queued(&grok, "p0"), "not the link's");
+        assert!(registry.cancel_any_queued("p0"), "the person's own");
+        assert!(registry.cancel_any_queued("g1"), "a link's too");
+        assert!(!registry.cancel_any_queued("g1"), "already off");
+        assert!(!registry.cancel_any_queued("nothing"));
+        let next = registry.next_queued(3).expect("next");
+        assert_eq!((next.id.as_str(), next.by), ("p1", By::Device));
+        assert_eq!(next.access.as_deref(), Some("auto_edit"));
+
+        let task = |by: By, owner: &str, builder: &str| Task {
+            bot: owner.to_owned(),
+            builder: builder.to_owned(),
+            folder_id: "f1".into(),
+            goal: "Fix it".into(),
+            branch: Some("o7/fix-it".into()),
+            path: Some("/work/wt".into()),
+            base: Some("abc".into()),
+            review_agent: Some("codex".into()),
+            reviewer: None,
+            created_at: 1,
+            by,
+            access: (by == By::Device).then(|| "full_auto".to_owned()),
+        };
+        registry.add_task(task(By::Device, "nobody", "c0"));
+        assert!(registry.task_of("c0").is_none(), "no such device here");
+        registry.add_task(task(By::Device, &phone.id, "c1"));
+        registry.add_task(task(By::Bot, &grok, "c2"));
+        assert!(registry.reviews_pending());
+        assert_eq!(registry.task_of("c1").expect("the device's").by, By::Device);
+        registry.set_reviewer("c1", "c3");
+        assert_eq!(registry.task_of("c3").expect("its review").builder, "c1");
+        assert_eq!(
+            registry
+                .tasks_here()
+                .iter()
+                .map(|task| task.builder.as_str())
+                .collect::<Vec<_>>(),
+            ["c1", "c2"]
+        );
+        // Nobody hears of the device's pull request until the phone is told things.
+        let callback = crate::callback::Callback {
+            kind: crate::callback::CallbackKind::Webhook,
+            url: "https://example.com/hook".into(),
+            channel: None,
+            to: None,
+        };
+        registry
+            .set_bot_callback(&grok, Some(callback))
+            .expect("callback");
+        let watched: Vec<String> = registry
+            .watched_tasks(2)
+            .into_iter()
+            .map(|(task, _)| task.builder)
+            .collect();
+        assert_eq!(watched, ["c2"]);
+        assert_eq!(registry.device_name(&phone.id).as_deref(), Some("iPhone"));
+
+        // A link's records read as before; the device's say whose they are.
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("file")).expect("json");
+        let kept = |list: &str, key: &str, id: &str| {
+            saved[list]
+                .as_array()
+                .expect(list)
+                .iter()
+                .find(|item| item[key] == id)
+                .cloned()
+                .expect("kept")
+        };
+        for record in [kept("queued", "id", "g2"), kept("tasks", "builder", "c2")] {
+            assert!(record.get("by").is_none(), "{record}");
+            assert!(record.get("access").is_none(), "{record}");
+        }
+        assert_eq!(kept("queued", "id", "p1")["by"], "device");
+        assert_eq!(kept("tasks", "builder", "c1")["access"], "full_auto");
+
+        // Another workspace sees none of it; this one does again after a restart.
+        let mut again = Registry::load(&path).expect("reload");
+        again.set_scope("other");
+        assert!(again.task_of("c1").is_none());
+        assert!(again.queued_here(3).is_empty());
+        assert!(!again.cancel_any_queued("p1"), "another workspace's");
+        again.set_scope("local");
+        assert_eq!(again.task_of("c1").expect("kept").by, By::Device);
+
+        // Removing the device takes its queue and its tasks out of reach.
+        assert!(again.remove_device(&phone.id).expect("removed"));
+        assert!(again.task_of("c1").is_none());
+        assert_eq!(again.next_queued(4).expect("the link's").id, "g2");
+        assert!(again.queued_here(4).iter().all(|item| item.by == By::Bot));
+
+        // An owner a newer build wrote reads as a link's: its id names no link, so it is left
+        // alone, and the file still loads.
+        let text = std::fs::read_to_string(&path).expect("file");
+        std::fs::write(&path, text.replace(r#""by": "device""#, r#""by": "robot""#))
+            .expect("write");
+        let mut newer = Registry::load(&path).expect("an owner it does not know");
+        newer.set_scope("local");
+        assert!(newer.task_of("c1").is_none());
+    }
+
     /// Kept awake only when asked, with remote access on, and while a link that has not expired
     /// (or a paired device) can reach the open workspace. The choice is kept across restarts, and
     /// a file from before it reads as off.
@@ -1459,6 +1744,8 @@ mod tests {
             review_agent: Some("codex".into()),
             reviewer: None,
             created_at: 1,
+            by: By::Bot,
+            access: None,
         };
         registry.add_task(task("nobody", "c0"));
         assert!(

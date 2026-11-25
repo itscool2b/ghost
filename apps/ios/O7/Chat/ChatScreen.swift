@@ -55,6 +55,14 @@ private struct ChatContent: View {
                 transcript(chat)
             }
         }
+        .safeAreaBar(edge: .top) {
+            // What the chat stands on stays in view while its turns scroll under it.
+            if let facts, facts.worktree || facts.pullRequest != nil {
+                BranchStrip(facts: facts) { showingChanges = facts.worktree ? .branch : .turn }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+            }
+        }
         .safeAreaBar(edge: .bottom) {
             if let chat {
                 VStack(spacing: 8) {
@@ -181,9 +189,6 @@ private struct ChatContent: View {
     private func transcript(_ chat: ChatStore) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
-                if let facts, facts.worktree || facts.pullRequest != nil {
-                    BranchStrip(facts: facts) { showingChanges = facts.worktree ? .branch : .turn }
-                }
                 if chat.hasMore {
                     Button {
                         Task { await chat.loadEarlier() }

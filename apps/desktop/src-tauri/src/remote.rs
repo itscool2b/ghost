@@ -69,13 +69,110 @@ fn pull_request(view: o7_core::gitworkspaces::PullRequestView) -> o7_remote::Pul
 /// and each look is a call to GitHub.
 const PR_FRESH: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// What GitHub CLI last said of each chat's pull request (in one line), and when, by chat.
-type PrSaid =
-    std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, Option<String>)>>;
+/// What GitHub CLI last said of each chat's pull request, and when, by chat: a bot's reading
+/// names it in one line, and o7 for iPhone shows its parts, from the same look.
+type PrSaid = std::sync::Mutex<
+    std::collections::HashMap<String, (std::time::Instant, Option<o7_remote::PullRequest>)>,
+>;
 
 fn pr_said() -> &'static PrSaid {
     static SAID: std::sync::OnceLock<PrSaid> = std::sync::OnceLock::new();
     SAID.get_or_init(Default::default)
+}
+
+/// The pull request open from `chat_id`'s branch: what GitHub CLI said within [`PR_FRESH`], or
+/// what it says now, kept for the next reading.
+async fn pull_request_of(
+    sessions: &o7_core::session::SessionManager,
+    chat_id: &str,
+) -> Result<Option<o7_remote::PullRequest>, AppError> {
+    let fresh = pr_said()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(chat_id)
+        .filter(|(at, _)| at.elapsed() < PR_FRESH)
+        .map(|(_, said)| said.clone());
+    if let Some(said) = fresh {
+        return Ok(said);
+    }
+    let said = sessions.pull_request(chat_id).await?.map(pull_request);
+    let mut kept = pr_said()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // What is no longer fresh is never read again: it goes, so the cache holds only the chats
+    // looked at in the last two minutes.
+    kept.retain(|_, (at, _)| at.elapsed() < PR_FRESH);
+    kept.insert(
+        chat_id.to_owned(),
+        (std::time::Instant::now(), said.clone()),
+    );
+    Ok(said)
+}
+
+/// The words the remote service uses for how a file changed.
+fn change_word(kind: o7_protocol::changes::ChangeKind) -> &'static str {
+    match kind {
+        o7_protocol::changes::ChangeKind::Added => "added",
+        o7_protocol::changes::ChangeKind::Modified => "modified",
+        o7_protocol::changes::ChangeKind::Deleted => "deleted",
+    }
+}
+
+/// The base64 length of `bytes` bytes, padded.
+fn base64_len(bytes: usize) -> usize {
+    bytes.div_ceil(3) * 4
+}
+
+/// The longer sides and JPEG qualities a picture for a paired device steps down through until
+/// its base64 fits the answer: the first is a bot's own picture.
+const STEPS: [(u32, u8); 5] = [
+    (PICTURE_SIDE, PICTURE_QUALITY),
+    (1280, 70),
+    (1024, 65),
+    (800, 60),
+    (640, 55),
+];
+
+/// `picture` as a JPEG whose base64 is at most `max_base64`, stepping down through [`STEPS`];
+/// none when even the smallest is larger. A picture with transparency is laid on white.
+fn jpeg_within(
+    picture: &image::DynamicImage,
+    max_base64: usize,
+) -> Result<Option<(Vec<u8>, u32, u32)>, String> {
+    for (side, quality) in STEPS {
+        let sized = if picture.width().max(picture.height()) > side {
+            picture.resize(side, side, image::imageops::FilterType::Triangle)
+        } else {
+            picture.clone()
+        };
+        let mut out = Vec::new();
+        on_white(&sized)
+            .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+                &mut out, quality,
+            ))
+            .map_err(|error| format!("The picture could not be made: {error}"))?;
+        if base64_len(out.len()) <= max_base64 {
+            return Ok(Some((out, sized.width(), sized.height())));
+        }
+    }
+    Ok(None)
+}
+
+/// `picture` with any transparency laid on white, as a JPEG holds it.
+fn on_white(picture: &image::DynamicImage) -> image::RgbImage {
+    if !picture.color().has_alpha() {
+        return picture.to_rgb8();
+    }
+    let rgba = picture.to_rgba8();
+    image::RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+        let [r, g, b, a] = rgba.get_pixel(x, y).0;
+        let over = |channel: u8| {
+            let alpha = u32::from(a);
+            let laid = (u32::from(channel) * alpha + 255 * (255 - alpha)) / 255;
+            u8::try_from(laid).unwrap_or(u8::MAX)
+        };
+        image::Rgb([over(r), over(g), over(b)])
+    })
 }
 
 /// The hour on the computer's own clock, 0 to 23, for work bots leave for tonight.
@@ -1012,14 +1109,7 @@ impl Backend for AppBackend {
                         files: changes
                             .files
                             .iter()
-                            .map(|file| {
-                                let kind = match file.kind {
-                                    o7_protocol::changes::ChangeKind::Added => "added",
-                                    o7_protocol::changes::ChangeKind::Modified => "modified",
-                                    o7_protocol::changes::ChangeKind::Deleted => "deleted",
-                                };
-                                (file.path.clone(), kind.to_owned())
-                            })
+                            .map(|file| (file.path.clone(), change_word(file.kind).to_owned()))
                             .collect(),
                         unavailable: changes.unavailable_reason,
                     })
@@ -1051,13 +1141,66 @@ impl Backend for AppBackend {
                         truncated: diff.truncated,
                     })
                 }
-                Action::ReadMemory { project_id } => Ok(Outcome::Memory {
-                    markdown: sessions
+                Action::ReadMemory { project_id } => {
+                    let memory = sessions
                         .read_project_memory(&project_id)
                         .await
-                        .map_err(|error| failed(error.into()))?
-                        .markdown,
-                }),
+                        .map_err(|error| failed(error.into()))?;
+                    Ok(Outcome::Memory {
+                        markdown: memory.markdown,
+                        revision: memory.revision,
+                    })
+                }
+                Action::SaveMemory {
+                    project_id,
+                    markdown,
+                    base_revision,
+                    reason,
+                } => {
+                    // The person's own edit from a paired device: saved as theirs, as the
+                    // window's editor saves, whatever the switch for agents' edits says.
+                    let conflict = || {
+                        BackendError::new(
+                            "conflict",
+                            "The brief changed on the computer since it was read. Read it again and make the edit there.",
+                        )
+                    };
+                    let current = sessions
+                        .read_project_memory(&project_id)
+                        .await
+                        .map_err(|error| failed(error.into()))?;
+                    // `Some(None)`: the device read no brief, so it saves only while there is
+                    // none yet.
+                    if base_revision.is_some_and(|base| base != current.revision) {
+                        return Err(conflict());
+                    }
+                    let saved = sessions
+                        .save_project_memory(o7_protocol::memory::SaveProjectMemory {
+                            project_id: project_id.clone(),
+                            expected_revision: current.revision.clone(),
+                            markdown,
+                            reason,
+                        })
+                        .await;
+                    match saved {
+                        Ok(saved) => Ok(Outcome::Memory {
+                            markdown: saved.markdown,
+                            revision: saved.revision,
+                        }),
+                        Err(error) => {
+                            // Saved over in the moment between the reading and the save.
+                            let moved = sessions
+                                .read_project_memory(&project_id)
+                                .await
+                                .is_ok_and(|now| now.revision != current.revision);
+                            Err(if moved {
+                                conflict()
+                            } else {
+                                failed(error.into())
+                            })
+                        }
+                    }
+                }
                 Action::WriteMemory {
                     project_id,
                     markdown,
@@ -1315,18 +1458,14 @@ impl Backend for AppBackend {
     }
 
     /// The pull request open from the chat's branch, read with GitHub CLI as the person is
-    /// signed in.
+    /// signed in, or as it said within [`PR_FRESH`].
     fn pull_request<'a>(
         &'a self,
         chat_id: &'a str,
     ) -> BoxFuture<'a, Result<Option<o7_remote::PullRequest>, BackendError>> {
         Box::pin(async move {
             let sessions = self.sessions().map_err(failed)?;
-            let view = sessions
-                .pull_request(chat_id)
-                .await
-                .map_err(|error| failed(error.into()))?;
-            Ok(view.map(pull_request))
+            pull_request_of(&sessions, chat_id).await.map_err(failed)
         })
     }
 
@@ -1392,31 +1531,14 @@ impl Backend for AppBackend {
             let own = branch
                 .as_deref()
                 .is_some_and(|branch| !matches!(branch, "main" | "master" | "trunk" | "develop"));
-            let fresh = pr_said()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get(chat_id)
-                .filter(|(at, _)| at.elapsed() < PR_FRESH)
-                .map(|(_, said)| said.clone());
-            let pull_request = match (own, fresh) {
-                (false, _) => None,
-                (true, Some(said)) => said,
-                (true, None) => {
-                    let said = sessions
-                        .pull_request(chat_id)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|view| o7_remote::render::pull_request(&pull_request(view)));
-                    pr_said()
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .insert(
-                            chat_id.to_owned(),
-                            (std::time::Instant::now(), said.clone()),
-                        );
-                    said
-                }
+            let pull_request = if own {
+                pull_request_of(&sessions, chat_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|pr| o7_remote::render::pull_request(&pr))
+            } else {
+                None
             };
             Ok(o7_remote::ChatFacts {
                 pull_request,
@@ -1424,6 +1546,258 @@ impl Backend for AppBackend {
                 worktree,
                 uncommitted: git.as_ref().map(|git| git.files.len()),
                 usage,
+            })
+        })
+    }
+
+    /// The profile's archived chats, as the window's archive lists them.
+    fn archived(&self) -> BoxFuture<'_, Result<Vec<WorkspaceChat>, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            let snapshot = sessions
+                .workspace_snapshot(WorkspaceFilter {
+                    include_archived: true,
+                    project_id: None,
+                })
+                .await
+                .map_err(|error| failed(error.into()))?;
+            Ok(snapshot
+                .chats
+                .into_iter()
+                .filter(|entry| entry.archived)
+                .collect())
+        })
+    }
+
+    /// The chat's browser tab or emulator as a JPEG, made smaller step by step until its base64
+    /// is at most `max_bytes` (a phone's answer is smaller than a bot's picture may be).
+    fn picture_within<'a>(
+        &'a self,
+        chat_id: &'a str,
+        of: o7_remote::PictureOf,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::Picture, BackendError>> {
+        use base64::Engine as _;
+        Box::pin(async move {
+            drop(self.sessions().map_err(failed)?);
+            let taken = match of {
+                o7_remote::PictureOf::Browser => crate::browser::picture(&self.app, chat_id).await,
+                o7_remote::PictureOf::Device => crate::mobile::picture(&self.app, chat_id).await,
+            }
+            .map_err(|message| BackendError::new("unavailable", message))?;
+            let jpeg = tokio::task::spawn_blocking(move || {
+                let picture = image::load_from_memory(&taken)
+                    .map_err(|error| format!("The picture could not be read: {error}"))?;
+                jpeg_within(&picture, max_bytes)
+            })
+            .await
+            .map_err(|error| BackendError::new("failed", error.to_string()))?
+            .map_err(|message| BackendError::new("failed", message))?
+            .ok_or_else(|| {
+                BackendError::new(
+                    "too_large",
+                    "The picture is too large to send to this device.",
+                )
+            })?;
+            Ok(o7_remote::Picture {
+                mime: "image/jpeg".into(),
+                data: base64::engine::general_purpose::STANDARD.encode(jpeg.0),
+            })
+        })
+    }
+
+    /// A photo from a paired device as the chat's message box keeps it (`prepare_photo`): a
+    /// JPEG stays a JPEG and anything else becomes a PNG, made again with nothing but its
+    /// pixels, turned upright, and under 4 MiB.
+    fn prepare_image<'a>(
+        &'a self,
+        bytes: Vec<u8>,
+        name: &'a str,
+        _mime: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::PreparedImage, BackendError>> {
+        Box::pin(async move {
+            let name = name.to_owned();
+            let photo =
+                tokio::task::spawn_blocking(move || o7_core::session::prepare_photo(&bytes, &name))
+                    .await
+                    .map_err(|error| BackendError::new("failed", error.to_string()))?
+                    .map_err(|error| failed(error.into()))?;
+            Ok(o7_remote::PreparedImage {
+                bytes: photo.bytes,
+                name: photo.name,
+                mime: photo.mime.into(),
+            })
+        })
+    }
+
+    /// A prepared photo into the chat's message box (`composer_photo`), kept with the chat. One
+    /// that is not what `prepare_photo` makes is prepared there first.
+    fn attach_image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        bytes: Vec<u8>,
+        name: &'a str,
+        _mime: &'a str,
+    ) -> BoxFuture<'a, Result<String, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            let attached = sessions
+                .composer_photo(chat_id, bytes, name.to_owned())
+                .await
+                .map_err(|error| failed(error.into()))?;
+            Ok(attached.id)
+        })
+    }
+
+    /// The message with its attachments, as the window's message box sends it.
+    fn send_input<'a>(
+        &'a self,
+        chat_id: &'a str,
+        text: String,
+        attachments: Vec<String>,
+    ) -> BoxFuture<'a, Result<PromptAck, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            sessions
+                .composer_send(
+                    chat_id,
+                    o7_protocol::composer::ComposerInput {
+                        text,
+                        attachments,
+                        mentions: Vec::new(),
+                    },
+                )
+                .await
+                .map_err(|error| failed(error.into()))
+        })
+    }
+
+    /// An image the chat holds, as the window's preview reads it (a PNG), or as a JPEG made
+    /// smaller step by step when the PNG would not fit `max_bytes` of base64. Never a project file
+    /// by its path: the service refuses that source, and so does this.
+    fn image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        source: o7_protocol::composer::ChatImageSource,
+        full: bool,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::ImagePreview, BackendError>> {
+        use base64::Engine as _;
+        Box::pin(async move {
+            if matches!(
+                source,
+                o7_protocol::composer::ChatImageSource::Project { .. }
+            ) {
+                return Err(BackendError::new(
+                    "invalid",
+                    "Images are read from the chat's own messages and attachments only.",
+                ));
+            }
+            let sessions = self.sessions().map_err(failed)?;
+            let preview = sessions
+                .chat_image_preview(chat_id, source, full)
+                .await
+                .map_err(|error| failed(error.into()))?;
+            if preview.png_base64.len() <= max_bytes {
+                return Ok(o7_remote::ImagePreview {
+                    mime: "image/png".into(),
+                    data: preview.png_base64,
+                    width: preview.width,
+                    height: preview.height,
+                });
+            }
+            let (jpeg, width, height) = tokio::task::spawn_blocking(move || {
+                let png = base64::engine::general_purpose::STANDARD
+                    .decode(preview.png_base64)
+                    .map_err(|_| "The image could not be read.".to_owned())?;
+                let picture = image::load_from_memory_with_format(&png, image::ImageFormat::Png)
+                    .map_err(|error| format!("The image could not be read: {error}"))?;
+                jpeg_within(&picture, max_bytes)
+            })
+            .await
+            .map_err(|error| BackendError::new("failed", error.to_string()))?
+            .map_err(|message| BackendError::new("failed", message))?
+            .ok_or_else(|| {
+                BackendError::new(
+                    "too_large",
+                    "The image is too large to send to this device.",
+                )
+            })?;
+            Ok(o7_remote::ImagePreview {
+                mime: "image/jpeg".into(),
+                data: base64::engine::general_purpose::STANDARD.encode(jpeg),
+                width,
+                height,
+            })
+        })
+    }
+
+    /// What the chat's own branch changed against its base, committed or not, read with the
+    /// app's own bounded Git: its task's base when the service names one, else its worktree's,
+    /// else where its branch left the folder's default branch. A chat on no branch of its own,
+    /// or one Git cannot read, says why.
+    fn branch_changes<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        max_files: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::BranchChanges, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            match sessions.chat_branch_changes(chat_id, base, max_files).await {
+                Ok(Some(changes)) => Ok(o7_remote::BranchChanges {
+                    files: changes
+                        .files
+                        .into_iter()
+                        .map(|file| (file.path, change_word(file.kind).to_owned()))
+                        .collect(),
+                    base: Some(changes.base),
+                    unavailable: None,
+                }),
+                Ok(None) => Ok(o7_remote::BranchChanges {
+                    unavailable: Some(
+                        "This chat has no branch of its own: it works in the project folder."
+                            .into(),
+                    ),
+                    ..o7_remote::BranchChanges::default()
+                }),
+                Err(error) => {
+                    let error = failed(error.into());
+                    if error.code == "not_found" {
+                        return Err(error);
+                    }
+                    Ok(o7_remote::BranchChanges {
+                        unavailable: Some(error.message),
+                        ..o7_remote::BranchChanges::default()
+                    })
+                }
+            }
+        })
+    }
+
+    /// One file of the chat's branch changes, before (at the base) and after (in its folder),
+    /// only when it is among them: nothing else is read.
+    fn branch_diff<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        path: &'a str,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::Diff, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            let diff = sessions
+                .chat_branch_diff(chat_id, base, path, max_bytes)
+                .await
+                .map_err(|error| failed(error.into()))?
+                .ok_or_else(|| {
+                    BackendError::new("not_found", "This chat's branch did not change that file.")
+                })?;
+            Ok(o7_remote::Diff {
+                before: diff.before,
+                after: diff.after,
+                binary: diff.binary,
+                truncated: diff.truncated,
             })
         })
     }
@@ -1485,6 +1859,45 @@ mod tests {
             (400, 300)
         );
         assert!(super::shrink(b"not a picture").is_err());
+    }
+
+    /// A picture for a paired device steps down in size until its base64 fits the answer, lays
+    /// transparency on white, and is refused (none) when even its smallest step does not fit.
+    #[test]
+    fn a_picture_for_the_phone_steps_down_until_it_fits() {
+        let mut seed = 7u32;
+        let noise = image::RgbImage::from_fn(3000, 2000, |_, _| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            let [a, b, c, _] = seed.to_le_bytes();
+            image::Rgb([a, b, c])
+        });
+        let picture = image::DynamicImage::ImageRgb8(noise);
+        let budget = 420 * 1024 - 1024;
+        let (jpeg, width, height) = super::jpeg_within(&picture, budget)
+            .expect("made")
+            .expect("fits");
+        assert!(super::base64_len(jpeg.len()) <= budget);
+        assert!(width.max(height) <= 1600, "{width}x{height}");
+        assert!(
+            width.max(height) < 1600,
+            "noise does not fit at the first step"
+        );
+        let back =
+            image::load_from_memory_with_format(&jpeg, image::ImageFormat::Jpeg).expect("a jpeg");
+        assert_eq!((back.width(), back.height()), (width, height));
+        assert!(super::jpeg_within(&picture, 100).expect("made").is_none());
+        // A small picture keeps its size; its clear pixels come out white.
+        let mut clear = image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 0, 0]));
+        clear.put_pixel(0, 0, image::Rgba([200, 0, 0, 255]));
+        let flat = super::on_white(&image::DynamicImage::ImageRgba8(clear));
+        assert_eq!(flat.get_pixel(3, 3).0, [255, 255, 255]);
+        assert_eq!(flat.get_pixel(0, 0).0, [200, 0, 0]);
+        let (_, width, height) = super::jpeg_within(&image::DynamicImage::ImageRgb8(flat), budget)
+            .expect("made")
+            .expect("fits");
+        assert_eq!((width, height), (4, 4));
     }
 
     #[test]

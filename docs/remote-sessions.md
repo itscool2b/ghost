@@ -220,11 +220,37 @@ one at a time (the next waits while the last one or its review works) and at mos
 The point is the person's subscriptions: work that can wait runs on capacity nobody is using.
 
 - `inbox` lists the link's queue, and what could not start in the last day with why (an agent
-  no longer ready, a project gone); a link with a call-back is also told so at once.
+  no longer ready, a project gone); a link with a call-back is also told so at once. A queued
+  task keeps its whole goal (at most 64 KiB), which its brief starts with.
 - `task` with `cancel` and the id takes a queued task off. A link may leave ten at a time, and
   its queue goes with it when it is removed.
 - The queue and the night's starts are kept in `remote.json` (`queued`, `night`), so a restart
   loses nothing. The computer must be awake: "Keep this computer awake" in Settings helps.
+
+### Tasks from the phone
+
+o7 for iPhone hands over a task as a bot does (`task`, feature `tasks`, 25 November 2026): now
+or for tonight, on a branch of its own, with a second agent's review. What differs:
+
+- **Owner.** The task belongs to the device (`by: "device"` in `remote.json`; a bot's records
+  have no `by`, so they read as before). It is kept, found and reviewed while that device is
+  paired in the open workspace, and goes with it. An owner a newer build wrote reads as a bot's,
+  whose id names no link, so it is left alone.
+- **Brief.** It says the person handed the task over from o7 on their phone, where a bot's says
+  the person's assistant did.
+- **Access.** A bot's task may approve no more than its link may. The person's may do anything
+  the project allows, and the access they choose (`ask`, `auto_edit` or `full_auto`) is set on
+  the chat before the brief is sent; when it cannot be set, nothing is sent. No choice leaves the
+  project's own. The review's chat is held to the same access.
+- **Photos.** A task that starts now may carry the person's staged photos with its brief,
+  measured before its chat, worktree and branch are made.
+- **Queue.** A device may leave ten tasks for tonight, as a link may. They start at night as a
+  bot's do, set to the access chosen when they were queued. The person may take any queued task
+  off, a bot's too (`task_cancel`); a link takes off only its own.
+- **Telling.** No bot follows the person's task, so nobody is told when its review is done or
+  when a queued one could not start. Notifications on the phone come next: `tell_later` and
+  `later_tick` (`host.rs`) are where the device hears of both, and its task's pull request is
+  watched from then on (`watched_tasks`). Until then `tasks` lists what happened.
 
 ### A task's pull request
 
@@ -361,7 +387,7 @@ service the bot's calls already pass through, but it is one more place the words
 | Part | Where | What it does |
 |---|---|---|
 | Relay | `apps/relay` (Worker `o7-relay`, route `o7.codes/api/remote/*`) | One Durable Object per computer holds its host socket and the sockets of browsers and o7 for iPhone, and forwards between them. Serves MCP to bots. |
-| Service | `crates/o7-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser or app (`host.rs`, `host/session.rs`, and what only the app asks for in `host/app.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
+| Service | `crates/o7-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser or app (`host.rs`, `host/session.rs`, what only the app asks for in `host/app.rs`, and its staged photos in `host/uploads.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
 | App | `apps/desktop/src-tauri/src/remote.rs` | Starts the service, gives it the open profile's chats through the same lease a window's commands take, and exposes the commands Settings uses. |
 | Settings page | `apps/desktop/src/components/settings/RemotePanel.tsx` | The switch, devices, bots, and the two dialogs that show a secret once. |
 | Remote page | `apps/web/app/pages/remote.tsx`, `apps/web/app/remote/` | The browser's session (`client.ts`), its half of the channel (`channel.ts`), where device keys are kept (`storage.ts`). |
@@ -496,7 +522,14 @@ thirty days forgets all of it; the computer sends its bot links again whenever i
 
 The computer also ends any connection that has not proved a key within twenty seconds, holds at
 most 32 connections, 16 running calls per browser and 8 running bot calls, and stops sending live
-events to a browser that falls 4 MiB behind (the page then opens the chat again).
+events to a browser that falls 4 MiB behind (the page then opens the chat again). For o7 for
+iPhone's photos it holds, in memory only: at most 8 MiB a photo, 4 arriving at once and 16
+staged per session, 24 MiB per session and 64 MiB across every session on the computer. Each
+photo's whole size counts from its first request until nothing holds its bytes, a message
+still being sent with it included, so the 64 MiB bound what photos take in memory. A photo
+nothing touched for ten minutes is dropped (the five-second sweep), and a session's photos go
+when it ends. Its pieces are taken at once, in order, and hold none of the 16 places for
+calls.
 
 ## Staying connected and keeping up
 
@@ -575,22 +608,30 @@ The rest belong to a feature, and a session may ask only for what it was offered
 | `pickers` | `options`, `set_model`, `set_thinking`, `switch_agent` | a browser and the app |
 | `inbox` | `inbox` | the app |
 | `search` | `search` | the app |
+| `control` | `archived`, `set_access`, `rename`, `archive`, `start_agent`, and the access levels in `options` | the app |
+| `review` | `changes`, `diff`, `facts` | the app |
+| `memory` | `memory`, `set_memory` | the app |
+| `screens` | `picture` | the app |
+| `tasks` | `task`, `tasks`, `task_cancel` | the app |
+| `attachments` | `upload_begin`, `upload_chunk`, `upload_abort`, `image`, and photos in `send`, `create` and `task` | the app |
 
-The four picker requests are the only ones of a full-control link's actions a device reaches.
-What they name (a model, a level, an agent) is a short value from a list the computer sent,
-checked for length and control characters before the app sees it, and the app refuses one its
-chat does not offer. No device has a request for a chat's access level, for a project from an
-arbitrary folder or for project memory.
+A browser reaches four of a full-control link's actions, the pickers. What they name (a model,
+a level, an agent) is a short value from a list the computer sent, checked for length and
+control characters before the app sees it, and the app refuses one its chat does not offer. The
+iPhone app reaches a few more, each checked the same way first: a chat's access level, title and
+archiving, starting its agent, its changes, a picture of its browser or device, and the
+project's brief as the person's own edit. No device has a request for a project from an
+arbitrary folder, for a bot's memory edit, or for a file by its path.
 
 The computer names what it offers when a session opens (`features` in its `ready` message), and
 a device shows a control only to a computer that names it: the page is always the newest, and an
 installed o7 can be older. A browser is offered `pickers`, as before the app, so what a browser
-is sent has not changed. The app is offered `pickers`, `inbox` and `search`, but only on a
-socket the relay marked as the app's (`k`), and only with a pairing link or a device recorded as
-`ios`: a browser's word that it is the app is not enough, and neither is the app's path with a
-browser's key. On the app's path `ready` also carries `site` (`https://o7.codes`), so the app
-follows the site if it moves, and the answer to an `ios` pairing carries `features`, so the app
-knows what it has before its next `ready`.
+is sent has not changed. The app is offered every feature above, but only on a socket the relay
+marked as the app's (`k`), and only with a pairing link or a device recorded as `ios`: a
+browser's word that it is the app is not enough, and neither is the app's path with a browser's
+key. On the app's path `ready` also carries `site` (`https://o7.codes`), so the app follows the
+site if it moves, and the answer to an `ios` pairing carries `features`, so the app knows what
+it has before its next `ready`.
 
 - A request the computer does not know ends the session, as anything outside the protocol does.
 - A request it knows but did not offer this session is answered `not_offered` ("This computer
@@ -616,6 +657,100 @@ What only the app asks for runs in `crates/o7-remote/src/host/app.rs`:
   own search of the open chats' titles, projects, agents and finished messages
   (`workspace_search`), each hit dated by its chat in the overview. `snippet` is `null` when only
   the title, project or agent matched. It costs one search and one overview.
+- **`archived`** takes `before` (Unix milliseconds) and `limit` (1 to 100, 50 when unsaid) and
+  answers `{ chats: [WorkspaceChat], more }`: the archived chats that last changed before
+  `before`, newest first. A page never ends between chats that changed in the same millisecond,
+  so asking again with the last one's `updated_at` misses none. The overview leaves archived
+  chats out; this reads the workspace with them (`include_archived`).
+- **`options`**, for the app, adds `access` (`[{ value, name }]`, by the value `set_access`
+  takes) and `access_mode`. A browser's answer has neither.
+- **`set_access`** takes `chat_id` and `access`, exactly `ask`, `auto_edit` or `full_auto`
+  (anything else is `invalid`), and sets it as the window's picker does. **`rename`** takes a
+  `title`, trimmed, of 1 to 200 characters on one line. **`archive`** takes `archived` (`true`
+  archives, `false` brings the chat back). **`start_agent`** starts a stopped chat's agent
+  without sending anything. Each answers `{}`.
+- **`changes`** takes `chat_id` and `scope`: `turn` (the default) for what the chat's last turn
+  changed, as the window's Changes shows it, or `branch` for everything its own branch changed
+  since that branch began, committed or not, untracked files included. A branch is counted from
+  its task's recorded base where the chat does a task's work, else its worktree's base, else
+  where it left its folder's default branch; it is read with the app's own bounded Git (no
+  shell). It answers `{ files: [{ path, kind }], unavailable, scope, base }`, `kind` being
+  `added`, `modified` or `deleted`, at most 2,000 files, and fewer when their paths would not
+  fit one answer. `unavailable` says why there is no list
+  (a chat with no branch of its own works in the project folder); `base` is the commit a
+  branch's changes are counted from.
+- **`diff`** takes `chat_id`, `path` and `scope`, and answers
+  `{ before, after, binary, truncated }`: the file before and after (`null` where it did not
+  exist), each side at most 160 KiB, and less when its text would not fit one answer once
+  encoded (a file of control characters takes six bytes for each); `truncated` says a side was
+  cut. Only a file the list of changes names is read; any other path is `not_found`. A branch's
+  credential and private-key files are not shown.
+- **`facts`** answers `{ branch, worktree, uncommitted, usage: [{ window, used }],
+  pull_request }`: what a bot's reading ends with, and the chat's pull request in parts,
+  `{ number, url, state, checks, failed: [name], notes: [{ author, kind, body, trusted }] }`,
+  where `checks` is `none`, `pending`, `passed` or `failed`. At most the newest 20 notes are
+  sent, each cut to 2,000 characters, and a note by someone who is not one of the repository's
+  own people has an empty `body`. GitHub CLI is asked at most every two minutes per chat; a bot's
+  reading and the app share what it said.
+- **`memory`** takes `project_id` and answers `{ markdown, revision }`: the project's brief.
+  **`set_memory`** takes `markdown` (at most 4 KiB, `too_large` above) and `base_revision`, and
+  answers `{ revision }`. It is saved as the person's own edit, "Edited from" the device's name,
+  as the window's editor saves: not as a bot's, and whatever the switch for agents' memory edits
+  says. With `base_revision` it is saved only while the brief is still at that revision, and is
+  refused `conflict` otherwise, also when another edit lands in the moment between. An empty
+  `base_revision` says the device read no brief (`memory` answered `revision: null`): it is
+  saved while there is still none, and refused `conflict` once there is one. Without
+  `base_revision` it saves over whatever is there.
+- **`picture`** takes `chat_id` and `of` (`browser` or `device`) and answers `{ mime, data }`
+  (standard base64): what the chat's browser tab or emulator shows, as a JPEG made smaller step
+  by step (1600, 1280, 1024, 800 and 640 pixels) until the answer stays under 420 KiB; one that
+  does not fit even then is `too_large`, and the session goes on. Only a chat of the workspace's
+  overview is pictured, and one picture at a time per session (`busy`).
+- **`task`**, **`tasks`** and **`task_cancel`** are the phone's tasks ("Tasks from the phone").
+  `task` takes `goal` (at most 64 KiB), `project_id`, `agent_id`, `review` (`true` when
+  unsaid), `when` (`now`, the default, or `tonight`), `access` and `attachments` (now only), and
+  answers `{ chat_id, branch, review_agent }`, or `{ queued }` for tonight. The whole goal goes
+  into the task's brief, now or when it starts at night (a queued task keeps all of it); a
+  started task keeps its first 2,000 characters for its review. `tasks` answers `{ tasks: [{
+  chat_id, goal, branch, review_agent, reviewer_chat, created_at, by }], queued: [{ id, goal,
+  project_id, agent_id, review, created_at, failed, failed_at, by }], night: { from, to, budget,
+  started } }`: the last 40 tasks of the workspace, newest first, by its bot links (`bot`) and
+  its devices (`device`), and everything queued for tonight, oldest first, each goal shown by its
+  first 2,000 characters (200 when the whole list would not fit one answer otherwise).
+  `task_cancel` takes `queued_id`, any queued task of the workspace, and answers `{}`, or
+  `not_found`. A request that ran on past a switch of workspace reads and changes nothing of
+  the next one's tasks or queue (`unavailable`).
+- **Photos.** `upload_begin` takes `name`, `mime` (`image/png`, `image/jpeg`, `image/webp` or
+  `image/gif`), `size` (at most 8 MiB) and `sha256` (hex), and answers `{ upload_id, chunk }`,
+  `chunk` being 49,152 bytes. `upload_chunk` takes `upload_id`, `index` (exactly the next, from 0)
+  and `data` (standard base64 of at most `chunk` bytes), and answers `{ received, complete }`;
+  the last piece is checked against the SHA-256, and a photo that does not match is dropped
+  (`corrupt`). `upload_abort` drops one and answers `{}`. A staged photo lives in the session's
+  memory only (limits above). `send` and `create` then take `attachments`, the ids of up to 8
+  whole photos, and the text may be empty with them. Each photo is kept as the chat's message
+  box keeps one: a JPEG stays a JPEG and anything else becomes a PNG, decoded and made again so
+  nothing but its pixels is kept (no location, no camera data), turned upright as its camera
+  recorded, at most 2048, 1600, 1280 or 1024 pixels, the first under 4 MiB. A message's photos
+  are measured that way before anything is made with them: together they take at most 8 MiB,
+  what an agent's message may carry, or the request is refused `too_large` ("These photos are
+  more than 8 MB together. Send fewer at a time.") and no attachment, chat, worktree or task is
+  made. Then each is added to the chat's message box and the message is sent with them, as the
+  window's message box sends one; the agent receives a JPEG as `image/jpeg`. A photo leaves the
+  stage only once its message went. A browser's `attachments` are not taken.
+- **`create`**, for the app, answers `{ chat, unsent }` when the chat was made and its first
+  message could not be sent, `unsent` saying why; a browser is answered with the error, as
+  before.
+- **`image`** takes `chat_id`, `source` and `full`, and answers `{ mime, data, width, height }`:
+  an image the chat holds, read as the window's preview reads it. `source` is
+  `{ type: "stored", sha256 }`, `{ type: "attachment", id }` or
+  `{ type: "message", context, index }`; a project file by its path is never read (`invalid`).
+  A PNG that would not fit 420 KiB comes as a smaller JPEG.
+
+Besides `not_offered` and `too_large`, the app's requests are answered with these codes:
+`invalid` (a value outside what the request takes), `empty`, `not_found` (no such chat, file,
+photo or queued task), `busy` (a picture already being taken, too many photos staged or
+arriving), `corrupt`, `conflict`, and `failed` with the computer's words (a task that could not
+start, for one).
 
 The computer pushes `chat` (a status changed), `frame` (live events of the followed chat), `lost`
 (open the chat again) and `reset` (another profile was opened: start over).
@@ -632,13 +767,16 @@ The computer pushes `chat` (a status changed), `frame` (live events of the follo
   - `corepack pnpm --filter @o7/relay worker:test`: the relay in the Workers runtime, the app's
     path and its mark included. CI runs it.
   - `cargo test -p o7-remote`: the service against a relay on this machine, with a simulated
-    browser, iPhone app and bot.
+    browser, iPhone app and bot: every request of the app reaching the action it should, a
+    browser refused each of them, photos, pictures, and the phone's tasks now and tonight.
   - `corepack pnpm --filter @o7/web test`: the browser's channel against the shared
     vectors, and the page's headers.
   - `apps/desktop/scripts/check-remote.mjs` (part of `check:settings`): the Settings page.
   - `corepack pnpm --filter @o7/relay worker:e2e`: everything together on this machine.
     It needs the website built and `cargo build -p o7-remote --example demo_host`, a stand-in
-    computer with a scripted agent. `--engines chromium,webkit` runs it in both, `--scheme dark`
+    computer with a scripted agent. The demo answers every request o7 for iPhone makes: a
+    turn's and a branch's changes with one file and its diff, a branch whose pull request passed
+    its checks, a brief with revisions, a picture, tasks now and for tonight, and photos. `--engines chromium,webkit` runs it in both, `--scheme dark`
     reports a dark system, and `--shots <folder>` keeps screenshots. Midway it silences the
     phone's socket without closing it and expects the page back on a new one.
   - `node apps/relay/tests/native.mjs <o7.exe> [--prompt]`: the real debug app in a data
@@ -701,7 +839,9 @@ Features:
 - **Telling a bot through MCP itself.** A link is told through its assistant's own webhook
   ("Telling a bot when a chat is done"). The MCP Events extension would let a bot subscribe
   without its person copying an address and a key; too few assistants take it yet.
-- Notifications on the phone when a chat needs an answer.
+- Notifications on the phone when a chat needs an answer, a task's review is done or a queued
+  task could not start.
 - A read-only level for a paired device (bot links have one).
-- New chats in a worktree, attachments, images, the queue's controls and the model picker from
-  the page (a full-control bot link has the model, thinking and access tools).
+- New chats in a worktree, attachments, images, the queue's controls and the access level from
+  the page. o7 for iPhone has them (features `control`, `review`, `memory`, `screens`, `tasks`
+  and `attachments`); the page keeps the pickers it had.

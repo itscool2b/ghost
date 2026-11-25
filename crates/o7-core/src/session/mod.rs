@@ -14,6 +14,7 @@
 mod activity;
 mod actor;
 pub use actor::TerminalOpened;
+pub use composer::{Photo, prepare_photo};
 mod agent_accounts;
 mod agent_installations;
 mod catalogs;

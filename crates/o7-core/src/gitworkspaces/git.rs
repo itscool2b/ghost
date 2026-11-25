@@ -91,7 +91,7 @@ impl Git {
     }
 
     /// As `output`, with variables such as a private `GIT_INDEX_FILE`, text on standard input,
-    /// or a longer wait for a network operation.
+    /// a longer wait for a network operation, or output cut at `maximum`.
     pub(super) async fn output_with(
         &self,
         cwd: &Path,
@@ -99,6 +99,12 @@ impl Git {
         maximum: usize,
         extra: Extra,
     ) -> Result<HelperOutput> {
+        let Extra {
+            set: extra_set,
+            input,
+            timeout,
+            allow_cut,
+        } = extra;
         let mut command = vec![
             "--no-pager".into(),
             "--literal-pathspecs".into(),
@@ -120,7 +126,7 @@ impl Git {
             ("GIT_ASKPASS".into(), OsString::new()),
             ("GCM_INTERACTIVE".into(), "never".into()),
         ];
-        set.extend(extra.set);
+        set.extend(extra_set);
         let spec = HelperSpec {
             program: self.program.clone(),
             args: command,
@@ -128,10 +134,10 @@ impl Git {
             env: HelperEnv::Resolved(Arc::clone(&self.env)),
             set,
             new_session: true,
-            timeout: extra.timeout.unwrap_or(Duration::from_secs(30)),
+            timeout: timeout.unwrap_or(Duration::from_secs(30)),
             max_stdout: maximum,
         };
-        let output = match extra.input {
+        let output = match input {
             Some(input) => run_helper_input(&self.registry, spec, input).await,
             None => run_helper(&self.registry, spec).await,
         }
@@ -141,7 +147,7 @@ impl Git {
                 "Git timed out. Review the worktree state before trying again.".into(),
             ));
         }
-        if output.stdout_truncated {
+        if output.stdout_truncated && !allow_cut {
             return Err(GitError::Message(
                 "This repository exceeds the bounded Git operation limit.".into(),
             ));
@@ -172,6 +178,9 @@ pub(super) struct Extra {
     pub(super) set: Vec<(OsString, OsString)>,
     pub(super) input: Option<Vec<u8>>,
     pub(super) timeout: Option<Duration>,
+    /// Output longer than the maximum comes back cut, with `stdout_truncated` set, instead of
+    /// being refused. For a bounded read of the first bytes of something.
+    pub(super) allow_cut: bool,
 }
 
 /// The commit a full reference names. A missing reference or a non-commit is an error.

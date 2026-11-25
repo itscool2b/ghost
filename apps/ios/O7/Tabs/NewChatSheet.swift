@@ -254,6 +254,10 @@ struct NewChatSheet: View {
         busy = true
         defer { busy = false }
         let goal = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let tooMany = PickedPhoto.overBudget(photos) {
+            failure = tooMany
+            return
+        }
         do {
             if asTask {
                 let started = try await computer.startTask(

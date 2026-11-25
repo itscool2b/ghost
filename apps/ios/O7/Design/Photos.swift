@@ -24,6 +24,16 @@ struct PickedPhoto: Identifiable, Equatable {
     }
 
     static func == (lhs: PickedPhoto, rhs: PickedPhoto) -> Bool { lhs.id == rhs.id }
+
+    /// The most photos one message takes, together, as the computer counts them.
+    static let budget = 8 * 1024 * 1024
+
+    /// Why these photos cannot go together, or nil when they can. The computer refuses the same,
+    /// before it makes anything; saying it here spares the upload.
+    static func overBudget(_ photos: [PickedPhoto]) -> String? {
+        photos.reduce(0) { $0 + $1.jpeg.count } > budget
+            ? "These photos are more than 8 MB together. Send fewer at a time." : nil
+    }
 }
 
 /// The photos waiting to go with a message, each with a way to take it back out.

@@ -115,12 +115,14 @@ struct BriefEditor: View {
         }
     }
 
+    /// Saves over the version this editor read: with no brief then, an empty base, so a brief made
+    /// on the computer meanwhile is not overwritten unseen.
     private func save() async {
         saving = true
         defer { saving = false }
         do {
             let result = try await computer.connection.send(
-                .setMemory(project.id, markdown: text, base: revision), as: SavedBrief.self)
+                .setMemory(project.id, markdown: text, base: revision ?? ""), as: SavedBrief.self)
             revision = result.revision
             saved = text
             dismiss()

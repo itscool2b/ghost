@@ -1,6 +1,7 @@
 //! Explicit local worktree lifecycle. No operation calls an agent or infers user confirmation.
 
 mod actions;
+mod branch_diff;
 mod commit;
 mod create;
 mod git;
@@ -16,6 +17,7 @@ mod new_chat_tests;
 mod publication;
 mod pull_request;
 
+pub use branch_diff::{BranchChanges, BranchDiff, BranchFile};
 pub use pull_request::{Checks, Note, PullRequestView};
 mod publish;
 mod records;

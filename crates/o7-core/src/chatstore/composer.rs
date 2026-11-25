@@ -80,7 +80,7 @@ pub(crate) fn execute(
     };
     match command {
         ComposerCommand::ResolveImage { chat_id, sha256 } => {
-            let item = conn.query_row("SELECT id,display_name,mime,byte_length,sha256 FROM composer_attachments WHERE chat_id=?1 AND sha256=?2 AND mime='image/png' LIMIT 1", params![chat_id,sha256], |row| {
+            let item = conn.query_row("SELECT id,display_name,mime,byte_length,sha256 FROM composer_attachments WHERE chat_id=?1 AND sha256=?2 AND mime IN ('image/png','image/jpeg') LIMIT 1", params![chat_id,sha256], |row| {
                 Ok(StoredAttachment { meta: ComposerAttachment { id: row.get(0)?, name: row.get(1)?, mime: row.get(2)?, bytes: row.get(3)?, image: true }, sha256: row.get(4)? })
             }).map_err(|_| StoreError::Other("This image is unavailable in this chat.".into()))?;
             Ok(ComposerReply::Attachments(vec![item]))

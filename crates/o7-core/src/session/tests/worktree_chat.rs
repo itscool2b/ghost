@@ -1306,3 +1306,215 @@ async fn a_slow_worktree_creation_does_not_delay_another_folder() {
         canonical(&made.chat.chat.folder)
     );
 }
+
+/// Runs Git in `folder` for a fixture and returns what it printed.
+async fn fixture_git(folder: &Path, command: &[&str]) -> String {
+    use o7_process::{HelperEnv, HelperSpec, LeftoverRegistry, find_exe, process_env, run_helper};
+    let vars = process_env();
+    let program = find_exe("git", &vars).expect("Git is required for owned worktree tests");
+    let output = run_helper(
+        &LeftoverRegistry::disabled(),
+        HelperSpec {
+            program,
+            args: command.iter().map(Into::into).collect(),
+            cwd: folder.into(),
+            env: HelperEnv::Resolved(Arc::new(ResolvedEnv {
+                vars,
+                source: EnvSource::Fallback {
+                    reason: "owned worktree test".into(),
+                },
+                warnings: vec![],
+                resolved_at_ms: 0,
+            })),
+            set: vec![],
+            new_session: true,
+            timeout: Duration::from_secs(15),
+            max_stdout: 8192,
+        },
+    )
+    .await
+    .expect("owned Git fixture");
+    assert_eq!(
+        output.exit.and_then(|exit| exit.code),
+        Some(0),
+        "{}",
+        output.stderr_tail
+    );
+    String::from_utf8(output.stdout)
+        .expect("Git output")
+        .trim()
+        .to_owned()
+}
+
+#[tokio::test]
+async fn a_chats_branch_starts_at_its_worktree_base_or_where_it_left_the_default_branch() {
+    use crate::gitworkspaces::{BranchDiff, BranchFile};
+    use o7_protocol::changes::ChangeKind;
+    let mut rig = rig(
+        vec![idle_driver("worktree"), idle_driver("direct")],
+        WriterConfig::STANDARD,
+        Knobs::STANDARD,
+    );
+    enable_worktree_fixture(&mut rig).await;
+    // An origin whose default branch is main, so the project folder records it.
+    for command in [
+        &[
+            "config",
+            "remote.origin.url",
+            "git@github.com:fixture/project.git",
+        ][..],
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    ] {
+        fixture_git(&rig.folder, command).await;
+    }
+    let project = project(&rig, &rig.folder).await;
+    assert_eq!(
+        project.folders[0].git_default_branch.as_deref(),
+        Some("main")
+    );
+    // A worktree chat starts at the commit its worktree was made from.
+    let preview = plan(
+        &rig,
+        WorktreeChatInput {
+            title: Some("Branch view".into()),
+            ..input(&project)
+        },
+    )
+    .await;
+    let created = rig
+        .manager
+        .worktree_chat_apply(&preview.token)
+        .await
+        .expect("worktree chat");
+    let chat_id = created.chat.chat.id.clone();
+    std::fs::write(Path::new(&created.worktree.path).join("new.txt"), "new\n").unwrap();
+    let changes = rig
+        .manager
+        .chat_branch_changes(&chat_id, None, 10)
+        .await
+        .expect("changes")
+        .expect("a branch of its own");
+    assert_eq!(changes.base, created.worktree.base_commit);
+    assert_eq!(
+        changes.branch.as_deref(),
+        Some(created.worktree.branch.as_str())
+    );
+    assert_eq!(
+        changes.files,
+        [BranchFile {
+            path: "new.txt".into(),
+            kind: ChangeKind::Added,
+        }]
+    );
+    assert_eq!(
+        rig.manager
+            .chat_branch_diff(&chat_id, None, "new.txt", 1024)
+            .await
+            .expect("diff"),
+        Some(BranchDiff {
+            before: None,
+            after: Some("new\n".into()),
+            binary: false,
+            truncated: false,
+        })
+    );
+    assert_eq!(
+        rig.manager
+            .chat_branch_diff(&chat_id, None, "missing.txt", 1024)
+            .await
+            .expect("not changed"),
+        None
+    );
+    for path in ["", "a\nb", &"a".repeat(4097), ".env", "config/server.pem"] {
+        assert!(
+            rig.manager
+                .chat_branch_diff(&chat_id, None, path, 1024)
+                .await
+                .is_err(),
+            "{path:?} is refused"
+        );
+    }
+    assert!(
+        rig.manager
+            .chat_branch_changes("no-such-chat", None, 10)
+            .await
+            .is_err()
+    );
+    // A chat in the project folder on its default branch has no branch of its own.
+    let direct = rig
+        .manager
+        .chat_project_create(ProjectChatCreate {
+            agent_id: "mock".into(),
+            folder_id: project.folders[0].id.clone(),
+            allow_busy_folder: false,
+        })
+        .await
+        .expect("direct chat");
+    assert_eq!(
+        rig.manager
+            .chat_branch_changes(&direct.chat.id, None, 10)
+            .await
+            .expect("on main"),
+        None
+    );
+    // On another branch it starts where it left the default branch, committed or not.
+    let main = fixture_git(&rig.folder, &["rev-parse", "HEAD"]).await;
+    fixture_git(&rig.folder, &["checkout", "-b", "topic"]).await;
+    std::fs::write(rig.folder.join("topic.txt"), "topic\n").unwrap();
+    for command in [
+        &["add", "--", "topic.txt"][..],
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@localhost",
+            "-c",
+            "commit.gpgSign=false",
+            "commit",
+            "-m",
+            "topic",
+        ],
+    ] {
+        fixture_git(&rig.folder, command).await;
+    }
+    let topic_head = fixture_git(&rig.folder, &["rev-parse", "HEAD"]).await;
+    std::fs::write(rig.folder.join("later.txt"), "later\n").unwrap();
+    let added = |paths: &[&str]| {
+        paths
+            .iter()
+            .map(|path| BranchFile {
+                path: (*path).into(),
+                kind: ChangeKind::Added,
+            })
+            .collect::<Vec<_>>()
+    };
+    let topic = rig
+        .manager
+        .chat_branch_changes(&direct.chat.id, None, 10)
+        .await
+        .expect("topic")
+        .expect("a branch of its own");
+    assert_eq!(topic.base, main);
+    assert_eq!(topic.branch.as_deref(), Some("topic"));
+    assert_eq!(topic.files, added(&["later.txt", "topic.txt"]));
+    // A base the caller gives comes first.
+    let given = rig
+        .manager
+        .chat_branch_changes(&direct.chat.id, Some(&topic_head), 10)
+        .await
+        .expect("given")
+        .expect("a given base");
+    assert_eq!(given.base, topic_head);
+    assert_eq!(given.files, added(&["later.txt"]));
+    assert_eq!(
+        rig.manager
+            .chat_branch_diff(&direct.chat.id, Some(&topic_head), "topic.txt", 1024)
+            .await
+            .expect("not changed since the given base"),
+        None
+    );
+}

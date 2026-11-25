@@ -226,6 +226,10 @@ final class ChatStore {
     func send(_ text: String, photos: [PickedPhoto] = []) async -> (String, [PickedPhoto])? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !photos.isEmpty else { return nil }
+        if let tooMany = PickedPhoto.overBudget(photos) {
+            problem = tooMany
+            return (text, photos)
+        }
         let entry = Sending(text: trimmed, before: userCount(trimmed), turns: turnCount, photos: photos)
         sending.append(entry)
         do {

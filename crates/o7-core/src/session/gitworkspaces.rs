@@ -420,6 +420,106 @@ impl SessionManager {
             .map_err(|error| invalid(error.to_string()))
     }
 
+    /// What `chat_id`'s own branch changed against its base, committed or not; `None` when the
+    /// chat has no branch of its own.
+    pub async fn chat_branch_changes(
+        &self,
+        chat_id: &str,
+        base: Option<&str>,
+        max_files: usize,
+    ) -> Result<Option<crate::gitworkspaces::BranchChanges>, SessionError> {
+        let Some((folder, base)) = self.chat_branch_base(chat_id, base).await? else {
+            return Ok(None);
+        };
+        self.worktrees()?
+            .branch_changes(&folder, &base, max_files)
+            .await
+            .map(Some)
+            .map_err(|error| invalid(error.to_string()))
+    }
+
+    /// One of those files, before (at the base) and after (in the working tree), each at most
+    /// `max_bytes`; `None` when the chat has no branch of its own or the path is not among its
+    /// changes. Credential and private-key files are not shown, as in the project viewer.
+    pub async fn chat_branch_diff(
+        &self,
+        chat_id: &str,
+        base: Option<&str>,
+        path: &str,
+        max_bytes: usize,
+    ) -> Result<Option<crate::gitworkspaces::BranchDiff>, SessionError> {
+        if path.is_empty() || path.len() > 4096 || path.chars().any(char::is_control) {
+            return Err(invalid("The file path is invalid."));
+        }
+        if super::composer::restricted(Path::new(path)) {
+            return Err(invalid("Credential and private-key files are not shown."));
+        }
+        let Some((folder, base)) = self.chat_branch_base(chat_id, base).await? else {
+            return Ok(None);
+        };
+        self.worktrees()?
+            .branch_diff(&folder, &base, path, max_bytes)
+            .await
+            .map_err(|error| invalid(error.to_string()))
+    }
+
+    /// The chat's folder and the commit its own branch is compared against: `base` when it is a
+    /// full commit id in the folder's repository; else the base commit recorded for the chat's
+    /// worktree; else, on a branch other than its project folder's default branch, where it
+    /// left the default branch.
+    async fn chat_branch_base(
+        &self,
+        chat_id: &str,
+        base: Option<&str>,
+    ) -> Result<Option<(PathBuf, String)>, SessionError> {
+        let chat = self.git_chat(chat_id).await?;
+        let service = self.worktrees()?;
+        if let Some(found) = service
+            .recorded_branch_base(chat_id, &chat.folder, base)
+            .await
+            .map_err(|error| invalid(error.to_string()))?
+        {
+            return Ok(Some((chat.folder, found)));
+        }
+        let Some(default) = self.folder_default_branch(&chat).await? else {
+            return Ok(None);
+        };
+        Ok(service
+            .default_branch_base(&chat.folder, &default)
+            .await
+            .map_err(|error| invalid(error.to_string()))?
+            .map(|found| (chat.folder, found)))
+    }
+
+    /// The default branch recorded for the chat's project folder, when known.
+    async fn folder_default_branch(
+        &self,
+        chat: &ChatRecord,
+    ) -> Result<Option<String>, SessionError> {
+        let Some(folder_id) = chat.folder_id.as_deref() else {
+            return Ok(None);
+        };
+        let organization = self
+            .deps()
+            .store
+            .organize(
+                crate::chatstore::organization::OrganizationCommand::Snapshot(
+                    o7_protocol::workspace::WorkspaceFilter {
+                        include_archived: true,
+                        project_id: None,
+                    },
+                ),
+            )
+            .await
+            .map_err(|error| storage_error(&error))?;
+        Ok(organization
+            .projects
+            .into_iter()
+            .flat_map(|project| project.folders)
+            .find(|folder| folder.id == folder_id)
+            .and_then(|folder| folder.git_default_branch))
+    }
+
     pub async fn isolation_preview(
         &self,
         chat_id: &str,

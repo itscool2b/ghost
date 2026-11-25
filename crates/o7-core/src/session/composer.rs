@@ -16,6 +16,9 @@ use std::{
 const MAX_IMPORT: usize = 12 * 1024 * 1024;
 const MAX_TEXT: usize = 256 * 1024;
 const MAX_ITEMS: usize = 8;
+/// The longer-side limits, in pixels, a prepared image steps down through until its PNG fits
+/// the image attachment limit.
+const IMAGE_EDGES: [u32; 4] = [2048, 1600, 1280, 1024];
 
 fn invalid(message: impl Into<String>) -> SessionError {
     SessionError::OptionInvalid(message.into())
@@ -144,6 +147,33 @@ impl SessionManager {
             .await
             .map_err(|_| invalid("The image could not be prepared."))??;
         self.composer_store(chat_id, name, "image/png".into(), bytes)
+            .await
+    }
+
+    /// A photo the person sent from a paired device, into a chat's message box: one
+    /// [`prepare_photo`] made is kept as it is, so it is not made twice; anything else is prepared
+    /// first. Only after the person's own send from that device.
+    pub async fn composer_photo(
+        &self,
+        chat_id: &str,
+        bytes: Vec<u8>,
+        name: String,
+    ) -> Result<ComposerAttachment, SessionError> {
+        self.composer_folder(chat_id).await?;
+        let photo = self
+            .deps()
+            .rt
+            .spawn_blocking(move || match prepared(&bytes) {
+                Some(mime) => Ok(Photo {
+                    name: photo_name(&name, extension(mime)),
+                    mime,
+                    bytes,
+                }),
+                None => prepare_photo(&bytes, &name),
+            })
+            .await
+            .map_err(|_| invalid("The image could not be prepared."))??;
+        self.composer_store(chat_id, photo.name, photo.mime.into(), photo.bytes)
             .await
     }
 
@@ -425,22 +455,235 @@ pub(super) fn normalize_image(bytes: &[u8]) -> Result<Vec<u8>, SessionError> {
     let decoded = reader
         .decode()
         .map_err(|_| invalid("This image is damaged, too large, or not supported."))?;
-    let resized = if decoded.width() > 2048 || decoded.height() > 2048 {
-        decoded.resize(2048, 2048, image::imageops::FilterType::Triangle)
-    } else {
-        decoded
+    let png = |image: &image::DynamicImage| {
+        let mut encoded = Cursor::new(Vec::new());
+        image
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .map_err(|_| invalid("The image could not be prepared."))?;
+        Ok::<_, SessionError>(encoded.into_inner())
     };
-    let mut encoded = Cursor::new(Vec::new());
-    resized
-        .write_to(&mut encoded, image::ImageFormat::Png)
-        .map_err(|_| invalid("The image could not be prepared."))?;
-    let bytes = encoded.into_inner();
-    if bytes.len() > o7_drivers::attachments::MAX_IMAGE_BYTES {
-        return Err(invalid(
-            "The prepared image exceeds 4 MiB. Use a smaller image.",
-        ));
+    // The longer side steps down until the PNG fits. An image within several of the limits is
+    // encoded as it is only once.
+    let longer = decoded.width().max(decoded.height());
+    let mut encoded_as_is = false;
+    for edge in IMAGE_EDGES {
+        let bytes = if longer > edge {
+            png(&decoded.resize(edge, edge, image::imageops::FilterType::Triangle))?
+        } else if encoded_as_is {
+            continue;
+        } else {
+            encoded_as_is = true;
+            png(&decoded)?
+        };
+        if bytes.len() <= o7_drivers::attachments::MAX_IMAGE_BYTES {
+            return Ok(bytes);
+        }
     }
-    Ok(bytes)
+    Err(invalid(
+        "The prepared image exceeds 4 MiB. Use a smaller image.",
+    ))
+}
+
+/// A photo as a chat's message box keeps it ([`prepare_photo`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Photo {
+    /// Its name, with the extension of what it is now.
+    pub name: String,
+    /// `image/jpeg` or `image/png`.
+    pub mime: &'static str,
+    pub bytes: Vec<u8>,
+}
+
+/// The quality a photo is kept at when it stays a JPEG.
+const PHOTO_QUALITY: u8 = 85;
+/// The longest stem a photo's name keeps, in bytes: with its extension, well within a name the
+/// message box shows.
+const PHOTO_STEM: usize = 56;
+
+/// A photo the person sent from a paired device, as a chat's message box keeps it. A JPEG stays a
+/// JPEG (a phone's photos stay small, so a message holds several) and anything else becomes a
+/// PNG. Either is decoded and made again, so nothing but its pixels is kept (no location, no
+/// camera data), turned upright as its camera recorded it, and stepped down through
+/// [`IMAGE_EDGES`] until it is under 4 MiB. `name` names it, with the extension of what it is
+/// now.
+pub fn prepare_photo(bytes: &[u8], name: &str) -> Result<Photo, SessionError> {
+    use image::ImageDecoder as _;
+    if bytes.len() > MAX_IMPORT {
+        return Err(invalid("The image exceeds 12 MiB."));
+    }
+    let mut reader = image::ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|_| invalid("The image format is not supported."))?;
+    let jpeg = reader.format() == Some(image::ImageFormat::Jpeg);
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(64 * 1024 * 1024);
+    limits.max_image_width = Some(16_384);
+    limits.max_image_height = Some(16_384);
+    reader.limits(limits);
+    let damaged = || invalid("This image is damaged, too large, or not supported.");
+    let mut decoder = reader.into_decoder().map_err(|_| damaged())?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut decoded = image::DynamicImage::from_decoder(decoder).map_err(|_| damaged())?;
+    decoded.apply_orientation(orientation);
+    let encode = |image: &image::DynamicImage| {
+        let mut encoded = Cursor::new(Vec::new());
+        let written =
+            if jpeg {
+                image.to_rgb8().write_with_encoder(
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut encoded, PHOTO_QUALITY),
+                )
+            } else {
+                image.write_to(&mut encoded, image::ImageFormat::Png)
+            };
+        written.map_err(|_| invalid("The image could not be prepared."))?;
+        Ok::<_, SessionError>(encoded.into_inner())
+    };
+    let longer = decoded.width().max(decoded.height());
+    let mut encoded_as_is = false;
+    for edge in IMAGE_EDGES {
+        let bytes = if longer > edge {
+            encode(&decoded.resize(edge, edge, image::imageops::FilterType::Triangle))?
+        } else if encoded_as_is {
+            continue;
+        } else {
+            encoded_as_is = true;
+            encode(&decoded)?
+        };
+        if bytes.len() <= o7_drivers::attachments::MAX_IMAGE_BYTES {
+            let mime = if jpeg { "image/jpeg" } else { "image/png" };
+            return Ok(Photo {
+                name: photo_name(name, extension(mime)),
+                mime,
+                bytes,
+            });
+        }
+    }
+    Err(invalid(
+        "The prepared image exceeds 4 MiB. Use a smaller image.",
+    ))
+}
+
+fn extension(mime: &str) -> &'static str {
+    if mime == "image/jpeg" { "jpg" } else { "png" }
+}
+
+/// Whether `bytes` are a photo [`prepare_photo`] made, and its type: exactly what the PNG or
+/// baseline JPEG encoder writes (no chunk or segment that could carry anything but pixels), at
+/// most 2048 pixels a side and 4 MiB. Anything else is prepared again.
+fn prepared(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() > o7_drivers::attachments::MAX_IMAGE_BYTES {
+        return None;
+    }
+    let edge = |width: u32, height: u32| {
+        (1..=IMAGE_EDGES[0]).contains(&width) && (1..=IMAGE_EDGES[0]).contains(&height)
+    };
+    let be16 = |at: usize| Some(u16::from_be_bytes([*bytes.get(at)?, *bytes.get(at + 1)?]));
+    let be32 = |at: usize| Some(u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?));
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        // IHDR first, then IDAT, then IEND at the very end: nothing else.
+        let (mut at, mut header, mut data) = (8, false, false);
+        while at < bytes.len() {
+            let length = usize::try_from(be32(at)?).ok()?;
+            let kind = bytes.get(at + 4..at + 8)?;
+            let next = at.checked_add(12)?.checked_add(length)?;
+            if next > bytes.len() {
+                return None;
+            }
+            match kind {
+                b"IHDR" if !header => {
+                    if length != 13 || !edge(be32(at + 8)?, be32(at + 12)?) {
+                        return None;
+                    }
+                    header = true;
+                }
+                b"IDAT" if header => data = true,
+                b"IEND" if data && next == bytes.len() => return Some("image/png"),
+                _ => return None,
+            }
+            at = next;
+        }
+        return None;
+    }
+    if bytes.starts_with(&[0xFF, 0xD8]) {
+        // JFIF, the frame, its tables, one scan: no segment for a location, a camera or words.
+        let mut at = 2;
+        let mut frame = false;
+        loop {
+            if *bytes.get(at)? != 0xFF {
+                return None;
+            }
+            let marker = *bytes.get(at + 1)?;
+            let length = usize::from(be16(at + 2)?);
+            if length < 2 {
+                return None;
+            }
+            match marker {
+                // The plain JFIF header, with no thumbnail.
+                0xE0 if length == 16 && bytes.get(at + 4..at + 9)? == b"JFIF\0" => {}
+                0xDB | 0xC4 => {}
+                0xC0 => {
+                    if frame || !edge(u32::from(be16(at + 7)?), u32::from(be16(at + 5)?)) {
+                        return None;
+                    }
+                    frame = true;
+                }
+                0xDA if frame => {
+                    at = at.checked_add(2)?.checked_add(length)?;
+                    break;
+                }
+                _ => return None,
+            }
+            at = at.checked_add(2)?.checked_add(length)?;
+        }
+        // The scan's data: stuffed bytes and restarts only, then the end at the very end.
+        while at + 1 < bytes.len() {
+            if bytes[at] == 0xFF {
+                match bytes[at + 1] {
+                    0x00 | 0xD0..=0xD7 => at += 2,
+                    0xD9 if at + 2 == bytes.len() => return Some("image/jpeg"),
+                    _ => return None,
+                }
+            } else {
+                at += 1;
+            }
+        }
+        return None;
+    }
+    None
+}
+
+/// A photo's name as the message box shows it: the stem of the name it came with, with no
+/// character a file name cannot hold and no dots or spaces at its ends, and `extension`.
+/// "Photo" when nothing is left.
+fn photo_name(name: &str, extension: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let stem = match base.rsplit_once('.') {
+        Some((stem, _)) if !stem.is_empty() => stem,
+        _ => base,
+    };
+    let clean: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_control() || r#"/\:*?"<>|"#.contains(c) {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let ends = |c: char| c == '.' || c.is_whitespace();
+    let clean = clean.trim_matches(ends);
+    let mut end = clean.len().min(PHOTO_STEM);
+    while !clean.is_char_boundary(end) {
+        end -= 1;
+    }
+    let clean = clean[..end].trim_end_matches(ends);
+    format!(
+        "{}.{extension}",
+        if clean.is_empty() { "Photo" } else { clean }
+    )
 }
 
 fn checked_mention(folder: &Path, relative: &str) -> Result<PathBuf, SessionError> {
@@ -606,6 +849,172 @@ fn search(folder: &Path, query: &str) -> Result<Vec<FileMention>, SessionError> 
 mod tests {
     use super::*;
 
+    fn jpeg_of(image: &image::RgbImage, quality: u8) -> Vec<u8> {
+        let mut jpeg = Vec::new();
+        image
+            .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+                &mut jpeg, quality,
+            ))
+            .expect("jpeg");
+        jpeg
+    }
+
+    fn png_of(image: &image::DynamicImage) -> Vec<u8> {
+        let mut png = Cursor::new(Vec::new());
+        image
+            .write_to(&mut png, image::ImageFormat::Png)
+            .expect("png");
+        png.into_inner()
+    }
+
+    /// A JPEG as a phone sends one: an Exif segment first, naming the camera's orientation.
+    fn camera_jpeg(width: u32, height: u32, orientation: u16) -> Vec<u8> {
+        let pixels = image::RgbImage::from_fn(width, height, |x, _| {
+            image::Rgb([u8::try_from(x * 5 % 256).expect("byte"), 40, 40])
+        });
+        let jpeg = jpeg_of(&pixels, 90);
+        let mut exif = b"Exif\0\0MM\0\x2a\0\0\0\x08".to_vec();
+        exif.extend_from_slice(&1u16.to_be_bytes());
+        exif.extend_from_slice(&0x0112u16.to_be_bytes());
+        exif.extend_from_slice(&3u16.to_be_bytes());
+        exif.extend_from_slice(&1u32.to_be_bytes());
+        exif.extend_from_slice(&orientation.to_be_bytes());
+        exif.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
+        let mut out = vec![0xFF, 0xD8, 0xFF, 0xE1];
+        out.extend_from_slice(&u16::try_from(exif.len() + 2).expect("short").to_be_bytes());
+        out.extend_from_slice(&exif);
+        out.extend_from_slice(&jpeg[2..]);
+        out
+    }
+
+    /// A phone's photo stays a JPEG, turned upright as its camera recorded, with nothing but its
+    /// pixels kept; anything else becomes a PNG. What comes out is kept as it is next time.
+    #[test]
+    fn a_phones_photo_stays_a_jpeg_upright_with_only_its_pixels() {
+        let sent = camera_jpeg(40, 20, 6);
+        assert_eq!(prepared(&sent), None, "its Exif segment: made again");
+        let photo = prepare_photo(&sent, "IMG_0001.HEIC").expect("photo");
+        assert_eq!(
+            (photo.name.as_str(), photo.mime),
+            ("IMG_0001.jpg", "image/jpeg")
+        );
+        let upright = image::load_from_memory(&photo.bytes).expect("jpeg");
+        assert_eq!((upright.width(), upright.height()), (20, 40), "turned");
+        assert!(!photo.bytes.windows(4).any(|window| window == b"Exif"));
+        assert_eq!(prepared(&photo.bytes), Some("image/jpeg"));
+        let again = prepare_photo(&photo.bytes, &photo.name).expect("again");
+        assert_eq!(again.name, "IMG_0001.jpg");
+
+        let screen = png_of(&image::DynamicImage::new_rgba8(30, 10));
+        let photo = prepare_photo(&screen, "Screen Shot.png").expect("png");
+        assert_eq!(
+            (photo.name.as_str(), photo.mime),
+            ("Screen Shot.png", "image/png")
+        );
+        assert_eq!(prepared(&photo.bytes), Some("image/png"));
+        let mut gif = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgba8(4, 4)
+            .write_to(&mut gif, image::ImageFormat::Gif)
+            .expect("gif");
+        let photo = prepare_photo(gif.get_ref(), "moving.gif").expect("gif");
+        assert_eq!(
+            (photo.name.as_str(), photo.mime),
+            ("moving.png", "image/png")
+        );
+        assert!(prepare_photo(b"not an image", "a.jpg").is_err());
+    }
+
+    /// A photo larger than an image may be steps down until it fits, and stays a JPEG.
+    #[test]
+    fn a_large_photo_steps_down_until_it_fits() {
+        let mut seed = 11u32;
+        let noise = image::RgbImage::from_fn(2400, 2400, |_, _| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            let [a, b, c, _] = seed.to_le_bytes();
+            image::Rgb([a, b, c])
+        });
+        let sent = jpeg_of(&noise, 85);
+        let photo = prepare_photo(&sent, "noise.jpg").expect("fits");
+        assert!(photo.bytes.len() <= o7_drivers::attachments::MAX_IMAGE_BYTES);
+        let back = image::load_from_memory(&photo.bytes).expect("jpeg");
+        assert!(back.width() < 2048, "{}", back.width());
+        assert_eq!(photo.mime, "image/jpeg");
+    }
+
+    /// Only what the encoders write is kept as it is: a segment or a chunk that could carry
+    /// anything but pixels, a side over 2048, a broken or padded file, all are made again.
+    #[test]
+    fn only_what_prepare_photo_makes_is_kept_as_it_is() {
+        let jpeg = jpeg_of(&image::RgbImage::new(16, 8), 85);
+        assert_eq!(prepared(&jpeg), Some("image/jpeg"));
+        let with = |at: usize, insert: &[u8]| [&jpeg[..at], insert, &jpeg[at..]].concat();
+        for (case, bytes) in [
+            ("a comment", with(2, &[0xFF, 0xFE, 0, 4, b'h', b'i'])),
+            ("an Exif segment", with(2, &[0xFF, 0xE1, 0, 4, 0, 0])),
+            ("bytes after the end", [jpeg.as_slice(), b"tail"].concat()),
+            ("cut short", jpeg[..jpeg.len() - 2].to_vec()),
+            (
+                "wider than 2048",
+                jpeg_of(&image::RgbImage::new(2049, 1), 85),
+            ),
+        ] {
+            assert_eq!(prepared(&bytes), None, "{case}");
+        }
+        let png = png_of(&image::DynamicImage::new_rgb8(16, 8));
+        assert_eq!(prepared(&png), Some("image/png"));
+        let text = {
+            let mut chunk = 5u32.to_be_bytes().to_vec();
+            chunk.extend_from_slice(b"tEXtwords\0\0\0\0");
+            chunk
+        };
+        for (case, bytes) in [
+            (
+                "a text chunk",
+                [&png[..33], text.as_slice(), &png[33..]].concat(),
+            ),
+            ("bytes after the end", [png.as_slice(), b"tail"].concat()),
+            ("no data", [&png[..33], &png[png.len() - 12..]].concat()),
+            (
+                "wider than 2048",
+                png_of(&image::DynamicImage::new_rgb8(2049, 1)),
+            ),
+        ] {
+            assert_eq!(prepared(&bytes), None, "{case}");
+        }
+        assert_eq!(prepared(b"GIF89a"), None);
+        assert_eq!(
+            prepared(&vec![0; o7_drivers::attachments::MAX_IMAGE_BYTES + 1]),
+            None
+        );
+    }
+
+    /// A photo keeps its own name's stem, as a file name can hold it, with the extension of what
+    /// it is now; one with nothing left (dots, spaces) is "Photo".
+    #[test]
+    fn a_photos_name_keeps_its_stem_with_the_extension_of_what_it_is() {
+        for (name, extension, kept) in [
+            ("IMG_0001.HEIC", "jpg", "IMG_0001.jpg"),
+            ("Screen Shot.jpeg", "png", "Screen Shot.png"),
+            ("x a:b*c?\u{7}.jpg", "jpg", "x a-b-c--.jpg"),
+            ("photos/2026\\IMG_2.jpg", "jpg", "IMG_2.jpg"),
+            (".hidden.jpg", "jpg", "hidden.jpg"),
+            ("", "jpg", "Photo.jpg"),
+            ("...", "png", "Photo.png"),
+            ("  .  ", "png", "Photo.png"),
+            ("plain", "png", "plain.png"),
+        ] {
+            assert_eq!(photo_name(name, extension), kept, "{name:?}");
+        }
+        let long = photo_name(&format!("{}.jpg", "é".repeat(60)), "jpg");
+        assert!(
+            long.len() <= PHOTO_STEM + 4 && long.ends_with(".jpg"),
+            "{long}"
+        );
+        assert!(long.starts_with("éé"));
+    }
+
     #[test]
     fn file_preview_bounds_text_and_refuses_private_paths() {
         let temp = tempfile::tempdir().expect("project");
@@ -650,6 +1059,54 @@ mod tests {
         assert!(import_file(&text).is_err());
         fs::write(&text, vec![b'a'; MAX_TEXT + 1]).expect("long text");
         assert!(import_file(&text).is_err());
+    }
+
+    /// Deterministic noise (xorshift64) that no PNG filter or compression can shrink.
+    fn noise(len: usize) -> Vec<u8> {
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        (0..len)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                (state >> 32) as u8
+            })
+            .collect()
+    }
+
+    fn png(image: image::DynamicImage) -> Vec<u8> {
+        let mut bytes = Cursor::new(Vec::new());
+        image
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .expect("fixture PNG");
+        bytes.into_inner()
+    }
+
+    #[test]
+    fn a_large_image_steps_down_until_its_png_fits() {
+        // Too large as a PNG at its own size (within 2048) and at 1600; it fits at 1280.
+        let source =
+            image::RgbImage::from_raw(2000, 1500, noise(2000 * 1500 * 3)).expect("noise image");
+        let bytes = png(image::DynamicImage::ImageRgb8(source));
+        assert!(bytes.len() > o7_drivers::attachments::MAX_IMAGE_BYTES);
+        assert!(bytes.len() <= MAX_IMPORT);
+        let prepared = normalize_image(&bytes).expect("stepped down");
+        assert!(prepared.len() <= o7_drivers::attachments::MAX_IMAGE_BYTES);
+        let image = image::load_from_memory(&prepared).expect("prepared PNG");
+        assert_eq!((image.width(), image.height()), (1280, 960));
+    }
+
+    #[test]
+    fn an_image_too_large_at_1024_is_refused() {
+        // 1024 square RGBA noise is larger than 4 MiB as a PNG at every limit it is within.
+        let source =
+            image::RgbaImage::from_raw(1024, 1024, noise(1024 * 1024 * 4)).expect("noise image");
+        let error = normalize_image(&png(image::DynamicImage::ImageRgba8(source)))
+            .expect_err("still too large at 1024");
+        assert_eq!(
+            error.to_string(),
+            invalid("The prepared image exceeds 4 MiB. Use a smaller image.").to_string()
+        );
     }
 
     #[test]

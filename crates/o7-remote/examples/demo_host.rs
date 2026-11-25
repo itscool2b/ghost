@@ -11,7 +11,11 @@
 //!
 //! o7 for iPhone reaches it as it reaches a real computer, on the relay's app path: its Inbox
 //! reads these chats (what asks, what works, what finished), and its Search finds them by title
-//! and words.
+//! and words. Everything else the app asks is answered too: access levels, titles, archiving and
+//! the archived chats; a turn's and a branch's changes (one file) and their diffs; what a chat
+//! stands on (a branch and a pull request whose checks passed); the project's brief, with
+//! revisions; a picture of a chat's browser; tasks now (each on a branch of its own, reviewed by
+//! the other agent) and for tonight; and photos in a message.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stdout)]
 
@@ -51,6 +55,11 @@ struct Chat {
     agent: &'static str,
     model: String,
     thinking: String,
+    /// Its access level, by the value `set_access` takes.
+    access: String,
+    archived: bool,
+    /// The branch of its own it works on, in a worktree: the first chat's, and a task's.
+    branch: Option<String>,
 }
 
 /// The demo computer's agents: two that can run and one that is not installed.
@@ -76,7 +85,36 @@ struct Demo {
     chats: Mutex<Vec<(String, Chat)>>,
     frames: Mutex<HashMap<String, (String, Frames)>>,
     statuses: Mutex<HashMap<String, Statuses>>,
+    /// Each project's brief and the number of its revision.
+    briefs: Mutex<HashMap<String, (String, u32)>>,
+    /// Photos added to message boxes, by attachment id.
+    attached: Mutex<Vec<(String, Attached)>>,
+    /// The photos each turn's message carried, by turn.
+    turn_images: Mutex<HashMap<String, Vec<String>>>,
 }
+
+/// A photo added to a chat's message box.
+#[derive(Clone)]
+struct Attached {
+    chat: String,
+    name: String,
+    mime: String,
+    bytes: Vec<u8>,
+}
+
+/// The commit the demo's branches start from.
+const BASE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const ACCESS: [(&str, &str); 3] = [
+    ("ask", "Ask first"),
+    ("auto_edit", "Edit files"),
+    ("full_auto", "Full access"),
+];
+/// The demo's one change: the login form checks the email first.
+const LOGIN_BEFORE: &str =
+    "export function submit(email: string) {\n  post(email);\n  return true;\n}\n";
+const LOGIN_AFTER: &str = "export function submit(email: string) {\n  if (!email.includes(\"@\")) {\n    setError(\"Enter your email address.\");\n    return false;\n  }\n  post(email);\n  return true;\n}\n";
+const LOGIN_TEST: &str =
+    "test(\"refuses an empty email\", () => {\n  expect(submit(\"\")).toBe(false);\n});\n";
 
 fn now() -> i64 {
     std::time::SystemTime::now()
@@ -94,9 +132,21 @@ impl Demo {
                 "status": chat.status, "needs_attention": chat.needs_attention,
                 "created_at": 0, "updated_at": chat.updated_at,
             },
-            "project_id": "p1", "folder_id": "f1", "pinned": false, "archived": false,
+            "project_id": "p1", "folder_id": "f1", "pinned": false, "archived": chat.archived,
         }))
         .expect("chat")
+    }
+
+    /// Tells whoever watches that a chat's title or place changed.
+    fn changed(&self, chat_id: &str) {
+        let (status, needs_attention) = {
+            let chats = self.chats.lock().unwrap();
+            let Some((_, chat)) = chats.iter().find(|(id, _)| id == chat_id) else {
+                return;
+            };
+            (chat.status, chat.needs_attention)
+        };
+        self.status(chat_id, status, needs_attention);
     }
 
     /// Records events in a chat and sends them to whoever follows it.
@@ -148,13 +198,20 @@ impl Demo {
     }
 
     /// One scripted turn: read a file, ask to run the tests, finish when that is answered.
-    async fn turn(self: Arc<Self>, chat_id: String, text: String) {
+    /// `images` are the photos its message carried.
+    async fn turn(self: Arc<Self>, chat_id: String, text: String, images: Vec<String>) {
         let (turn, stop) = {
             let mut chats = self.chats.lock().unwrap();
             let (_, chat) = chats.iter_mut().find(|(id, _)| *id == chat_id).unwrap();
             chat.turns += 1;
             (format!("{chat_id}-t{}", chat.turns), chat.stop.clone())
         };
+        if !images.is_empty() {
+            self.turn_images
+                .lock()
+                .unwrap()
+                .insert(turn.clone(), images);
+        }
         let request = format!("{turn}-p");
         let asked = Arc::new(tokio::sync::Notify::new());
         self.status(&chat_id, SessionStatus::Running, false);
@@ -317,6 +374,94 @@ const DEMO_PICTURE: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlE
 /// The backend the service drives. It holds the demo behind an `Arc` so a turn can outlive a call.
 struct Shared(Arc<Demo>);
 
+impl Shared {
+    /// Starts a turn with `text` and the photos `images` names, unless one is running.
+    fn start(
+        &self,
+        chat_id: &str,
+        text: String,
+        images: Vec<String>,
+    ) -> Result<PromptAck, BackendError> {
+        let busy = {
+            let chats = self.0.chats.lock().unwrap();
+            let (_, chat) = chats
+                .iter()
+                .find(|(id, _)| id == chat_id)
+                .ok_or_else(missing)?;
+            chat.status == SessionStatus::Running
+        };
+        if busy {
+            return Err(BackendError::new(
+                "queue_full",
+                "The demo agent takes one message at a time.",
+            ));
+        }
+        tokio::spawn(self.0.clone().turn(chat_id.to_owned(), text, images));
+        Ok(PromptAck {
+            prompt_id: "prompt".into(),
+            queued: false,
+        })
+    }
+}
+
+impl Demo {
+    /// The branch of its own `chat_id` works on, if any.
+    fn branch_of(&self, chat_id: &str) -> Result<Option<String>, BackendError> {
+        let chats = self.chats.lock().unwrap();
+        let (_, chat) = chats
+            .iter()
+            .find(|(id, _)| id == chat_id)
+            .ok_or_else(missing)?;
+        Ok(chat.branch.clone())
+    }
+}
+
+/// The pull request of every branch the demo has: open, its checks passed, approved.
+fn demo_pull_request() -> o7_remote::PullRequest {
+    o7_remote::PullRequest {
+        number: 12,
+        url: "https://github.com/demo/app/pull/12".into(),
+        state: "open".into(),
+        checks: o7_remote::PrChecks::Passed,
+        notes: vec![o7_remote::PrNote {
+            author: "you".into(),
+            kind: "approved".into(),
+            body: "Looks right. Ship it.".into(),
+            trusted: true,
+        }],
+    }
+}
+
+/// A PNG's or a JPEG's width and height, read from its header; nothing for anything else.
+fn dimensions(bytes: &[u8]) -> (u32, u32) {
+    let be32 = |at: usize| {
+        bytes
+            .get(at..at + 4)
+            .map_or(0, |b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+    };
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return (be32(16), be32(20));
+    }
+    if bytes.starts_with(&[0xFF, 0xD8]) {
+        let mut at = 2;
+        while at + 9 < bytes.len() {
+            if bytes[at] != 0xFF {
+                break;
+            }
+            let marker = bytes[at + 1];
+            let length = usize::from(u16::from_be_bytes([bytes[at + 2], bytes[at + 3]]));
+            // A start of frame: its height, then its width.
+            if matches!(marker, 0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF) {
+                let height = u16::from_be_bytes([bytes[at + 5], bytes[at + 6]]);
+                let width = u16::from_be_bytes([bytes[at + 7], bytes[at + 8]]);
+                return (u32::from(width), u32::from(height));
+            }
+            at += 2 + length;
+        }
+    }
+    (0, 0)
+}
+
 impl Backend for Shared {
     // The demo computer has one workspace.
     fn bound(self: Arc<Self>, _profile: &str) -> Arc<dyn Backend> {
@@ -398,6 +543,7 @@ impl Backend for Shared {
                 .lock()
                 .unwrap()
                 .iter()
+                .filter(|(_, chat)| !chat.archived)
                 .map(|(id, chat)| Demo::summary(id, chat))
                 .collect();
             chats.sort_by_key(|entry| std::cmp::Reverse(entry.chat.updated_at));
@@ -429,13 +575,16 @@ impl Backend for Shared {
         })
     }
 
-    /// The pickers: what a chat offers, a model, a thinking level, and a handoff to another agent.
+    /// The pickers (what a chat offers, a model, a thinking level, a handoff to another agent),
+    /// and what else a chat or a project changes: its access, title and place, its agent, its
+    /// changes and the project's brief.
     fn act(&self, action: Action) -> BoxFuture<'_, Result<Outcome, BackendError>> {
         Box::pin(async move {
-            let mut chats = self.0.chats.lock().unwrap();
             let invalid = |what: &str| {
                 BackendError::new("invalid", format!("This agent has no such {what}."))
             };
+            let done = || Ok(Outcome::Done("Done.".into()));
+            let mut chats = self.0.chats.lock().unwrap();
             match action {
                 Action::Options { chat_id } => {
                     let (_, chat) = chats
@@ -447,7 +596,8 @@ impl Backend for Shared {
                         model: Some(chat.model.clone()),
                         thinking: choices(&LEVELS),
                         thinking_level: Some(chat.thinking.clone()),
-                        ..ChatOptions::default()
+                        access: choices(&ACCESS),
+                        access_mode: Some(chat.access.clone()),
                     }))
                 }
                 Action::SetModel { chat_id, model } => {
@@ -459,7 +609,7 @@ impl Backend for Shared {
                         return Err(invalid("model"));
                     }
                     chat.model = model;
-                    Ok(Outcome::Done("Done.".into()))
+                    done()
                 }
                 Action::SetThinking { chat_id, level } => {
                     let (_, chat) = chats
@@ -470,7 +620,18 @@ impl Backend for Shared {
                         return Err(invalid("thinking level"));
                     }
                     chat.thinking = level;
-                    Ok(Outcome::Done("Done.".into()))
+                    done()
+                }
+                Action::SetAccess { chat_id, access } => {
+                    let (_, chat) = chats
+                        .iter_mut()
+                        .find(|(id, _)| *id == chat_id)
+                        .ok_or_else(missing)?;
+                    if !ACCESS.iter().any(|(value, _)| *value == access) {
+                        return Err(invalid("access level"));
+                    }
+                    chat.access = access;
+                    done()
                 }
                 Action::SwitchAgent { chat_id, agent_id } => {
                     let agent = AGENTS
@@ -496,11 +657,377 @@ impl Backend for Shared {
                     chats.push((id.clone(), next));
                     Ok(Outcome::Chat { id })
                 }
-                _ => Err(BackendError::new(
+                Action::Rename { chat_id, title } => {
+                    let (_, chat) = chats
+                        .iter_mut()
+                        .find(|(id, _)| *id == chat_id)
+                        .ok_or_else(missing)?;
+                    chat.title = title;
+                    drop(chats);
+                    self.0.changed(&chat_id);
+                    done()
+                }
+                Action::Archive { chat_id, archived } => {
+                    let (_, chat) = chats
+                        .iter_mut()
+                        .find(|(id, _)| *id == chat_id)
+                        .ok_or_else(missing)?;
+                    chat.archived = archived;
+                    drop(chats);
+                    self.0.changed(&chat_id);
+                    done()
+                }
+                Action::StartAgent { chat_id } => {
+                    let (_, chat) = chats
+                        .iter()
+                        .find(|(id, _)| *id == chat_id)
+                        .ok_or_else(missing)?;
+                    let stopped = chat.status == SessionStatus::Stopped;
+                    drop(chats);
+                    if stopped {
+                        self.0.status(&chat_id, SessionStatus::Ready, false);
+                    }
+                    done()
+                }
+                // The last turn changed the login form, in every chat that ran one.
+                Action::Changes { chat_id } => {
+                    let (_, chat) = chats
+                        .iter()
+                        .find(|(id, _)| *id == chat_id)
+                        .ok_or_else(missing)?;
+                    Ok(Outcome::Changes {
+                        files: if chat.turns > 0 {
+                            vec![("src/login.ts".into(), "modified".into())]
+                        } else {
+                            Vec::new()
+                        },
+                        unavailable: None,
+                    })
+                }
+                Action::Diff { chat_id, path } => {
+                    let (_, chat) = chats
+                        .iter()
+                        .find(|(id, _)| *id == chat_id)
+                        .ok_or_else(missing)?;
+                    if chat.turns == 0 || path != "src/login.ts" {
+                        return Err(BackendError::new(
+                            "not_found",
+                            "The last turn did not change that file.",
+                        ));
+                    }
+                    Ok(Outcome::Diff {
+                        before: Some(LOGIN_BEFORE.into()),
+                        after: Some(LOGIN_AFTER.into()),
+                        binary: false,
+                        truncated: false,
+                    })
+                }
+                Action::ReadMemory { project_id } => {
+                    drop(chats);
+                    let briefs = self.0.briefs.lock().unwrap();
+                    let (markdown, revision) = briefs.get(&project_id).cloned().unwrap_or_default();
+                    Ok(Outcome::Memory {
+                        markdown,
+                        revision: (revision > 0).then(|| format!("r{revision}")),
+                    })
+                }
+                Action::WriteMemory {
+                    project_id,
+                    markdown,
+                } => {
+                    drop(chats);
+                    let mut briefs = self.0.briefs.lock().unwrap();
+                    let brief = briefs.entry(project_id).or_default();
+                    *brief = (markdown, brief.1 + 1);
+                    Ok(Outcome::Done("Saved the project's memory.".into()))
+                }
+                // The person's own edit, refused when the brief moved on since it was read.
+                Action::SaveMemory {
+                    project_id,
+                    markdown,
+                    base_revision,
+                    ..
+                } => {
+                    drop(chats);
+                    let mut briefs = self.0.briefs.lock().unwrap();
+                    let brief = briefs.entry(project_id).or_default();
+                    let current = (brief.1 > 0).then(|| format!("r{}", brief.1));
+                    if base_revision.is_some_and(|base| base != current) {
+                        return Err(BackendError::new(
+                            "conflict",
+                            "The brief changed on the computer since it was read. Read it again.",
+                        ));
+                    }
+                    *brief = (markdown.clone(), brief.1 + 1);
+                    Ok(Outcome::Memory {
+                        markdown,
+                        revision: Some(format!("r{}", brief.1)),
+                    })
+                }
+                Action::CreateProject { .. } => Err(BackendError::new(
                     "unavailable",
                     "The demo computer does not offer that.",
                 )),
             }
+        })
+    }
+
+    // Archived chats are left out of the overview and listed here.
+    fn archived(&self) -> BoxFuture<'_, Result<Vec<WorkspaceChat>, BackendError>> {
+        Box::pin(async move {
+            Ok(self
+                .0
+                .chats
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, chat)| chat.archived)
+                .map(|(id, chat)| Demo::summary(id, chat))
+                .collect())
+        })
+    }
+
+    // A chat on a branch of its own has a pull request whose checks passed.
+    fn facts<'a>(
+        &'a self,
+        chat_id: &'a str,
+        _agent_id: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::ChatFacts, BackendError>> {
+        Box::pin(async move {
+            let branch = self.0.branch_of(chat_id)?;
+            Ok(o7_remote::ChatFacts {
+                pull_request: branch
+                    .as_ref()
+                    .map(|_| o7_remote::render::pull_request(&demo_pull_request())),
+                worktree: branch.is_some(),
+                branch: Some(branch.unwrap_or_else(|| "main".into())),
+                uncommitted: Some(0),
+                usage: vec![("5 hours".into(), 42.0), ("Week".into(), 18.0)],
+            })
+        })
+    }
+
+    fn pull_request<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<o7_remote::PullRequest>, BackendError>> {
+        Box::pin(async move { Ok(self.0.branch_of(chat_id)?.map(|_| demo_pull_request())) })
+    }
+
+    // A chat on a branch of its own changed the login form and added its test.
+    fn branch_changes<'a>(
+        &'a self,
+        chat_id: &'a str,
+        base: Option<&'a str>,
+        _max_files: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::BranchChanges, BackendError>> {
+        Box::pin(async move {
+            Ok(match self.0.branch_of(chat_id)? {
+                Some(_) => o7_remote::BranchChanges {
+                    files: vec![
+                        ("src/login.test.ts".into(), "added".into()),
+                        ("src/login.ts".into(), "modified".into()),
+                    ],
+                    base: Some(base.unwrap_or(BASE).to_owned()),
+                    unavailable: None,
+                },
+                None => o7_remote::BranchChanges {
+                    files: Vec::new(),
+                    base: None,
+                    unavailable: Some(
+                        "This chat has no branch of its own: it works in the project folder."
+                            .into(),
+                    ),
+                },
+            })
+        })
+    }
+
+    fn branch_diff<'a>(
+        &'a self,
+        chat_id: &'a str,
+        _base: Option<&'a str>,
+        path: &'a str,
+        _max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::Diff, BackendError>> {
+        Box::pin(async move {
+            let not_found =
+                || BackendError::new("not_found", "This chat's branch did not change that file.");
+            self.0.branch_of(chat_id)?.ok_or_else(not_found)?;
+            match path {
+                "src/login.ts" => Ok(o7_remote::Diff {
+                    before: Some(LOGIN_BEFORE.into()),
+                    after: Some(LOGIN_AFTER.into()),
+                    binary: false,
+                    truncated: false,
+                }),
+                "src/login.test.ts" => Ok(o7_remote::Diff {
+                    before: None,
+                    after: Some(LOGIN_TEST.into()),
+                    binary: false,
+                    truncated: false,
+                }),
+                _ => Err(not_found()),
+            }
+        })
+    }
+
+    // A task's chat works in a worktree of its own, on a branch named for its goal.
+    fn create_task_chat<'a>(
+        &'a self,
+        folder_id: &'a str,
+        agent_id: Option<&'a str>,
+        title: &'a str,
+    ) -> BoxFuture<'a, Result<o7_remote::TaskChat, BackendError>> {
+        Box::pin(async move {
+            let made = self.create(folder_id, agent_id).await?;
+            let slug: String = title
+                .to_lowercase()
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .filter(|word| !word.is_empty())
+                .take(5)
+                .collect::<Vec<_>>()
+                .join("-");
+            let branch = format!("o7/{}", if slug.is_empty() { "task" } else { &slug });
+            {
+                let mut chats = self.0.chats.lock().unwrap();
+                if let Some((_, chat)) = chats.iter_mut().find(|(id, _)| *id == made.chat.id) {
+                    chat.title = title.to_owned();
+                    chat.branch = Some(branch.clone());
+                }
+            }
+            Ok(o7_remote::TaskChat {
+                chat: made,
+                path: Some(format!("/demo-worktrees/{}", &branch[3..])),
+                branch: Some(branch),
+                base: Some(BASE.into()),
+            })
+        })
+    }
+
+    // A photo goes into the chat's message box; the next message carries it.
+    fn attach_image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        bytes: Vec<u8>,
+        name: &'a str,
+        mime: &'a str,
+    ) -> BoxFuture<'a, Result<String, BackendError>> {
+        Box::pin(async move {
+            let mut attached = self.0.attached.lock().unwrap();
+            let id = format!("a{}", attached.len() + 1);
+            attached.push((
+                id.clone(),
+                Attached {
+                    chat: chat_id.to_owned(),
+                    name: name.to_owned(),
+                    mime: mime.to_owned(),
+                    bytes,
+                },
+            ));
+            Ok(id)
+        })
+    }
+
+    fn send_input<'a>(
+        &'a self,
+        chat_id: &'a str,
+        text: String,
+        attachments: Vec<String>,
+    ) -> BoxFuture<'a, Result<PromptAck, BackendError>> {
+        Box::pin(async move {
+            let names: Vec<String> = {
+                let attached = self.0.attached.lock().unwrap();
+                attachments
+                    .iter()
+                    .map(|id| {
+                        attached
+                            .iter()
+                            .find(|(known, photo)| known == id && photo.chat == chat_id)
+                            .map(|(_, photo)| photo.name.clone())
+                            .ok_or_else(|| {
+                                BackendError::new("invalid", "That attachment is not this chat's.")
+                            })
+                    })
+                    .collect::<Result<_, _>>()?
+            };
+            // As the window shows a message with images: its text, then each image named.
+            let mut shown = text;
+            for name in &names {
+                shown.push_str(&format!("\n\n[Image: {name}]"));
+            }
+            self.start(chat_id, shown.trim_start().to_owned(), attachments)
+        })
+    }
+
+    // The photos a chat holds: one in its message box, one a message carried, or one by its
+    // SHA-256. Never larger than the device asked for.
+    fn image<'a>(
+        &'a self,
+        chat_id: &'a str,
+        source: o7_protocol::composer::ChatImageSource,
+        _full: bool,
+        max_bytes: usize,
+    ) -> BoxFuture<'a, Result<o7_remote::ImagePreview, BackendError>> {
+        use base64::Engine as _;
+        use o7_protocol::composer::{ChatImageContext, ChatImageSource};
+        Box::pin(async move {
+            let gone = || BackendError::new("invalid", "This image is unavailable in this chat.");
+            let id = match source {
+                ChatImageSource::Attachment { id } => id,
+                ChatImageSource::Message {
+                    context: ChatImageContext::Turn { turn_id },
+                    index,
+                } => self
+                    .0
+                    .turn_images
+                    .lock()
+                    .unwrap()
+                    .get(&turn_id)
+                    .and_then(|ids| ids.get(index as usize).cloned())
+                    .ok_or_else(gone)?,
+                ChatImageSource::Stored { sha256 } => {
+                    use sha2::Digest as _;
+                    self.0
+                        .attached
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|(_, photo)| {
+                            sha2::Sha256::digest(&photo.bytes)
+                                .iter()
+                                .map(|byte| format!("{byte:02x}"))
+                                .collect::<String>()
+                                == sha256
+                        })
+                        .map(|(id, _)| id.clone())
+                        .ok_or_else(gone)?
+                }
+                _ => return Err(gone()),
+            };
+            let photo = self
+                .0
+                .attached
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|(known, photo)| *known == id && photo.chat == chat_id)
+                .map(|(_, photo)| photo.clone())
+                .ok_or_else(gone)?;
+            let data = base64::engine::general_purpose::STANDARD.encode(&photo.bytes);
+            if data.len() > max_bytes {
+                return Err(BackendError::new(
+                    "too_large",
+                    "The demo computer cannot make this image smaller.",
+                ));
+            }
+            let (width, height) = dimensions(&photo.bytes);
+            Ok(o7_remote::ImagePreview {
+                mime: photo.mime,
+                data,
+                width,
+                height,
+            })
         })
     }
 
@@ -611,27 +1138,7 @@ impl Backend for Shared {
         chat_id: &'a str,
         text: String,
     ) -> BoxFuture<'a, Result<PromptAck, BackendError>> {
-        Box::pin(async move {
-            let busy = {
-                let chats = self.0.chats.lock().unwrap();
-                let (_, chat) = chats
-                    .iter()
-                    .find(|(id, _)| id == chat_id)
-                    .ok_or_else(missing)?;
-                chat.status == SessionStatus::Running
-            };
-            if busy {
-                return Err(BackendError::new(
-                    "queue_full",
-                    "The demo agent takes one message at a time.",
-                ));
-            }
-            tokio::spawn(self.0.clone().turn(chat_id.to_owned(), text));
-            Ok(PromptAck {
-                prompt_id: "prompt".into(),
-                queued: false,
-            })
-        })
+        Box::pin(async move { self.start(chat_id, text, Vec::new()) })
     }
 
     fn interrupt<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Result<(), BackendError>> {
@@ -753,6 +1260,9 @@ fn chat(title: &str) -> Chat {
         agent: "demo",
         model: "fast".into(),
         thinking: "low".into(),
+        access: "ask".into(),
+        archived: false,
+        branch: None,
     }
 }
 
@@ -809,7 +1319,16 @@ async fn main() {
         .map(|(seq, event)| (ended - 1200 + 400 * seq as i64, event))
         .collect();
         first.turns = 1;
+        // It works in a worktree of its own, whose pull request passed its checks.
+        first.branch = Some("o7/fix-the-login-form".into());
         demo.chats.lock().unwrap().push(("c1".into(), first));
+        demo.briefs.lock().unwrap().insert(
+            "p1".into(),
+            (
+                "# demo\n\nShort sentences. Run `npm test` before a commit.".into(),
+                1,
+            ),
+        );
     }
     let service = Service::start(
         Config {
