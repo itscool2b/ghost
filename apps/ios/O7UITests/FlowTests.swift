@@ -46,7 +46,7 @@ final class FlowTests: XCTestCase {
         // The row starts under the strip above the tabs; the list scrolls it clear.
         app.swipeUp()
         row.tap()
-        XCTAssertTrue(app.staticTexts["Fix the login form"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.chatTitle("Fix the login form").waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Why does the login form submit empty emails?"].waitForExistence(timeout: 10))
         let box = app.textViews["Message"].exists ? app.textViews["Message"] : app.textFields["Message"]
         box.tap()
@@ -70,13 +70,18 @@ final class FlowTests: XCTestCase {
         // as partial scaling. Those rows were checked by eye at twice the usual size.
         app.swipeUp()
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Fix the login form'")).firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Fix the login form"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.chatTitle("Fix the login form").waitForExistence(timeout: 5))
         // The branch strip comes with the chat's facts, a moment after the chat: audited once it
         // is there, not while it arrives.
         let strip = app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Changes:'")).firstMatch
         XCTAssertTrue(strip.waitForExistence(timeout: 10))
         sleep(2)
-        try app.performAccessibilityAudit(for: [.dynamicType, .sufficientElementDescription, .hitRegion])
+        try app.performAccessibilityAudit(for: [.dynamicType, .sufficientElementDescription, .hitRegion]) { issue in
+            // The bar's title is the system's own title menu (rename), drawn at the title's height,
+            // as in Apple's apps: not a control the app sizes.
+            issue.auditType == .hitRegion && issue.element?.elementType == .button
+                && issue.element?.label == "Fix the login form"
+        }
     }
 
     func testQueuesWorkForTonightAndCancelsIt() {
@@ -120,14 +125,14 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         app.swipeUp()
         row.tap()
-        XCTAssertTrue(app.staticTexts["Fix the login form"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.chatTitle("Fix the login form").waitForExistence(timeout: 5))
         app.buttons["More"].firstMatch.tap()
         app.buttons["Rename"].tap()
         let field = app.textFields["Title"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.clearAndType("Check emails first")
         app.alerts.buttons["Rename"].tap()
-        XCTAssertTrue(app.staticTexts["Check emails first"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.chatTitle("Check emails first").waitForExistence(timeout: 5))
     }
 
     func testEditsAProjectsBrief() {
@@ -145,6 +150,13 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Save"].isEnabled)
         app.buttons["Save"].tap()
         XCTAssertTrue(app.buttons["Brief"].waitForExistence(timeout: 5))
+    }
+}
+
+extension XCUIApplication {
+    /// A chat's title in its bar: a menu (rename), so a button, not plain text.
+    func chatTitle(_ title: String) -> XCUIElement {
+        descendants(matching: .any).matching(NSPredicate(format: "label == %@", title)).firstMatch
     }
 }
 

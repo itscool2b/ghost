@@ -7,6 +7,9 @@ import O7Push
 import O7Store
 import O7Wire
 import SwiftUI
+import os
+
+private let demoLog = Logger(subsystem: "codes.o7.mobile", category: "demo")
 
 /// The app's state: the paired computers, the one in view, a pairing in progress, and the person's
 /// own settings.
@@ -89,10 +92,17 @@ final class AppModel {
         // Fixed in the demo, so `scripts/push.mjs` can seal a notification for it.
         let device = await mock.addDevice(id: MockComputer.demoDeviceId, key: MockComputer.demoDeviceKey)
         let credential = DeviceCredential(hostId: mock.hostId, deviceId: device.id, key: device.key)
-        _ = try? backend.computers.paired(
-            credential, hostName: mock.hostName, site: "https://o7.codes",
-            look: Look(theme: "claude", appearance: "dark"), features: ["pickers", "inbox", "search"])
-        guard let record = backend.computers.all().first else { return }
+        do {
+            try backend.computers.paired(
+                credential, hostName: mock.hostName, site: "https://o7.codes",
+                look: Look(theme: "claude", appearance: "dark"), features: ["pickers", "inbox", "search"])
+        } catch {
+            demoLog.error("the demo did not pair: \(String(describing: error), privacy: .public)")
+        }
+        guard let record = backend.computers.all().first else {
+            demoLog.error("the demo's record is not there")
+            return
+        }
         let store = ComputerStore(record: record, credential: credential, backend: backend)
         connect(store)
         computers = [store]
