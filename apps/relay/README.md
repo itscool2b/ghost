@@ -1,7 +1,8 @@
 # o7 relay
 
 The Worker behind remote sessions: one Durable Object per computer holds its outbound host socket
-and the sockets of paired browsers, forwards between them, and serves MCP to linked bots. It stores
+and the sockets of paired browsers and o7 for iPhone (`/app/`, with no Origin), forwards between
+them, and serves MCP to linked bots. It stores
 only the hash of a computer's key and the hashes of its bot tokens. How it fits together, who is
 trusted with what and how to test it are in [docs/remote-sessions.md](../../docs/remote-sessions.md).
 

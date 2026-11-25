@@ -69,6 +69,11 @@ struct App {
     hour: Mutex<Option<u8>>,
     /// The pull request every chat's branch has, when a test sets one.
     pr: Mutex<Option<o7_remote::PullRequest>>,
+    /// More chats the overview lists, each with its newest page of history (none: its history
+    /// is gone): an inbox's test.
+    listed: Mutex<Vec<(WorkspaceChat, Option<Vec<HistoryItem>>)>>,
+    /// What a search finds, when a test sets it.
+    found: Mutex<Vec<o7_protocol::search::ChatSearchHit>>,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -263,6 +268,16 @@ impl Backend for Bound {
             self.app.pull_request(chat_id).await
         })
     }
+
+    fn search<'a>(
+        &'a self,
+        query: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<o7_protocol::search::ChatSearchHit>, BackendError>> {
+        Box::pin(async move {
+            self.admitted()?;
+            self.app.search(query).await
+        })
+    }
 }
 
 impl Backend for App {
@@ -302,6 +317,13 @@ impl Backend for App {
                             .iter()
                             .map(|(id, status)| chat(id, *status)),
                     )
+                    .chain(
+                        self.listed
+                            .lock()
+                            .expect("listed")
+                            .iter()
+                            .map(|(chat, _)| chat.clone()),
+                    )
                     .collect(),
                 agents: std::iter::once(RemoteAgent {
                     id: "claude-code".into(),
@@ -338,7 +360,7 @@ impl Backend for App {
         frames: Frames,
     ) -> BoxFuture<'a, Result<ChatAttach, BackendError>> {
         Box::pin(async move {
-            if chat_id != "c1" && chat_id != "big" && chat_id != "slow" {
+            if !matches!(chat_id, "c1" | "big" | "slow" | "huge") {
                 return Err(missing());
             }
             if chat_id == "slow" {
@@ -349,10 +371,11 @@ impl Backend for App {
                 .lock()
                 .expect("frames")
                 .insert(owner.into(), frames);
-            let items = if chat_id == "big" {
-                (0..400).map(|seq| said(seq, &"x".repeat(4096))).collect()
-            } else {
-                vec![said(4, "Earlier answer")]
+            let items = match chat_id {
+                "big" => (0..400).map(|seq| said(seq, &"x".repeat(4096))).collect(),
+                // One step larger than a sealed message carries: no page of it is small enough.
+                "huge" => vec![said(0, &"x".repeat(700 * 1024))],
+                _ => vec![said(4, "Earlier answer")],
             };
             Ok(serde_json::from_value(json!({
                 "subscription_id": "s1",
@@ -406,6 +429,18 @@ impl Backend for App {
         _before_seq: u32,
     ) -> BoxFuture<'a, Result<HistoryPage, BackendError>> {
         Box::pin(async move {
+            if let Some((_, items)) = self
+                .listed
+                .lock()
+                .expect("listed")
+                .iter()
+                .find(|(chat, _)| chat.chat.id == chat_id)
+            {
+                return items
+                    .clone()
+                    .map(|items| page(chat_id, items))
+                    .ok_or_else(missing);
+            }
             if self
                 .made
                 .lock()
@@ -598,6 +633,19 @@ impl Backend for App {
         })
     }
 
+    fn search<'a>(
+        &'a self,
+        query: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<o7_protocol::search::ChatSearchHit>, BackendError>> {
+        Box::pin(async move {
+            self.answered
+                .lock()
+                .expect("answered")
+                .push(format!("search {query}"));
+            Ok(self.found.lock().expect("found").clone())
+        })
+    }
+
     /// c1's browser shows a page; it has no device.
     fn picture<'a>(
         &'a self,
@@ -710,8 +758,33 @@ impl Browser {
         id: &str,
         key: &[u8; 32],
     ) -> (Self, Value) {
+        Self::greet(relay, cid, false, kind, id, key).await
+    }
+
+    /// Says hello as o7 for iPhone does: on the app's path, which the relay marks with `k`.
+    async fn app(
+        relay: &mut Relay,
+        cid: &str,
+        kind: &str,
+        id: &str,
+        key: &[u8; 32],
+    ) -> (Self, Value) {
+        Self::greet(relay, cid, true, kind, id, key).await
+    }
+
+    async fn greet(
+        relay: &mut Relay,
+        cid: &str,
+        native: bool,
+        kind: &str,
+        id: &str,
+        key: &[u8; 32],
+    ) -> (Self, Value) {
         let nonce: [u8; 16] = crypto::random().expect("nonce");
         relay.send(format!("o{cid}")).await;
+        if native {
+            relay.send(format!("k{cid}")).await;
+        }
         relay
             .send(format!(
                 "m{cid} H{}",
@@ -3738,4 +3811,647 @@ access: full_auto (current)
     .await;
     assert_eq!(long["error"], true);
     assert!(text(&long).contains("4 KiB"));
+}
+
+/// The time now, in Unix milliseconds, as the service reads it.
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
+        })
+}
+
+/// A chat the overview lists, as `chat` makes one, standing as given.
+fn listed(
+    id: &str,
+    status: SessionStatus,
+    needs_attention: bool,
+    updated_at: i64,
+) -> WorkspaceChat {
+    let mut entry = chat(id, status);
+    entry.chat.needs_attention = needs_attention;
+    entry.chat.updated_at = updated_at;
+    entry
+}
+
+/// One stored event of turn `t1`, at `at`.
+fn event(seq: u32, at: i64, event: O7Event) -> HistoryItem {
+    HistoryItem {
+        seq,
+        turn_id: Some("t1".into()),
+        at,
+        event,
+    }
+}
+
+/// The pairing an app makes on its own path, and the device it becomes: id and key.
+async fn pair_app(rig: &Rig, relay: &mut Relay, cid: &str) -> (Browser, String, [u8; 32]) {
+    let (_, pairing, key) = link(&rig.service.pair().expect("pairing").url);
+    let (mut phone, _) = Browser::app(relay, cid, "pair", &pairing, &key).await;
+    let paired = phone
+        .request(
+            relay,
+            json!({ "op": "pair", "name": "", "client": { "kind": "ios", "version": "1.0" } }),
+        )
+        .await;
+    assert_eq!(paired["ok"], true, "{paired}");
+    phone.events.clear();
+    let device = paired["data"]["device_id"].as_str().expect("id").to_owned();
+    let key =
+        crypto::decode(paired["data"]["device_key"].as_str().expect("key")).expect("32 bytes");
+    (phone, device, key)
+}
+
+/// o7 for iPhone pairs on the path the relay marks as its own, is recorded as the app, and is
+/// offered the app's features there, in the pairing answer and in every `ready` after it.
+#[tokio::test]
+async fn the_iphone_app_pairs_on_its_own_path_and_is_offered_more() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (_, pairing, key) = link(&rig.service.pair().expect("pairing").url);
+    let (mut phone, ready) =
+        Browser::app(&mut relay, "aaaaaaaaaaaaaaaa", "pair", &pairing, &key).await;
+    assert_eq!(
+        ready,
+        json!({
+            "ev": "ready", "host_name": "Studio", "paired": false,
+            "features": ["pickers", "inbox", "search"],
+            "look": { "theme": "claude", "appearance": "dark" },
+            "site": "https://auracode.test",
+        })
+    );
+    let paired = phone
+        .request(
+            &mut relay,
+            json!({
+                "op": "pair", "name": "",
+                "client": { "kind": "ios", "version": " 1.0\n(12) ", "model": "iPhone17,1" },
+            }),
+        )
+        .await;
+    assert_eq!(paired["ok"], true, "{paired}");
+    assert_eq!(
+        paired["data"]["features"],
+        json!(["pickers", "inbox", "search"])
+    );
+    let device = paired["data"]["device_id"].as_str().expect("id").to_owned();
+    let key =
+        crypto::decode(paired["data"]["device_key"].as_str().expect("key")).expect("32 bytes");
+    let status = rig.service.status();
+    assert_eq!(status.devices.len(), 1);
+    assert_eq!(status.devices[0].name, "iPhone");
+    assert_eq!(
+        status.devices[0].kind,
+        o7_protocol::remote::RemoteDeviceKind::Ios
+    );
+    assert_eq!(status.devices[0].app_version.as_deref(), Some("1.0 (12)"));
+    // The session is the app's from here on.
+    let inbox = phone.request(&mut relay, json!({ "op": "inbox" })).await;
+    assert_eq!(inbox["ok"], true, "{inbox}");
+
+    // Its next session on its own path is offered the same and told the site.
+    let (mut again, ready) =
+        Browser::app(&mut relay, "bbbbbbbbbbbbbbbb", "device", &device, &key).await;
+    assert_eq!(ready["paired"], true);
+    assert_eq!(ready["features"], json!(["pickers", "inbox", "search"]));
+    assert_eq!(ready["site"], "https://auracode.test");
+    assert_eq!(
+        again.request(&mut relay, json!({ "op": "inbox" })).await["ok"],
+        true
+    );
+
+    // The same key on a browser's path is a browser's session, whatever the record says.
+    let (mut tab, ready) =
+        Browser::hello(&mut relay, "cccccccccccccccc", "device", &device, &key).await;
+    assert_eq!(ready["features"], json!(["pickers"]));
+    assert!(ready.get("site").is_none(), "{ready}");
+    let refused = tab.request(&mut relay, json!({ "op": "inbox" })).await;
+    assert_eq!(refused["error"]["code"], "not_offered", "{refused}");
+    // A mark that comes once a session has begun changes nothing it was offered.
+    relay.send("kcccccccccccccccc").await;
+    let refused = tab
+        .request(&mut relay, json!({ "op": "search", "query": "login" }))
+        .await;
+    assert_eq!(refused["error"]["code"], "not_offered", "{refused}");
+
+    // On the app's path without saying it is the app, a pairing is a browser's: so is what it is
+    // offered from then on.
+    let (_, pairing, key) = link(&rig.service.pair().expect("pairing").url);
+    let (mut quiet, _) = Browser::app(&mut relay, "dddddddddddddddd", "pair", &pairing, &key).await;
+    let paired = quiet
+        .request(&mut relay, json!({ "op": "pair", "name": "Tool" }))
+        .await;
+    assert_eq!(paired["ok"], true, "{paired}");
+    assert!(paired["data"].get("features").is_none(), "{paired}");
+    let refused = quiet.request(&mut relay, json!({ "op": "inbox" })).await;
+    assert_eq!(refused["error"]["code"], "not_offered", "{refused}");
+    let kinds: Vec<_> = rig
+        .service
+        .status()
+        .devices
+        .iter()
+        .map(|device| (device.name.clone(), device.kind))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            (
+                "iPhone".to_owned(),
+                o7_protocol::remote::RemoteDeviceKind::Ios
+            ),
+            (
+                "Tool".to_owned(),
+                o7_protocol::remote::RemoteDeviceKind::Browser
+            ),
+        ]
+    );
+}
+
+/// A browser is offered what it always was, whatever it says it is, and asking for more is
+/// answered without ending its session. What no device may ask for reaches nothing.
+#[tokio::test]
+async fn a_browser_is_offered_what_it_was_whatever_it_says() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (_, pairing, key) = link(&rig.service.pair().expect("pairing").url);
+    // A browser's path, so no mark from the relay: it only says it is the app.
+    let (mut phone, ready) =
+        Browser::hello(&mut relay, "aaaaaaaaaaaaaaaa", "pair", &pairing, &key).await;
+    assert_eq!(ready["features"], json!(["pickers"]));
+    assert!(ready.get("site").is_none(), "{ready}");
+    let paired = phone
+        .request(
+            &mut relay,
+            json!({ "op": "pair", "name": "Phone", "client": { "kind": "ios", "version": "1.0" } }),
+        )
+        .await;
+    assert_eq!(paired["ok"], true, "{paired}");
+    // Its answer is exactly a browser's.
+    assert_eq!(
+        paired["data"]
+            .as_object()
+            .expect("data")
+            .keys()
+            .collect::<Vec<_>>(),
+        ["device_id", "device_key"]
+    );
+    let status = rig.service.status();
+    assert_eq!(
+        status.devices[0].kind,
+        o7_protocol::remote::RemoteDeviceKind::Browser
+    );
+    assert_eq!(status.devices[0].app_version, None);
+    let saved: Value =
+        serde_json::from_slice(&std::fs::read(&rig.path).expect("saved")).expect("json");
+    assert!(saved["devices"][0].get("kind").is_none(), "{saved}");
+    assert!(saved["devices"][0].get("app_version").is_none(), "{saved}");
+
+    // Asking for what only the app is offered is answered, and the session goes on.
+    for ask in [
+        json!({ "op": "inbox" }),
+        json!({ "op": "search", "query": "login" }),
+    ] {
+        let refused = phone.request(&mut relay, ask).await;
+        assert_eq!(
+            refused["error"],
+            json!({
+                "code": "not_offered",
+                "message": "This computer does not offer that to this device.",
+            })
+        );
+    }
+    assert_eq!(
+        phone.request(&mut relay, json!({ "op": "overview" })).await["ok"],
+        true
+    );
+    // What it always had still works.
+    assert_eq!(
+        phone
+            .request(&mut relay, json!({ "op": "options", "chat_id": "c1" }))
+            .await["ok"],
+        true
+    );
+    assert!(
+        !rig.app
+            .answered
+            .lock()
+            .expect("answered")
+            .iter()
+            .any(|asked| asked.starts_with("search")),
+        "a refused search reached the app"
+    );
+
+    // No device may ask for a chat's access level or for project memory: there is no such
+    // request, so asking for one ends the session, as anything outside the protocol does.
+    let device = paired["data"]["device_id"].as_str().expect("id").to_owned();
+    let key =
+        crypto::decode(paired["data"]["device_key"].as_str().expect("key")).expect("32 bytes");
+    for (cid, ask) in [
+        (
+            "bbbbbbbbbbbbbbbb",
+            json!({ "op": "set_access", "chat_id": "c1", "access": "full_auto" }),
+        ),
+        (
+            "cccccccccccccccc",
+            json!({ "op": "write_memory", "project_id": "p1", "markdown": "x" }),
+        ),
+    ] {
+        let (mut tab, _) = Browser::hello(&mut relay, cid, "device", &device, &key).await;
+        assert_eq!(
+            tab.request(&mut relay, json!({ "op": "overview" })).await["ok"],
+            true
+        );
+        tab.send(&mut relay, ask).await;
+        assert_eq!(relay.next().await, format!("c{cid}"));
+    }
+    assert_eq!(
+        *rig.app.acted.lock().expect("acted"),
+        [Action::Options {
+            chat_id: "c1".into()
+        }]
+    );
+    relay.silent().await;
+}
+
+/// An answer too large to go in one sealed message would be a frame the relay ends the
+/// computer's whole connection for: it is answered `too_large`, and everything goes on.
+#[tokio::test]
+async fn an_answer_too_large_to_send_says_so_and_the_session_goes_on() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let owner = "auracode-remote:aaaaaaaaaaaaaaaa";
+    let id = phone
+        .send(&mut relay, json!({ "op": "open", "chat_id": "huge" }))
+        .await;
+    let frame = relay.next().await;
+    assert!(
+        frame.len() < 1024,
+        "{} bytes went to the relay",
+        frame.len()
+    );
+    assert_eq!(
+        phone.open(&frame),
+        json!({
+            "re": id, "ok": false,
+            "error": {
+                "code": "too_large",
+                "message": "The answer is too large to send to this device.",
+            },
+        })
+    );
+    // Told the open failed, the device follows nothing.
+    assert!(!rig.app.frames.lock().expect("frames").contains_key(owner));
+    // The connection and the session both go on.
+    let overview = phone.request(&mut relay, json!({ "op": "overview" })).await;
+    assert_eq!(overview["ok"], true, "{overview}");
+    let opened = phone
+        .request(&mut relay, json!({ "op": "open", "chat_id": "c1" }))
+        .await;
+    assert_eq!(opened["ok"], true, "{opened}");
+    assert!(rig.app.frames.lock().expect("frames").contains_key(owner));
+}
+
+/// The app's Inbox in one call: each request a chat waits on with what it asks and its choices,
+/// what each working chat is doing and since when, and how each turn that ended in the last day
+/// came out. The chats are the ones the bot's `inbox` reads.
+#[tokio::test]
+async fn the_inbox_says_what_asks_what_works_and_what_finished() {
+    use o7_protocol::{
+        PermissionDecision, PermissionOption, PermissionOptionKind, PermissionRequest, ResolvedBy,
+        StopReason, ToolCall, ToolKind, ToolStatus, UiPrompt, UiRequest,
+    };
+    let rig = rig().await;
+    let now = now_ms();
+    let (minute, hour, day) = (60_000, 3_600_000, 86_400_000);
+    let started = |seq, at| {
+        event(
+            seq,
+            at,
+            O7Event::TurnStarted {
+                turn_id: "t1".into(),
+                prompt_id: None,
+            },
+        )
+    };
+    let ended = |seq, at, stop_reason, duration_ms| {
+        event(
+            seq,
+            at,
+            O7Event::TurnEnded {
+                turn_id: "t1".into(),
+                stop_reason,
+                usage: None,
+                duration_ms: Some(duration_ms),
+                recovered: false,
+            },
+        )
+    };
+    let tool = |seq, at, title: &str, status| {
+        event(
+            seq,
+            at,
+            O7Event::ToolCall(ToolCall {
+                tool_call_id: format!("x{seq}"),
+                kind: ToolKind::Execute,
+                title: title.into(),
+                status,
+                locations: vec![],
+                raw_input: None,
+                tool_name: None,
+                content: vec![],
+                truncated: None,
+            }),
+        )
+    };
+    let permission = |seq, at, id: &str| {
+        event(
+            seq,
+            at,
+            O7Event::PermissionRequested(PermissionRequest {
+                request_id: id.into(),
+                tool_call_id: None,
+                title: "Run `npm test`".into(),
+                kind: Some(ToolKind::Execute),
+                raw_input: None,
+                content: vec![],
+                locations: vec![],
+                options: vec![
+                    PermissionOption {
+                        option_id: "allow".into(),
+                        kind: PermissionOptionKind::AllowOnce,
+                        label: "Allow once".into(),
+                    },
+                    PermissionOption {
+                        option_id: "reject".into(),
+                        kind: PermissionOptionKind::RejectOnce,
+                        label: "Reject".into(),
+                    },
+                ],
+                truncated: None,
+            }),
+        )
+    };
+    let question = |seq, at, id: &str, prompt| {
+        event(
+            seq,
+            at,
+            O7Event::UiRequest(UiRequest {
+                request_id: id.into(),
+                prompt,
+            }),
+        )
+    };
+    let words = |seq, at, text: &str| {
+        event(
+            seq,
+            at,
+            O7Event::MessageDelta {
+                message_id: format!("m{seq}"),
+                text: text.into(),
+            },
+        )
+    };
+    *rig.app.listed.lock().expect("listed") = vec![
+        // Asking: a permission with its choices, then a question with its prompt.
+        (
+            listed("a1", SessionStatus::Running, true, now - minute),
+            Some(vec![
+                started(1, now - 2 * minute),
+                tool(
+                    2,
+                    now - 2 * minute,
+                    "Read src/login.ts",
+                    ToolStatus::Completed,
+                ),
+                permission(3, now - minute, "p1"),
+            ]),
+        ),
+        (
+            listed("a2", SessionStatus::Running, true, now - minute),
+            Some(vec![
+                started(1, now - minute),
+                question(
+                    2,
+                    now - minute,
+                    "q1",
+                    UiPrompt::Select {
+                        message: "Which branch?".into(),
+                        options: vec!["main".into(), "dev".into()],
+                    },
+                ),
+            ]),
+        ),
+        // Waiting on something its newest page does not show: a notice asks nothing, and the
+        // request it shows was answered.
+        (
+            listed("a3", SessionStatus::Running, true, now - minute),
+            Some(vec![
+                started(1, now - minute),
+                question(
+                    2,
+                    now - minute,
+                    "n1",
+                    UiPrompt::Notify {
+                        message: "Indexing".into(),
+                    },
+                ),
+                permission(3, now - minute, "p2"),
+                event(
+                    4,
+                    now - minute,
+                    O7Event::PermissionResolved {
+                        request_id: "p2".into(),
+                        decision: PermissionDecision::Cancelled,
+                        by: ResolvedBy::User,
+                    },
+                ),
+            ]),
+        ),
+        // Gone between the overview and its history: left out.
+        (listed("gone", SessionStatus::Running, true, now), None),
+        // Working: on a step since its turn began, and starting a turn its page does not show.
+        (
+            listed("w1", SessionStatus::Running, false, now - minute),
+            Some(vec![
+                started(1, now - 2 * minute),
+                words(2, now - 2 * minute, "Running the tests."),
+                tool(
+                    3,
+                    now - minute,
+                    "Running cargo test",
+                    ToolStatus::InProgress,
+                ),
+            ]),
+        ),
+        (
+            listed("w2", SessionStatus::Starting, false, now - 5_000),
+            Some(vec![
+                started(1, now - hour),
+                ended(2, now - hour, StopReason::EndTurn, 1_000),
+            ]),
+        ),
+        // Finished in the last day, newest first: what each came to.
+        (
+            listed("d2", SessionStatus::Failed, false, now - 2 * hour),
+            Some(vec![
+                started(1, now - 2 * hour - 5_000),
+                event(
+                    2,
+                    now - 2 * hour,
+                    O7Event::Error {
+                        kind: o7_protocol::ErrorKind::AgentExited,
+                        message: "The agent stopped.".into(),
+                        detail: None,
+                        recoverable: false,
+                    },
+                ),
+                ended(3, now - 2 * hour, StopReason::Error, 5_000),
+            ]),
+        ),
+        (
+            listed("d1", SessionStatus::Ready, false, now - hour),
+            Some(vec![
+                started(1, now - hour - 900),
+                words(2, now - hour - 100, "All 12 passed."),
+                ended(3, now - hour, StopReason::EndTurn, 900),
+            ]),
+        ),
+        // Not news: changed two days ago, or never ran.
+        (
+            listed("old", SessionStatus::Ready, false, now - 2 * day),
+            Some(vec![
+                started(1, now - 2 * day),
+                ended(2, now - 2 * day, StopReason::EndTurn, 10),
+            ]),
+        ),
+        (
+            listed("never", SessionStatus::Stopped, false, now - minute),
+            Some(vec![]),
+        ),
+    ];
+    // An archived chat is not in an inbox, whatever it waits on.
+    let mut archived = listed("arch", SessionStatus::Running, true, now);
+    archived.archived = true;
+    rig.app
+        .listed
+        .lock()
+        .expect("listed")
+        .push((archived, Some(vec![permission(1, now, "p9")])));
+
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let inbox = phone.request(&mut relay, json!({ "op": "inbox" })).await;
+    assert_eq!(inbox["ok"], true, "{inbox}");
+    assert_eq!(
+        inbox["data"],
+        json!({
+            "asking": [
+                { "chat_id": "a1", "request": {
+                    "id": "p1", "kind": "permission", "title": "Run `npm test`",
+                    "options": [
+                        { "option_id": "allow", "kind": "allow_once", "label": "Allow once" },
+                        { "option_id": "reject", "kind": "reject_once", "label": "Reject" },
+                    ],
+                } },
+                { "chat_id": "a2", "request": {
+                    "id": "q1", "kind": "question", "title": "Which branch?",
+                    "prompt": { "type": "select", "message": "Which branch?", "options": ["main", "dev"] },
+                } },
+                { "chat_id": "a3", "request": null },
+            ],
+            "working": [
+                { "chat_id": "w1", "line": "Running cargo test", "since": now - 2 * minute },
+                { "chat_id": "w2", "line": "starting", "since": now - 5_000 },
+            ],
+            "recent": [
+                { "chat_id": "d1", "ended_at": now - hour, "duration_ms": 900, "line": "finished. All 12 passed." },
+                { "chat_id": "d2", "ended_at": now - 2 * hour, "duration_ms": 5_000, "line": "ended with an error. The agent stopped." },
+            ],
+        })
+    );
+}
+
+/// A search finds chats as the window's own search does, dated by the overview, at most as many
+/// as asked for; what is not one line of 1 to 200 characters never reaches the app.
+#[tokio::test]
+async fn a_search_finds_chats_as_the_window_does() {
+    use o7_protocol::search::ChatSearchHit;
+    let rig = rig().await;
+    *rig.app.listed.lock().expect("listed") = ["s1", "s2", "s3"]
+        .iter()
+        .zip([10, 20, 30])
+        .map(|(id, at)| (listed(id, SessionStatus::Ready, false, at), Some(vec![])))
+        .collect();
+    let hit = |id: &str, snippet: Option<&str>, archived| ChatSearchHit {
+        id: id.into(),
+        title: format!("Chat {id}"),
+        project: "app".into(),
+        snippet: snippet.map(str::to_owned),
+        archived,
+    };
+    *rig.app.found.lock().expect("found") = vec![
+        hit("s3", Some("…the login form…"), false),
+        // Gone from the overview since, and archived: neither is a hit.
+        hit("gone", Some("…login…"), false),
+        hit("s2", None, true),
+        hit("s1", None, false),
+        hit("s2", None, false),
+    ];
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair_app(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let found = phone
+        .request(&mut relay, json!({ "op": "search", "query": "  login " }))
+        .await;
+    assert_eq!(
+        found["data"],
+        json!({ "hits": [
+            { "chat_id": "s3", "title": "Chat s3", "snippet": "…the login form…", "at": 30 },
+            { "chat_id": "s1", "title": "Chat s1", "snippet": null, "at": 10 },
+            { "chat_id": "s2", "title": "Chat s2", "snippet": null, "at": 20 },
+        ] })
+    );
+    let ids = |found: &Value| -> Vec<String> {
+        found["data"]["hits"]
+            .as_array()
+            .expect("hits")
+            .iter()
+            .map(|hit| hit["chat_id"].as_str().expect("id").to_owned())
+            .collect()
+    };
+    for (limit, wanted) in [
+        (2, vec!["s3", "s1"]),
+        (0, vec!["s3"]),
+        (500, vec!["s3", "s1", "s2"]),
+    ] {
+        let found = phone
+            .request(
+                &mut relay,
+                json!({ "op": "search", "query": "login", "limit": limit }),
+            )
+            .await;
+        assert_eq!(ids(&found), wanted, "{limit}");
+    }
+    // Characters, not bytes: two hundred of them is a search.
+    let long = phone
+        .request(
+            &mut relay,
+            json!({ "op": "search", "query": "é".repeat(200) }),
+        )
+        .await;
+    assert_eq!(long["ok"], true, "{long}");
+    let asked = rig.app.answered.lock().expect("answered").len();
+    for query in [String::new(), "   ".into(), "x".repeat(201), "a\nb".into()] {
+        let refused = phone
+            .request(&mut relay, json!({ "op": "search", "query": query }))
+            .await;
+        assert_eq!(refused["error"]["code"], "invalid", "{query:?}: {refused}");
+    }
+    assert_eq!(rig.app.answered.lock().expect("answered").len(), asked);
+    assert_eq!(
+        rig.app.answered.lock().expect("answered")[0],
+        "search login",
+        "the query is sent trimmed"
+    );
 }

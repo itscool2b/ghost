@@ -34,7 +34,7 @@ use crate::{
     bot,
     callback::{self, Callback, CallbackEvent, Delivery},
     crypto::{self, Channel, NONCE_BYTES, Side},
-    registry::{Registry, RegistryError},
+    registry::{DeviceKind, Registry, RegistryError},
     relay,
     wire::{
         self, BotAnswer, BotCall, BotLink, CredentialKind, Data, ErrorBody, Event, FromRelay,
@@ -42,6 +42,7 @@ use crate::{
     },
 };
 
+mod app;
 mod session;
 use session::{Received, bot_answer, bot_links, closed, receive, refusal, seal};
 
@@ -208,6 +209,8 @@ impl Service {
                     created_at: device.created_at,
                     last_seen_at: device.last_seen_at,
                     connected: connected.get(&device.id).is_some_and(|count| *count > 0),
+                    kind: device.kind,
+                    app_version: device.app_version.clone(),
                 })
                 .collect(),
             automations: registry
@@ -1043,6 +1046,11 @@ struct Session {
     scope: String,
     /// A sealed message from the browser opened: it holds the key.
     proven: bool,
+    /// What it is offered beyond the first version's requests ([`wire::FEATURES`], or
+    /// [`wire::APP_FEATURES`] for o7 for iPhone), as its `ready` named them.
+    features: &'static [&'static str],
+    /// Its connection came in on the iPhone app's path ([`Connection::native`]).
+    native: bool,
     calls: Arc<AtomicUsize>,
     backlog: Arc<AtomicUsize>,
     /// Which chat this browser follows is decided by its newest `open` or `close`. Each takes the
@@ -1057,6 +1065,9 @@ struct Session {
 struct Connection {
     since: Instant,
     session: Option<Session>,
+    /// The relay marked it as come in on the iPhone app's path (`k`), which no page can open:
+    /// only then may a session be offered the app's features.
+    native: bool,
 }
 
 /// Finished work on its way back to the socket.
@@ -1358,8 +1369,20 @@ impl Serving {
                         Connection {
                             since: Instant::now(),
                             session: None,
+                            native: false,
                         },
                     );
+                }
+            }
+            // The relay sends it right after `o`; a mark that comes once a session has begun
+            // changes nothing that session was offered.
+            FromRelay::Native(cid) => {
+                if let Some(connection) = self
+                    .connections
+                    .get_mut(cid)
+                    .filter(|connection| connection.session.is_none())
+                {
+                    connection.native = true;
                 }
             }
             FromRelay::Closed(cid) => {

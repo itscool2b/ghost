@@ -122,6 +122,13 @@ async function client(hostId) {
   return reader(response.webSocket);
 }
 
+/** o7 for iPhone's socket: the app's path, with no Origin. */
+async function app(hostId, headers = {}) {
+  const response = await upgrade(`app/${hostId}`, headers);
+  assert.equal(response.status, 101);
+  return reader(response.webSocket);
+}
+
 const mcp = (hostId, reference, body, init = {}) =>
   runtime.dispatchFetch(`${BASE}/mcp/${hostId}/${reference}`, {
     method: "POST",
@@ -262,6 +269,165 @@ test("a browser socket needs the website's origin", async () => {
       .status,
     400,
   );
+});
+
+test("the iPhone app's socket comes without an origin, on a path no page can open", async () => {
+  const key = id(32);
+  const hostId = idOf(key);
+  // Nothing is behind an id no desktop has claimed, on this path either.
+  assert.equal((await upgrade(`app/${hostId}`)).status, 404);
+  (await host(hostId, key)).close();
+  // A page always sends an Origin (its own, or "null" from a sandboxed frame or a file), so any
+  // Origin at all is refused: the site's own, the one it had before, another site's, "null".
+  // An empty one never reaches a Worker: the runtime drops a header with no value, so it arrives
+  // as none, and no page can send one.
+  for (const origin of [ORIGIN, FORMER, "https://evil.test", "null", "undefined"])
+    assert.equal((await upgrade(`app/${hostId}`, { Origin: origin })).status, 403, origin);
+  // A plain request is not a socket, with an Origin or without.
+  for (const init of [{}, { headers: { Origin: ORIGIN } }, { method: "POST" }])
+    assert.equal(
+      (await runtime.dispatchFetch(`${BASE}/app/${hostId}`, init)).status,
+      400,
+      JSON.stringify(init),
+    );
+  // The browser's path still needs the site's origin: without one it is refused there.
+  assert.equal((await upgrade(`client/${hostId}`)).status, 403);
+
+  // Without an Origin the app is let in, and its desktop is told which path it came by: `k`
+  // with the same connection id, right after `o`.
+  const desk = await host(hostId, key);
+  const phone = await app(hostId);
+  assert.equal(await phone.message(), "h1");
+  const opened = await desk.message();
+  assert.match(opened, /^o[A-Za-z0-9_-]{16}$/);
+  const cid = opened.slice(1);
+  assert.equal(await desk.message(), `k${cid}`);
+  // It talks to its desktop as a browser does.
+  phone.send('mH{"v":1}');
+  assert.equal(await desk.message(), `m${cid} H{"v":1}`);
+  desk.send(`m${cid} W{"n":"a b c"}`);
+  assert.equal(await phone.message(), 'mW{"n":"a b c"}');
+  phone.send("ping");
+  assert.equal(await phone.message(), "pong");
+  // A browser is not marked.
+  const browser = await client(hostId);
+  assert.equal(await browser.message(), "h1");
+  const other = await desk.message();
+  assert.match(other, /^o[A-Za-z0-9_-]{16}$/);
+  await desk.quiet();
+  phone.close();
+  assert.equal(await desk.message(), `c${cid}`);
+  browser.close();
+  assert.equal(await desk.message(), `c${other.slice(1)}`);
+  desk.close();
+});
+
+test("a desktop that connects again is told again which sockets came by the app's path", async () => {
+  const key = id(32);
+  const hostId = idOf(key);
+  const desk = await host(hostId, key);
+  const phone = await app(hostId);
+  assert.equal(await phone.message(), "h1");
+  const mine = (await desk.message()).slice(1);
+  assert.equal(await desk.message(), `k${mine}`);
+  const browser = await client(hostId);
+  assert.equal(await browser.message(), "h1");
+  const theirs = (await desk.message()).slice(1);
+  // The desktop accepted the app's session.
+  desk.send(`a${mine}`);
+  await desk.quiet(100);
+
+  // A replacing socket and a returning one each hear `o` for every socket again, and `k` right
+  // after the app's.
+  const told = async (socket) => {
+    const frames = [await socket.message(), await socket.message(), await socket.message()];
+    assert.deepEqual([...frames].sort(), [`k${mine}`, `o${mine}`, `o${theirs}`].sort());
+    assert.equal(frames.indexOf(`k${mine}`), frames.indexOf(`o${mine}`) + 1, String(frames));
+    await socket.quiet();
+  };
+  const replacement = await host(hostId, key);
+  assert.equal(await desk.message(), "x");
+  for (const socket of [phone, browser]) {
+    assert.equal(await socket.message(), "h0");
+    assert.equal(await socket.message(), "h1");
+  }
+  await told(replacement);
+  replacement.close();
+  for (const socket of [phone, browser]) assert.equal(await socket.message(), "h0");
+  const back = await host(hostId, key);
+  for (const socket of [phone, browser]) assert.equal(await socket.message(), "h1");
+  await told(back);
+  // Accepted before, the app keeps its place while it starts again, as a browser does.
+  phone.send("mEagain");
+  assert.equal(await back.message(), `m${mine} Eagain`);
+  back.close();
+});
+
+test("the app's socket is held to every limit a browser's is", async () => {
+  const key = id(32);
+  const hostId = idOf(key);
+  const desk = await host(hostId, key);
+  const open = async (path, from) => {
+    const response = await upgrade(`${path}/${hostId}`, {
+      ...(path === "client" ? { Origin: ORIGIN } : {}),
+      "CF-Connecting-IP": from,
+    });
+    assert.equal(response.status, 101);
+    const socket = reader(response.webSocket);
+    assert.equal(await socket.message(), "h1");
+    const cid = (await desk.message()).slice(1);
+    if (path === "app") assert.equal(await desk.message(), `k${cid}`);
+    return { socket, cid };
+  };
+
+  // Before the desktop accepts it: the handshake's four small messages, and nothing more.
+  const chatty = await open("app", "192.0.2.1");
+  for (let sent = 0; sent < 4; sent += 1) {
+    chatty.socket.send("mH{}");
+    assert.equal(await desk.message(), `m${chatty.cid} H{}`);
+  }
+  chatty.socket.send("mH{}");
+  assert.equal(await chatty.socket.closing(), 1008);
+  assert.equal(await desk.message(), `c${chatty.cid}`);
+  const loud = await open("app", "192.0.2.2");
+  loud.socket.send(`m${"x".repeat(3000)}`);
+  assert.equal(await loud.socket.closing(), 1008);
+  assert.equal(await desk.message(), `c${loud.cid}`);
+
+  // Accepted: at most 96 KiB a message and 240 messages in ten seconds.
+  const large = await open("app", "192.0.2.3");
+  desk.send(`a${large.cid}`);
+  await desk.quiet(100);
+  large.socket.send(`m${"y".repeat(4000)}`);
+  assert.equal((await desk.message()).length, `m${large.cid} `.length + 4000);
+  large.socket.send(`m${"a".repeat(96 * 1024)}`);
+  assert.equal(await large.socket.closing(), 1009);
+  assert.equal(await desk.message(), `c${large.cid}`);
+  const flood = await open("app", "192.0.2.4");
+  desk.send(`a${flood.cid}`);
+  await desk.quiet(100);
+  for (let sent = 0; sent < 241; sent += 1) flood.socket.send("mE");
+  assert.equal(await flood.socket.closing(), 1008);
+  for (let sent = 0; sent < 240; sent += 1) assert.equal(await desk.message(), `m${flood.cid} E`);
+  assert.equal(await desk.message(), `c${flood.cid}`);
+
+  // Unproven app and browser sockets share the same few places: three per address, and a
+  // newcomer replaces the oldest whichever path either came by.
+  const first = await open("client", "198.51.100.7");
+  await open("app", "198.51.100.7");
+  await open("app", "198.51.100.7");
+  const fourth = await upgrade(`app/${hostId}`, { "CF-Connecting-IP": "198.51.100.7" });
+  assert.equal(fourth.status, 101);
+  assert.equal(await first.socket.message(), "x");
+  assert.equal(await desk.message(), `c${first.cid}`);
+  const newest = reader(fourth.webSocket);
+  assert.equal(await newest.message(), "h1");
+  const cid = (await desk.message()).slice(1);
+  assert.equal(await desk.message(), `k${cid}`);
+
+  // The desktop leaving tells the app, as it tells a browser.
+  desk.close();
+  assert.equal(await newest.message(), "h0");
 });
 
 test("forwards a browser's messages to its desktop and back, and says who is there", async () => {

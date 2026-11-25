@@ -8,6 +8,10 @@
 //! It turns remote access on, prints `PAIR <link>` and `BOT <address>`, and prints a new pairing
 //! link for every line read from standard input. Each message sent to a chat starts a turn that
 //! reads a file, asks permission to run the tests, and finishes once that is answered.
+//!
+//! o7 for iPhone reaches it as it reaches a real computer, on the relay's app path: its Inbox
+//! reads these chats (what asks, what works, what finished), and its Search finds them by title
+//! and words.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stdout)]
 
@@ -22,6 +26,7 @@ use o7_protocol::{
     EventBatch, O7Event, PermissionDecision, PermissionOption, PermissionOptionKind,
     PermissionRequest, ResolvedBy, SessionStatus, StopReason, ToolCall, ToolKind, ToolStatus,
     UiAnswer,
+    search::ChatSearchHit,
     session::{ChatAttach, ChatStatusUpdate, HistoryItem, HistoryPage, PromptAck},
     workspace::WorkspaceChat,
 };
@@ -35,7 +40,8 @@ struct Chat {
     title: String,
     status: SessionStatus,
     needs_attention: bool,
-    events: Vec<O7Event>,
+    /// What happened in it, oldest first, each with when.
+    events: Vec<(i64, O7Event)>,
     updated_at: i64,
     /// The permission request the turn waits on, and what wakes it.
     waiting: Option<(String, Arc<tokio::sync::Notify>)>,
@@ -101,8 +107,10 @@ impl Demo {
                 return;
             };
             let start = chat.events.len() as u32;
-            chat.events.extend(events.iter().cloned());
-            chat.updated_at = now();
+            let at = now();
+            chat.events
+                .extend(events.iter().cloned().map(|event| (at, event)));
+            chat.updated_at = at;
             start
         };
         let batch = EventBatch {
@@ -323,6 +331,45 @@ impl Backend for Shared {
         })
     }
 
+    // The chats whose title or words hold the query, as the window's own search finds them.
+    fn search<'a>(
+        &'a self,
+        query: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ChatSearchHit>, BackendError>> {
+        Box::pin(async move {
+            let needle = query.to_lowercase();
+            let chats = self.0.chats.lock().unwrap();
+            let mut hits: Vec<(i64, ChatSearchHit)> = chats
+                .iter()
+                .filter_map(|(id, chat)| {
+                    let said = chat.events.iter().find_map(|(_, event)| match event {
+                        O7Event::MessageDelta { text, .. }
+                        | O7Event::UserMessageDelta { text, .. }
+                            if text.to_lowercase().contains(&needle) =>
+                        {
+                            Some(snippet(text, &needle))
+                        }
+                        _ => None,
+                    });
+                    (said.is_some() || chat.title.to_lowercase().contains(&needle)).then(|| {
+                        (
+                            chat.updated_at,
+                            ChatSearchHit {
+                                id: id.clone(),
+                                title: chat.title.clone(),
+                                project: "demo".into(),
+                                snippet: said,
+                                archived: false,
+                            },
+                        )
+                    })
+                })
+                .collect();
+            hits.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+            Ok(hits.into_iter().map(|(_, hit)| hit).collect())
+        })
+    }
+
     // A chat's browser shows a page of one pixel; there is no device.
     fn picture<'a>(
         &'a self,
@@ -487,10 +534,10 @@ impl Backend for Shared {
                 .events
                 .iter()
                 .enumerate()
-                .map(|(seq, event)| HistoryItem {
+                .map(|(seq, (at, event))| HistoryItem {
                     seq: seq as u32,
                     turn_id: None,
-                    at: 0,
+                    at: *at,
                     event: event.clone(),
                 })
                 .collect();
@@ -542,10 +589,10 @@ impl Backend for Shared {
                     .iter()
                     .enumerate()
                     .filter(|(seq, _)| (*seq as u32) < before_seq)
-                    .map(|(seq, event)| HistoryItem {
+                    .map(|(seq, (at, event))| HistoryItem {
                         seq: seq as u32,
                         turn_id: None,
-                        at: 0,
+                        at: *at,
                         event: event.clone(),
                     })
                     .collect(),
@@ -676,6 +723,23 @@ impl Backend for Shared {
     }
 }
 
+/// The words around the first word of `needle` in `text`, as a search result shows them.
+fn snippet(text: &str, needle: &str) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let first = needle.split_whitespace().next().unwrap_or_default();
+    let at = words
+        .iter()
+        .position(|word| word.to_lowercase().contains(first))
+        .unwrap_or(0);
+    let (from, to) = (at.saturating_sub(4), (at + 8).min(words.len()));
+    format!(
+        "{}{}{}",
+        if from > 0 { "…" } else { "" },
+        words[from..to].join(" "),
+        if to < words.len() { "…" } else { "" }
+    )
+}
+
 fn chat(title: &str) -> Chat {
     Chat {
         title: title.into(),
@@ -716,6 +780,9 @@ async fn main() {
     {
         let mut first = chat("Fix the login form");
         first.status = SessionStatus::Ready;
+        // Its turn finished an hour ago: the app's Inbox lists it among what finished today.
+        let ended = now() - 60 * 60 * 1000;
+        first.updated_at = ended;
         first.events = vec![
             O7Event::TurnStarted {
                 turn_id: "c1-t0".into(),
@@ -736,7 +803,11 @@ async fn main() {
                 duration_ms: Some(1200),
                 recovered: false,
             },
-        ];
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(seq, event)| (ended - 1200 + 400 * seq as i64, event))
+        .collect();
         first.turns = 1;
         demo.chats.lock().unwrap().push(("c1".into(), first));
     }

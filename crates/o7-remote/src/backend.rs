@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub use futures::future::BoxFuture;
 use o7_protocol::{
     EventBatch, UiAnswer,
+    search::ChatSearchHit,
     session::{ChatAttach, ChatStatusUpdate, HistoryPage, PromptAck},
     workspace::WorkspaceChat,
 };
@@ -358,5 +359,20 @@ pub trait Backend: Send + Sync + 'static {
         _agent_id: &'a str,
     ) -> BoxFuture<'a, Result<ChatFacts, BackendError>> {
         Box::pin(async { Ok(ChatFacts::default()) })
+    }
+    /// The open chats whose title, project, agent or completed messages match `query`, best
+    /// first, as the window's own search finds them (archived chats left out). The query is
+    /// already checked: one line of at most [`crate::wire::MAX_QUERY`] characters. A backend that
+    /// cannot search refuses.
+    fn search<'a>(
+        &'a self,
+        _query: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ChatSearchHit>, BackendError>> {
+        Box::pin(async {
+            Err(BackendError::new(
+                "unavailable",
+                "Search is not available on this computer.",
+            ))
+        })
     }
 }

@@ -7,7 +7,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use o7_protocol::{SessionStatus, UiAnswer, UiPrompt, UiQuestion, UiQuestionAnswer};
+use o7_protocol::{UiAnswer, UiPrompt, UiQuestion, UiQuestionAnswer};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -41,11 +41,10 @@ const WAIT_SENT: u64 = 45;
 /// it, so a wait of exactly that long was lost there every time.
 const WAIT_MAX: u64 = 200;
 
-/// How many chats each part of `inbox` reads into: every one costs the bot what it says.
+/// How many chats each part of `inbox` reads into: every one costs the bot what it says. A chat
+/// that finished longer ago than [`render::RECENT_MS`] is not news.
 const INBOX_ASKING: usize = 6;
 const INBOX_DONE: usize = 6;
-/// A chat that finished longer ago than this is not news.
-const INBOX_RECENT_MS: i64 = 24 * 60 * 60 * 1000;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1138,39 +1137,17 @@ async fn inbox(
             entry.chat.agent_name
         )
     };
-    let open: Vec<_> = overview
-        .chats
-        .iter()
-        .filter(|entry| !entry.archived)
-        .collect();
-    let busy = |status: SessionStatus| {
-        matches!(
-            status,
-            SessionStatus::Running | SessionStatus::Starting | SessionStatus::Cancelling
-        )
-    };
-    let asking: Vec<_> = open
-        .iter()
-        .filter(|entry| entry.chat.needs_attention)
-        .collect();
-    let working: Vec<_> = open
-        .iter()
-        .filter(|entry| !entry.chat.needs_attention && busy(entry.chat.status))
-        .collect();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| {
             i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
         });
-    let mut done: Vec<_> = open
-        .iter()
-        .filter(|entry| {
-            !entry.chat.needs_attention
-                && !busy(entry.chat.status)
-                && now.saturating_sub(entry.chat.updated_at) <= INBOX_RECENT_MS
-        })
-        .collect();
-    done.sort_by_key(|entry| std::cmp::Reverse(entry.chat.updated_at));
+    // The same chats the iPhone app's inbox reads (`host/app.rs`).
+    let render::Sorted {
+        asking,
+        working,
+        finished: done,
+    } = render::sorted(&overview.chats, now);
     if asking.is_empty() && working.is_empty() && done.is_empty() && queued.is_empty() {
         return Ok(
             "Nothing needs you: no chat is asking, working or finished in the last day.".into(),

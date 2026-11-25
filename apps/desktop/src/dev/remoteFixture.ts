@@ -3,8 +3,8 @@ import type { RemoteApi } from "../lib/remote";
 
 /**
  * Remote access for development previews: nothing connects anywhere. `?remote=on` starts with it
- * on, a paired phone and a linked bot; `window.remoteFixture` plays the other side (a device
- * opening the pairing link, the relay going away).
+ * on, a paired phone's browser, o7 for iPhone and a linked bot; `window.remoteFixture` plays the
+ * other side (a device opening the pairing link, the relay going away).
  */
 export function remoteFixture(): RemoteApi {
   const on = new URLSearchParams(location.search).get("remote") === "on";
@@ -22,6 +22,18 @@ export function remoteFixture(): RemoteApi {
             created_at: Date.now() - 86_400_000 * 3,
             last_seen_at: Date.now() - 60_000 * 7,
             connected: false,
+            kind: "browser",
+            app_version: null,
+          },
+          // The iPhone app, under a name its person chose: its kind, not its name, says phone.
+          {
+            id: "device-app",
+            name: "Travel",
+            created_at: Date.now() - 86_400_000,
+            last_seen_at: Date.now(),
+            connected: true,
+            kind: "ios",
+            app_version: "1.0",
           },
         ]
       : [],
@@ -90,6 +102,8 @@ export function remoteFixture(): RemoteApi {
               created_at: Date.now(),
               last_seen_at: Date.now(),
               connected: true,
+              kind: "browser",
+              app_version: null,
             },
           ],
         }),

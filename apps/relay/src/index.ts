@@ -1,8 +1,9 @@
 /**
  * The remote-sessions relay. A desktop keeps one outbound WebSocket here (its "host" socket);
- * paired browsers and bots reach it through this Worker, so the desktop opens no port.
+ * paired browsers, o7 for iPhone and bots reach it through this Worker, so the desktop opens no
+ * port.
  *
- * - A browser's traffic is sealed end to end between the browser and the desktop
+ * - A browser's traffic, and the iPhone app's, is sealed end to end between it and the desktop
  *   (docs/remote-sessions.md). The relay forwards opaque text and cannot read or forge it.
  * - A bot speaks MCP over HTTPS, so its calls are readable here in passing. The relay turns each
  *   tool call into one request to the desktop, which checks the bot's token itself.
@@ -290,6 +291,12 @@ export default {
       // An exact match against the one or two origins this deployment names, never a pattern.
       const known = !!origin && (origin === env.APP_ORIGIN || origin === env.FORMER_ORIGIN);
       if (!known) return json(403, { error: "forbidden" });
+    } else if (kind === "app") {
+      // o7 for iPhone, which sends no Origin. A page always sends one (its own, or "null"), so
+      // any Origin at all is refused: no page can open this path. An empty one never gets here:
+      // the runtime drops a header with no value, and no page can send one.
+      if (!isUpgrade(request)) return json(400, { error: "invalid_request" });
+      if (origin !== null) return json(403, { error: "forbidden" });
     } else if (kind === "mcp") {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     } else if (kind === "hook") {
@@ -324,6 +331,11 @@ type Attachment =
       readonly until?: number;
       /** This side ended the socket and the desktop already knows. */
       readonly told?: boolean;
+      /**
+       * It came in on the app's path (`/app/`), without an Origin: the desktop is told so with
+       * `k<cid>` after each `o<cid>`. Absent for a browser.
+       */
+      readonly native?: true;
     };
 type ClientAttachment = Extract<Attachment, { role: "client" }>;
 
@@ -412,7 +424,8 @@ export class Room extends DurableObject<Env> {
   override async fetch(request: Request): Promise<Response> {
     const [kind, , reference] = new URL(request.url).pathname.slice(PREFIX.length).split("/");
     if (kind === "host") return this.#acceptHost(request);
-    if (kind === "client") return this.#acceptClient(request);
+    if (kind === "client") return this.#acceptClient(request, false);
+    if (kind === "app") return this.#acceptClient(request, true);
     if (kind === "mcp") return this.#mcp(request, reference ?? "");
     if (kind === "hook") return this.#hook(request, reference ?? "");
     return notFound();
@@ -480,11 +493,17 @@ export class Room extends DurableObject<Env> {
       if (replacing) client.send("h0");
       client.send("h1");
       pair[1].send(`o${attachment.cid}`);
+      if (attachment.native) pair[1].send(`k${attachment.cid}`);
     }
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  async #acceptClient(request: Request): Promise<Response> {
+  /**
+   * A browser's socket, or with `native` the iPhone app's. Both are held to the same limits; the
+   * desktop is told which path a socket came in on (`k<cid>`), since what a session asks for in
+   * `pair` is only its own word.
+   */
+  async #acceptClient(request: Request, native: boolean): Promise<Response> {
     // An id no desktop ever claimed has nothing behind it.
     if ((await this.ctx.storage.get("host")) === undefined) return notFound();
     const from = network(request.headers.get("CF-Connecting-IP") ?? "");
@@ -512,10 +531,12 @@ export class Room extends DurableObject<Env> {
       since: Date.now(),
       from,
       proven: false,
+      ...(native ? { native: true } : {}),
     } satisfies Attachment);
     const host = this.#host(pair[1]);
     pair[1].send(host ? "h1" : "h0");
     host?.send(`o${cid}`);
+    if (native) host?.send(`k${cid}`);
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 

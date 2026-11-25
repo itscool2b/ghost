@@ -1,9 +1,9 @@
 # Remote sessions
 
-A person sees and steers the chats on their computer from a phone's browser, and a bot (Grok Bot,
-or any assistant that connects to MCP servers) can do the same through tools. The computer opens
-no port: o7 keeps one outbound WebSocket to a relay, and everything else reaches it through
-that.
+A person sees and steers the chats on their computer from a phone's browser or from o7 for
+iPhone, and a bot (Grok Bot, or any assistant that connects to MCP servers) can do the same
+through tools. The computer opens no port: o7 keeps one outbound WebSocket to a relay, and
+everything else reaches it through that.
 
 It is off until turned on in Settings > Remote access, and it works while o7 is open,
 including in the tray.
@@ -28,6 +28,8 @@ including in the tray.
      Settings lists it once. Other tabs of the browser move to the new key.
    - A link that does not work says why, in the computer's words when it refused (a full list of
      devices, a closed link), and offers the way back to the computer the page was with.
+   - o7 for iPhone pairs from the same code or link, scanned or pasted in the app. It asks
+     first, as the page does, and nothing is sent before the tap.
 3. **Use it.** Open a chat to follow it live, send a message (it queues behind a running turn, as
    in the app), stop a turn, answer a permission request or a question, start a chat in a
    project's folder. "Model and agent" in a chat's header chooses its model and thinking level,
@@ -358,11 +360,12 @@ service the bot's calls already pass through, but it is one more place the words
 
 | Part | Where | What it does |
 |---|---|---|
-| Relay | `apps/relay` (Worker `o7-relay`, route `o7.codes/api/remote/*`) | One Durable Object per computer holds its host socket and the browsers' sockets and forwards between them. Serves MCP to bots. |
-| Service | `crates/o7-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser (`host.rs`, `host/session.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
+| Relay | `apps/relay` (Worker `o7-relay`, route `o7.codes/api/remote/*`) | One Durable Object per computer holds its host socket and the sockets of browsers and o7 for iPhone, and forwards between them. Serves MCP to bots. |
+| Service | `crates/o7-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser or app (`host.rs`, `host/session.rs`, and what only the app asks for in `host/app.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
 | App | `apps/desktop/src-tauri/src/remote.rs` | Starts the service, gives it the open profile's chats through the same lease a window's commands take, and exposes the commands Settings uses. |
 | Settings page | `apps/desktop/src/components/settings/RemotePanel.tsx` | The switch, devices, bots, and the two dialogs that show a secret once. |
 | Remote page | `apps/web/app/pages/remote.tsx`, `apps/web/app/remote/` | The browser's session (`client.ts`), its half of the channel (`channel.ts`), where device keys are kept (`storage.ts`). |
+| o7 for iPhone | `apps/ios` | The native app: the same sealed channel and requests, on a path of its own at the relay (below). |
 
 The remote page folds a chat with the desktop app's own reducer
 (`apps/desktop/src/lib/chat/transcript.ts`), from the same events the app's window gets, so a turn
@@ -421,6 +424,13 @@ object in IndexedDB, so a script on the origin can use it and none can read it o
 keeps device keys, and only the SHA-256 of each bot token, in `remote.json` in the data folder,
 beside the chats themselves and readable by the same user.
 
+o7 for iPhone keeps its device key in the iPhone's Keychain. Its `pair` names it
+(`client: { kind: "ios", version, model }`), and the computer records the device as `ios` with
+that version (at most 32 characters) only when the pairing came in on the app's path, which the
+relay marks (below). Anything can say it is the app; only the path proves no page sent it. A
+browser that says so is recorded as a browser. An `ios` device with no name is called "iPhone".
+Settings shows "o7 for iPhone 1.0" on its row.
+
 ### The sealed channel
 
 Both sides hold one 32-byte secret: the pairing key, or the device key.
@@ -437,8 +447,10 @@ Both sides hold one 32-byte secret: the pairing key, or the device key.
 
 The browser accepts exactly one welcome per hello and one `ready` per session, so a replayed
 welcome can never restart a key's numbering. Anything that fails to open, arrives out of order,
-or is not one of the operations ends the session. `crates/o7-remote/tests/vectors.json` holds
-vectors both implementations are tested against.
+or is not one of the operations ends the session. An operation the computer knows but did not
+offer this session is answered `not_offered`, and the session goes on (see "Operations a device
+can ask for"). `crates/o7-remote/tests/vectors.json` holds vectors both implementations are
+tested against.
 
 A refusal (`R`) is not sealed, since there may be no key to seal it with. So it deletes nothing:
 the page says the computer no longer accepts this browser and lets the person try again or forget
@@ -459,6 +471,17 @@ thirty days forgets all of it; the computer sends its bot links again whenever i
   a newcomer replaces the oldest, and it may send four messages of at most 2 KiB: the handshake
   and nothing more. Accepted browsers are never replaced; after the computer reconnects they
   have thirty seconds to be accepted again.
+- o7 for iPhone connects at `/api/remote/v1/app/<computer id>` and sends no `Origin`. A page
+  always sends one (its origin, or `null`), so an upgrade there with any `Origin` is refused
+  (403), and a request that is not an upgrade gets 400. The Workers runtime drops a header with
+  no value, so an empty `Origin` arrives as none; no page can send one. After it tells the
+  computer `o<cid>` for such a socket, the relay sends `k<cid>`, and again after each `o` it
+  replays when the computer reconnects. That mark is how the computer knows the socket is the
+  app's and not a page's. An o7 on the computer from before the mark ignores `k`, so the iPhone
+  app is offered there what a browser is. Every limit here (the
+  unproven places, the four small messages, 96 KiB, 240 in ten seconds, keep-alives, the thirty
+  seconds to be accepted again) applies to the app's socket as to a browser's, and both share
+  the same places.
 - That does not stop someone who knows a computer's id from opening sockets fast enough to keep
   a new browser from finishing its handshake. It costs the computer almost nothing and reaches
   no chat, but it can delay pairing or a reconnect. The id is in every pairing link and bot
@@ -537,24 +560,62 @@ time (`seen`) and forgets it with the rest of the room. A call that was with the
 went says instead that it is not known whether it was done, and to read the chat once the
 computer is back.
 
-## Operations a browser can ask for
+## Operations a device can ask for
 
-`pair`, `overview`, `open`, `close`, `history`, `send`, `interrupt`, `permission`, `answer`,
-`create`, `forget`, and for the pickers `options`, `set_model`, `set_thinking` and `switch_agent`
-(`crates/o7-remote/src/wire.rs`). Each maps to the session manager call the app's own window
+A device is a paired browser or o7 for iPhone. A pairing link's session asks for `pair` alone;
+every device may ask for `overview`, `open`, `close`, `history`, `send`, `interrupt`,
+`permission`, `answer`, `create` and `forget` (`crates/o7-remote/src/wire.rs`). Each maps to the session manager call the app's own window
 makes; there is no file, terminal, settings or account access. A new chat starts in the project
 folder itself with the project's usual agent.
 
-The four picker requests are the only ones of a full-control link's actions a browser reaches.
+The rest belong to a feature, and a session may ask only for what it was offered:
+
+| Feature | Requests | Offered to |
+|---|---|---|
+| `pickers` | `options`, `set_model`, `set_thinking`, `switch_agent` | a browser and the app |
+| `inbox` | `inbox` | the app |
+| `search` | `search` | the app |
+
+The four picker requests are the only ones of a full-control link's actions a device reaches.
 What they name (a model, a level, an agent) is a short value from a list the computer sent,
 checked for length and control characters before the app sees it, and the app refuses one its
-chat does not offer. A browser has no request for a chat's access level, for a project from an
+chat does not offer. No device has a request for a chat's access level, for a project from an
 arbitrary folder or for project memory.
 
-A request the computer does not know ends the session, as anything outside the protocol does. So
-a computer says what it offers beyond the first version's requests when a session opens
-(`features` in its `ready` message, `pickers` so far), and the page shows a control only to a
-computer that names it: the page is always the newest, and an installed o7 can be older.
+The computer names what it offers when a session opens (`features` in its `ready` message), and
+a device shows a control only to a computer that names it: the page is always the newest, and an
+installed o7 can be older. A browser is offered `pickers`, as before the app, so what a browser
+is sent has not changed. The app is offered `pickers`, `inbox` and `search`, but only on a
+socket the relay marked as the app's (`k`), and only with a pairing link or a device recorded as
+`ios`: a browser's word that it is the app is not enough, and neither is the app's path with a
+browser's key. On the app's path `ready` also carries `site` (`https://o7.codes`), so the app
+follows the site if it moves, and the answer to an `ios` pairing carries `features`, so the app
+knows what it has before its next `ready`.
+
+- A request the computer does not know ends the session, as anything outside the protocol does.
+- A request it knows but did not offer this session is answered `not_offered` ("This computer
+  does not offer that to this device."), and the session goes on.
+- An answer larger than one sealed message carries (600 KiB) is answered `too_large` instead:
+  sealed, it could pass the relay's limit for one frame (2 MiB), and the relay would end the
+  computer's whole connection, every device with it. An `open` answered so follows nothing.
+
+What only the app asks for runs in `crates/o7-remote/src/host/app.rs`:
+
+- **`inbox`** is the app's Inbox in one call, read from the same chats as a bot's `inbox`
+  (`render::sorted`): `asking`, one entry per request a chat waits on, `{ chat_id, request }`
+  with `request` as `{ id, kind: "permission", title, options }` or
+  `{ id, kind: "question", title, prompt }`, and `null` when the chat waits on something its
+  newest history does not show yet; `working`, `{ chat_id, line, since }`, its latest step and
+  when its turn began; and `recent`, `{ chat_id, ended_at, duration_ms, line }`, each turn that
+  ended in the last day, newest first, with the bot's one-line brief. At most 40 of each. It
+  reads the overview and the newest page of history (up to 256 KiB) of each chat it lists, at
+  most 120 pages and in practice a few, so the app asks for it again when a `chat` event says
+  something changed, a moment after the last such event, and never on a timer.
+- **`search`** takes `query` (1 to 200 characters, one line) and `limit` (at most 50, 20 when
+  unsaid) and answers `{ hits: [{ chat_id, title, snippet, at }] }`, best first: the window's
+  own search of the open chats' titles, projects, agents and finished messages
+  (`workspace_search`), each hit dated by its chat in the overview. `snippet` is `null` when only
+  the title, project or agent matched. It costs one search and one overview.
 
 The computer pushes `chat` (a status changed), `frame` (live events of the followed chat), `lost`
 (open the chat again) and `reset` (another profile was opened: start over).
@@ -568,9 +629,10 @@ The computer pushes `chat` (a status changed), `frame` (live events of the follo
   `ws://127.0.0.1:8799`) and `O7_REMOTE_SITE` together; release builds reach only
   o7's own relay. A page served from `localhost` accepts `?relay=ws://127.0.0.1:<port>`.
 - **Tests:**
-  - `corepack pnpm --filter @o7/relay worker:test`: the relay in the Workers runtime.
+  - `corepack pnpm --filter @o7/relay worker:test`: the relay in the Workers runtime, the app's
+    path and its mark included. CI runs it.
   - `cargo test -p o7-remote`: the service against a relay on this machine, with a simulated
-    browser and bot.
+    browser, iPhone app and bot.
   - `corepack pnpm --filter @o7/web test`: the browser's channel against the shared
     vectors, and the page's headers.
   - `apps/desktop/scripts/check-remote.mjs` (part of `check:settings`): the Settings page.
@@ -621,7 +683,9 @@ Security, from the review of 10 November 2026 (each is a known limit, not a surp
   workspace (`Registry::set_site`). A record from before sites were recorded counts as the old
   address. So the first start after the move ends every pairing and bot link made at
   auracode.si: the phone pairs once more and the bot is linked once more, at o7.codes, and
-  nothing that still works is tied to the address being given up.
+  nothing that still works is tied to the address being given up. An `ios` device stays: o7 for
+  iPhone keeps its key in the iPhone's Keychain, under no web origin, so a page at the old
+  address cannot use it, and its `ready` names the new site.
 - **Per-room rate limits** at Cloudflare's edge for new sockets and host claims. Since 19 November
   2026 the zone has one rule per address instead: more than 60 requests to `/api/remote/*` in ten
   seconds from one address are refused for ten seconds (infra/README.md). It blunts a flood from

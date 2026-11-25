@@ -14,6 +14,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub use o7_protocol::remote::RemoteDeviceKind as DeviceKind;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::{self, KEY_BYTES};
@@ -21,6 +22,8 @@ use crate::crypto::{self, KEY_BYTES};
 pub const MAX_DEVICES: usize = 16;
 pub const MAX_BOTS: usize = 16;
 pub const MAX_NAME: usize = 48;
+/// The longest app version or device model a device gives when it pairs, in characters.
+pub const MAX_CLIENT_FIELD: usize = 32;
 /// How long a pairing link opens.
 pub const PAIRING_MS: i64 = 10 * 60 * 1000;
 /// Wrong attempts a pairing link survives. Its key cannot be guessed; this only bounds the noise.
@@ -66,6 +69,14 @@ pub struct Device {
     /// Empty on a record from before sites were recorded, when the site was auracode.si.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub site: String,
+    /// A browser, or o7 for iPhone. Only a pairing on the app's own path, which the relay marks
+    /// (`k`), is recorded as the app: what a session says about itself is only its word. Left
+    /// out for a browser, so its record reads as it did before kinds were recorded.
+    #[serde(default, skip_serializing_if = "DeviceKind::is_browser")]
+    pub kind: DeviceKind,
+    /// The app's version as o7 for iPhone gave it when it paired. None for a browser.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -331,17 +342,21 @@ impl Registry {
         })
     }
 
-    /// Names the website this copy pairs through, and removes every device and bot link issued
-    /// under another one, in every workspace. Returns how many went.
+    /// Names the website this copy pairs through, and removes every browser device and bot link
+    /// issued under another one, in every workspace. Returns how many went.
     ///
     /// A browser keeps a device's key under the site's origin, and a bot's token is part of an
     /// address at the site. When the site moves, whoever holds the old address later holds a
     /// page that can use those keys and receives those tokens, so none of them may stay good:
-    /// the phone pairs again and the bot is linked again, at the new address.
+    /// the phone pairs again and the bot is linked again, at the new address. o7 for iPhone
+    /// keeps its key in the iPhone's Keychain, under no web origin, so it stays; its `ready`
+    /// names the new site.
     pub fn set_site(&mut self, site: &str) -> usize {
         self.site = site.to_owned();
         let before = self.stored.devices.len() + self.stored.bots.len();
-        self.stored.devices.retain(|device| device.site == site);
+        self.stored
+            .devices
+            .retain(|device| device.kind == DeviceKind::Ios || device.site == site);
         self.stored.bots.retain(|bot| bot.site == site);
         let gone = before - self.stored.devices.len() - self.stored.bots.len();
         if gone > 0 {
@@ -763,11 +778,25 @@ impl Registry {
         }
     }
 
-    /// Spends the pairing link `id` on a new device. The link never opens again.
+    /// Spends the pairing link `id` on a new browser device. The link never opens again.
     pub fn pair(
         &mut self,
         id: &str,
         name: &str,
+        now: i64,
+    ) -> Result<Option<Device>, RegistryError> {
+        self.pair_as(id, name, DeviceKind::Browser, None, now)
+    }
+
+    /// Spends the pairing link `id` on a new device of `kind`: a browser, or o7 for iPhone with
+    /// the version it gave (cut to [`MAX_CLIENT_FIELD`]). The link never opens again. A browser
+    /// keeps no version.
+    pub fn pair_as(
+        &mut self,
+        id: &str,
+        name: &str,
+        kind: DeviceKind,
+        app_version: Option<&str>,
         now: i64,
     ) -> Result<Option<Device>, RegistryError> {
         if self.pairing_key(id, now).is_none() {
@@ -776,14 +805,25 @@ impl Registry {
         if self.devices().len() >= MAX_DEVICES {
             return Err(RegistryError::TooManyDevices);
         }
+        let (fallback, app_version) = match kind {
+            DeviceKind::Browser => ("Browser", None),
+            DeviceKind::Ios => (
+                "iPhone",
+                app_version
+                    .map(|version| one_line(version, MAX_CLIENT_FIELD))
+                    .filter(|version| !version.is_empty()),
+            ),
+        };
         let device = Device {
             id: crypto::encode(&crypto::random::<8>()?),
             key: crypto::encode(&crypto::random::<KEY_BYTES>()?),
-            name: name_of(name, "Browser"),
+            name: name_of(name, fallback),
             created_at: now,
             last_seen_at: now,
             profile: self.scope.clone(),
             site: self.site.clone(),
+            kind,
+            app_version,
         };
         self.stored.devices.push(device.clone());
         if let Err(error) = self.save() {
@@ -801,6 +841,15 @@ impl Registry {
             .iter()
             .find(|device| crypto::same(&device.id, id) && self.open(&device.profile))
             .and_then(|device| crypto::decode(&device.key))
+    }
+
+    /// What the device `id` is, if it was paired in the open workspace.
+    pub fn device_kind(&self, id: &str) -> Option<DeviceKind> {
+        self.stored
+            .devices
+            .iter()
+            .find(|device| crypto::same(&device.id, id) && self.open(&device.profile))
+            .map(|device| device.kind)
     }
 
     /// Whether the device `id` is paired, but in a workspace that is not the open one.
@@ -1148,21 +1197,26 @@ pub fn expired(bot: &Bot, now: i64) -> bool {
 
 /// A name a person or a browser supplied, as one short line; `fallback` when nothing is left.
 fn name_of(name: &str, fallback: &str) -> String {
-    let name: String = name
-        .chars()
+    let name = one_line(name, MAX_NAME);
+    if name.is_empty() {
+        fallback.to_owned()
+    } else {
+        name
+    }
+}
+
+/// What a device supplied, as one line of at most `max` characters: control characters become
+/// spaces and runs of space become one.
+pub fn one_line(text: &str, max: usize) -> String {
+    text.chars()
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .chars()
-        .take(MAX_NAME)
-        .collect();
-    if name.is_empty() {
-        fallback.to_owned()
-    } else {
-        name
-    }
+        .take(max)
+        .collect()
 }
 
 #[cfg(test)]
@@ -1629,6 +1683,12 @@ mod tests {
         let bot = registry
             .add_bot("Bot", crate::bot::Rights::FULL, 3)
             .expect("bot");
+        // o7 for iPhone, paired under the same site: its key is in the iPhone's Keychain.
+        let pairing = registry.start_pairing(3).expect("pairing");
+        let iphone = registry
+            .pair_as(&pairing.id, "", DeviceKind::Ios, Some("1.0"), 3)
+            .expect("pair")
+            .expect("device");
         // Another workspace's records go too: the site is the same for all of them.
         registry.set_scope("other");
         let pairing = registry.start_pairing(4).expect("pairing");
@@ -1637,6 +1697,7 @@ mod tests {
             .expect("pair")
             .expect("device");
         assert_eq!(phone.site, "https://old.test");
+        assert_eq!(iphone.site, "https://old.test");
 
         // The same site again keeps everything.
         let mut same = Registry::load(&path).expect("reload");
@@ -1645,26 +1706,32 @@ mod tests {
         assert!(same.device_key(&phone.id).is_some());
         assert!(same.verify_bot(&bot.id, &bot.token, 6));
 
-        // The site moved: nothing issued under the old one is good, here or after a restart.
+        // The site moved: nothing a browser or a bot was issued under the old one is good, here
+        // or after a restart. The iPhone app's key never lived under the site, so it stays.
         for _ in 0..2 {
             let mut moved = Registry::load(&path).expect("reload");
             let gone = moved.set_site("https://new.test");
             for scope in ["local", "other"] {
                 moved.set_scope(scope);
-                assert!(
-                    moved.devices().is_empty() && moved.bots().is_empty(),
-                    "{scope}"
-                );
+                assert!(moved.bots().is_empty(), "{scope}");
                 assert_eq!(moved.device_key(&phone.id), None);
                 assert_eq!(moved.device_key(&tablet.id), None);
                 assert!(!moved.device_elsewhere(&tablet.id));
                 assert!(!moved.verify_bot(&bot.id, &bot.token, 7));
             }
+            moved.set_scope("other");
+            assert!(moved.devices().is_empty());
+            moved.set_scope("local");
+            let kept: Vec<&str> = moved.devices().iter().map(|d| d.id.as_str()).collect();
+            assert_eq!(kept, [iphone.id.as_str()]);
+            assert_eq!(moved.device_kind(&iphone.id), Some(DeviceKind::Ios));
+            assert!(moved.device_key(&iphone.id).is_some());
             // The second time round they are already gone from the file.
-            assert!(gone == 3 || gone == 0);
+            assert!(gone == 3 || gone == 0, "{gone}");
         }
         let saved = std::fs::read_to_string(&path).expect("file");
         assert!(!saved.contains(&phone.key) && !saved.contains(&phone.id));
+        assert!(saved.contains(&iphone.key));
 
         // What is issued now is kept, and says where it was issued.
         let mut moved = Registry::load(&path).expect("reload");
@@ -1694,6 +1761,108 @@ mod tests {
         assert_eq!(early.set_site("https://new.test"), 1);
         early.set_scope("local");
         assert_eq!(early.device_key(&again.id), None);
+    }
+
+    /// o7 for iPhone is recorded as what it is, with its version, and a browser exactly as
+    /// before kinds were recorded.
+    #[test]
+    fn an_iphone_is_recorded_as_the_app_and_a_browser_as_before() {
+        let (folder, mut registry) = fresh();
+        let path = folder.path().join("remote.json");
+        let pairing = registry.start_pairing(1).expect("pairing");
+        let iphone = registry
+            .pair_as(
+                &pairing.id,
+                "  ",
+                DeviceKind::Ios,
+                Some(" 1.0\n(12)\u{7} "),
+                2,
+            )
+            .expect("pair")
+            .expect("device");
+        assert_eq!(iphone.name, "iPhone", "the app's name when none is given");
+        assert_eq!(iphone.kind, DeviceKind::Ios);
+        assert_eq!(iphone.app_version.as_deref(), Some("1.0 (12)"));
+        let pairing = registry.start_pairing(3).expect("pairing");
+        let long = registry
+            .pair_as(
+                &pairing.id,
+                "Work",
+                DeviceKind::Ios,
+                Some(&"9".repeat(40)),
+                4,
+            )
+            .expect("pair")
+            .expect("device");
+        assert_eq!(long.app_version, Some("9".repeat(MAX_CLIENT_FIELD)));
+        // A browser keeps no version, whatever it is given, and is named as before.
+        let pairing = registry.start_pairing(5).expect("pairing");
+        let browser = registry
+            .pair_as(&pairing.id, "", DeviceKind::Browser, Some("1.0"), 6)
+            .expect("pair")
+            .expect("device");
+        assert_eq!(
+            (browser.name.as_str(), browser.app_version.as_deref()),
+            ("Browser", None)
+        );
+        let pairing = registry.start_pairing(7).expect("pairing");
+        let old = registry
+            .pair(&pairing.id, "Phone", 8)
+            .expect("pair")
+            .expect("device");
+        assert_eq!(old.kind, DeviceKind::Browser);
+        assert_eq!(registry.device_kind(&iphone.id), Some(DeviceKind::Ios));
+        assert_eq!(registry.device_kind(&old.id), Some(DeviceKind::Browser));
+        assert_eq!(registry.device_kind("nobody"), None);
+
+        // Both survive a restart.
+        let mut again = Registry::load(&path).expect("reload");
+        again.set_scope("local");
+        let found = |registry: &Registry, id: &str| {
+            registry
+                .devices()
+                .into_iter()
+                .find(|device| device.id == id)
+                .cloned()
+                .expect("device")
+        };
+        assert_eq!(found(&again, &iphone.id), iphone);
+        assert_eq!(found(&again, &old.id), old);
+        // Another workspace does not see what either is.
+        again.set_scope("other");
+        assert_eq!(again.device_kind(&iphone.id), None);
+
+        // A browser's record has neither field, so it reads as it did before; the app's has both.
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("file")).expect("json");
+        let record = |id: &str| {
+            saved["devices"]
+                .as_array()
+                .expect("devices")
+                .iter()
+                .find(|device| device["id"] == id)
+                .cloned()
+                .expect("record")
+        };
+        for id in [&browser.id, &old.id] {
+            let record = record(id);
+            assert!(record.get("kind").is_none(), "{record}");
+            assert!(record.get("app_version").is_none(), "{record}");
+        }
+        assert_eq!(record(&iphone.id)["kind"], "ios");
+        assert_eq!(record(&iphone.id)["app_version"], "1.0 (12)");
+
+        // A kind a newer build wrote reads as a browser, the device offered least, and the file
+        // still loads.
+        let text = std::fs::read_to_string(&path).expect("file");
+        std::fs::write(
+            &path,
+            text.replace(r#""kind": "ios""#, r#""kind": "android""#),
+        )
+        .expect("write");
+        let mut newer = Registry::load(&path).expect("a kind it does not know");
+        newer.set_scope("local");
+        assert_eq!(newer.device_kind(&iphone.id), Some(DeviceKind::Browser));
     }
 
     fn fresh() -> (tempfile::TempDir, Registry) {
