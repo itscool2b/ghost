@@ -107,8 +107,12 @@ final class AppModel {
 
     // MARK: Pairing
 
+    /// The link being paired came from the clipboard: once paired, the app offers to clear it.
+    var pastedLink = false
+
     /// A scanned, pasted or opened link: asks first, whatever is on screen.
-    func propose(_ text: String) {
+    func propose(_ text: String, pasted: Bool = false) {
+        pastedLink = pasted
         guard let link = PairingLink.parse(text, sites: backend.sites) else {
             notice = "That is not an o7 pairing code. In o7 on your computer, open Settings, Remote access, Pair a device."
             return

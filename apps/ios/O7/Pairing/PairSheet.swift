@@ -125,6 +125,13 @@ private struct Progress: View {
             Text("Its chats are on this iPhone now. Nothing more to pair: this iPhone opens them without another code.")
                 .o7Font(.prose)
                 .foregroundStyle(style.fg2)
+            if model.pastedLink {
+                // The link is spent, but it named this computer: nothing else needs it now.
+                QuietButton(title: "Clear the copied link", systemImage: "doc.on.clipboard") {
+                    UIPasteboard.general.items = []
+                    model.pastedLink = false
+                }
+            }
             Spacer()
             if model.push.status == .notDetermined {
                 // Asked once, here, when it means something: the computer can now say when an

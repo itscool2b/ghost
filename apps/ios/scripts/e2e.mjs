@@ -9,7 +9,10 @@
  *   node apps/ios/scripts/e2e.mjs [--host <demo_host executable>]
  *
  * Nothing leaves the machine: every address is localhost. A small control server lets the Swift
- * test ask the stand-in desktop for fresh pairing links (`POST /pair`).
+ * test ask the stand-in desktop for fresh pairing links (`POST /pair`) and read what the relay
+ * sent to Apple (`GET /pushes`): the relay holds a test push key made here, and Apple is a stand-in
+ * that keeps each notification and answers 200, so the test opens a sealed notification as the
+ * phone would and answers it.
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -20,6 +23,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { webcrypto } from "node:crypto";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const root = resolve(here, "../../..");
@@ -34,6 +38,16 @@ const SITE = "http://localhost:1437";
 const RELAY_PORT = 8799;
 const CONTROL_PORT = 8797;
 
+// A push key for the relay to sign with, as Apple issues one (PKCS#8, P-256).
+const signing = await webcrypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+  "sign",
+  "verify",
+]);
+const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", signing.privateKey));
+const APNS_KEY = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64").replace(/.{64}/g, "$&\n")}\n-----END PRIVATE KEY-----\n`;
+/** What the relay sent to Apple, oldest first. */
+const pushes = [];
+
 const relay = new Miniflare(
   convertV4MiniflareOptions({
     modules: [
@@ -44,8 +58,28 @@ const relay = new Miniflare(
       },
     ],
     compatibilityDate: "2026-10-26",
-    durableObjects: { ROOMS: { className: "Room", useSQLite: true } },
-    bindings: { APP_ORIGIN: SITE },
+    durableObjects: {
+      ROOMS: { className: "Room", useSQLite: true },
+      APNS: { className: "Apns", useSQLite: true },
+    },
+    bindings: {
+      APP_ORIGIN: SITE,
+      APNS_TOPIC: "codes.o7.mobile",
+      APNS_KEY_ID: "E2ETESTKEY",
+      APNS_TEAM_ID: "E2ETEAM123",
+      APNS_KEY,
+    },
+    // Apple: every notification is kept for the test and accepted.
+    outboundService: async (request) => {
+      const url = new URL(request.url);
+      if (!url.hostname.endsWith("push.apple.com")) return new Response("not here", { status: 502 });
+      pushes.push({
+        url: request.url,
+        headers: Object.fromEntries(request.headers),
+        body: await request.text(),
+      });
+      return new Response("", { status: 200, headers: { "apns-id": webcrypto.randomUUID() } });
+    },
     host: "127.0.0.1",
     port: RELAY_PORT,
   }),
@@ -92,6 +126,10 @@ const control = createServer(async (request, response) => {
     host.stdin.write("pair\n");
     const link = await line("PAIR");
     response.writeHead(200, { "Content-Type": "text/plain" }).end(link);
+    return;
+  }
+  if (request.method === "GET" && request.url === "/pushes") {
+    response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(pushes));
     return;
   }
   response.writeHead(404).end();
