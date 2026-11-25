@@ -72,5 +72,18 @@ only the owner does them:
 3. **Deploy the relay** (`wrangler deploy --env preview`, then `--env production`).
 4. **Try a real push** on a phone: pair, turn notifications on, and use Send test notification
    in o7's Settings on the computer.
-5. **Ship**: archive and upload from Xcode; App Store listing, screenshots, privacy labels and
-   export compliance (standard encryption only).
+5. **TestFlight** (the owner's choice for now, 25 November 2026). Archive the `O7` scheme
+   (Release) and upload it from Xcode's Organizer. Each upload needs a new build number: let the
+   Organizer raise it, or raise `CURRENT_PROJECT_VERSION` in `project.yml`.
+   - A TestFlight build is a release build. It pairs only with `https://o7.codes`, so the relay
+     must be deployed to production, and the computers need a desktop release that has these
+     changes.
+   - Its notifications go through Apple's production service, so the push key must be set with
+     `--env production`.
+   - App Store Connect asks about encryption for every build until `ITSAppUsesNonExemptEncryption`
+     in `O7/Info.plist` answers it. That answer is the owner's to give.
+   - Internal testers can install a build at once. External testers need Beta App Review, which
+     asks for test information such as a privacy policy address.
+6. **Later, for the App Store**: the listing, screenshots (the iPhone app workflow's screenshots
+   input), the privacy label, then the desktop tour stop and a Smart App Banner on `/remote`, which
+   need the App Store link.
