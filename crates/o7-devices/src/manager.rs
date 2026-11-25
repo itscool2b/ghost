@@ -1402,6 +1402,12 @@ impl Manager {
         }
     }
 
+    /// Whether what is installed has been looked at since o7 started.
+    #[cfg(test)]
+    pub(crate) fn looked(&self) -> bool {
+        lock(&self.inner.state).looked
+    }
+
     /// Notes that the chat's agent called on its device, so the window opens the chat's pane.
     pub(crate) fn summon(&self, chat_id: &str) {
         {
@@ -2929,7 +2935,7 @@ pub(crate) mod tests {
     use super::*;
 
     pub(crate) fn manager(folder: &std::path::Path) -> Manager {
-        Manager::new(
+        let manager = Manager::new(
             Config {
                 root: folder.to_owned(),
                 places: Places::default(),
@@ -2938,7 +2944,11 @@ pub(crate) mod tests {
                 max_running: DEFAULT_RUNNING,
             },
             || {},
-        )
+        );
+        // A test sets what is installed itself: the first tool call must not look at this
+        // computer (a Mac runner's real Xcode made `mobile_start` reach for an iPhone).
+        lock(&manager.inner.state).looked = true;
+        manager
     }
 
     /// Puts a phone in adb's list and gives it to `chat_id`, as if the person had picked it.

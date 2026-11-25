@@ -854,6 +854,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_agents_first_call_looks_at_what_is_installed() {
+        let folder = tempfile::tempdir().unwrap();
+        // Not the test helper's manager, which marks the look as done.
+        let manager = Manager::new(
+            crate::manager::Config {
+                root: folder.path().to_owned(),
+                places: crate::sdk::Places::default(),
+                adb: crate::adb::Adb::at(1),
+                max_running: crate::manager::DEFAULT_RUNNING,
+            },
+            || {},
+        );
+        assert!(!manager.looked());
+        manager.tool("chat", "mobile_devices", &json!({})).await;
+        assert!(
+            manager.looked(),
+            "the first call looked, as opening the pane does"
+        );
+    }
+
+    #[tokio::test]
     async fn an_agents_call_opens_the_pane_even_before_android_is_set_up() {
         let folder = tempfile::tempdir().unwrap();
         let manager = manager(folder.path());
