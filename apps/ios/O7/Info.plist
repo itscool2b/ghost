@@ -37,6 +37,8 @@
 	<string>o7 uses the camera to scan the pairing code your computer shows, and to take photos you send to a chat.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>o7 can ask for Face ID before it opens, or before it allows what an agent asks.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Development builds can reach a relay on your network.</string>
 	<key>NSAppTransportSecurity</key>

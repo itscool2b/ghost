@@ -75,7 +75,7 @@ struct NewChatSheet: View {
                     }
                     if computer.offersPhotos {
                         HStack {
-                            PhotoButton(picking: $picking, shooting: $shooting)
+                            PhotoButton(picking: $picking, shooting: $shooting) { photos.append($0) }
                                 .disabled(photos.count >= photoLimit)
                             Spacer()
                         }

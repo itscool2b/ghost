@@ -70,7 +70,9 @@ struct InboxView: View {
             if !recent.isEmpty {
                 Section {
                     ForEach(recent.prefix(12)) { chat in
-                        row(computer, chat, line: computer.recentLine(chat.chat.id)?.line)
+                        let ended = computer.recentLine(chat.chat.id)
+                        row(computer, chat, line: ended?.line, outcome: ended.flatMap { outcome($0, chat) },
+                            pullRequest: ended?.pullRequest)
                     }
                 } header: {
                     GroupTitle(title: "Today")
@@ -97,15 +99,33 @@ struct InboxView: View {
         .animation(.smooth, value: computer.overview?.chats.map(\.chat.status))
     }
 
-    private func row(_ computer: ComputerStore, _ chat: WorkspaceChat, line: String?) -> some View {
+    private func row(
+        _ computer: ComputerStore, _ chat: WorkspaceChat, line: String?, outcome: String? = nil,
+        pullRequest: InboxSnapshot.Recent.PullRequest? = nil
+    ) -> some View {
         Button {
             open(ChatRoute(hostId: computer.hostId, chatId: chat.chat.id))
         } label: {
-            ChatRow(chat: chat, project: computer.project(chat.projectId)?.name, line: line)
+            ChatRow(
+                chat: chat, project: computer.project(chat.projectId)?.name, line: line, outcome: outcome,
+                pullRequest: pullRequest)
         }
         .buttonStyle(.plain)
         .matchedTransitionSource(id: chat.chat.id, in: zoom)
         .listRowSeparatorTint(style.line)
+    }
+
+    /// "Done in 12m · 6 files · +120 −8"; a failed turn says only how long it ran.
+    private func outcome(_ ended: InboxSnapshot.Recent, _ chat: WorkspaceChat) -> String? {
+        var parts: [String] = []
+        if let duration = ended.durationMs {
+            parts.append((chat.chat.status == .failed ? "Ran " : "Done in ") + elapsedWords(duration))
+        }
+        if let files = ended.files, files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
+        if let added = ended.added, let removed = ended.removed, added + removed > 0 {
+            parts.append("+\(added) −\(removed)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func workingWords(_ working: InboxSnapshot.Working) -> String {

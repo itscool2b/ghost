@@ -81,6 +81,15 @@ struct RootTabs: View {
         .sheet(isPresented: $settings) {
             SettingsView().o7Look(style)
         }
+        .onChange(of: model.route) { _, route in
+            // A notification or a widget names a chat: it opens over the Inbox.
+            guard let route else { return }
+            settings = false
+            newWork = false
+            tab = .inbox
+            inboxPath = [route]
+            model.route = nil
+        }
         .sheet(isPresented: $newWork) {
             NewChatSheet { route in
                 tab = .inbox

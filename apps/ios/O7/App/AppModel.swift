@@ -3,6 +3,7 @@ import Observation
 import O7Client
 import O7Crypto
 import O7MockHost
+import O7Push
 import O7Store
 import O7Wire
 import SwiftUI
@@ -24,6 +25,15 @@ final class AppModel {
     /// A problem to say once, such as a code that is not o7's.
     var notice: String?
     let settings = Settings()
+    /// Notifications: the person's yes, Apple's token, what each computer should send.
+    let push = PushHub()
+    @ObservationIgnored let activities = LiveActivities()
+    /// A chat to open, from a notification or a link; the tabs take it.
+    var route: ChatRoute?
+    /// The chat on screen, so its notifications do not show a banner.
+    var visibleChat: ChatRoute?
+    @ObservationIgnored var snapshotWrite: Task<Void, Never>?
+    @ObservationIgnored var lastSnapshot: SharedSnapshot?
 
     init(backend: Backend = .current()) {
         self.backend = backend
@@ -32,6 +42,16 @@ final class AppModel {
             computers.append(ComputerStore(record: record, credential: credential, backend: backend))
         }
         selectedHostId = computers.first?.hostId
+        for computer in computers { connect(computer) }
+        // Here and not in `start()`: a notification's button can launch the app in the background,
+        // before any screen appears.
+        NotificationRouter.shared.attach(self)
+    }
+
+    /// Hands a computer what the app keeps for all of them.
+    private func connect(_ computer: ComputerStore) {
+        computer.push = push
+        computer.changed = { [weak self] in self?.scheduleSnapshot() }
     }
 
     var selected: ComputerStore? {
@@ -49,6 +69,7 @@ final class AppModel {
     // MARK: Life
 
     func start() {
+        Task { await push.refreshStatus() }
         for computer in computers { computer.start() }
         // The demo computer, already paired, for screenshots and UI tests.
         if let mock = backend.mock, computers.isEmpty,
@@ -65,13 +86,15 @@ final class AppModel {
     }
 
     private func pairedDemo(_ mock: MockComputer) async {
-        let device = await mock.addDevice()
+        // Fixed in the demo, so `scripts/push.mjs` can seal a notification for it.
+        let device = await mock.addDevice(id: MockComputer.demoDeviceId, key: MockComputer.demoDeviceKey)
         let credential = DeviceCredential(hostId: mock.hostId, deviceId: device.id, key: device.key)
         _ = try? backend.computers.paired(
             credential, hostName: mock.hostName, site: "https://o7.codes",
             look: Look(theme: "claude", appearance: "dark"), features: ["pickers", "inbox", "search"])
         guard let record = backend.computers.all().first else { return }
         let store = ComputerStore(record: record, credential: credential, backend: backend)
+        connect(store)
         computers = [store]
         selectedHostId = store.hostId
         store.start()
@@ -115,10 +138,12 @@ final class AppModel {
             computers[old].stop()
             computers.remove(at: old)
         }
+        connect(store)
         computers.insert(store, at: 0)
         selectedHostId = store.hostId
         pairing = nil
         proposed = nil
+        Task { await store.preparePush() }
     }
 
     func cancelPairing() {

@@ -88,6 +88,10 @@ struct ChatRow: View {
     var project: String?
     /// A live line under it: the step in progress, or how the last turn ended.
     var line: String?
+    /// How the last turn ended, in numbers: "Done in 12m · 6 files · +120 −8".
+    var outcome: String?
+    /// The chat's pull request: its number and its checks.
+    var pullRequest: InboxSnapshot.Recent.PullRequest?
 
     var body: some View {
         let status = StatusWords(chat.chat)
@@ -115,11 +119,40 @@ struct ChatRow: View {
                         .foregroundStyle(style.fg2)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 4 : 2)
                 }
+                if outcome != nil || pullRequest != nil {
+                    HStack(spacing: 8) {
+                        if let outcome {
+                            Text(outcome).monospacedDigit().foregroundStyle(style.fg3)
+                        }
+                        if let pullRequest {
+                            pullChip(pullRequest)
+                        }
+                    }
+                    .o7Font(.small)
+                }
             }
         }
         .padding(.vertical, 10)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension ChatRow {
+    /// "#12 checks passed", in the checks' colour.
+    private func pullChip(_ pull: InboxSnapshot.Recent.PullRequest) -> some View {
+        let (words, tone): (String, Color) =
+            switch pull.checks {
+            case "passed": ("checks passed", style.green)
+            case "failed": ("checks failed", style.red)
+            case "pending": ("checks running", style.amber)
+            default: (pull.state == "merged" ? "merged" : "open", style.fg3)
+            }
+        return Text("#\(pull.number) \(words)")
+            .foregroundStyle(tone)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(tone.opacity(0.14), in: .capsule)
     }
 }
 

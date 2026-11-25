@@ -21,7 +21,12 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Pair with this computer?"].waitForExistence(timeout: 5))
         app.buttons["Pair"].tap()
         XCTAssertTrue(app.staticTexts["Paired with Studio"].waitForExistence(timeout: 10))
-        app.buttons["Open Studio"].tap()
+        // Notifications are offered once, right after the first pairing.
+        if app.buttons["Not now"].exists {
+            app.buttons["Not now"].tap()
+        } else {
+            app.buttons["Open Studio"].tap()
+        }
         XCTAssertTrue(app.navigationBars["Studio"].waitForExistence(timeout: 10))
     }
 

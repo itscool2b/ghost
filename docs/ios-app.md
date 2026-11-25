@@ -47,6 +47,43 @@ Each of these needs the computer's o7 to offer it (`ready.features`: `control`, 
 `screens`, `tasks`, `attachments`). With an older o7 the app leaves the control out and never sends
 the operation.
 
+## Notifications
+
+The app asks once, right after the first pairing ("Know when an agent needs you"), or from
+Settings > Notifications. Each computer then knows where Apple delivers this phone's notifications
+(`push_register`) and what the person wants from it: Needs you, Finished, Failed, Tasks, for every
+chat or only those started or answered from this phone.
+
+- **Sealed end to end.** The computer seals each notification's words for this phone with a key
+  derived from the device key (HKDF-SHA256, `o7 push v1`), bound to the computer and the device.
+  The relay and Apple carry a blob they cannot read; the outside of every notification is the same
+  fixed "o7" and "Something changed on your computer."
+- **Opened on the phone.** The notification extension (`O7NotificationService`) opens it with the
+  push key, which the app keeps in the App Group's Keychain group; the device key itself never
+  leaves the app's own Keychain. It writes the chat as the title, the project and agent under it,
+  and the ask or the result as the body, one thread per chat. A repeat or an older one than the
+  newest from that computer comes in quietly. Before the phone's first unlock after it starts, the
+  key cannot be read: the fixed words stay, with no buttons.
+- **Answering.** A permission gets **Allow once** and **Deny**, a yes-or-no question **Yes** and
+  **No**, a question in words a text field; each asks for the phone's own unlock first, and only a
+  notification that opened gets buttons, so nothing is allowed unread. The app answers through its
+  session, waking it if it slept; when the computer cannot be reached, a notification says so.
+- **In the app.** No banner for the chat on screen. A notification's tap opens its chat.
+- **Live Activity.** While agents work, the Lock Screen and the Dynamic Island show each computer's
+  counts and the leading chat ("Studio: 1 needs you · 1 working"), with a timer. The app keeps it
+  current while it runs; the computer then sends its updates through Apple, sealed the same way
+  (`activity`). Off in Settings > Notifications.
+- **Widgets.** Needs you, small and medium, and on the Lock Screen: counts and up to three chats
+  from what the app and the extension last wrote to the App Group. A tap opens the chat
+  (`o7://chat/<computer>/<chat>`) or the Inbox (`o7://inbox`).
+
+A simulator does not run the notification extension for a simulated push.
+`node apps/ios/scripts/push.mjs --udid <simulator> [--buttons]` sends one sealed for the demo
+computer (`-O7Backend mock`), whose ids and key are fixed in debug builds: Apple's fixed words show,
+and with `--buttons` the category the extension would set, so the buttons and the app's answer can
+be tried. The extension's own opening is covered by `O7PushTests`, and on a phone by a real push
+once the Apple team is set.
+
 Pairing a computer the phone already has says so ("Pair this iPhone again?"); the new key replaces
 the old one, and the app asks the computer to forget the old device, so its Settings lists the
 phone once.

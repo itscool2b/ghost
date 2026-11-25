@@ -79,6 +79,8 @@ struct PhotoButton: View {
     @Environment(\.style) private var style
     @Binding var picking: Bool
     @Binding var shooting: Bool
+    /// Where a pasted image goes.
+    var pasted: ((PickedPhoto) -> Void)?
 
     var body: some View {
         // Plain inside the composer's glass: a glass menu there never takes a tap on its items.
@@ -86,6 +88,11 @@ struct PhotoButton: View {
             Button("Photo library", systemImage: "photo.on.rectangle") { picking = true }
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button("Take a photo", systemImage: "camera") { shooting = true }
+            }
+            if let pasted, UIPasteboard.general.hasImages {
+                Button("Paste image", systemImage: "doc.on.clipboard") {
+                    if let image = UIPasteboard.general.image, let photo = PickedPhoto(image: image) { pasted(photo) }
+                }
             }
         } label: {
             Image(systemName: "plus")

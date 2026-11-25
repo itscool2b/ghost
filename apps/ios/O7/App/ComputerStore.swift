@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import O7Client
 import O7Crypto
+import O7Push
 import O7Store
 import O7Wire
 
@@ -23,6 +24,12 @@ final class ComputerStore: Identifiable {
     var problem: String?
     /// A chat made without its first message: the words go back in its box, with why.
     var unsent: (chatId: String, text: String, reason: String)?
+    /// Notifications: where Apple delivers them and what the person wants; set by the app.
+    weak var push: PushHub?
+    /// Whether the relay in front of this computer sends notifications, as it last said.
+    private(set) var relayPushes: Bool?
+    /// Called when what the lists show changed: the widgets and the badge follow.
+    var changed: (() -> Void)?
     /// The chat open on this computer, if any. One per computer, as the protocol has it.
     private(set) var chat: ChatStore?
 
@@ -108,6 +115,7 @@ final class ComputerStore: Identifiable {
                 await refresh()
                 await refreshInbox()
                 await chat?.sessionRestarted()
+                await preparePush()
             }
         case .chat(let update):
             merge(update)
@@ -169,6 +177,7 @@ final class ComputerStore: Identifiable {
         do {
             let fresh = try await connection.send(.overview, as: Overview.self)
             overview = fresh
+            changed?()
             if !fresh.hostName.isEmpty, fresh.hostName != hostName {
                 hostName = fresh.hostName
                 save()
@@ -180,7 +189,10 @@ final class ComputerStore: Identifiable {
 
     func refreshInbox() async {
         guard features.contains("inbox") else { return }
-        if let fresh = try? await connection.send(.inbox, as: InboxSnapshot.self) { inbox = fresh }
+        if let fresh = try? await connection.send(.inbox, as: InboxSnapshot.self) {
+            inbox = fresh
+            changed?()
+        }
     }
 
     private func scheduleInbox() {
@@ -210,6 +222,7 @@ final class ComputerStore: Identifiable {
         current.chats[at].chat.updatedAt = update.updatedAt
         current.chats.sort { $0.chat.updatedAt > $1.chat.updatedAt }
         overview = current
+        changed?()
     }
 
     // MARK: What the lists show
@@ -313,9 +326,51 @@ final class ComputerStore: Identifiable {
 
     /// Unpairs: the computer forgets this phone and this phone its key.
     func forget() async {
+        if offersPush { try? await connection.perform(.pushUnregister) }
         try? await connection.perform(.forget)
+        if let deviceId = record?.deviceId { push?.keys.delete(deviceId: deviceId) }
         backend.computers.forget(hostId)
         stop()
+    }
+
+    // MARK: Notifications
+
+    var offersPush: Bool { features.contains("push") }
+    var offersActivity: Bool { features.contains("activity") }
+
+    /// Keeps this computer's push key where the notification extension finds it, and tells the
+    /// computer where to send.
+    func preparePush() async {
+        guard let push, let credential = backend.computers.credential(for: hostId) else { return }
+        do {
+            try push.keys.save(PushSeal.key(deviceKey: credential.key), deviceId: credential.deviceId)
+        } catch {
+            push.failure = "The notification key could not be kept (\(error))."
+        }
+        await registerPush()
+    }
+
+    /// Tells the computer this phone's notification token and what it wants, when both sides can.
+    func registerPush() async {
+        guard let push, let token = push.token, offersPush, phase == .ready else { return }
+        do {
+            let registered = try await connection.send(
+                .pushRegister(token: token, env: push.environment, prefs: push.prefs(hostId)), as: PushRegistered.self)
+            relayPushes = registered.relay
+        } catch {
+            problem = (error as? LocalizedError)?.errorDescription
+        }
+    }
+
+    /// Waits for the session to be ready, as when the app was opened by a notification's button.
+    func ready(within timeout: Duration) async -> Bool {
+        start()
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if case .ready = phase { return true }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return false
     }
 
     /// Deletes this computer's key here without asking it anything (after it refused the key).

@@ -10,7 +10,10 @@ public actor MockComputer {
     public nonisolated let hostId: String
     public nonisolated let hostName: String
     public var look = Look(theme: "claude", appearance: "dark")
-    public var features = ["pickers", "inbox", "search", "control", "review", "memory", "screens", "tasks", "attachments"]
+    public var features = [
+        "pickers", "inbox", "search", "control", "review", "memory", "screens", "tasks", "attachments", "push",
+        "activity",
+    ]
     /// Seconds between the scripted agent's steps.
     public var pace: Duration
     /// While false, the relay says the computer is away.
@@ -36,8 +39,14 @@ public actor MockComputer {
         var ready = false
     }
 
-    public init(hostName: String = "Studio", pace: Duration = .milliseconds(350)) {
-        hostId = Base64URL.encode(randomBytes(16))
+    /// The demo's own ids and key in the app's mock mode, fixed so a notification can be sealed
+    /// for it from outside the app (`apps/ios/scripts/push.mjs`). Never a real computer's.
+    public static let demoHostId = "TW9jayBjb21wdXRlciAxMg"
+    public static let demoDeviceId = "TW9ja0RldjE"
+    public static let demoDeviceKey = Data((0..<32).map { UInt8($0) })
+
+    public init(hostName: String = "Studio", hostId: String? = nil, pace: Duration = .milliseconds(350)) {
+        self.hostId = hostId ?? Base64URL.encode(randomBytes(16))
         self.hostName = hostName
         self.pace = pace
         chats = Script.chats()
@@ -55,6 +64,12 @@ public actor MockComputer {
     public func addDevice() -> (id: String, key: Data) {
         let id = Base64URL.encode(randomBytes(8))
         let key = randomBytes(32)
+        devices[id] = key
+        return (id, key)
+    }
+
+    /// A device the computer knows by an id and key of the caller's.
+    public func addDevice(id: String, key: Data) -> (id: String, key: Data) {
         devices[id] = key
         return (id, key)
     }
@@ -344,12 +359,23 @@ public actor MockComputer {
                         "since": .number(Double(Script.now - 240_000)),
                     ]))
             } else {
-                recent.append(
-                    .object([
-                        "chat_id": .string(chat.id), "ended_at": .number(Double(chat.summary.chat.updatedAt)),
-                        "duration_ms": .number(192_000),
-                        "line": .string(chat.summary.chat.status == .failed ? "The agent stopped unexpectedly." : "The tests pass: 42 passed."),
-                    ]))
+                let failed = chat.summary.chat.status == .failed
+                var entry: [String: JSONValue] = [
+                    "chat_id": .string(chat.id), "ended_at": .number(Double(chat.summary.chat.updatedAt)),
+                    "duration_ms": .number(192_000),
+                    "line": .string(failed ? "The agent stopped unexpectedly." : "The tests pass: 42 passed."),
+                ]
+                if !failed {
+                    entry["files"] = .number(2)
+                    entry["added"] = .number(9)
+                    entry["removed"] = .number(1)
+                }
+                if chat.id == "c1" {
+                    entry["pull_request"] = .object([
+                        "number": .number(12), "state": .string("open"), "checks": .string("passed"),
+                    ])
+                }
+                recent.append(.object(entry))
             }
         }
         return .object(["asking": .array(asking), "working": .array(working), "recent": .array(recent)])
