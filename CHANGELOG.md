@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-25
 
+- Pairing more than one device is quicker: after a device pairs, Pair another device in the same Settings dialog shows a new code at once. On your phone, a code scanned while the remote page is already open now pairs too, and pairing the same computer again replaces the old entry instead of listing your phone twice. ([#213](https://github.com/itscool2b/o7/pull/213))
 - o7 now has Terms of Service and a Privacy Policy, from BASH.AI LLC. Setup says that continuing accepts them, and if you set up o7 before today it shows them to you once with an OK. Settings > About links both. ([#212](https://github.com/itscool2b/o7/pull/212))
 
 ## 2026-11-24
