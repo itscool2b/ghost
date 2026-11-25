@@ -79,6 +79,12 @@ export async function checkRemote(browser, url, out, engine) {
     await dialog.waitFor();
     assert.deepEqual(await calls(), ["enabled:true", "pair"]);
     assert.equal(await toggle.isChecked(), true);
+    // The code is for a phone's camera, o7 for iPhone or a browser alike.
+    await dialog
+      .getByText("Scan it with your phone's camera or with o7 for iPhone, or open the link", {
+        exact: false,
+      })
+      .waitFor();
     const code = dialog.getByRole("img", { name: "Pairing code" });
     const box = await code.boundingBox();
     assert.ok(
@@ -306,6 +312,15 @@ export async function checkRemote(browser, url, out, engine) {
     await page.getByText("iPhone (Safari)", { exact: true }).waitFor();
     await page.getByText("Last seen 7 min ago", { exact: true }).waitFor();
     await page.getByText("Grok Bot", { exact: true }).waitFor();
+    // o7 for iPhone says which app it is, and wears the phone by its kind: its name is one the
+    // name's guess would not take for a phone.
+    const iphone = page.locator(".settings-row", { hasText: "Travel" });
+    await iphone.getByText("Connected now · o7 for iPhone 1.0", { exact: true }).waitFor();
+    assert.equal(await iphone.locator("svg.lucide-smartphone").count(), 1, "the app's glyph");
+    // A browser says nothing of an app; its name still chooses its glyph.
+    const safari = page.locator(".settings-row", { hasText: "iPhone (Safari)" });
+    assert.equal(await safari.getByText("o7 for iPhone", { exact: false }).count(), 0);
+    assert.equal(await safari.locator("svg.lucide-smartphone").count(), 1, "the name's glyph");
     await settled(page);
     assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
     await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote.png`) });

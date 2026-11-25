@@ -42,6 +42,9 @@ apps/desktop/src-tauri/gen/schemas/
 *.pem
 *.key
 *.p12
+*.p8
+*.cer
+*.mobileprovision
 
 # Logs and test output
 *.log

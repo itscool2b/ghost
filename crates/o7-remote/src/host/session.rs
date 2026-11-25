@@ -151,14 +151,17 @@ fn hello(
     let Some(client_nonce) = crypto::decode::<NONCE_BYTES>(&hello.nonce) else {
         return Received::Refuse(None);
     };
-    // The key and the workspace it is good for, read together.
-    let (key, scope) = {
+    // The key, the workspace it is good for and what the device is, read together.
+    let (key, scope, app) = {
         let mut registry = lock(&shared.registry);
-        let key = match hello.kind {
-            CredentialKind::Pair => registry.pairing_key(&hello.id, now()),
-            CredentialKind::Device => registry.device_key(&hello.id),
+        let (key, app) = match hello.kind {
+            CredentialKind::Pair => (registry.pairing_key(&hello.id, now()), false),
+            CredentialKind::Device => (
+                registry.device_key(&hello.id),
+                registry.device_kind(&hello.id) == Some(DeviceKind::Ios),
+            ),
         };
-        (key, registry.scope().to_owned())
+        (key, registry.scope().to_owned(), app)
     };
     let Some(key) = key else {
         let elsewhere = hello.kind == CredentialKind::Device
@@ -178,14 +181,25 @@ fn hello(
         return Received::Refuse(None);
     };
     let paired = hello.kind == CredentialKind::Device;
+    // The app's features need the app's path, which the relay marks and no page can open, and
+    // either a pairing link or a device recorded as the app. A browser's word that it is the app
+    // is not enough; neither is the app's path with a browser's key.
+    let native = connection.native;
+    let features = if native && (!paired || app) {
+        wire::APP_FEATURES
+    } else {
+        wire::FEATURES
+    };
     let look = backend.look();
     let Ok(ready) = seal(
         &mut channel,
         &Event::Ready {
             host_name: &shared.config.host_name,
             paired,
-            features: wire::FEATURES,
+            features,
             look: look.as_ref(),
+            // The app keeps the site it pairs through, and follows it when it moves.
+            site: native.then_some(shared.config.site.as_str()),
         },
     ) else {
         return Received::Refuse(None);
@@ -201,6 +215,8 @@ fn hello(
         device: paired.then_some(hello.id),
         scope,
         proven: false,
+        features,
+        native,
         calls: Arc::new(AtomicUsize::new(0)),
         backlog: Arc::new(AtomicUsize::new(0)),
         follow: Arc::new(AtomicU64::new(0)),
@@ -213,15 +229,17 @@ fn hello(
     ])
 }
 
-fn reply(out: &UnboundedSender<Out>, cid: &str, id: u32, result: Result<Data, BackendError>) {
-    let json = match &result {
-        Ok(data) => serde_json::to_string(&Reply {
-            re: id,
-            ok: true,
-            data: Some(data),
-            error: None,
-        }),
-        Err(error) => serde_json::to_string(&Reply {
+/// Sends the answer to request `id`, and says whether it went as it was. One larger than a sealed
+/// message carries ([`MAX_PLAINTEXT`]) is answered `too_large` instead: sealed, it could pass the
+/// relay's limit for one frame, and the relay ends this computer's whole connection for that.
+fn reply(
+    out: &UnboundedSender<Out>,
+    cid: &str,
+    id: u32,
+    result: Result<Data, BackendError>,
+) -> bool {
+    let failure = |error: &BackendError| {
+        serde_json::to_string(&Reply {
             re: id,
             ok: false,
             data: None,
@@ -229,7 +247,25 @@ fn reply(out: &UnboundedSender<Out>, cid: &str, id: u32, result: Result<Data, Ba
                 code: error.code,
                 message: error.message.clone(),
             }),
+        })
+    };
+    let json = match &result {
+        Ok(data) => serde_json::to_string(&Reply {
+            re: id,
+            ok: true,
+            data: Some(data),
+            error: None,
         }),
+        Err(error) => failure(error),
+    };
+    let whole = json.as_ref().is_ok_and(|json| json.len() <= MAX_PLAINTEXT);
+    let json = match json {
+        Ok(json) if whole => Ok(json),
+        Ok(_) => failure(&BackendError::new(
+            "too_large",
+            "The answer is too large to send to this device.",
+        )),
+        Err(error) => Err(error),
     };
     // A value that will not serialize is a fault here, never the browser's doing: say so.
     let json = json.unwrap_or_else(|_| {
@@ -245,6 +281,7 @@ fn reply(out: &UnboundedSender<Out>, cid: &str, id: u32, result: Result<Data, Ba
         json,
         backlog: 0,
     });
+    whole
 }
 
 /// Halves a page from its oldest end until it fits one message; the rest is the next page.
@@ -313,7 +350,7 @@ fn start(
     let id = request.id;
     // A pairing link does one thing: become a device.
     if let Some(pairing) = session.pairing.clone() {
-        let Op::Pair { name } = request.op else {
+        let Op::Pair { name, client } = request.op else {
             reply(
                 out,
                 cid,
@@ -322,12 +359,25 @@ fn start(
             );
             return Ok(());
         };
-        let result = lock(&shared.registry).pair(&pairing, &name, now());
+        // Recorded as the app only on the app's path: anything can say it is the app.
+        let app = session.native && client.as_ref().is_some_and(wire::Client::ios);
+        let (kind, version) = if app {
+            (DeviceKind::Ios, client.and_then(|client| client.version))
+        } else {
+            (DeviceKind::Browser, None)
+        };
+        let result =
+            lock(&shared.registry).pair_as(&pairing, &name, kind, version.as_deref(), now());
         match result {
             Ok(Some(device)) => {
-                // The session is the device's from here on.
+                // The session is the device's from here on, offered what its next one will be.
                 session.pairing = None;
                 session.device = Some(device.id.clone());
+                session.features = if app {
+                    wire::APP_FEATURES
+                } else {
+                    wire::FEATURES
+                };
                 *lock(&shared.connected)
                     .entry(device.id.clone())
                     .or_default() += 1;
@@ -339,24 +389,29 @@ fn start(
                     Ok(Data::Paired(Paired {
                         device_id: device.id,
                         device_key: device.key,
+                        features: app.then_some(wire::APP_FEATURES),
                     })),
                 );
             }
-            Ok(None) => reply(
-                out,
-                cid,
-                id,
-                Err(BackendError::new(
-                    "expired",
-                    "This pairing link is no longer open. Create a new one in o7.",
-                )),
-            ),
-            Err(error) => reply(
-                out,
-                cid,
-                id,
-                Err(BackendError::new("refused", error.to_string())),
-            ),
+            Ok(None) => {
+                reply(
+                    out,
+                    cid,
+                    id,
+                    Err(BackendError::new(
+                        "expired",
+                        "This pairing link is no longer open. Create a new one in o7.",
+                    )),
+                );
+            }
+            Err(error) => {
+                reply(
+                    out,
+                    cid,
+                    id,
+                    Err(BackendError::new("refused", error.to_string())),
+                );
+            }
         }
         return Ok(());
     }
@@ -366,6 +421,23 @@ fn start(
     // A device removed in Settings is gone at once, even mid-session.
     if lock(&shared.registry).device_key(&device).is_none() {
         return Err(());
+    }
+    // A request this build knows but did not offer this session is answered, and the session
+    // goes on: a device may be newer than this computer's o7, or a browser ask for what only
+    // the app is offered.
+    if let Some(feature) = request.op.feature()
+        && !session.features.contains(&feature)
+    {
+        reply(
+            out,
+            cid,
+            id,
+            Err(BackendError::new(
+                "not_offered",
+                "This computer does not offer that to this device.",
+            )),
+        );
+        return Ok(());
     }
     if session.calls.load(Ordering::Relaxed) >= MAX_CALLS {
         reply(
@@ -390,6 +462,7 @@ fn start(
     };
     session.calls.fetch_add(1, Ordering::Relaxed);
     let (calls, backlog) = (session.calls.clone(), session.backlog.clone());
+    let opening = matches!(request.op, Op::Open { .. });
     let (shared, backend, out, cid) = (
         shared.clone(),
         backend.clone().bound(&session.scope),
@@ -397,11 +470,11 @@ fn start(
         cid.to_owned(),
     );
     tokio::spawn(async move {
-        let result = match turn {
+        let (result, held) = match turn {
             Some(turn) => {
                 // In the order they were asked for, and only while still the newest.
-                let _held = turn.order.lock().await;
-                if turn.ended.load(Ordering::SeqCst) {
+                let held = turn.order.clone().lock_owned().await;
+                let result = if turn.ended.load(Ordering::SeqCst) {
                     Err(BackendError::new("closed", "This session is over."))
                 } else if turn.newest.load(Ordering::SeqCst) == turn.mine {
                     let result =
@@ -416,13 +489,23 @@ fn start(
                         "superseded",
                         "Another chat was opened after this one.",
                     ))
-                }
+                };
+                (result, Some(held))
             }
-            None => perform(&shared, &backend, &out, &cid, &device, backlog, request.op).await,
+            None => (
+                perform(&shared, &backend, &out, &cid, &device, backlog, request.op).await,
+                None,
+            ),
         };
         calls.fetch_sub(1, Ordering::Relaxed);
         let forgot = matches!(result, Ok(Performed::Forgot));
-        reply(&out, &cid, id, result.map(Performed::data));
+        let whole = reply(&out, &cid, id, result.map(Performed::data));
+        // An open whose answer was too large to send follows nothing, as the device was told it
+        // failed. Still in its turn, so no open asked for after it is undone.
+        if opening && !whole {
+            backend.release(&owner(&cid));
+        }
+        drop(held);
         if forgot {
             let _ = out.send(Out::Drop { cid });
         }
@@ -591,5 +674,8 @@ async fn perform(
             (shared.config.changed)();
             Ok(Performed::Forgot)
         }
+        // What o7 for iPhone is offered beyond a browser (`host/app.rs`).
+        Op::Inbox => done(super::app::inbox(backend).await?),
+        Op::Search { query, limit } => done(super::app::search(backend, &query, limit).await?),
     }
 }

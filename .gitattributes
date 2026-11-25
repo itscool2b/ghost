@@ -5,3 +5,6 @@
 /CLAUDE.md text eol=lf
 # The pinned scrcpy server is a jar: never touch its bytes.
 /crates/o7-devices/resources/scrcpy-server-* binary
+# The iPhone app's fonts and images are binary.
+/apps/ios/**/*.ttf binary
+/apps/ios/**/*.png binary

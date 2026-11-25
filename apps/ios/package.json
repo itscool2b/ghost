@@ -1,0 +1,10 @@
+{
+  "name": "@o7/ios",
+  "private": true,
+  "type": "module",
+  "description": "o7 for iPhone. The app builds with Xcode; these scripts keep its generated Swift sources in step with the desktop's.",
+  "scripts": {
+    "generate": "node scripts/write-palettes.mts && node scripts/write-pixel-goldens.mts && node scripts/write-agent-logos.mts && node scripts/write-highlighter.mjs && node scripts/write-icon.mjs && node --import ./scripts/register-ts.mjs scripts/write-goldens.mts",
+    "check": "node scripts/write-palettes.mts --check && node scripts/write-pixel-goldens.mts --check && node scripts/write-agent-logos.mts --check && node scripts/write-highlighter.mjs --check && node scripts/write-icon.mjs --check && node --import ./scripts/register-ts.mjs scripts/write-goldens.mts --check"
+  }
+}

@@ -1484,6 +1484,11 @@ mod tests {
             tasks::TaskStepKind::Text,
             tasks::TaskStepKind::as_str,
         );
+        check_lenient(
+            remote::RemoteDeviceKind::ALL,
+            remote::RemoteDeviceKind::Browser,
+            remote::RemoteDeviceKind::as_str,
+        );
     }
 
     #[test]
@@ -1501,6 +1506,11 @@ mod tests {
         assert_eq!(
             session::ConfigCategory::FALLBACK,
             session::ConfigCategory::Other
+        );
+        // A device of a kind this build does not know is offered what a browser is.
+        assert_eq!(
+            remote::RemoteDeviceKind::FALLBACK,
+            remote::RemoteDeviceKind::Browser
         );
     }
 

@@ -58,6 +58,53 @@ fn error(status: u16, body: &'static [u8], head: bool, common: &[(&str, &str)]) 
     }
 }
 
+/// The Apple app site association: the file that lets o7 for iPhone open the site's pairing
+/// links (Universal Links). None until the app's Apple Developer Team ID is known; then it is
+///
+/// ```text
+/// {"applinks":{"details":[{"appIDs":["TEAMID.codes.o7.mobile"],"components":[{"/":"/remote","#":"?*.?*.?*"}]}]}}
+/// ```
+///
+/// with `TEAMID` the Team ID. Only `/remote` with a pairing link's fragment (three parts joined
+/// by dots) opens the app; every other page stays in the browser. It is compiled in rather than
+/// a static file because the asset manifest takes no folder whose name starts with a dot.
+const ASSOCIATION: Option<&str> = None;
+
+/// Where Apple reads the association: the first is where it looks now, the second where it
+/// looked first.
+const ASSOCIATION_PATHS: [&str; 2] = [
+    "/.well-known/apple-app-site-association",
+    "/apple-app-site-association",
+];
+
+/// The association, at the site's own address only. Apple follows no redirect for it, so the
+/// former address answers 404, as both do while there is none.
+fn associated(
+    association: Option<&'static str>,
+    head: bool,
+    host: &str,
+    common: &[(&str, &str)],
+) -> ResponsePlan {
+    let former = FORMER_HOSTS
+        .iter()
+        .any(|former| host.eq_ignore_ascii_case(former));
+    let Some(body) = association.filter(|_| !former) else {
+        return error(404, b"Not found\n", head, common);
+    };
+    let mut headers: Vec<_> = common
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    header(&mut headers, "content-type", "application/json");
+    header(&mut headers, "cache-control", "public, max-age=3600");
+    header(&mut headers, "content-length", &body.len().to_string());
+    ResponsePlan {
+        status: 200,
+        headers,
+        body: if head { b"" } else { body.as_bytes() },
+    }
+}
+
 /// Sends a page asked for at a former address to the same page at [`SITE`].
 fn moved(path: &str, common: &[(&str, &str)]) -> ResponsePlan {
     let mut headers: Vec<_> = common
@@ -75,6 +122,27 @@ fn moved(path: &str, common: &[(&str, &str)]) -> ResponsePlan {
 }
 
 pub fn respond(
+    method: &str,
+    host: &str,
+    path: &str,
+    if_none_match: Option<&str>,
+    assets: &[Asset],
+    common: &[(&str, &str)],
+) -> ResponsePlan {
+    respond_with(
+        ASSOCIATION,
+        method,
+        host,
+        path,
+        if_none_match,
+        assets,
+        common,
+    )
+}
+
+/// [`respond`], with `association` as the Apple app site association ([`ASSOCIATION`]).
+fn respond_with(
+    association: Option<&'static str>,
     method: &str,
     host: &str,
     path: &str,
@@ -100,6 +168,9 @@ pub fn respond(
         let mut response = error(405, b"Method not allowed\n", false, common);
         header(&mut response.headers, "allow", "GET, HEAD");
         return response;
+    }
+    if ASSOCIATION_PATHS.contains(&path) {
+        return associated(association, head, host, common);
     }
     let asset = assets.iter().find(|asset| {
         asset.path == path
@@ -386,6 +457,94 @@ mod tests {
             assert_eq!(at(host, "GET", "/download", None).status, 404, "{host}");
             assert_eq!(at(host, "GET", "/", None).body, b"home", "{host}");
         }
+    }
+
+    /// The association as it will be once the Team ID is known.
+    const SAMPLE: &str = r##"{"applinks":{"details":[{"appIDs":["TEAMID.codes.o7.mobile"],"components":[{"/":"/remote","#":"?*.?*.?*"}]}]}}"##;
+
+    fn with(
+        association: Option<&'static str>,
+        host: &str,
+        method: &str,
+        path: &str,
+    ) -> ResponsePlan {
+        respond_with(
+            association,
+            method,
+            host,
+            path,
+            None,
+            ASSETS,
+            &[("x-content-type-options", "nosniff")],
+        )
+    }
+
+    #[test]
+    fn the_app_site_association_is_served_once_there_is_one_and_never_redirected() {
+        // As built now, there is none: both addresses are not found, here and at the former
+        // address, and nothing is sent elsewhere.
+        assert_eq!(ASSOCIATION, None);
+        for path in ASSOCIATION_PATHS {
+            for host in ["o7.codes", "auracode.si"] {
+                for method in ["GET", "HEAD"] {
+                    let response = at(host, method, path, None);
+                    assert_eq!(response.status, 404, "{host}{path}");
+                    assert_eq!(value(&response, "location"), None);
+                    assert_eq!(value(&response, "cache-control"), Some("no-store"));
+                }
+            }
+        }
+        for path in ASSOCIATION_PATHS {
+            // Once there is one: JSON, kept an hour, the same bytes at both addresses.
+            let response = with(Some(SAMPLE), "o7.codes", "GET", path);
+            assert_eq!(response.status, 200, "{path}");
+            assert_eq!(response.body, SAMPLE.as_bytes());
+            assert_eq!(value(&response, "content-type"), Some("application/json"));
+            assert_eq!(
+                value(&response, "cache-control"),
+                Some("public, max-age=3600")
+            );
+            assert_eq!(
+                value(&response, "content-length"),
+                Some(SAMPLE.len().to_string().as_str())
+            );
+            assert_eq!(value(&response, "x-content-type-options"), Some("nosniff"));
+            assert_eq!(value(&response, "location"), None);
+            // HEAD: the same answer with no body.
+            let head = with(Some(SAMPLE), "o7.codes", "HEAD", path);
+            assert_eq!(head.status, 200);
+            assert!(head.body.is_empty());
+            assert_eq!(head.headers, response.headers);
+            // Nothing but reading it.
+            let post = with(Some(SAMPLE), "o7.codes", "POST", path);
+            assert_eq!(post.status, 405);
+            assert_eq!(value(&post, "allow"), Some("GET, HEAD"));
+            // The former address answers 404 rather than sending Apple on: it follows no
+            // redirect, and the app's links are at the site's address.
+            for host in ["auracode.si", "AuraCode.SI"] {
+                let former = with(Some(SAMPLE), host, "GET", path);
+                assert_eq!(former.status, 404, "{host}{path}");
+                assert_eq!(value(&former, "location"), None);
+                assert!(with(Some(SAMPLE), host, "HEAD", path).body.is_empty());
+            }
+        }
+        // Only those two paths.
+        for path in [
+            "/.well-known/apple-app-site-association/",
+            "/.well-known/apple-app-site-association.json",
+            "/.well-known/",
+            "/.well-known",
+            "/Apple-App-Site-Association",
+        ] {
+            assert_eq!(
+                with(Some(SAMPLE), "o7.codes", "GET", path).status,
+                404,
+                "{path}"
+            );
+        }
+        // Everything else is answered as before.
+        assert_eq!(with(Some(SAMPLE), "o7.codes", "GET", "/").body, b"home");
+        assert_eq!(with(Some(SAMPLE), "auracode.si", "GET", "/").status, 308);
     }
 
     #[test]

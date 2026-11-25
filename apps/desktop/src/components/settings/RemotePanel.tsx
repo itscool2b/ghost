@@ -222,12 +222,24 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
                 key={device.id}
                 title={device.name}
                 setting="Devices"
-                mark={handheld(device.name) ? <Smartphone size={18} /> : <Monitor size={18} />}
+                mark={
+                  device.kind === "ios" || handheld(device.name) ? (
+                    <Smartphone size={18} />
+                  ) : (
+                    <Monitor size={18} />
+                  )
+                }
                 detail={
                   device.connected ? (
-                    <State tone="green">Connected now</State>
+                    <State tone="green">
+                      Connected now
+                      {deviceApp(device)}
+                    </State>
                   ) : (
-                    <State tone="off">Last seen {ago(device.last_seen_at, now)}</State>
+                    <State tone="off">
+                      Last seen {ago(device.last_seen_at, now)}
+                      {deviceApp(device)}
+                    </State>
                   )
                 }
               >
@@ -739,9 +751,18 @@ export function told(bot: Pick<RemoteBot, "callback">): string {
     : ` · tells ${bot.callback.address.replace(/^https?:\/\//, "")}`;
 }
 
-/** Whether a paired browser's name reads as a phone or tablet: its row wears that glyph. */
+/**
+ * Whether a paired browser's name reads as a phone or tablet: its row wears that glyph. o7 for
+ * iPhone wears it by its kind, whatever it is named.
+ */
 const handheld = (name: string): boolean =>
   /iphone|ipad|android|pixel|galaxy|phone|mobile/i.test(name);
+
+/** The app a device is, after how it stands: " · o7 for iPhone 1.0". Nothing for a browser. */
+export function deviceApp(device: Pick<RemoteDevice, "kind" | "app_version">): string {
+  if (device.kind !== "ios") return "";
+  return device.app_version ? ` · o7 for iPhone ${device.app_version}` : " · o7 for iPhone";
+}
 
 /** A QR code as one SVG path: dark modules on white, whatever the app's appearance. */
 export function QrCode({ text, label }: { readonly text: string; readonly label: string }) {
@@ -946,8 +967,8 @@ function PairingDialog({
         <>
           <QrCode text={pairing.url} label="Pairing code" />
           <p className="remote-note">
-            Scan it with your phone's camera, or open the link in the browser of the device you want
-            to pair.
+            Scan it with your phone's camera or with o7 for iPhone, or open the link in the browser
+            of the device you want to pair.
           </p>
           <CopyField value={pairing.url} label="Pairing link" />
           <p className="remote-note" data-testid="remote-pairing-time">

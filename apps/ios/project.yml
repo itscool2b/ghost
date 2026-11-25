@@ -1,0 +1,96 @@
+# The iPhone app's Xcode project. Generate it with `apps/ios/scripts/project.sh` (XcodeGen
+# 2.45.4); the generated O7.xcodeproj is not committed. Settings live in Config/*.xcconfig, and the
+# Info.plist and entitlements are written by hand so a change to them shows in review.
+name: O7
+options:
+  bundleIdPrefix: codes.o7
+  deploymentTarget:
+    iOS: "26.1"
+  xcodeVersion: "27.2"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+packages:
+  O7Kit:
+    path: O7Kit
+targets:
+  O7:
+    type: application
+    platform: iOS
+    sources:
+      - path: O7
+        excludes:
+          - Info.plist
+          - O7.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: codes.o7.mobile
+        PRODUCT_NAME: o7
+        INFOPLIST_FILE: O7/Info.plist
+        CODE_SIGN_ENTITLEMENTS: O7/O7.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        GENERATE_INFOPLIST_FILE: NO
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0"
+    dependencies:
+      - package: O7Kit
+        products:
+          - O7Wire
+          - O7Crypto
+          - O7Client
+          - O7Transcript
+          - O7Store
+          - O7Theme
+          - O7Marks
+          - O7Markdown
+          - O7Highlight
+          - O7MockHost
+  O7Tests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: O7Tests
+    dependencies:
+      - target: O7
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/o7.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/o7
+  O7UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: O7UITests
+    dependencies:
+      - target: O7
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        TEST_TARGET_NAME: O7
+schemes:
+  O7:
+    build:
+      targets:
+        O7: all
+        O7Tests: [test]
+        O7UITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - O7Tests
+        - O7UITests
+    archive:
+      config: Release

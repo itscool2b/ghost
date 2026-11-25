@@ -1,0 +1,123 @@
+name: iPhone app
+
+# Started by hand only, like every workflow here. It checks o7 for iPhone (apps/ios): O7Kit's
+# tests on a Mac (the sealed channel against the desktop's vectors, the transcript port against
+# the desktop's own reducer), the generated palettes and logos against their sources, the app's
+# build and its tests on a simulator, and optionally its client end to end against the relay and
+# the stand-in desktop. macOS minutes cost ten times Linux ones: say the bill when you start it
+# (docs/developing-in-o7.md).
+on:
+  workflow_dispatch:
+    inputs:
+      xcode:
+        description: The Xcode to build with
+        type: choice
+        options: ["27", "26"]
+        default: "27"
+      e2e:
+        description: Also run the client end to end against the relay and demo_host
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generated:
+    name: Generated sources match their origins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Palettes, logos, highlighter, icon and transcript goldens are current
+        run: pnpm --filter @o7/ios check
+
+  app:
+    name: O7Kit and the app (Xcode ${{ inputs.xcode }})
+    runs-on: ${{ inputs.xcode == '27' && 'xcode-27' || 'macos-26' }}
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show Xcode
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun simctl list runtimes
+      - name: O7Kit's tests
+        run: swift test --package-path apps/ios/O7Kit
+      - name: XcodeGen
+        run: .github/scripts/fetch-xcodegen.sh
+      - name: Generate the project
+        run: apps/ios/scripts/project.sh
+      - name: Build and test on a simulator
+        run: |
+          destination="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,l in sorted(d.items(), reverse=True) if "iOS" in k for v in l if v["name"].startswith("iPhone")))')"
+          xcodebuild test -project apps/ios/O7.xcodeproj -scheme O7 \
+            -destination "id=$destination" -resultBundlePath "$RUNNER_TEMP/O7.xcresult" \
+            CODE_SIGNING_ALLOWED=YES | tail -n 200
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-app-xcode-${{ inputs.xcode }}
+          path: ${{ runner.temp }}/O7.xcresult
+          if-no-files-found: ignore
+
+  e2e:
+    name: Client end to end
+    if: inputs.e2e
+    runs-on: ${{ inputs.xcode == '27' && 'xcode-27' || 'macos-26' }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install rustup if the image has none
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ios-e2e-${{ inputs.xcode }}
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build the relay and the stand-in desktop
+        run: |
+          pnpm --filter @o7/relay worker:build
+          cargo build -p o7-remote --example demo_host
+      - name: The app's client against them
+        run: node apps/ios/scripts/e2e.mjs

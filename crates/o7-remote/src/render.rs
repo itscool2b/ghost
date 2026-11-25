@@ -8,6 +8,7 @@ use o7_protocol::{
     UiRequest,
     commands::{CommandRun, first_error, hide_secret_flags},
     session::{ChatSummary, HistoryItem},
+    workspace::WorkspaceChat,
 };
 
 /// The most of a prompt, of an agent's words and of a turn's steps one reading carries. A bot
@@ -430,20 +431,126 @@ pub fn asked(items: &[HistoryItem]) -> Vec<(&'static str, String, String)> {
                     "question"
                 },
                 request.request_id.clone(),
-                match &request.prompt {
-                    UiPrompt::Confirm { message }
-                    | UiPrompt::Input { message, .. }
-                    | UiPrompt::Notify { message }
-                    | UiPrompt::Form { message, .. }
-                    | UiPrompt::Link { message, .. }
-                    | UiPrompt::Select { message, .. } => message.clone(),
-                    UiPrompt::Questions { message, questions } => questions
-                        .first()
-                        .map_or_else(|| message.clone(), |first| first.question.clone()),
-                },
+                question(&request.prompt),
             ),
         })
         .collect()
+}
+
+/// What a question asks, as the agent wrote it: its message, or a grouped prompt's first
+/// question.
+pub fn question(prompt: &UiPrompt) -> String {
+    match prompt {
+        UiPrompt::Confirm { message }
+        | UiPrompt::Input { message, .. }
+        | UiPrompt::Notify { message }
+        | UiPrompt::Form { message, .. }
+        | UiPrompt::Link { message, .. }
+        | UiPrompt::Select { message, .. } => message.clone(),
+        UiPrompt::Questions { message, questions } => questions
+            .first()
+            .map_or_else(|| message.clone(), |first| first.question.clone()),
+    }
+}
+
+/// How long a finished chat is news: an inbox lists the chats that finished in the last day.
+pub const RECENT_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// The open chats as an inbox sorts them. The bot's `inbox` and the iPhone app's read the same.
+pub struct Sorted<'a> {
+    /// Waiting for an answer.
+    pub asking: Vec<&'a WorkspaceChat>,
+    pub working: Vec<&'a WorkspaceChat>,
+    /// Neither, and changed in the last day ([`RECENT_MS`]), newest first.
+    pub finished: Vec<&'a WorkspaceChat>,
+}
+
+pub fn sorted(chats: &[WorkspaceChat], now: i64) -> Sorted<'_> {
+    let open: Vec<&WorkspaceChat> = chats.iter().filter(|entry| !entry.archived).collect();
+    let busy = |chat: &ChatSummary| {
+        matches!(
+            chat.status,
+            SessionStatus::Running | SessionStatus::Starting | SessionStatus::Cancelling
+        )
+    };
+    let asking = open
+        .iter()
+        .copied()
+        .filter(|entry| entry.chat.needs_attention)
+        .collect();
+    let working = open
+        .iter()
+        .copied()
+        .filter(|entry| !entry.chat.needs_attention && busy(&entry.chat))
+        .collect();
+    let mut finished: Vec<&WorkspaceChat> = open
+        .iter()
+        .copied()
+        .filter(|entry| {
+            !entry.chat.needs_attention
+                && !busy(&entry.chat)
+                && now.saturating_sub(entry.chat.updated_at) <= RECENT_MS
+        })
+        .collect();
+    finished.sort_by_key(|entry| std::cmp::Reverse(entry.chat.updated_at));
+    Sorted {
+        asking,
+        working,
+        finished,
+    }
+}
+
+/// When a page's last turn started and, once it ended, when and after how long. A page that
+/// begins inside a turn has that turn start at its first event, the earliest known.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LastTurn {
+    pub started_at: Option<i64>,
+    pub ended_at: Option<i64>,
+    pub duration_ms: Option<u64>,
+}
+
+pub fn last_turn(items: &[HistoryItem]) -> LastTurn {
+    let mut last = LastTurn::default();
+    for item in items {
+        match &item.event {
+            O7Event::TurnStarted { .. } => {
+                last = LastTurn {
+                    started_at: Some(item.at),
+                    ..LastTurn::default()
+                };
+            }
+            O7Event::TurnEnded { duration_ms, .. } => {
+                last.started_at.get_or_insert(item.at);
+                last.ended_at = Some(item.at);
+                last.duration_ms = *duration_ms;
+            }
+            _ => {
+                last.started_at.get_or_insert(item.at);
+            }
+        }
+    }
+    last
+}
+
+/// What a working chat is doing, in one line: the latest step of its turn, else how the agent's
+/// last message begins, else its status.
+pub fn doing(chat: &ChatSummary, items: &[HistoryItem]) -> String {
+    digest(items)
+        .turns
+        .last()
+        .filter(|turn| turn.ended.is_none())
+        .and_then(|turn| {
+            turn.steps
+                .last()
+                .map(|(title, _)| one_line(title, 160))
+                .or_else(|| {
+                    turn.said
+                        .last()
+                        .filter(|said| !said.trim().is_empty())
+                        .map(|said| one_line(said, 160))
+                })
+        })
+        .unwrap_or_else(|| status(chat))
 }
 
 /// What a chat is asking, each request as `read` shows it, for a reading of several chats.
@@ -1168,5 +1275,90 @@ mod tests {
         ] {
             assert!(settled(&summary(status, false)));
         }
+    }
+
+    /// When a page's last turn began and ended, for an inbox: a page cut inside a turn starts it
+    /// at its first event, and a new turn forgets the last one's end.
+    #[test]
+    fn a_pages_last_turn_is_timed_from_its_own_events() {
+        let at = |times: &[i64], events: Vec<O7Event>| {
+            let mut page = items(events);
+            for (item, time) in page.iter_mut().zip(times) {
+                item.at = *time;
+            }
+            page
+        };
+        assert_eq!(last_turn(&[]), LastTurn::default());
+        // Cut inside a turn that is still going: its first event is the earliest known.
+        let cut = at(
+            &[5, 7],
+            vec![
+                said("m1", "Looking"),
+                tool("x1", "ls", ToolStatus::InProgress),
+            ],
+        );
+        assert_eq!(
+            last_turn(&cut),
+            LastTurn {
+                started_at: Some(5),
+                ended_at: None,
+                duration_ms: None
+            }
+        );
+        // Two turns: the second's start, and the end only once it came.
+        let mut done = ended("t2", StopReason::EndTurn);
+        if let O7Event::TurnEnded { duration_ms, .. } = &mut done {
+            *duration_ms = Some(40);
+        }
+        let two = at(
+            &[1, 2, 3, 10, 11, 50],
+            vec![
+                started("t1"),
+                said("m1", "a"),
+                ended("t1", StopReason::EndTurn),
+                started("t2"),
+                said("m2", "b"),
+                done,
+            ],
+        );
+        assert_eq!(
+            last_turn(&two),
+            LastTurn {
+                started_at: Some(10),
+                ended_at: Some(50),
+                duration_ms: Some(40)
+            }
+        );
+        assert_eq!(
+            last_turn(&two[..5]).ended_at,
+            None,
+            "a new turn forgets the last end"
+        );
+    }
+
+    /// A working chat's line is its open turn's latest step, else its agent's words, else how it
+    /// stands; a turn that already ended says nothing about what the chat does now.
+    #[test]
+    fn what_a_working_chat_does_is_its_open_turns_latest_step() {
+        let chat = summary(SessionStatus::Running, false);
+        let page = items(vec![
+            started("t1"),
+            said("m1", "I will run\n the tests."),
+            tool("x1", "Read src/login.ts", ToolStatus::Completed),
+            tool("x2", "Run   cargo\ntest", ToolStatus::InProgress),
+        ]);
+        assert_eq!(doing(&chat, &page), "Run cargo test");
+        assert_eq!(doing(&chat, &page[..2]), "I will run the tests.");
+        assert_eq!(doing(&chat, &page[..1]), "working");
+        let finished = items(vec![
+            started("t1"),
+            tool("x1", "ls", ToolStatus::Completed),
+            ended("t1", StopReason::EndTurn),
+        ]);
+        assert_eq!(
+            doing(&summary(SessionStatus::Starting, false), &finished),
+            "starting"
+        );
+        assert_eq!(doing(&chat, &[]), "working");
     }
 }

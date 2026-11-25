@@ -1,5 +1,6 @@
-//! Remote access: paired browsers and linked bots reaching this computer's chats through the
-//! relay (`o7-remote`, `docs/remote-sessions.md`). Off until the person turns it on in Settings.
+//! Remote access: paired browsers, o7 for iPhone and linked bots reaching this computer's chats
+//! through the relay (`o7-remote`, `docs/remote-sessions.md`). Off until the person turns it on
+//! in Settings.
 //!
 //! The service belongs to the installation: one connection to the relay, whichever profile is
 //! open. A device or a bot link belongs to the profile it was made in and reaches no other
@@ -12,6 +13,7 @@ use o7_core::session::{FrameSink, SinkGone, StatusSink};
 use o7_protocol::{
     EventBatch, UiAnswer,
     remote::{RemoteBotLink, RemotePairing, RemoteStatus},
+    search::ChatSearchHit,
     session::{Availability, ChatAttach, ChatStatusUpdate, HistoryPage, PromptAck},
     workspace::{ProjectChatCreate, WorkspaceChat, WorkspaceFilter},
 };
@@ -1423,6 +1425,22 @@ impl Backend for AppBackend {
                 uncommitted: git.as_ref().map(|git| git.files.len()),
                 usage,
             })
+        })
+    }
+
+    /// The window's own search of the profile's chats (`workspace_search`), archived chats left
+    /// out, under the same lease and only while this backend's profile is the open one.
+    fn search<'a>(
+        &'a self,
+        query: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ChatSearchHit>, BackendError>> {
+        Box::pin(async move {
+            let sessions = self.sessions().map_err(failed)?;
+            let results = sessions
+                .search(query.to_owned(), false)
+                .await
+                .map_err(|error| failed(error.into()))?;
+            Ok(results.chats)
         })
     }
 }

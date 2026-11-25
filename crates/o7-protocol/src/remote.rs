@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::Millis;
+use crate::{Millis, lenient::lenient_enum};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct RemoteStatus {
@@ -46,6 +46,32 @@ pub struct RemoteDevice {
     pub last_seen_at: Millis,
     /// It has a session open right now.
     pub connected: bool,
+    /// A browser, or o7 for iPhone.
+    #[serde(default)]
+    pub kind: RemoteDeviceKind,
+    /// The app's version, as o7 for iPhone gave it when it paired. A browser has none.
+    #[serde(default)]
+    pub app_version: Option<String>,
+}
+
+lenient_enum! {
+    /// What a paired device is. A browser keeps its key under the website's origin; o7 for
+    /// iPhone keeps it in the iPhone's Keychain. A kind a newer build wrote reads as a browser,
+    /// the device that is offered least.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Type)]
+    #[serde(rename_all = "snake_case")]
+    pub enum RemoteDeviceKind {
+        #[default]
+        Browser = "browser",
+        Ios = "ios",
+    }
+    fallback = Browser;
+}
+
+impl RemoteDeviceKind {
+    pub fn is_browser(&self) -> bool {
+        *self == Self::Browser
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

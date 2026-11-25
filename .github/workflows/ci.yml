@@ -135,6 +135,11 @@ jobs:
           pnpm --filter @o7/web-worker worker:build
           pnpm --filter @o7/web-worker worker:test
 
+      - name: Test the remote relay in the Workers runtime
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
+        timeout-minutes: 10
+        run: pnpm --filter @o7/relay worker:test
+
       - name: Install browser test engines
         id: browsers
         if: ${{ !cancelled() && steps.ready.outcome == 'success' }}

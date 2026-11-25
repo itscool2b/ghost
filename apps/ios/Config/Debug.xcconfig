@@ -1,0 +1,5 @@
+#include "Base.xcconfig"
+// Development builds can pair with the preview site and a computer on this Mac, and point at a
+// relay of their own (Settings > Developer). None of that is in a release build.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG O7_DEV_TOOLS
+O7_APS_ENVIRONMENT = development
