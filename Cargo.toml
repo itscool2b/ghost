@@ -12,7 +12,7 @@ edition = "2024"
 # running rustc, and resolver 3 prefers dependency versions that build on this one, so keep it at
 # the true floor: raise it in the same change as the dependency update or the code that needs more.
 rust-version = "1.95"
-authors = ["itscool2b"]
+authors = ["BASH.AI LLC"]
 license = "MIT"
 repository = "https://github.com/itscool2b/o7"
 publish = false

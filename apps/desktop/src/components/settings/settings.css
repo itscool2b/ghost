@@ -1397,3 +1397,10 @@ h1 + .settings-group {
 .settings-lead + :is(.instructions, .plugins-universal) {
   margin-top: var(--g-space-16);
 }
+
+/* About: the operator's copyright, under the device. */
+.settings-legal {
+  margin-top: var(--g-space-24);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}

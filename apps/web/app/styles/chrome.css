@@ -287,6 +287,14 @@
   line-height: 16px;
 }
 
+/* The operator's copyright, quieter than the statement above it. */
+.footer-legal {
+  margin-top: 12px;
+  color: var(--s-soft);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 /* The link columns sit at the right of a dotted rule, spread over the room dot.com's five take. */
 .footer-links {
   display: flex;

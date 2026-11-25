@@ -203,6 +203,8 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   { page: "about", title: "Updates", words: "version upgrade release" },
   { page: "about", title: "Diagnostics", words: "logs troubleshooting startup" },
   { page: "about", title: "Third-party notices", words: "licenses open source" },
+  { page: "about", title: "Terms of Service", words: "legal terms agreement bash.ai" },
+  { page: "about", title: "Privacy Policy", words: "legal privacy data personal information" },
   { page: "about", title: "This device", words: "operating system version windows macos" },
 ];
 

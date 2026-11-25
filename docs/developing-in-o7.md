@@ -254,6 +254,19 @@ line's words and its pull request number, not the link (the page was built while
 repository was private; it has been public since 19 November 2026). The headline
 is set in ink and the rest of the line follows it as the body.
 
+## Terms and Privacy
+
+BASH.AI LLC publishes o7's Terms of Service and Privacy Policy (owner, 25 November 2026). Their
+text is `apps/web/app/legal/terms.md` and `privacy.md`, shown at o7.codes/terms and /privacy;
+change them only with the owner's approved wording. In the app, `apps/desktop/src/lib/legal.ts`
+holds their effective date (`LEGAL_VERSION`). Setup's Welcome page says that continuing accepts
+them, and a copy that has not accepted the current version shows one notice with both links until
+OK (both documents promise an in-app notice for material changes). For a material change, update
+the documents' date and `LEGAL_VERSION` together in the same pull request. Settings > About links
+both and carries the copyright line, as the website's footer does. `LICENSE`, the workspace's
+`authors` and the bundle's copyright name BASH.AI LLC; third-party notices keep their own.
+Previews count as having accepted; `&legal=new` shows the notice.
+
 ## Getting a change into the installed app
 
 On Windows, `apps/desktop/scripts/host-upgrade.mjs` replaces the installed app with a local build

@@ -38,6 +38,7 @@ import type { DataCleanupApi } from "../../lib/dataCleanup";
 import { type DictationApi, dictationApi } from "../../lib/dictation";
 import { GLOBAL, type InstructionsApi, instructionsApi } from "../../lib/instructions";
 import { revealDataDir } from "../../lib/ipc";
+import { COPYRIGHT, OPERATOR, PRIVACY_URL, TERMS_URL } from "../../lib/legal";
 import type { MobileStore } from "../../lib/mobile";
 import { type ProfileApi, profileApi } from "../../lib/profiles";
 import { type RemoteApi, remoteApi } from "../../lib/remote";
@@ -639,6 +640,29 @@ export function SettingsScreen({
                     View
                   </button>
                 </Row>
+                <Row title="Terms of Service" detail="The terms for using o7, on o7.codes.">
+                  <a
+                    className="g-button g-button-outline g-button-28"
+                    href={TERMS_URL}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    Open
+                  </a>
+                </Row>
+                <Row
+                  title="Privacy Policy"
+                  detail="What o7 keeps on your computer and what goes online."
+                >
+                  <a
+                    className="g-button g-button-outline g-button-28"
+                    href={PRIVACY_URL}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    Open
+                  </a>
+                </Row>
               </div>
               <section className="settings-section" aria-labelledby="settings-this-device">
                 <h2 id="settings-this-device">This device</h2>
@@ -656,6 +680,10 @@ export function SettingsScreen({
                   />
                 </div>
               </section>
+              <p className="settings-lead settings-legal" data-testid="settings-copyright">
+                {COPYRIGHT} o7 is a product of {OPERATOR}. Its source code is available under the
+                MIT License.
+              </p>
             </>,
           )}
           {notices ? <NoticesDialog onClose={() => setNotices(false)} /> : null}

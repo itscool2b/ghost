@@ -1,7 +1,16 @@
-import { DatabaseBackup, HardDrive, Info, NotebookPen, TriangleAlert, X } from "lucide-react";
+import {
+  DatabaseBackup,
+  HardDrive,
+  Info,
+  NotebookPen,
+  Scale,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { EnvStatus, StorageStatus } from "../../bindings";
 import { type DismissState, SHOWN } from "../../lib/dismiss";
+import { PRIVACY_URL, TERMS_URL } from "../../lib/legal";
 import type { AgentEditState } from "../../lib/projectMemory";
 import { dismissRecovery } from "../RecoveryNotice";
 import type { NoticeItem } from "./Notifications";
@@ -169,15 +178,20 @@ export function Banners({
   storage,
   memoryEdits = [],
   onExpire,
+  legal = null,
 }: {
   readonly storage: StorageStatus | null;
   readonly memoryEdits?: readonly MemoryEditBanner[];
   readonly onExpire?: (key: string) => void;
+  /** The Terms of Service and Privacy Policy, until this copy accepts them (`lib/legal.ts`). */
+  readonly legal?: LegalBanner | null;
 }) {
   const storageText = storageBanner(storage);
-  if ((storage === null || storageText === null) && memoryEdits.length === 0) return null;
+  if ((storage === null || storageText === null) && memoryEdits.length === 0 && legal === null)
+    return null;
   return (
     <ul className="chat-banners ui-toasts" aria-label="Notices">
+      {legal !== null ? <LegalToast legal={legal} /> : null}
       {storage !== null && storageText !== null ? (
         <StorageToast storage={storage} text={storageText} />
       ) : null}
@@ -189,6 +203,56 @@ export function Banners({
         />
       ))}
     </ul>
+  );
+}
+
+/** The Terms of Service and Privacy Policy notice: what it says and its OK. */
+export interface LegalBanner {
+  readonly title: string;
+  readonly detail: string;
+  readonly onAccept: () => void;
+}
+
+/**
+ * Shown once to a copy that has not accepted the current Terms of Service and Privacy Policy
+ * (both promise "an in-app notice" for material changes). It stays until OK; the links open in
+ * the browser.
+ */
+function LegalToast({ legal }: { readonly legal: LegalBanner }) {
+  return (
+    <Toast
+      testId="legal-banner"
+      mark={<Scale size={16} />}
+      title={legal.title}
+      detail={legal.detail}
+      actions={
+        <>
+          <a
+            className="g-button g-button-24"
+            href={TERMS_URL}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Terms of Service
+          </a>
+          <a
+            className="g-button g-button-24"
+            href={PRIVACY_URL}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Privacy Policy
+          </a>
+          <button
+            type="button"
+            className="g-button g-button-24 g-button-primary"
+            onClick={legal.onAccept}
+          >
+            OK
+          </button>
+        </>
+      }
+    />
   );
 }
 
