@@ -190,12 +190,45 @@ try {
         [],
         `${engine} assistant accessibility`,
       );
+      // The phone follows the assistant (owner, 24 November 2026): what it is for, Android's
+      // setup with Google's offer and licence in full, and nothing fetched until it is accepted.
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByRole("heading", { name: /^Build phone apps./ }).waitFor();
+      assert.match(
+        await page.getByTestId("setup-phone-android").textContent(),
+        /About 2\.5 GB from Google/,
+      );
+      await page.getByTestId("setup-phone-setup").click();
+      await page.getByTestId("device-offer").waitFor();
+      assert.match(await page.getByTestId("device-license").textContent(), /License Agreement/);
+      await settled(page);
+      await page.screenshot({ path: resolve(out, `${engine}-phone-offer.png`) });
+      assert.deepEqual(
+        (await new AxeBuilder({ page }).analyze()).violations,
+        [],
+        `${engine} phone offer accessibility`,
+      );
+      await page.getByRole("button", { name: "Not now" }).click();
+      await page.getByTestId("setup-phone").waitFor();
+      assert.deepEqual(
+        await page.evaluate(() => window.deviceFixture.calls.filter((call) => call !== "refresh")),
+        ["fetchOffer", "fetchCancel"],
+      );
+      await settled(page);
+      await page.screenshot({ path: resolve(out, `${engine}-phone.png`) });
+      assert.deepEqual(
+        (await new AxeBuilder({ page }).analyze()).violations,
+        [],
+        `${engine} phone accessibility`,
+      );
       // It is a page of the agents step: a setup left here resumes at the agents.
       await page.reload();
       await page.getByRole("heading", { name: /^Found 3 agents./ }).waitFor();
       await page.waitForFunction(() => !document.querySelector("[data-cinematic]"));
       await page.getByRole("button", { name: "Continue", exact: true }).click();
       await page.getByRole("heading", { name: /^Bring your assistant./ }).waitFor();
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByRole("heading", { name: /^Build phone apps./ }).waitFor();
       await page.getByRole("button", { name: "Continue", exact: true }).click();
       // The step survives a restart, and a setup saved at the retired motion step resumes at the
       // step that followed it.

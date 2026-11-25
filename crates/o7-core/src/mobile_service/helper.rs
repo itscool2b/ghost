@@ -98,7 +98,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "mobile_start",
-            "description": "Start this chat's device and wait until it is ready: an Android emulator of this chat's own, or with platform ios an iPhone simulator of its own (a Mac with Xcode), made if there is none. A first start takes about a minute. Says the screen's size, and for an iPhone its UDID to build for. Only the person can choose a phone, in the Device pane.",
+            "description": "Start this chat's device and wait until it is ready: an Android emulator of this chat's own, or with platform ios an iPhone simulator of its own (a Mac with Xcode), made if there is none. Call it yourself, without being asked, whenever you build, run, fix or test a phone app, and check your work on the device: it opens the Device pane beside the chat, so the person need not. A first start takes about a minute. Says the screen's size, and for an iPhone its UDID to build for. Only the person can choose a phone, in the Device pane.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -406,9 +406,23 @@ mod tests {
             "Passwords",
             "Only the person can choose a phone",
             "signing keys",
+            // Agents start the device themselves for phone work (owner, 24 November 2026).
+            "Use it without being asked",
+            "your first call opens it",
         ] {
             assert!(INSTRUCTIONS.contains(phrase), "{phrase}");
         }
+        // Agents that never read a server's instructions see it in the tool itself.
+        let start = tools()
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "mobile_start")
+            .unwrap()["description"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(start.contains("without being asked"), "{start}");
         for name in tool_names() {
             assert!(INSTRUCTIONS.contains(&name), "the instructions name {name}");
         }

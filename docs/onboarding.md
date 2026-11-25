@@ -15,13 +15,13 @@ command (owner, 17 November 2026: an agent that needed a sign-in did not say so 
 sign-in" was found in a menu). Sign in opens the existing terminal sheet whose Start action is
 separately explicit, and the sign-in is checked again when the sheet closes.
 
-Setup is four pages (Welcome, Your agents, Your assistant, First project) on one centred card
-(docs/design/visual-language.md). Where the window has room (1100 by 640 or more) the card has two
+Setup is five pages (Welcome, Your agents, Your assistant, Your phone, First project) on one
+centred card (docs/design/visual-language.md). Where the window has room (1100 by 640 or more) the card has two
 panes: the steps' column, and one picture that is the same on every page and fills in as setup
 goes (`SetupMap.tsx`): the four assistants above o7's logo, the coding agents on this computer
-below it and the first project beside it. An agent that is found, a bot that is linked and the
-project that is chosen each gain a settled line; the open page's lines run toward o7. Narrower,
-the card is the column alone. Every page is
+below it, the phone to its left and the first project to its right. An agent that is found, a bot
+that is linked, a phone that is ready and the project that is chosen each gain a settled line;
+the open page's lines run toward o7. Narrower, the card is the column alone. Every page is
 skippable: Continue never requires anything, the progress bars visit any step and Skip setup
 finishes from anywhere. The step is saved on every move, so quitting halfway resumes there. Motion is not a
 step: Full already follows the system's reduced motion and Settings changes it; a setup saved at
@@ -40,6 +40,15 @@ where remote access turns on, when the link is made and not before; a link made 
 linked on its button and in the picture. It is a page of the agents step, not a saved step of
 its own: a setup left there resumes at Your agents, and nothing new is written that a copy of the
 app from before it would misread.
+
+Your phone (owner, 24 November 2026: make the phone "more intuitive to the user. maybe add it to
+onboarding") says what the phone beside the chat is for: ask an agent to build or fix a phone app
+and it starts a phone there, runs the app and checks its own work, and the person watches and can
+use it too. Its Android row offers Set up, which shows Google's offer and the Android SDK licence in
+full, exactly as the Device pane does (`SetupPhone.tsx` reuses the pane's `FetchView`); nothing is
+fetched before Accept and download, and a download keeps going after setup moves on. On a Mac an
+iPhone row says what Xcode has or what is missing. Like Your assistant it is a page of the agents
+step, not a saved step. See docs/mobile.md.
 
 First project offers a folder (chosen or dropped), an existing project, or Clone a repository,
 which replaces the step's content in place, X Money style: "Clone a repository." / "Git copies it

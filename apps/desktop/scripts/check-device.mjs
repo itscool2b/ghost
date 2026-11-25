@@ -230,20 +230,84 @@ export async function checkDevice(browser, url, out, engine) {
         await panel.getByRole("button", { name, exact: true }).click();
         await called(page, call, `${label} ${name}`);
       }
+      // Nothing that comes and goes moves the screen (owner, 24 November 2026: it "jitters up
+      // and down"): not a saved picture's notice, not what the agent is doing.
+      const stage = panel.locator(".device-stage");
+      const stageTop = async () => (await stage.boundingBox()).y;
+      const stageHeight = async () => (await stage.boundingBox()).height;
+      const top = await stageTop();
+      const height = await stageHeight();
+      const unmoved = async (when) => {
+        assert.equal(await stageTop(), top, `${label}: the screen stays put ${when}`);
+        assert.equal(await stageHeight(), height, `${label}: the screen keeps its size ${when}`);
+      };
       await panel.getByTestId("device-screenshot").click();
       await panel.getByTestId("device-saved").waitFor();
       assert.match(
         await panel.getByTestId("device-saved").textContent(),
         /Saved to .*o7-device-\d+\.png/,
       );
-      // What the agent is doing shows while it does it, with no word of what it types.
-      await page.evaluate(() => {
-        const fake = window.deviceFixture;
-        fake.change({ chats: fake.current().chats.map((chat) => ({ ...chat, agent: "Typing" })) });
-      });
+      await unmoved("with a notice");
+      // What the agent is doing shows in the header while it does it, with no word of what it
+      // types, and stays a moment after each call so a run of calls reads as one line.
+      const doing = (agent) =>
+        page.evaluate((agent) => {
+          const fake = window.deviceFixture;
+          fake.change({ chats: fake.current().chats.map((chat) => ({ ...chat, agent })) });
+        }, agent);
+      await doing("Typing");
       assert.equal(await panel.getByTestId("device-agent").textContent(), "Claude Code · Typing");
+      await unmoved("while the agent works");
+      await doing(null);
+      assert.equal(
+        await panel.getByTestId("device-agent").count(),
+        1,
+        `${label}: the line stays a moment after the call`,
+      );
+      await panel.getByTestId("device-agent").waitFor({ state: "detached", timeout: 4000 });
+      await unmoved("after the agent's call");
+      await doing("Typing");
       await axe(page, `${label} live`);
       await shot("live");
+
+      // The agent calls on the device with nothing set up and the pane closed: the pane opens by
+      // itself with Google's offer, and accepting it stays the person's.
+      const summon = (seq) =>
+        page.evaluate(
+          (seq) =>
+            window.deviceFixture.change({ summons: [{ chat_id: "device-fixture-chat", seq }] }),
+          seq,
+        );
+      await page.goto(`${url}/?preview=device&theme=${theme}&state=setup&closed`);
+      await page.getByTestId("chat-device").waitFor();
+      assert.equal(await panel.count(), 0, `${label}: the pane starts closed`);
+      await summon(1);
+      await panel.getByTestId("device-offer").waitFor();
+      await called(page, "fetchOffer", `${label} summoned`);
+      assert.ok(
+        !(await calls(page)).includes("fetchStart"),
+        `${label}: the licence is the person's to accept`,
+      );
+      await axe(page, `${label} summoned`);
+      await shot("summoned");
+      // Closed by the person while the agent works, the agent's next call leaves it closed.
+      await panel.getByRole("button", { name: "Close the device" }).click();
+      await summon(2);
+      await page.waitForTimeout(300);
+      assert.equal(await panel.count(), 0, `${label}: closed stays closed`);
+
+      // The agent works on a device whose pane is closed: the phone button says so.
+      await page.goto(`${url}/?preview=device&theme=${theme}&state=live&closed`);
+      const phoneButton = page.getByTestId("chat-device");
+      await phoneButton.waitFor();
+      assert.equal(await phoneButton.getAttribute("data-agent"), null);
+      await doing("Tapping d3");
+      await until(
+        async () => (await phoneButton.getAttribute("data-agent")) === "",
+        `${label}: the phone button marks the agent's work`,
+      );
+      assert.equal(await phoneButton.getAttribute("aria-label"), "Device: Claude Code is using it");
+      await axe(page, `${label} agent on a closed device`, "[data-testid=chat-device]");
 
       // A phone: the agent may not use it until the person says so, here.
       await open("phone");

@@ -224,28 +224,28 @@
   }
 }
 
-:where(.setup-content) :where(.agent-list, .setup-bots) > li {
+:where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li {
   animation: setup-land var(--g-dur-land) var(--g-ease-expo) backwards;
   animation-delay: calc(var(--g-dur-wave) * var(--row, 0));
 }
 
-:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(2) {
+:where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li:nth-child(2) {
   --row: 1;
 }
 
-:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(3) {
+:where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li:nth-child(3) {
   --row: 2;
 }
 
-:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(4) {
+:where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li:nth-child(4) {
   --row: 3;
 }
 
-:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(5) {
+:where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li:nth-child(5) {
   --row: 4;
 }
 
-:where(.setup-content) :where(.agent-list, .setup-bots) > li:nth-child(n + 6) {
+:where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li:nth-child(n + 6) {
   --row: 5;
 }
 
@@ -1211,7 +1211,7 @@ html[data-motion="off"] * {
     animation: none;
   }
 
-  :where(.setup-content) :where(.agent-list, .setup-bots) > li {
+  :where(.setup-content) :where(.agent-list, .setup-bots, .setup-phone) > li {
     animation: none;
   }
 
@@ -1297,4 +1297,36 @@ html[data-motion="off"] * {
   flex: none;
   margin-left: auto;
   color: var(--g-green);
+}
+
+/* The phone page: the Device pane's own rows and offer, inside the step's column. */
+.setup-phone {
+  margin-top: var(--g-space-4);
+}
+
+.setup-phone-ready {
+  flex: none;
+  margin-right: var(--g-space-6);
+  color: var(--g-green);
+}
+
+.setup-phone-fetch .device-message {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Inside setup's card the offer keeps to the window: a shorter licence (it scrolls) and a
+   heading the size of the page's own text. */
+.setup-phone-fetch .device-message {
+  gap: var(--g-space-8);
+}
+
+.setup-phone-fetch .device-message h2 {
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+}
+
+.setup-phone-fetch .device-license {
+  max-height: 104px;
 }

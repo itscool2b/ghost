@@ -1,11 +1,11 @@
 import { BotMark } from "@o7/ui/bot-mark";
 import { AgentMark, BOTS, type BotId, Logo } from "@o7/ui/graphite";
-import { Check, Folder } from "lucide-react";
+import { Check, Folder, Smartphone } from "lucide-react";
 import type { AgentEntry } from "../../bindings";
 import "./setup-map.css";
 
 /** The part of the picture a step is about: its lines run toward o7 while the step is open. */
-export type MapFocus = "all" | "agents" | "bots" | "project";
+export type MapFocus = "all" | "agents" | "bots" | "phone" | "project";
 
 const WIDTH = 440;
 const HEIGHT = 400;
@@ -35,9 +35,10 @@ function curve(from: { x: number; y: number }, above: boolean): string {
 
 /**
  * Setup's picture: the assistants that can hand o7 work above its logo, the coding agents on
- * this computer below it, and the first project beside it. It is the same picture on every step
- * and fills in as setup goes: an agent that is found, a bot that is linked and the project that is
- * chosen each gain a settled line and a check, and the step that is open has its lines running
+ * this computer below it, the phone the agents test on to its left and the first project to its
+ * right. It is the same picture on every step and fills in as setup goes: an agent that is found,
+ * a bot that is linked, a phone that is ready and the project that is chosen each gain a settled
+ * line and a check, and the step that is open has its lines running
  * toward o7. Whole tiles move; nothing is drawn over a mark or changes it
  * (third-party/brand-marks.md). Reduced motion shows the picture still.
  */
@@ -45,12 +46,15 @@ export function SetupMap({
   focus,
   agents,
   linked,
+  phone = false,
   project,
 }: {
   readonly focus: MapFocus;
   readonly agents: readonly AgentEntry[];
   /** The assistants a bot link names. */
   readonly linked: readonly BotId[];
+  /** An Android phone or an iPhone can start here. */
+  readonly phone?: boolean;
   /** The first project's name, once one is chosen. */
   readonly project: string | null;
 }) {
@@ -65,9 +69,11 @@ export function SetupMap({
   const bots = row(BOTS.length, BOTS_Y, 84);
   const tiles = row(drawn.length, AGENTS_Y, Math.min(84, (WIDTH - TILE - 8) / drawn.length));
   const folder = { x: WIDTH - 58, y: HUB.y };
+  const handset = { x: 58, y: HUB.y };
   const label = [
     found.length === 1 ? "1 agent found" : `${found.length} agents found`,
     linked.length === 1 ? "1 assistant linked" : `${linked.length} assistants linked`,
+    phone ? "a phone ready" : "no phone yet",
     project ? `first project ${project}` : "no project yet",
   ].join(", ");
   const place = (at: { x: number; y: number }, order: number) =>
@@ -153,6 +159,20 @@ export function SetupMap({
             </g>
           );
         })}
+        <g className="setup-map-link" data-group="phone" data-state={phone ? "joined" : "open"}>
+          <path
+            className="setup-map-line"
+            d={`M ${handset.x + TILE / 2} ${handset.y} L ${HUB.x - HUB_HALF} ${HUB.y}`}
+            pathLength={1}
+          />
+          {phone ? null : (
+            <path
+              className="setup-map-flow"
+              d={`M ${handset.x + TILE / 2} ${handset.y} L ${HUB.x - HUB_HALF} ${HUB.y}`}
+              pathLength={1}
+            />
+          )}
+        </g>
         <g className="setup-map-link" data-group="project" data-state={project ? "joined" : "open"}>
           <path
             className="setup-map-line"
@@ -194,9 +214,17 @@ export function SetupMap({
       ))}
       <div
         className="setup-map-tile setup-map-folder"
+        data-state={phone ? "joined" : "open"}
+        title={phone ? "A phone for your agents" : "A phone for your agents, once set up"}
+        style={place(handset, BOTS.length + drawn.length)}
+      >
+        <Smartphone size={20} aria-hidden="true" />
+      </div>
+      <div
+        className="setup-map-tile setup-map-folder"
         data-state={project ? "joined" : "open"}
         title={project ?? "Your first project"}
-        style={place(folder, BOTS.length + drawn.length)}
+        style={place(folder, BOTS.length + drawn.length + 1)}
       >
         <Folder size={20} aria-hidden="true" />
       </div>

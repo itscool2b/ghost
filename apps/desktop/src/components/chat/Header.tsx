@@ -107,7 +107,12 @@ export function Header({
    */
   readonly browser?: { readonly open: boolean; readonly onToggle: () => void };
   /** The device beside the chat (the Mobile plugin), in Chat view while the plugin is on. */
-  readonly device?: { readonly open: boolean; readonly onToggle: () => void };
+  readonly device?: {
+    readonly open: boolean;
+    /** The agent working on the device while its pane is closed, by name. */
+    readonly agent?: string | null;
+    readonly onToggle: () => void;
+  };
   /** Run, in a worktree chat whose folder setup saved a Run command: start it, or stop it. */
   readonly run?: {
     /** "pnpm dev". */
@@ -259,12 +264,17 @@ export function Header({
           <button
             type="button"
             className="g-button g-button-ghost g-button-icon g-button-28 chat-device-toggle"
-            aria-label="Device"
-            title={`Device (${commandKey()} Shift D)`}
+            aria-label={device.agent ? `Device: ${device.agent} is using it` : "Device"}
+            title={
+              device.agent
+                ? `${device.agent} is using the device (${commandKey()} Shift D)`
+                : `Device (${commandKey()} Shift D)`
+            }
             aria-keyshortcuts="Control+Shift+D Meta+Shift+D"
             aria-expanded={device.open}
             data-testid="chat-device"
             data-tour="device"
+            data-agent={device.agent ? "" : undefined}
             onClick={(event) => {
               event.currentTarget.focus();
               device.onToggle();

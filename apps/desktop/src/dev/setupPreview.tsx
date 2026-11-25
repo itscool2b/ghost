@@ -12,6 +12,7 @@ import {
 } from "../lib/appearance";
 import { AppStore } from "../lib/chat/appStore";
 import { chatSummary, FakeTransport } from "../lib/chat/testing";
+import { MobileStore } from "../lib/mobile";
 import { DEFAULT_GENERAL, type SetupApi } from "../lib/setup";
 import { InstallApiContext } from "../lib/setup-actions/api";
 import { WorkspaceStore } from "../lib/workspace";
@@ -19,6 +20,7 @@ import { createAccountsFixture } from "./accountsFixture";
 import { cloneFixture } from "./cloneFixture";
 import { fixtureFolderMatches } from "./folderMatches";
 import { installFixture } from "./installFixture";
+import { FakeMobile, mobileStatus } from "./mobileFixture";
 import { remoteFixture } from "./remoteFixture";
 
 const install = installFixture();
@@ -218,6 +220,18 @@ const transport = new FakeTransport({
     ),
   pickFolder: async () => "C:/fixture/Orbit",
 });
+// The phone page: Android not set up yet (`&phone=ready` has it set up). `window.deviceFixture`
+// records what the page asked for.
+const devices = (() => {
+  const base = mobileStatus();
+  return new FakeMobile(
+    params.get("phone") === "ready"
+      ? base
+      : mobileStatus({ setup: { ...base.setup, adb: false, emulator: false, acceleration: null } }),
+  );
+})();
+(window as { deviceFixture?: FakeMobile }).deviceFixture = devices;
+Object.assign(transport, { mobile: new MobileStore(devices) });
 const app = new AppStore(transport);
 if (params.has("working")) void app.reloadChats();
 // `?preview=clone`, `clone-running` and `clone-error` open the first-project step on the clone,

@@ -56,6 +56,7 @@
 
 .setup-map:where([data-focus="bots"]) .setup-map-link[data-group="bots"] .setup-map-flow,
 .setup-map:where([data-focus="agents"]) .setup-map-link[data-group="agents"] .setup-map-flow,
+.setup-map:where([data-focus="phone"]) .setup-map-link[data-group="phone"] .setup-map-flow,
 .setup-map:where([data-focus="project"]) .setup-map-link[data-group="project"] .setup-map-flow,
 .setup-map-link[data-state="joining"] .setup-map-flow {
   display: inline;

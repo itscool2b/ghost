@@ -356,6 +356,34 @@ impl Device {
         .map(drop)
     }
 
+    /// Turns the device through the window manager's own command (`wm user-rotation`), for a
+    /// system that did not follow the setting [`Device::set_orientation`] writes.
+    pub async fn lock_rotation(&self, orientation: Orientation) -> Result<(), Error> {
+        let turns = match orientation {
+            Orientation::Portrait => 0,
+            Orientation::Landscape => 1,
+        };
+        self.run(
+            &format!("wm user-rotation lock {turns}"),
+            "Turning the device",
+        )
+        .await
+        .map(drop)
+    }
+
+    /// Whether the main display is wider than tall now, as the window manager has it. `None`
+    /// when that cannot be read.
+    pub async fn on_its_side(&self) -> Option<bool> {
+        let text = self
+            .adb
+            .shell(&self.serial, "dumpsys window displays", TEXT_LIMIT, QUICK)
+            .await
+            .ok()?
+            .ok("Reading the display")
+            .ok()?;
+        main_display_on_its_side(&text)
+    }
+
     /// Gives or takes away one of an app's permissions (`android.permission.CAMERA`).
     pub async fn set_permission(
         &self,
@@ -386,6 +414,24 @@ fn parse_display_size(said: &str) -> Option<(u32, u32)> {
     size("Override size:")
         .or_else(|| size("Physical size:"))
         .filter(|(w, h)| *w > 0 && *h > 0)
+}
+
+/// From `dumpsys window displays`: whether display 0 is wider than tall now. Its block starts
+/// `Display: mDisplayId=0` and soon has `cur=2400x1080`; other displays (scrcpy's own) are not
+/// read.
+fn main_display_on_its_side(said: &str) -> Option<bool> {
+    let mut lines = said.lines().skip_while(|line| {
+        line.trim_start()
+            .strip_prefix("Display: mDisplayId=0")
+            .is_none_or(|rest| !(rest.is_empty() || rest.starts_with(' ')))
+    });
+    lines.next()?;
+    lines.take(4).find_map(|line| {
+        let (_, after) = line.split_once(" cur=")?;
+        let (width, height) = after.split_whitespace().next()?.split_once('x')?;
+        let (width, height): (u32, u32) = (width.parse().ok()?, height.parse().ok()?);
+        Some(width > height)
+    })
 }
 
 /// The last line that names a component of `package` (`com.example/.MainActivity`).
@@ -444,6 +490,25 @@ mod tests {
         assert_eq!(parse_display_size("nothing"), None);
         assert_eq!(parse_display_size("Physical size: 0x0"), None);
         assert_eq!(parse_display_size("Physical size: axb"), None);
+    }
+
+    #[test]
+    fn the_main_displays_turn_is_read_from_the_window_manager() {
+        // As Android 17's emulator printed it, with scrcpy's display first (24 November 2026).
+        let said = "WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n  Display: mDisplayId=7\n    init=1600x720 1dpi mMinSizeOfResizeableTaskDp=220 cur=1600x720 app=1600x720\n    mRotation=0\n  Display: mDisplayId=0 (organized)\n    init=1080x2400 420dpi mMinSizeOfResizeableTaskDp=220 cur=2400x1080 app=2400x1080 rng=1080x1080-2400x2400\n    deferred=false mLayoutNeeded=false\n";
+        assert_eq!(main_display_on_its_side(said), Some(true));
+        let upright = said.replace("cur=2400x1080", "cur=1080x2400");
+        assert_eq!(main_display_on_its_side(&upright), Some(false));
+        // Display 10 is not display 0, and a block without its size says nothing.
+        assert_eq!(
+            main_display_on_its_side("  Display: mDisplayId=10\n    cur=2400x1080\n"),
+            None
+        );
+        assert_eq!(
+            main_display_on_its_side("  Display: mDisplayId=0\n    mRotation=0\n"),
+            None
+        );
+        assert_eq!(main_display_on_its_side(""), None);
     }
 
     #[test]

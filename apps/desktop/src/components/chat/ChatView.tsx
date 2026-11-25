@@ -190,21 +190,25 @@ export function ChatView({
       if (open) {
         setChangesOpen(false);
         setOpenTaskId(null);
-        if (devicePanels.open(chatId)) devicePanels.set(chatId, false);
+        if (devicePanels.open(chatId)) {
+          devicePanels.set(chatId, false);
+          mobileStore?.closed(chatId);
+        }
       }
     },
-    [chatId],
+    [chatId, mobileStore],
   );
   const setDeviceOpen = useCallback(
     (open: boolean) => {
       devicePanels.set(chatId, open);
+      if (!open) mobileStore?.closed(chatId);
       if (open) {
         setChangesOpen(false);
         setOpenTaskId(null);
         if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
       }
     },
-    [chatId],
+    [chatId, mobileStore],
   );
   // The canvas takes the transcript's place above the composer; the drawing stays with the chat.
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -434,13 +438,32 @@ export function ChatView({
   // An agent that opens a page shows it, unless Changes, a task or the device holds the side.
   const sideTaken = useRef(false);
   sideTaken.current = changesOpen || openTaskId !== null || deviceOpen;
-  // An agent that starts using the chat's device shows it, unless something else holds the side.
-  const agentOnDevice = mobileStore?.held(chatId)?.agent ?? null;
-  const sideFree = !changesOpen && openTaskId === null && !browserOpen;
+  // An agent that calls on the chat's device opens its pane, before it even has a device (owner,
+  // 24 November 2026: "the agent should be able to open the phone and start working"). The pane
+  // takes the side from the browser, but never from Changes or a task the person has open: then
+  // the phone button says the agent is on the device, and the pane opens when they close.
+  const summoned = deviceUsable && mobileStore?.summoned(chatId) === true;
+  const sideHeld = changesOpen || openTaskId !== null;
+  const [deviceSummoned, setDeviceSummoned] = useState(false);
   useEffect(() => {
-    if (agentOnDevice === null || !deviceUsable || !active || !sideFree) return;
-    if (!devicePanels.open(chatId)) setDeviceOpen(true);
-  }, [agentOnDevice, deviceUsable, active, sideFree, chatId, setDeviceOpen]);
+    if (!summoned || !mobileStore) return;
+    if (devicePanels.open(chatId)) {
+      mobileStore.answer(chatId);
+      setDeviceSummoned(true);
+      return;
+    }
+    if (sideHeld) return;
+    mobileStore.answer(chatId);
+    setDeviceSummoned(true);
+    setDeviceOpen(true);
+  }, [summoned, sideHeld, chatId, mobileStore, setDeviceOpen]);
+  useEffect(() => {
+    if (!deviceOpen) setDeviceSummoned(false);
+  }, [deviceOpen]);
+  const agentOnDevice =
+    deviceUsable &&
+    !deviceOpen &&
+    (summoned || (mobileStore?.held(chatId)?.agent ?? null) !== null);
   useEffect(() => {
     if (!browserStore || !browserUsable) return;
     return browserStore.onEvent((event) => {
@@ -1232,7 +1255,11 @@ export function ChatView({
             }
             device={
               deviceUsable
-                ? { open: deviceOpen, onToggle: () => setDeviceOpen(!deviceOpen) }
+                ? {
+                    open: deviceOpen,
+                    agent: agentOnDevice ? agentName : null,
+                    onToggle: () => setDeviceOpen(!deviceOpen),
+                  }
                 : undefined
             }
             view={
@@ -1653,6 +1680,7 @@ export function ChatView({
                 onClose={() => setDeviceOpen(false)}
                 agentId={state.chat.agent_id}
                 agentName={agentName}
+                summoned={deviceSummoned}
               />
             ) : browserOpen && browserStore ? (
               <BrowserPanel

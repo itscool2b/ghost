@@ -30,11 +30,34 @@ import {
   videoPoint,
 } from "../../lib/mobile";
 
+/** How long what the agent did stays in the header after its call, so a run of calls reads as one. */
+export const AGENT_LINGER_MS = 1200;
+
+/**
+ * What the agent is doing, held for `ms` after it stops, and the last thing it did (shown while
+ * the line fades). The pane changes no size for it (owner, 24 November 2026: the screen "jitters
+ * up and down" when a bar came and went over it).
+ */
+function useLingering(value: string | null, ms: number): { shown: boolean; last: string | null } {
+  const [held, setHeld] = useState(value !== null);
+  const last = useRef<string | null>(value);
+  if (value !== null) last.current = value;
+  useEffect(() => {
+    if (value !== null) {
+      setHeld(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setHeld(false), ms);
+    return () => window.clearTimeout(timer);
+  }, [value, ms]);
+  return { shown: value !== null || held, last: last.current };
+}
+
 /**
  * The device beside the chat (docs/superpowers/plans/2026-11-21-mobile.md): an Android emulator of
  * the chat's own, an iPhone simulator of its own on a Mac, or a phone the person chose, with its
  * live screen. The person uses it by clicking and typing; the chat's agent uses the same device
- * through its tools, and a bar says what it is doing. Setting Android up, accepting Google's
+ * through its tools, and the header says what it is doing. Setting Android up, accepting Google's
  * licence and handing a phone to the agent happen here and nowhere else.
  */
 export function DevicePanel({
@@ -44,6 +67,7 @@ export function DevicePanel({
   onClose,
   agentId,
   agentName,
+  summoned = false,
 }: {
   readonly chatId: string;
   readonly store: MobileStore;
@@ -52,6 +76,8 @@ export function DevicePanel({
   readonly onClose: () => void;
   readonly agentId: string;
   readonly agentName: string;
+  /** The agent opened the pane: with nothing set up, Google's offer shows at once. */
+  readonly summoned?: boolean;
 }) {
   useSyncExternalStore(store.subscribe, store.getVersion, store.getVersion);
   const status = store.status();
@@ -59,8 +85,26 @@ export function DevicePanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const fail = useCallback((error: unknown) => setProblem(errorMessage(error)), []);
+  const doing = useLingering(held?.agent ?? null, AGENT_LINGER_MS);
   // Opening the pane looks again at what is installed and starts watching for phones.
   useEffect(() => store.refresh(), [store]);
+  // The agent asked for a phone and there is none to give: the person sees what setting Android
+  // up downloads, with Google's licence, and accepting it stays theirs. On a Mac the choice of
+  // an Android phone or an iPhone shows instead.
+  const offered = useRef(false);
+  const offerNow =
+    summoned &&
+    status !== null &&
+    held === null &&
+    status.unavailable === null &&
+    !status.setup.emulator &&
+    !status.setup.ios.possible &&
+    status.setup.fetch.state === "idle";
+  useEffect(() => {
+    if (!offerNow || offered.current) return;
+    offered.current = true;
+    store.api.fetchOffer().catch(fail);
+  }, [offerNow, store, fail]);
   // A notice about a saved picture leaves by itself.
   useEffect(() => {
     if (saved === null) return;
@@ -85,9 +129,29 @@ export function DevicePanel({
       data-full={narrow ? "" : undefined}
     >
       <div className="device-head">
-        <span className="device-title" data-testid="device-title">
-          <Smartphone size={15} aria-hidden="true" />
-          <span className="device-title-text">{held ? held.title : "Device"}</span>
+        {/* The device's name, and in its place while the agent works, what it is doing: the
+            header keeps its height, so the screen under it never moves. */}
+        <span
+          className="device-title"
+          data-testid="device-title"
+          data-agent={doing.shown ? "" : undefined}
+        >
+          <span className="device-title-name" aria-hidden={doing.shown ? true : undefined}>
+            <Smartphone size={15} aria-hidden="true" />
+            <span className="device-title-text">{held ? held.title : "Device"}</span>
+          </span>
+          <output
+            className="device-title-agent"
+            data-testid={doing.shown ? "device-agent" : undefined}
+            aria-hidden={doing.shown ? undefined : true}
+          >
+            <span className="device-bar-mark" aria-hidden="true">
+              <AgentMark agent={agentId} state="tool" size={14} />
+            </span>
+            <span className="device-title-text">
+              {doing.last ? `${agentName} · ${doing.last}` : ""}
+            </span>
+          </output>
         </span>
         <span className="device-head-end">
           {live ? (
@@ -144,34 +208,6 @@ export function DevicePanel({
           </button>
         </span>
       </div>
-      {held?.agent ? (
-        <output className="device-bar" data-testid="device-agent">
-          <span className="device-bar-mark" aria-hidden="true">
-            <AgentMark agent={agentId} state="tool" size={14} />
-          </span>
-          <span className="device-bar-text">
-            {agentName} · {held.agent}
-          </span>
-        </output>
-      ) : null}
-      {problem ? (
-        <p className="device-bar ui-error" role="alert" data-testid="device-problem">
-          <span className="device-bar-text">{problem}</span>
-          <button
-            type="button"
-            className="g-button g-button-ghost g-button-icon g-button-28"
-            aria-label="Dismiss"
-            onClick={() => setProblem(null)}
-          >
-            <X size={14} />
-          </button>
-        </p>
-      ) : null}
-      {saved ? (
-        <output className="device-bar" data-testid="device-saved">
-          <span className="device-bar-text">Saved to {saved}</span>
-        </output>
-      ) : null}
       {held?.kind === "phone" && live ? (
         <label className="device-bar device-consent" data-testid="device-consent">
           <span className="device-bar-text">
@@ -200,6 +236,29 @@ export function DevicePanel({
         ) : (
           <Chooser status={status} api={api} onAttach={attach} onError={fail} />
         )}
+        {/* Notices float over the foot of the stage, so the screen does not move for them. */}
+        {problem || saved ? (
+          <div className="device-notices">
+            {problem ? (
+              <p className="device-bar ui-error" role="alert" data-testid="device-problem">
+                <span className="device-bar-text">{problem}</span>
+                <button
+                  type="button"
+                  className="g-button g-button-ghost g-button-icon g-button-28"
+                  aria-label="Dismiss"
+                  onClick={() => setProblem(null)}
+                >
+                  <X size={14} />
+                </button>
+              </p>
+            ) : null}
+            {saved ? (
+              <output className="device-bar" data-testid="device-saved">
+                <span className="device-bar-text">Saved to {saved}</span>
+              </output>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {live ? (
         <div className="device-keys" role="toolbar" aria-label="Device buttons">
@@ -712,7 +771,7 @@ function DeviceRow({
 const PHASES = { downloading: "Downloading", checking: "Checking", unpacking: "Unpacking" };
 
 /** Fetching Android's packages: what is offered with its licence, the progress, or why it failed. */
-function FetchView({
+export function FetchView({
   fetch,
   api,
   onError,
