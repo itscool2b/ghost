@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { Channel, decode, encode, importSecret, randomBytes } from "../app/remote/channel.ts";
+import { takePairingLink } from "../app/remote/link.ts";
 
 interface Vectors {
   secret: string;
@@ -81,4 +82,50 @@ test("ids and keys decode only in their one canonical spelling", () => {
   assert.deepEqual(decode("AA"), new Uint8Array([0]));
   assert.equal(decode("AB"), null);
   assert.deepEqual(decode(""), new Uint8Array(0));
+});
+
+/** An address bar and history that record what the page did to them. */
+function addressOf(href: string) {
+  const url = new URL(href);
+  const replaced: { state: unknown; url: string }[] = [];
+  const address = {
+    location: { hash: url.hash, pathname: url.pathname, search: url.search },
+    history: {
+      state: { usr: null, key: "default", idx: 0 },
+      replaceState(state: unknown, _unused: string, next?: string | URL | null) {
+        replaced.push({ state, url: String(next) });
+        address.location.hash = "";
+      },
+    },
+  };
+  return { address, replaced };
+}
+
+test("a pairing link leaves the address the moment it is taken, keeping the router's entry", () => {
+  const { address, replaced } = addressOf(
+    "https://o7.codes/remote?relay=ws://127.0.0.1:8799#aaaa.bbbb.cccc",
+  );
+  assert.equal(takePairingLink(address), "#aaaa.bbbb.cccc");
+  assert.deepEqual(replaced, [
+    {
+      state: { usr: null, key: "default", idx: 0 },
+      url: "/remote?relay=ws://127.0.0.1:8799",
+    },
+  ]);
+  // Nothing is left to take, and nothing more is rewritten.
+  assert.equal(takePairingLink(address), "");
+  assert.equal(replaced.length, 1);
+});
+
+test("every link is taken, not only the one the page loaded with", () => {
+  const { address } = addressOf("https://o7.codes/remote");
+  assert.equal(takePairingLink(address), "");
+  // A second computer's code scanned while the page is open changes only the part after `#`.
+  address.location.hash = "#second.link.key";
+  assert.equal(takePairingLink(address), "#second.link.key");
+  address.location.hash = "#third.link.key";
+  assert.equal(takePairingLink(address), "#third.link.key");
+  // A bare `#` is no link.
+  address.location.hash = "#";
+  assert.equal(takePairingLink(address), "");
 });

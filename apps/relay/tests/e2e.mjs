@@ -83,10 +83,9 @@ function serveSite() {
 }
 
 /** The stand-in desktop: its pairing links and bot address as it prints them. */
-function startHost(folder) {
-  const child = spawn(hostBinary, [`ws://127.0.0.1:${RELAY_PORT}`, SITE, folder], {
-    stdio: ["pipe", "pipe", "inherit"],
-  });
+function startHost(folder, name) {
+  const args = [`ws://127.0.0.1:${RELAY_PORT}`, SITE, folder, ...(name ? [name] : [])];
+  const child = spawn(hostBinary, args, { stdio: ["pipe", "pipe", "inherit"] });
   const lines = [];
   const waiting = [];
   let rest = "";
@@ -394,6 +393,108 @@ async function browserFlow(engine, launcher, host, first, shots) {
   }
 }
 
+/** The devices a stand-in desktop keeps, as its `remote.json` lists them. */
+async function devicesOf(folder) {
+  const stored = JSON.parse(await readFile(join(folder, "remote.json"), "utf8"));
+  return (stored.devices ?? []).map((device) => device.id);
+}
+
+/**
+ * Pairing more devices and more computers from a page that is already open. A code scanned while
+ * the remote page is open changes only the part after the `#`: the page takes it there and then,
+ * asks, and pairs, keeping every computer it had. Pairing a computer again replaces the old key
+ * there, and another tab still on the old key moves to the new one.
+ */
+async function pairingFlow(engine, launcher, host, first, folder) {
+  const otherFolder = await mkdtemp(join(tmpdir(), "o7-remote-e2e-second-"));
+  const second = startHost(otherFolder, "Second computer");
+  const browser = await launcher.launch();
+  const errors = [];
+  try {
+    const secondLink = await second.line("PAIR");
+    await second.line("BOT");
+    await second.line("FULLBOT");
+    await second.line("HOOK");
+    const phone = await browser.newContext(
+      engine === "webkit" ? devices["iPhone 14"] : devices["Pixel 7"],
+    );
+    const tab = await phone.newPage();
+    tab.on("pageerror", (error) => errors.push(error.message));
+    const open = (link) =>
+      tab.evaluate((href) => {
+        window.location.href = href;
+      }, page(link));
+    const heading = (name) => tab.getByRole("heading", { level: 1, name }).waitFor();
+
+    await tab.goto(page(first));
+    await tab.getByRole("button", { name: "Pair this browser", exact: true }).click();
+    await heading("Demo computer");
+    await tab.getByText("Connected", { exact: true }).waitFor();
+    const [demoDevice] = await devicesOf(folder);
+
+    // Another computer's code, opened in the same tab: the page asks, then pairs with it too.
+    await open(secondLink);
+    await tab.getByRole("heading", { name: "Pair this browser?" }).waitFor();
+    assert.equal(new URL(tab.url()).hash, "", "the pairing key stayed in the address");
+    // Not now leaves the page as it was: still connected to the first computer.
+    await tab.getByRole("button", { name: "Not now" }).click();
+    await heading("Demo computer");
+    await tab.getByText("Connected", { exact: true }).waitFor();
+    await open(await second.pair());
+    await tab.getByRole("button", { name: "Pair this browser", exact: true }).click();
+    await heading("Second computer");
+    await tab.getByText("Connected", { exact: true }).waitFor();
+    await tab.getByRole("button", { name: "This computer", exact: true }).click();
+    await tab.getByRole("button", { name: "Switch to Demo computer" }).waitFor();
+    await tab.getByRole("button", { name: "This computer", exact: true }).click();
+
+    // A second tab of the same browser, on the first computer with its key.
+    const other = await phone.newPage();
+    other.on("pageerror", (error) => errors.push(error.message));
+    await other.goto(`${SITE}/remote?relay=ws://127.0.0.1:${RELAY_PORT}`);
+    await other.getByRole("heading", { level: 1, name: "Second computer" }).waitFor();
+    await other.getByRole("button", { name: "This computer", exact: true }).click();
+    await other.getByRole("button", { name: "Switch to Demo computer" }).click();
+    await other.getByRole("heading", { level: 1, name: "Demo computer" }).waitFor();
+    await other.getByText("Connected", { exact: true }).waitFor();
+
+    // The first computer's code again: the page says so, pairs again, and the old device goes.
+    await open(await host.pair());
+    await tab.getByRole("heading", { name: "Pair this browser again?" }).waitFor();
+    await tab.getByText("already paired with Demo computer", { exact: false }).waitFor();
+    await tab.getByRole("button", { name: "Pair again" }).click();
+    await heading("Demo computer");
+    await tab.getByText("Connected", { exact: true }).waitFor();
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const now = await devicesOf(folder);
+      if (now.length === 1 && now[0] !== demoDevice) break;
+      assert.ok(Date.now() < deadline, `the old device stayed: ${now.join(", ")}`);
+      await new Promise((done) => setTimeout(done, 100));
+    }
+    // The other tab moved to the new key instead of being turned away.
+    await other.getByRole("button", { name: /Fix the login form/ }).click();
+    await other.getByText("Why does the login form submit empty emails?").waitFor();
+    assert.equal(await other.getByText("This pairing is over.").count(), 0);
+
+    // A spent link says why, and leads back to the computer the page was with.
+    await open(first);
+    await tab.getByRole("button", { name: "Pair again" }).click();
+    await tab.getByText(/already used or has expired/).waitFor();
+    await tab.getByRole("button", { name: "Back to Demo computer" }).click();
+    await heading("Demo computer");
+    await tab.getByText("Connected", { exact: true }).waitFor();
+    await tab.getByRole("button", { name: /Fix the login form/ }).waitFor();
+    assert.deepEqual(errors, []);
+    await phone.close();
+  } finally {
+    await browser.close();
+    second.child.stdin.end();
+    second.child.kill();
+    await rm(otherFolder, { recursive: true, force: true });
+  }
+}
+
 /** A bot, speaking MCP over HTTP to the address the desktop printed. */
 /** A full-control link is listed look and gets the picture the computer took, as MCP shows one. */
 async function lookFlow(address) {
@@ -586,7 +687,7 @@ async function withHost(work) {
     const fullBot = await host.line("FULLBOT");
     await host.line("HOOK");
     assert.match(first, /^http:\/\/localhost:1437\/remote#[\w-]{22}\.[\w-]{11}\.[\w-]{43}$/);
-    await work(host, first, bot, fullBot);
+    await work(host, first, bot, fullBot, folder);
   } finally {
     host.child.stdin.end();
     host.child.kill();
@@ -605,6 +706,10 @@ try {
     await withHost(async (host, first) => {
       await browserFlow(engine, engine === "webkit" ? webkit : chromium, host, first, values.shots);
       console.log(`${engine}: paired, followed a turn live, answered, stopped, started and forgot`);
+    });
+    await withHost(async (host, first, _bot, _fullBot, folder) => {
+      await pairingFlow(engine, engine === "webkit" ? webkit : chromium, host, first, folder);
+      console.log(`${engine}: paired a second computer and again the first, from an open page`);
     });
   }
 } finally {

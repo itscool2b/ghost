@@ -919,6 +919,10 @@ function PairingDialog({
             Paired with {paired.name}. It can open your chats from now on, without another link.
           </p>
           <div className="g-dialog-actions">
+            {/* The next device needs a link of its own: a link opens once. */}
+            <button className="g-button" type="button" onClick={onRenew}>
+              Pair another device
+            </button>
             <button className="g-button g-button-primary" type="button" onClick={onClose}>
               Done
             </button>

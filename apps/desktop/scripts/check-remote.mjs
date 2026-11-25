@@ -112,10 +112,16 @@ export async function checkRemote(browser, url, out, engine) {
     await page.evaluate(() => window.remoteFixture.pairDevice("Pixel (Chrome)"));
     await dialog.getByText("Paired with Pixel (Chrome).").waitFor();
     assert.equal(await dialog.getByRole("img").count(), 0, "the spent link stayed on screen");
+    // The next device goes on from here: a fresh link in place, without closing the dialog.
+    await dialog.getByRole("button", { name: "Pair another device" }).click();
+    await dialog.getByRole("img", { name: "Pairing code" }).waitFor();
+    assert.equal((await calls()).at(-1), "pair");
+    await page.evaluate(() => window.remoteFixture.pairDevice("iPhone (Safari)"));
+    await dialog.getByText("Paired with iPhone (Safari).").waitFor();
     await dialog.getByRole("button", { name: "Done" }).click();
     await dialog.waitFor({ state: "detached" });
     assert.equal((await calls()).includes("cancel-pairing"), false, "a used link was cancelled");
-    await page.getByText("Connected now", { exact: true }).waitFor();
+    assert.equal(await page.getByText("Connected now", { exact: true }).count(), 2);
 
     // Closing an unused link cancels it; an expired one offers a new link instead of a dead code.
     await page.getByRole("button", { name: "Pair a device", exact: true }).click();

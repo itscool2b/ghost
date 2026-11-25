@@ -35,7 +35,14 @@ import {
   withTasks,
 } from "../../../desktop/src/lib/chat/transcript";
 import { Channel, decode, encode, importSecret, randomBytes } from "./channel";
-import { deleteHost, type Look, loadHosts, type SavedHost, saveHost } from "./storage";
+import {
+  deleteHost,
+  type Look,
+  loadHosts,
+  onHostsChanged,
+  type SavedHost,
+  saveHost,
+} from "./storage";
 
 export type { Look } from "./storage";
 
@@ -76,9 +83,15 @@ export type Phase =
   | { readonly name: "ready" }
   /**
    * This pairing is over: the link was spent, or the computer no longer accepts this browser
-   * (`refused` names it, so the page can offer to try again or to forget it).
+   * (`refused` names it, so the page can offer to try again or to forget it). `back` names the
+   * computer this page was with before a pairing link that did not work, to go back to.
    */
-  | { readonly name: "ended"; readonly reason: string; readonly refused?: string };
+  | {
+      readonly name: "ended";
+      readonly reason: string;
+      readonly refused?: string;
+      readonly back?: string;
+    };
 
 export interface OpenChat {
   readonly id: string;
@@ -239,6 +252,9 @@ export class RemoteClient {
   /** Live entries folded into `#entries` and not drawn yet, and the session state they bring. */
   #fresh: { readonly chatId: string; entries: Entry[]; snapshot: ChatSnapshot } | null = null;
   #paint: (() => void) | null = null;
+  /** The computer this page was with when a pairing link took over, to go back to if it fails. */
+  #back: string | null = null;
+  #unwatch: (() => void) | null = null;
 
   /** `origin` is the relay's WebSocket origin, the page's own unless a test says otherwise. */
   constructor(origin: string) {
@@ -262,26 +278,60 @@ export class RemoteClient {
    * else to the computer paired most recently.
    */
   async start(fragment: string): Promise<void> {
+    this.#watch();
+    if (fragment.replace(/^#/, "") !== "") return this.pair(fragment);
     const hosts = await loadHosts();
     this.#set({ hosts, look: lookOf(hosts[0]?.look) });
-    const pairing = parsePairing(fragment);
-    if (pairing) {
-      this.#credential = {
-        kind: "pair",
-        hostId: pairing.hostId,
-        id: pairing.id,
-        key: await importSecret(pairing.key),
-      };
-      pairing.key.fill(0);
-    } else if (fragment.replace(/^#/, "") !== "") {
-      this.#set({ phase: { name: "ended", reason: "This pairing link is not complete." } });
-      return;
-    } else if (hosts[0]) {
+    if (hosts[0]) {
       this.#credential = { kind: "device", host: hosts[0] };
+      this.#connect();
     } else {
       this.#set({ phase: { name: "empty" } });
+    }
+  }
+
+  /**
+   * Pairs with the computer a link names, whatever this page is doing: a session with another
+   * computer ends, and every computer paired before stays paired. If the link does not work, the
+   * page offers the way back to the computer it was with.
+   */
+  async pair(fragment: string): Promise<void> {
+    this.#watch();
+    const current = this.#credential;
+    const back =
+      current?.kind === "device"
+        ? current.host.hostId
+        : this.#state.phase.name === "ended"
+          ? (this.#state.phase.back ?? null)
+          : this.#back;
+    const hosts = await loadHosts();
+    const pairing = parsePairing(fragment);
+    this.#forgetChat();
+    this.#set({
+      hosts,
+      host: null,
+      overview: null,
+      chat: null,
+      opening: null,
+      features: [],
+      look: lookOf(hosts.find((entry) => entry.hostId === pairing?.hostId)?.look),
+    });
+    this.#back = back;
+    // The session with the computer this page was with ends here, whatever the link turns out to be.
+    this.#credential = null;
+    if (!pairing) {
+      this.#end("This pairing link is not complete.");
       return;
     }
+    this.#credential = {
+      kind: "pair",
+      hostId: pairing.hostId,
+      id: pairing.id,
+      key: await importSecret(pairing.key),
+    };
+    pairing.key.fill(0);
+    this.#stopped = false;
+    this.#retries = 0;
     this.#connect();
   }
 
@@ -289,6 +339,8 @@ export class RemoteClient {
   use(hostId: string) {
     const host = this.#state.hosts.find((entry) => entry.hostId === hostId);
     if (!host) return;
+    this.#watch();
+    this.#back = null;
     this.#credential = { kind: "device", host };
     this.#forgetChat();
     this.#set({ host: null, overview: null, chat: null, opening: null, look: lookOf(host.look) });
@@ -297,7 +349,27 @@ export class RemoteClient {
 
   stop() {
     this.#stopped = true;
+    this.#unwatch?.();
+    this.#unwatch = null;
     this.#close();
+  }
+
+  /** Follows pairings saved or deleted by this browser's other remote pages. */
+  #watch() {
+    this.#unwatch ??= onHostsChanged(() => void this.#hostsChanged());
+  }
+
+  /**
+   * Another page of this browser paired or forgot a computer. The list follows, and a session whose
+   * computer was paired again there moves to the new key: the old one is about to stop working.
+   */
+  async #hostsChanged() {
+    const hosts = await loadHosts();
+    this.#set({ hosts });
+    const credential = this.#credential;
+    if (credential?.kind !== "device") return;
+    const saved = hosts.find((entry) => entry.hostId === credential.host.hostId);
+    if (saved && saved.deviceId !== credential.host.deviceId) this.use(saved.hostId);
   }
 
   /**
@@ -479,11 +551,7 @@ export class RemoteClient {
     if (credential?.kind === "device") {
       // Nothing proves who sent a refusal, so it deletes nothing: the key stays until the person
       // decides. If the device was removed on the computer, forgetting it here tidies up.
-      const host = credential.host;
-      this.#end(
-        `${host.hostName} no longer accepts this browser. If you removed it in o7's Settings, pair again from there.`,
-        host.hostId,
-      );
+      void this.#refusedDevice(credential.host);
     } else {
       this.#end(
         "This pairing link was already used or has expired. Create a new one in o7: Settings, Remote access, Pair.",
@@ -491,11 +559,44 @@ export class RemoteClient {
     }
   }
 
+  /**
+   * The computer turned this browser's key away. When another page of this browser paired the
+   * computer again meanwhile, the new key is in storage: the session moves to it. Otherwise the
+   * person decides what happens to the key.
+   */
+  async #refusedDevice(host: SavedHost) {
+    const hosts = await loadHosts();
+    const saved = hosts.find((entry) => entry.hostId === host.hostId);
+    if (saved && saved.deviceId !== host.deviceId) {
+      this.#set({ hosts });
+      this.use(saved.hostId);
+      return;
+    }
+    this.#end(
+      `${host.hostName} no longer accepts this browser. If you removed it in o7's Settings, pair again from there.`,
+      host.hostId,
+    );
+  }
+
+  /**
+   * Ends this pairing with `reason`. After a pairing link that did not work, the page offers the
+   * computer it was with before, when there was one.
+   */
   #end(reason: string, refused?: string) {
+    const back =
+      this.#credential?.kind !== "device" && this.#back && this.#back !== refused
+        ? this.#back
+        : null;
     this.#credential = null;
+    this.#back = null;
     this.#forgetChat();
     this.#set({
-      phase: refused ? { name: "ended", reason, refused } : { name: "ended", reason },
+      phase: {
+        name: "ended",
+        reason,
+        ...(refused ? { refused } : {}),
+        ...(back ? { back } : {}),
+      },
       host: null,
       overview: null,
       chat: null,
@@ -536,7 +637,15 @@ export class RemoteClient {
             : [],
           ...(look ? { look } : {}),
         });
-        void this.#begin(String(message.host_name ?? ""), look).catch(() => this.#socket?.close());
+        void this.#begin(String(message.host_name ?? ""), look).catch((error: unknown) => {
+          // The computer refused to pair, in its own words (its devices are full, the link
+          // closed): that is the end of this link, and reconnecting would only spend it again.
+          if (error instanceof RemoteError && this.#credential?.kind === "pair") {
+            this.#end(error.message);
+            return;
+          }
+          this.#socket?.close();
+        });
         break;
       }
       case "chat":
@@ -580,13 +689,18 @@ export class RemoteClient {
         ...(look ? { look } : {}),
       };
       raw.fill(0);
+      // Paired with this computer before: the new device replaces the old one, here and there.
+      const replaced = this.#state.hosts.find((entry) => entry.hostId === credential.hostId);
       await saveHost(host);
       // The session carries on as the device; the next connection uses its own key.
       this.#credential = { kind: "device", host };
+      this.#back = null;
       const added = host;
       this.#set({
         hosts: [added, ...this.#state.hosts.filter((entry) => entry.hostId !== added.hostId)],
       });
+      if (replaced && replaced.deviceId !== added.deviceId)
+        void forgetDevice(this.#origin, replaced).catch(() => {});
     } else {
       // The computer was renamed, or changed its look: the saved record follows.
       const renamed = hostName && credential.host.hostName !== hostName;
@@ -990,6 +1104,72 @@ export class RemoteClient {
       });
     }
   }
+}
+
+/**
+ * Asks a computer to forget one of this browser's old devices, over a session of that device's
+ * own: after the browser paired with the computer again, so its Settings lists it once. Best
+ * effort: a key the computer no longer takes, or a computer that is away, leaves things as they
+ * were.
+ */
+async function forgetDevice(origin: string, host: SavedHost): Promise<void> {
+  const socket = new WebSocket(`${origin}/api/remote/v1/client/${host.hostId}`);
+  const nonce = randomBytes(16);
+  let channel: Channel | null = null;
+  let ready = false;
+  await new Promise<void>((done) => {
+    const finish = () => {
+      clearTimeout(timer);
+      socket.onmessage = socket.onclose = socket.onerror = null;
+      try {
+        socket.close();
+      } catch {
+        // Already closing.
+      }
+      done();
+    };
+    const timer = setTimeout(finish, REQUEST_MS);
+    socket.onclose = finish;
+    socket.onerror = finish;
+    // The welcome and the sealed "ready" come back to back, and opening one waits on the keys the
+    // other derives: messages are handled strictly one after another, as the session's own are.
+    let inbox: Promise<void> = Promise.resolve();
+    socket.onmessage = (event) => {
+      const text = typeof event.data === "string" ? event.data : "";
+      inbox = inbox.then(() => handle(text));
+    };
+    const handle = async (text: string) => {
+      try {
+        if (text === "h1") {
+          const hello = { v: VERSION, kind: "device", id: host.deviceId, nonce: encode(nonce) };
+          socket.send(`mH${JSON.stringify(hello)}`);
+        } else if (text === "h0" || text.startsWith("mR")) {
+          finish();
+        } else if (text.startsWith("mW") && !channel) {
+          const welcome = JSON.parse(text.slice(2)) as { nonce?: unknown };
+          const hostNonce = typeof welcome.nonce === "string" ? decode(welcome.nonce, 16) : null;
+          if (!hostNonce) return finish();
+          channel = await Channel.create(
+            "client",
+            host.key,
+            nonce,
+            hostNonce,
+            `device|${host.deviceId}`,
+          );
+        } else if (text.startsWith("mE") && channel) {
+          const message = JSON.parse(await channel.open(text.slice(2))) as { ev?: unknown };
+          if (!ready && message.ev === "ready") {
+            ready = true;
+            socket.send(`mE${await channel.seal(JSON.stringify({ id: 1, op: "forget" }))}`);
+          } else if (ready) {
+            finish();
+          }
+        }
+      } catch {
+        finish();
+      }
+    };
+  });
 }
 
 function entriesOf(page: HistoryPage): Entry[] {

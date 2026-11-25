@@ -30,12 +30,14 @@ import {
   type Look,
   type OpenChat,
   type Overview,
+  parsePairing,
   RemoteClient,
   type State,
 } from "../remote/client";
+import { takePairingLink } from "../remote/link";
 import { Markdown } from "../remote/markdown";
 import { ChatPickers } from "../remote/pickers";
-import { keepsPairings } from "../remote/storage";
+import { keepsPairings, loadHosts, type SavedHost } from "../remote/storage";
 // The desktop's themes, one per agent: the page wears the one its computer wears.
 import "@o7/ui/themes.css";
 import "../styles/remote.css";
@@ -45,19 +47,6 @@ export const meta = () => [
   { name: "robots", content: "noindex" },
   { name: "referrer", content: "no-referrer" },
 ];
-
-/**
- * A pairing link carries its key after the `#`. It is read once and taken out of the address bar
- * and the history before anything else runs, so it is never shared, bookmarked or sent anywhere.
- */
-let taken: string | null = null;
-function takeFragment(): string {
-  if (taken === null) {
-    taken = location.hash;
-    if (taken) history.replaceState(null, "", location.pathname + location.search);
-  }
-  return taken;
-}
 
 /** The relay is this site. A page served from this machine may name another, for development. */
 function relayOrigin(): string {
@@ -141,25 +130,43 @@ export default function RemotePage() {
   // A pairing link waits for a tap. Opening the page pairs nothing by itself, so a program that
   // only opens links (a mail or chat scanner) cannot spend the link or become a device.
   const [asking, setAsking] = useState<string | null>(null);
+  // Whether the client has started: a link on a fresh page waits for the tap before anything
+  // connects, and "Not now" then connects to what is already paired.
+  const started = useRef(false);
   useEffect(() => {
     const next = new RemoteClient(relayOrigin());
-    const fragment = takeFragment();
-    if (fragment.replace(/^#/, "") === "") void next.start("");
-    else setAsking(fragment);
+    const link = takePairingLink(window);
+    if (link === "") {
+      started.current = true;
+      void next.start("");
+    } else setAsking(link);
     setClient(next);
+    // A link can also arrive while the page is open: a scanned code or a pasted link changes only
+    // the part after the `#`, which reloads nothing. It asks the same question over whatever is on
+    // screen.
+    const arrived = () => {
+      const fresh = takePairingLink(window);
+      if (fresh !== "") setAsking(fresh);
+    };
     // Back in front, back online, or restored from the back-forward cache: check the session.
     const wake = () => {
       if (document.visibilityState === "visible") next.wake();
     };
+    const shown = () => {
+      arrived();
+      wake();
+    };
+    window.addEventListener("hashchange", arrived);
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("online", wake);
     window.addEventListener("focus", wake);
-    window.addEventListener("pageshow", wake);
+    window.addEventListener("pageshow", shown);
     return () => {
+      window.removeEventListener("hashchange", arrived);
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("online", wake);
       window.removeEventListener("focus", wake);
-      window.removeEventListener("pageshow", wake);
+      window.removeEventListener("pageshow", shown);
       next.stop();
     };
   }, []);
@@ -167,35 +174,23 @@ export default function RemotePage() {
     <main id="main" className="remote">
       {client && asking !== null ? (
         <Themed client={client}>
-          <Centered title="Pair this browser?">
-            <p>
-              This link pairs this browser with your computer. Once paired, it can read your chats
-              there and direct your agents, which can edit files and run commands.
-            </p>
-            <p>Go on only if you opened this link from your own computer just now.</p>
-            <p className="remote-card-actions">
-              <button
-                type="button"
-                className="g-button g-button-primary remote-button"
-                onClick={() => {
-                  setAsking(null);
-                  void client.start(asking);
-                }}
-              >
-                Pair this browser
-              </button>
-              <button
-                type="button"
-                className="g-button remote-button remote-quiet"
-                onClick={() => {
-                  setAsking(null);
-                  void client.start("");
-                }}
-              >
-                Not now
-              </button>
-            </p>
-          </Centered>
+          <PairQuestion
+            link={asking}
+            client={client}
+            onPair={() => {
+              setAsking(null);
+              started.current = true;
+              void client.pair(asking);
+            }}
+            onNotNow={() => {
+              setAsking(null);
+              // On a fresh page nothing has connected yet; on a page in use, nothing changes.
+              if (!started.current) {
+                started.current = true;
+                void client.start("");
+              }
+            }}
+          />
         </Themed>
       ) : client ? (
         <Themed client={client}>
@@ -210,6 +205,60 @@ export default function RemotePage() {
         </Centered>
       )}
     </main>
+  );
+}
+
+/**
+ * Asks before a pairing link is used. A computer this browser is already paired with is named: the
+ * link pairs it again, with a new key that replaces the old one.
+ */
+function PairQuestion({
+  link,
+  client,
+  onPair,
+  onNotNow,
+}: {
+  readonly link: string;
+  readonly client: RemoteClient;
+  readonly onPair: () => void;
+  readonly onNotNow: () => void;
+}) {
+  const state = useSyncExternalStore(client.subscribe, client.getState, client.getState);
+  const hostId = parsePairing(link)?.hostId ?? null;
+  const [saved, setSaved] = useState<readonly SavedHost[]>(state.hosts);
+  useEffect(() => {
+    let live = true;
+    void loadHosts().then((hosts) => {
+      if (live) setSaved(hosts);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const known = hostId ? saved.find((host) => host.hostId === hostId) : undefined;
+  return (
+    <Centered title={known ? "Pair this browser again?" : "Pair this browser?"}>
+      {known ? (
+        <p>
+          This browser is already paired with {known.hostName}. Pairing again gives it a new key
+          there, and the old one stops working.
+        </p>
+      ) : (
+        <p>
+          This link pairs this browser with your computer. Once paired, it can read your chats there
+          and direct your agents, which can edit files and run commands.
+        </p>
+      )}
+      <p>Go on only if you opened this link from your own computer just now.</p>
+      <p className="remote-card-actions">
+        <button type="button" className="g-button g-button-primary remote-button" onClick={onPair}>
+          {known ? "Pair again" : "Pair this browser"}
+        </button>
+        <button type="button" className="g-button remote-button remote-quiet" onClick={onNotNow}>
+          Not now
+        </button>
+      </p>
+    </Centered>
   );
 }
 
@@ -241,12 +290,24 @@ function Remote({ client }: { readonly client: RemoteClient }) {
         </p>
       </Centered>
     );
-  if (state.phase.name === "ended")
+  if (state.phase.name === "ended") {
+    const ended = state.phase;
+    const back = ended.back ? state.hosts.find((host) => host.hostId === ended.back) : undefined;
     return (
       <Centered title="This pairing is over.">
-        <p role="status">{state.phase.reason}</p>
-        {state.phase.refused ? (
-          <Refused client={client} hostId={state.phase.refused} />
+        <p role="status">{ended.reason}</p>
+        {ended.refused ? (
+          <Refused client={client} hostId={ended.refused} />
+        ) : back ? (
+          <p>
+            <button
+              type="button"
+              className="g-button g-button-primary remote-button"
+              onClick={() => client.use(back.hostId)}
+            >
+              Back to {back.hostName}
+            </button>
+          </p>
         ) : state.hosts.length > 0 ? (
           <p>
             <button
@@ -260,6 +321,7 @@ function Remote({ client }: { readonly client: RemoteClient }) {
         ) : null}
       </Centered>
     );
+  }
   if (state.chat || state.opening) return <ChatScreen client={client} state={state} />;
   return <ListScreen client={client} state={state} />;
 }
