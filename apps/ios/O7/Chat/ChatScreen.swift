@@ -32,11 +32,19 @@ private struct ChatContent: View {
     @State private var chat: ChatStore?
     @State private var draft = ""
     @State private var pickers = false
-    @State private var renaming = false
+    @State private var photos: [PickedPhoto] = []
+    @State private var picking = false
+    @State private var shooting = false
     @State private var atBottom = true
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var workingSince = Date()
     @State private var sentCount = 0
+    @State private var facts: ChatFacts?
+    @State private var showingChanges: ChangeScope?
+    @State private var showingScreen = false
+    @State private var renaming = false
+    @State private var newTitle = ""
+    @State private var archiving = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -55,8 +63,9 @@ private struct ChatContent: View {
                         TaskStrip(tasks: tasks, live: chat.live, liveTasks: chat.liveTasks)
                     }
                     Composer(
-                        text: $draft, running: chat.running, waiting: chat.waiting,
-                        enabled: computer.phase == .ready,
+                        text: $draft, photos: $photos, picking: $picking, shooting: $shooting,
+                        running: chat.running, waiting: chat.waiting,
+                        enabled: computer.phase == .ready, offersPhotos: computer.offersPhotos,
                         chip: computer.offersPickers ? chip(chat) : nil,
                         onSend: { send(chat) },
                         onStop: { Task { await chat.stop() } },
@@ -66,6 +75,7 @@ private struct ChatContent: View {
                 }
             }
         }
+        .photoSources($photos, picking: $picking, shooting: $shooting)
         .navigationTitle(summary?.title ?? "Untitled chat")
         .navigationSubtitle(subtitle(summary))
         .navigationBarTitleDisplayMode(.inline)
@@ -74,6 +84,24 @@ private struct ChatContent: View {
                 Menu {
                     if computer.offersPickers {
                         Button("Model and agent", systemImage: "slider.horizontal.3") { pickers = true }
+                    }
+                    if computer.offersReview {
+                        Button("Changes", systemImage: "plus.forwardslash.minus") { showingChanges = .turn }
+                    }
+                    if computer.offersScreens {
+                        Button("Screen", systemImage: "rectangle.on.rectangle") { showingScreen = true }
+                    }
+                    if computer.offersControl {
+                        Button("Rename", systemImage: "pencil") {
+                            newTitle = summary?.title ?? ""
+                            renaming = true
+                        }
+                        if let status = summary?.status, status == .stopped || status == .failed {
+                            Button("Start the agent", systemImage: "play") {
+                                Task { try? await computer.connection.perform(.startAgent(chatId), timeout: .slow) }
+                            }
+                        }
+                        Button("Archive", systemImage: "archivebox") { archiving = true }
                     }
                     if let chat, chat.running {
                         Button("Stop the turn", systemImage: "stop.fill", role: .destructive) {
@@ -95,6 +123,43 @@ private struct ChatContent: View {
                 .o7Look(style)
             }
         }
+        .sheet(item: $showingChanges) { scope in
+            ChangesView(computer: computer, chatId: chatId, scope: scope)
+                .presentationDetents([.large])
+                .o7Look(style)
+        }
+        .sheet(isPresented: $showingScreen) {
+            ScreenView(computer: computer, chatId: chatId)
+                .presentationDetents([.large])
+                .o7Look(style)
+        }
+        .alert("Rename the chat", isPresented: $renaming) {
+            TextField("Title", text: $newTitle)
+            Button("Rename") {
+                let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !title.isEmpty else { return }
+                Task {
+                    try? await computer.connection.perform(.rename(chatId, title: title))
+                    await computer.refresh()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Archive this chat?", isPresented: $archiving, titleVisibility: .visible) {
+            Button("Archive") {
+                Task {
+                    try? await computer.connection.perform(.archive(chatId, archived: true))
+                    await computer.refresh()
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("It leaves the lists here and on your computer. Archived chats are in the project's Archived list.")
+        }
+        .task(id: chat?.segments.last?.end != nil) {
+            // What the chat stands on: read when it opens, and again when a turn ends.
+            if computer.offersReview { facts = try? await computer.connection.send(.facts(chatId), as: ChatFacts.self) }
+        }
         .onAppear {
             if chat == nil { chat = computer.open(chatId) }
         }
@@ -111,6 +176,9 @@ private struct ChatContent: View {
     private func transcript(_ chat: ChatStore) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
+                if let facts, facts.worktree || facts.pullRequest != nil {
+                    BranchStrip(facts: facts) { showingChanges = facts.worktree ? .branch : .turn }
+                }
                 if chat.hasMore {
                     Button {
                         Task { await chat.loadEarlier() }
@@ -153,7 +221,8 @@ private struct ChatContent: View {
                 }
                 ForEach(chat.sending) { sending in
                     UserBubble(
-                        text: sending.text, pending: sending.queued ? "Queued until this turn ends" : "Sending")
+                        text: sending.text, photos: sending.photos,
+                        pending: sending.queued ? "Queued until this turn ends" : "Sending")
                 }
                 if chat.running, !chat.waiting {
                     WorkingLine(since: chat.turnStartedAt ?? workingSince)
@@ -198,10 +267,14 @@ private struct ChatContent: View {
 
     private func send(_ chat: ChatStore) {
         let text = draft
+        let sent = photos
         draft = ""
+        photos = []
         sentCount += 1
         Task {
-            if let back = await chat.send(text), draft.isEmpty { draft = back }
+            guard let (words, pictures) = await chat.send(text, photos: sent) else { return }
+            if draft.isEmpty { draft = words }
+            if photos.isEmpty { photos = pictures }
         }
     }
 
@@ -215,4 +288,8 @@ private struct ChatContent: View {
         guard let summary else { return "" }
         return "\(summary.agentName) · \(StatusWords(summary).words)"
     }
+}
+
+extension ChangeScope: @retroactive Identifiable {
+    public var id: String { rawValue }
 }

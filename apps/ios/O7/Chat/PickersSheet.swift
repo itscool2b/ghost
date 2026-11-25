@@ -6,6 +6,7 @@ import SwiftUI
 /// The chat's model and thinking level, which apply as they are chosen, and the agent: choosing
 /// another hands the chat over, into a new chat that starts from this one's history.
 struct PickersSheet: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.style) private var style
     @Environment(\.dismiss) private var dismiss
     let computer: ComputerStore
@@ -18,6 +19,8 @@ struct PickersSheet: View {
     @State private var failure: String?
     @State private var agent: String?
     @State private var switching = false
+    /// An access level that loosens what the agent may do, waiting for the person's yes.
+    @State private var loosening: Choice?
 
     var body: some View {
         NavigationStack {
@@ -44,6 +47,24 @@ struct PickersSheet: View {
                     HStack {
                         PixelLoader(size: 14, tempo: .thinking)
                         Text("Asking the computer.").foregroundStyle(style.fg3)
+                    }
+                }
+                if let access = choices?.access, !access.isEmpty {
+                    Section {
+                        Picker("Access", selection: Binding(
+                            get: { choices?.accessMode ?? "" },
+                            set: { value in
+                                guard let choice = access.first(where: { $0.value == value }) else { return }
+                                if Self.rank(value) > Self.rank(choices?.accessMode ?? "ask") {
+                                    loosening = choice
+                                } else {
+                                    setAccess(choice)
+                                }
+                            })) {
+                            ForEach(access) { Text($0.name).tag($0.value) }
+                        }
+                    } footer: {
+                        Text("What the agent may do without asking you first. Loosening it asks before it applies.")
                     }
                 }
                 Section {
@@ -103,6 +124,26 @@ struct PickersSheet: View {
             }
             .task { await load() }
             .sensoryFeedback(.selection, trigger: said)
+            .confirmationDialog(
+                loosening.map { Self.question($0.value, agent: chat.agentName) } ?? "",
+                isPresented: Binding(get: { loosening != nil }, set: { if !$0 { loosening = nil } }),
+                titleVisibility: .visible
+            ) {
+                if let choice = loosening {
+                    Button(choice.name) {
+                        Task {
+                            if model.settings.faceIdToApprove, !(await Authenticator.confirm("Loosen what the agent may do")) {
+                                return
+                            }
+                            setAccess(choice)
+                        }
+                    }
+                }
+            } message: {
+                Text(loosening?.value == "full_auto"
+                    ? "It can then run any command and change any file in this chat without asking."
+                    : "It can then edit files in this chat without asking. Commands still ask.")
+            }
         }
     }
 
@@ -115,6 +156,35 @@ struct PickersSheet: View {
             choices = try await computer.connection.send(.options(chat.id), as: Choices.self)
         } catch {
             failure = (error as? LocalizedError)?.errorDescription ?? "The computer did not answer."
+        }
+    }
+
+    /// How much an access level lets an agent do without asking: more is looser.
+    static func rank(_ access: String) -> Int {
+        switch access {
+        case "full_auto": 2
+        case "auto_edit": 1
+        default: 0
+        }
+    }
+
+    static func question(_ access: String, agent: String) -> String {
+        access == "full_auto"
+            ? "Give \(agent) full access?" : "Let \(agent) edit files without asking?"
+    }
+
+    private func setAccess(_ choice: Choice) {
+        let before = choices?.accessMode
+        choices?.accessMode = choice.value
+        Task {
+            do {
+                try await computer.connection.perform(.setAccess(chat.id, access: choice.value))
+                await load()
+                said = "Access set to \(choice.name)."
+            } catch {
+                choices?.accessMode = before
+                failure = (error as? LocalizedError)?.errorDescription
+            }
         }
     }
 

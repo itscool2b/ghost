@@ -24,6 +24,7 @@ struct ProjectsView: View {
                         open(.project(hostId: computer.hostId, projectId: project.id))
                     } label: {
                         ProjectRow(project: project, chats: computer.chats.filter { $0.projectId == project.id })
+                            .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(Color.clear)
@@ -100,7 +101,7 @@ struct ProjectRow: View {
     }
 }
 
-/// One project's chats.
+/// One project's chats, and its archived ones.
 struct ProjectView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.style) private var style
@@ -109,13 +110,25 @@ struct ProjectView: View {
     let zoom: Namespace.ID
     let open: (ChatRoute) -> Void
     @State private var newChat = false
+    @State private var showArchived = false
+    @State private var archived: [WorkspaceChat] = []
+    @State private var editingBrief = false
 
     var body: some View {
         let computer = model.computers.first { $0.hostId == hostId }
         let project = computer?.project(projectId)
         List {
+            if computer?.offersControl == true {
+                Picker("Chats", selection: $showArchived) {
+                    Text("Chats").tag(false)
+                    Text("Archived").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
             if let computer {
-                let chats = computer.chats.filter { $0.projectId == projectId }
+                let chats = showArchived ? archived : computer.chats.filter { $0.projectId == projectId }
                 ForEach(chats) { chat in
                     Button {
                         open(ChatRoute(hostId: hostId, chatId: chat.chat.id))
@@ -126,9 +139,21 @@ struct ProjectView: View {
                     .matchedTransitionSource(id: chat.chat.id, in: zoom)
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(style.line)
+                    .swipeActions {
+                        if computer.offersControl {
+                            Button(showArchived ? "Unarchive" : "Archive", systemImage: "archivebox") {
+                                Task {
+                                    try? await computer.connection.perform(.archive(chat.chat.id, archived: !showArchived))
+                                    await computer.refresh()
+                                    await loadArchived(computer)
+                                }
+                            }
+                            .tint(style.fg3)
+                        }
+                    }
                 }
                 if chats.isEmpty {
-                    Text("No chats here yet.")
+                    Text(showArchived ? "Nothing archived here." : "No chats here yet.")
                         .o7Font(.meta)
                         .foregroundStyle(style.fg3)
                         .listRowBackground(Color.clear)
@@ -141,14 +166,33 @@ struct ProjectView: View {
         .navigationTitle(project?.name ?? "Project")
         .navigationSubtitle(project?.folders.first?.path ?? "")
         .toolbar {
+            if computer?.offersMemory == true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Brief", systemImage: "doc.text") { editingBrief = true }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("New chat", systemImage: "plus") { newChat = true }
                     .buttonStyle(.glassProminent)
             }
         }
+        .task(id: showArchived) {
+            if showArchived, let computer { await loadArchived(computer) }
+        }
         .sheet(isPresented: $newChat) {
             NewChatSheet(projectId: projectId) { route in open(route) }
                 .o7Look(style)
         }
+        .sheet(isPresented: $editingBrief) {
+            if let computer, let project {
+                BriefEditor(computer: computer, project: project)
+                    .o7Look(style)
+            }
+        }
+    }
+
+    private func loadArchived(_ computer: ComputerStore) async {
+        guard let page = try? await computer.connection.send(.archived(), as: ArchivedChats.self) else { return }
+        archived = page.chats.filter { $0.projectId == projectId }
     }
 }

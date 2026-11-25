@@ -6,9 +6,15 @@ import SwiftUI
 struct Composer: View {
     @Environment(\.style) private var style
     @Binding var text: String
+    @Binding var photos: [PickedPhoto]
+    /// The photo library and the camera, presented by the screen.
+    @Binding var picking: Bool
+    @Binding var shooting: Bool
     let running: Bool
     let waiting: Bool
     let enabled: Bool
+    /// The computer takes photos with a message.
+    var offersPhotos = false
     /// "Opus 5.5 · High", when the computer lets the person choose.
     var chip: String?
     let onSend: () -> Void
@@ -17,7 +23,7 @@ struct Composer: View {
     @FocusState private var focused: Bool
     @Namespace private var glass
 
-    private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photos.isEmpty }
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
@@ -41,14 +47,24 @@ struct Composer: View {
                     .padding(.vertical, -8)
                     .accessibilityLabel("Model and agent: \(chip)")
                 }
+                VStack(alignment: .leading, spacing: 0) {
+                if !photos.isEmpty {
+                    PhotoStrip(photos: $photos)
+                }
                 HStack(alignment: .bottom, spacing: 8) {
+                    if offersPhotos {
+                        PhotoButton(picking: $picking, shooting: $shooting)
+                            .disabled(photos.count >= photoLimit)
+                            .padding(.leading, 4)
+                            .padding(.bottom, 1)
+                    }
                     TextField(running ? "Add to the queue" : "Message the agent", text: $text, axis: .vertical)
                         .o7Font(.composer)
                         .foregroundStyle(style.fg1)
                         .lineLimit(1...6)
                         .focused($focused)
                         .submitLabel(.return)
-                        .padding(.leading, 16)
+                        .padding(.leading, offersPhotos ? 0 : 16)
                         .padding(.vertical, 11)
                         .accessibilityLabel("Message")
                     if running {
@@ -82,6 +98,7 @@ struct Composer: View {
                         .padding(.bottom, 5)
                     }
                 }
+                }
                 .glassEffect(
                     .regular.tint(style.accent.opacity(waiting ? 0.22 : 0.08)).interactive(),
                     in: .rect(cornerRadius: 24))
@@ -89,6 +106,7 @@ struct Composer: View {
         }
         .animation(.snappy(duration: 0.25), value: running)
         .animation(.snappy(duration: 0.25), value: empty)
+        .animation(.snappy(duration: 0.25), value: photos.count)
     }
 }
 
