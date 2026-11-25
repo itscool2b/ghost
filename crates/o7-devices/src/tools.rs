@@ -10,7 +10,8 @@ use serde_json::Value;
 
 use crate::android::{Appearance, Orientation};
 use crate::manager::{
-    ANY_EMULATOR, ANY_IPHONE, DeviceKind, DeviceState, Live, Manager, TURNED_OFF, ToolReply,
+    ANY_EMULATOR, ANY_IPHONE, DeviceKind, DeviceState, Live, Manager, NOT_SET_UP, TURNED_OFF,
+    ToolReply,
 };
 use crate::outline::Item;
 use crate::scrcpy::key;
@@ -40,6 +41,13 @@ pub const TOOLS: [&str; 16] = [
 const START: Duration = Duration::from_secs(200);
 /// How long the screen is given to settle after an action before the reply is sent.
 const SETTLE: Duration = Duration::from_millis(350);
+/// How long a change of appearance, text size or turn takes to be drawn: a screenshot taken at
+/// once after a quicker reply still showed the old look (24 November 2026).
+const REDRAW: Duration = Duration::from_millis(1500);
+
+/// What an agent is told when it asks for a device and Android is not there: the pane has opened
+/// beside the chat with the setup, which only the person may accept.
+const SET_UP_IN_THE_PANE: &str = "Android is not set up on this computer yet. o7 opened the Device pane beside the chat with Android's setup: ask the person to press Accept and download there (Google's Android SDK licence; about 2.5 GB to download, 8 GB on disk), then call mobile_start again.";
 
 fn refused(text: impl Into<String>) -> Error {
     Error::Refused(text.into())
@@ -143,7 +151,12 @@ pub(crate) async fn call(
             crate::shell::shown(tool)
         ));
     }
-    if tool != "mobile_devices" {
+    // Until the pane was opened nothing had been looked at, and Android was reported missing.
+    manager.look_once().await;
+    if !matches!(tool, "mobile_devices" | "mobile_stop") {
+        // The pane opens beside the chat while the agent works on the device, even before it
+        // has one: when Android is not set up, the pane shows its setup.
+        manager.summon(chat_id);
         manager.agent_doing(chat_id, Some(label(tool, arguments)));
     }
     let reply = run(manager, chat_id, tool, arguments).await;
@@ -305,7 +318,7 @@ fn devices(manager: &Manager, chat_id: &str) -> String {
         return format!("{unavailable}\n");
     }
     if !status.setup.emulator {
-        out.push_str("No Android emulator is set up on this computer. The person can set one up in the Device pane beside the chat.\n");
+        out.push_str("Android is not set up on this computer yet. Call mobile_start: o7 opens the Device pane beside the chat with Android's setup, for the person to accept.\n");
     } else if status
         .setup
         .acceleration
@@ -325,6 +338,11 @@ fn devices(manager: &Manager, chat_id: &str) -> String {
         }
     }
     for device in &status.devices {
+        // An emulator left from before Android was removed cannot start: not listed as if it
+        // could.
+        if device.kind == DeviceKind::Emulator && !status.setup.emulator {
+            continue;
+        }
         let kind = match device.kind {
             DeviceKind::Emulator => "emulator",
             DeviceKind::Phone => "phone",
@@ -405,7 +423,19 @@ async fn start(manager: &Manager, chat_id: &str, arguments: &Value) -> Result<To
             "This chat's device is the person's phone, and they have not allowed agents to use it. Ask them to turn on \"Let the agent use this phone\" in the Device pane.",
         ));
     }
-    manager.attach(chat_id, wanted)?;
+    match manager.attach(chat_id, wanted) {
+        Ok(()) => {}
+        Err(Error::Refused(text)) if text == NOT_SET_UP => {
+            return Err(refused(SET_UP_IN_THE_PANE));
+        }
+        // An iPhone that cannot start yet: the pane beside the chat shows what is missing too.
+        Err(Error::Refused(text)) if wanted == Some(ANY_IPHONE) => {
+            return Err(refused(format!(
+                "{text} o7 opened the Device pane beside the chat, which shows the same."
+            )));
+        }
+        Err(error) => return Err(error),
+    }
     let live = manager.wait_live(chat_id, START).await?;
     let (width, height) = live.screen();
     let system = live.system().await;
@@ -617,12 +647,17 @@ async fn settings(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
             "landscape" => Orientation::Landscape,
             _ => return Err(refused("Orientation is portrait or landscape.")),
         };
-        live.set_orientation(orientation).await?;
-        done.push(match orientation {
-            Orientation::Portrait => "The device is upright.".to_owned(),
-            Orientation::Landscape => "The device is on its side.".to_owned(),
+        let turned = live.set_orientation(orientation).await?;
+        done.push(match (orientation, turned) {
+            (Orientation::Portrait, true) => "The device is upright.".to_owned(),
+            (Orientation::Landscape, true) => "The device is on its side.".to_owned(),
+            (_, false) => "The device did not turn: the app in front (or the home screen) keeps its own way up. Take a screenshot to see it.".to_owned(),
         });
     }
+    // A change of look is drawn a moment after the device takes it.
+    let redraw = ["appearance", "text_scale", "orientation"]
+        .iter()
+        .any(|name| arguments.get(*name).is_some());
     if let Some(permission) = arguments
         .get("permission")
         .filter(|value| value.is_object())
@@ -652,7 +687,7 @@ async fn settings(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
             "Give appearance (light or dark), text_scale (0.85 to 2), orientation (portrait or landscape), or permission.",
         ));
     }
-    tokio::time::sleep(SETTLE).await;
+    tokio::time::sleep(if redraw { REDRAW } else { SETTLE }).await;
     Ok(ToolReply::text(done.join(" ")))
 }
 
@@ -793,7 +828,7 @@ mod tests {
         let listed = manager.tool("chat", "mobile_devices", &json!({})).await;
         assert!(!listed.error);
         assert!(
-            listed.text.contains("No Android emulator is set up"),
+            listed.text.contains("Android is not set up"),
             "{}",
             listed.text
         );
@@ -809,7 +844,70 @@ mod tests {
             "{}",
             start.text
         );
+        // The agent is told the pane opened with the setup, which the person accepts.
+        assert!(
+            start.text.contains("o7 opened the Device pane"),
+            "{}",
+            start.text
+        );
         assert!(!manager.tool("chat", "mobile_stop", &json!({})).await.error);
+    }
+
+    #[tokio::test]
+    async fn an_agents_first_call_looks_at_what_is_installed() {
+        let folder = tempfile::tempdir().unwrap();
+        // Not the test helper's manager, which marks the look as done.
+        let manager = Manager::new(
+            crate::manager::Config {
+                root: folder.path().to_owned(),
+                places: crate::sdk::Places::default(),
+                adb: crate::adb::Adb::at(1),
+                max_running: crate::manager::DEFAULT_RUNNING,
+            },
+            || {},
+        );
+        assert!(!manager.looked());
+        manager.tool("chat", "mobile_devices", &json!({})).await;
+        assert!(
+            manager.looked(),
+            "the first call looked, as opening the pane does"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_agents_call_opens_the_pane_even_before_android_is_set_up() {
+        let folder = tempfile::tempdir().unwrap();
+        let manager = manager(folder.path());
+        let seq = |chat: &str| {
+            manager
+                .status()
+                .summons
+                .iter()
+                .find(|summon| summon.chat_id == chat)
+                .map(|summon| summon.seq)
+        };
+        // Listing and stopping do not open the pane.
+        manager.tool("chat", "mobile_devices", &json!({})).await;
+        manager.tool("chat", "mobile_stop", &json!({})).await;
+        assert_eq!(seq("chat"), None);
+        // Every other call does, refused or not, and each call is a new number.
+        let mut last = 0;
+        for tool in TOOLS {
+            if matches!(tool, "mobile_devices" | "mobile_stop") {
+                continue;
+            }
+            manager.tool("chat", tool, &json!({})).await;
+            let now = seq("chat").unwrap_or_else(|| panic!("{tool} did not summon"));
+            assert!(now > last, "{tool}");
+            last = now;
+        }
+        manager.tool("other", "mobile_start", &json!({})).await;
+        assert!(seq("other").unwrap() > last);
+        assert_eq!(seq("chat"), Some(last));
+        // Off, nothing is summoned.
+        manager.set_enabled(false).await;
+        manager.tool("chat", "mobile_start", &json!({})).await;
+        assert_eq!(seq("chat"), Some(last));
     }
 
     #[tokio::test]

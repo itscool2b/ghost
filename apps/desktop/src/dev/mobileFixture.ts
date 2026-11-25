@@ -56,6 +56,7 @@ export function mobileStatus(change: Partial<MobileStatus> = {}): MobileStatus {
     },
     devices: [],
     chats: [],
+    summons: [],
     ...change,
   };
 }

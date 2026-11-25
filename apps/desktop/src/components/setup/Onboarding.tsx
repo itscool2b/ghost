@@ -30,6 +30,7 @@ import type { CloneDraft } from "../../lib/setup-actions/clone";
 import { FLIGHT_MS } from "../../lib/tour/flight";
 import type { WorkspaceStore } from "../../lib/workspace";
 import { projectName } from "../chat/ChatList";
+import { phoneReady, SetupPhone } from "../mobile/SetupPhone";
 import { type BotChoice, BotDialog } from "../settings/RemotePanel";
 import { AgentRoster } from "./AgentsScreen";
 import { CloneBody, cloneHeading, useClone } from "./CloneProject";
@@ -40,25 +41,29 @@ import "./setup.css";
 import { Select } from "../Select";
 
 /**
- * A page of setup. All but one are saved steps; linking an assistant is a page of the agents
- * step (owner, 21 November 2026), so a setup left there resumes at the agents and nothing new is
- * saved for a copy of the app from before it to misread.
+ * A page of setup. All but two are saved steps; linking an assistant (owner, 21 November 2026)
+ * and the phone (owner, 24 November 2026) are pages of the agents step, so a setup left on either
+ * resumes at the agents and nothing new is saved for a copy of the app from before them to
+ * misread.
  */
-type Page = SetupStep | "bots";
+type Page = SetupStep | "bots" | "phone";
+/** The agents step's own pages after its first. */
+type AgentsPage = "bots" | "phone";
 
 /**
- * Four pages, each skippable: Continue never requires anything. Motion is not one of them: Full
+ * Five pages, each skippable: Continue never requires anything. Motion is not one of them: Full
  * already follows the system's reduced motion, and Settings changes it.
  */
 const STEPS: readonly { id: Page; label: string }[] = [
   { id: "welcome", label: "Welcome" },
   { id: "agents", label: "Your agents" },
   { id: "bots", label: "Your assistant" },
+  { id: "phone", label: "Your phone" },
   { id: "project", label: "First project" },
 ];
 
 /** The saved step a page belongs to. */
-const saves = (page: Page): SetupStep => (page === "bots" ? "agents" : page);
+const saves = (page: Page): SetupStep => (page === "bots" || page === "phone" ? "agents" : page);
 
 /** How long the intro holds before setup shows: the swim on a first launch, a beat later. */
 const INTRO_MS = { live: 1800, still: 240, reducedFirst: 300 } as const;
@@ -111,13 +116,21 @@ export function Onboarding({
   const heading = useRef<HTMLHeadingElement>(null);
   const started = useRef<Promise<SetupSnapshot> | null>(null);
   const lock = useRef(false);
-  // Linking an assistant: the page is open, the dialog is open for one, and the links there are.
-  const [onBots, setOnBots] = useState(false);
+  // The agents step's later pages (an assistant, the phone), the assistant's dialog and links.
+  const [later, setLater] = useState<AgentsPage | null>(null);
   const [linking, setLinking] = useState<BotChoice | null>(null);
   const [links, setLinks] = useState<readonly string[]>([]);
   const agents = agentsState.agents ?? [];
   const saving = current(saved?.preferences.step);
-  const step: Page = saving === "agents" && onBots ? "bots" : saving;
+  const step: Page = saving === "agents" && later !== null ? later : saving;
+  // The phone the agents test on, for its page and the picture.
+  const mobile = transport.mobile ?? null;
+  useSyncExternalStore(
+    mobile?.subscribe ?? noSubscribe,
+    mobile?.getVersion ?? noVersion,
+    mobile?.getVersion ?? noVersion,
+  );
+  const phone = phoneReady(mobile?.status() ?? null);
   const index = STEPS.findIndex((item) => item.id === step);
   // The wing on the progress line: which way the last move went, so the page glides in from
   // that side, and the wing flies back nose first before it turns to face what is next.
@@ -297,7 +310,7 @@ export function Onboarding({
   const open = (page: Page) =>
     void run(async () => {
       if (saves(page) !== saving) await apply({ type: "visit", step: saves(page) });
-      setOnBots(page === "bots");
+      setLater(page === "bots" || page === "phone" ? page : null);
     });
   const advance = () => {
     const next = STEPS[index + 1]?.id;
@@ -383,6 +396,7 @@ export function Onboarding({
     welcome: ["Welcome to o7.", "Every agent, one window."],
     agents: agentsHeading,
     bots: ["Bring your assistant.", "It can run the work for you."],
+    phone: ["Build phone apps.", "Your agents test on a real phone."],
     motion: ["Add a first project.", "Any folder works."],
     project: ["Add a first project.", "Any folder works."],
   };
@@ -391,9 +405,11 @@ export function Onboarding({
       ? "agents"
       : step === "bots"
         ? "bots"
-        : step === "welcome"
-          ? "all"
-          : "project";
+        : step === "phone"
+          ? "phone"
+          : step === "welcome"
+            ? "all"
+            : "project";
   const introMode: IntroMode =
     saved === null ? "pending" : saved.cold_start && !reduced ? "live" : "still";
   return (
@@ -508,6 +524,16 @@ export function Onboarding({
                       Link another assistant
                     </button>
                   </div>
+                </>
+              ) : null}
+              {step === "phone" ? (
+                <>
+                  <p className="setup-lead">
+                    Ask an agent to build or fix a phone app and it starts a phone beside the chat,
+                    runs the app there and checks its own work. You watch every tap, and you can use
+                    the phone too.
+                  </p>
+                  <SetupPhone store={mobile} />
                 </>
               ) : null}
               {step === "agents" ? (
@@ -698,6 +724,7 @@ export function Onboarding({
             focus={focus}
             agents={roster}
             linked={links.map((name) => botNamed(name)).filter((bot): bot is BotId => bot !== null)}
+            phone={phone}
             project={saved?.preferences.first_project_id && project ? project.name : null}
           />
         </aside>
@@ -733,6 +760,9 @@ export function Onboarding({
     </main>
   );
 }
+
+const noSubscribe = () => () => {};
+const noVersion = () => 0;
 
 /** The project step's clone: its two-tone heading follows Git, then the form or the progress. */
 function ProjectClone({

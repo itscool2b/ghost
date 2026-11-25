@@ -96,7 +96,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "chat",
     side: "below",
     title: "A phone beside the chat",
-    body: "An Android emulator, an iPhone simulator on a Mac, or your own phone on a cable, for building apps. You and the agent both see it and use it.",
+    body: "An Android emulator, an iPhone simulator on a Mac, or your own phone on a cable, for building apps. Agents open it themselves when they work on an app; you both see it and use it.",
   },
   {
     id: "run",

@@ -3069,6 +3069,12 @@ export type MobileStatus = {
 	setup: Setup,
 	devices: DeviceInfo[],
 	chats: ChatDevice[],
+	/**
+	 *  Each chat whose agent has called on its device, with the number of its latest call. A
+	 *  number the window has not seen opens the chat's pane (owner, 24 November 2026: "the
+	 *  agent should be able to open the phone and start working").
+	 */
+	summons: Summon[],
 };
 
 /**  What one of the agents' tools answered, for the development checks. */
@@ -4225,6 +4231,13 @@ export type StressConfig = {
 	rate: number,
 	aura: boolean,
 	seconds: number,
+};
+
+/**  A chat's agent called on the chat's device. */
+export type Summon = {
+	chat_id: string,
+	/**  Rises with every call, across chats, for as long as o7 runs. */
+	seq: number,
 };
 
 /**  What the page shows and uses. */

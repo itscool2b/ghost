@@ -88,6 +88,18 @@ pub struct MobileStatus {
     pub setup: Setup,
     pub devices: Vec<DeviceInfo>,
     pub chats: Vec<ChatDevice>,
+    /// Each chat whose agent has called on its device, with the number of its latest call. A
+    /// number the window has not seen opens the chat's pane (owner, 24 November 2026: "the
+    /// agent should be able to open the phone and start working").
+    pub summons: Vec<Summon>,
+}
+
+/// A chat's agent called on the chat's device.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct Summon {
+    pub chat_id: String,
+    /// Rises with every call, across chats, for as long as o7 runs.
+    pub seq: u32,
 }
 
 /// What is installed and what is not.
@@ -910,9 +922,20 @@ impl Live {
         }
     }
 
-    pub(crate) async fn set_orientation(&self, orientation: Orientation) -> Result<(), Error> {
+    /// Turns the device, and answers whether it did. Android's setting is written first; a
+    /// system that did not follow it (seen once on Android 17, 24 November 2026) is asked again
+    /// through the window manager's own command.
+    pub(crate) async fn set_orientation(&self, orientation: Orientation) -> Result<bool, Error> {
         match &self.backend {
-            Backend::Android(android) => android.device.set_orientation(orientation).await,
+            Backend::Android(android) => {
+                let device = &android.device;
+                device.set_orientation(orientation).await?;
+                if turned(device, orientation).await {
+                    return Ok(true);
+                }
+                let _ = device.lock_rotation(orientation).await;
+                Ok(turned(device, orientation).await)
+            }
             Backend::Ios(_) => Err(Error::Refused(NO_ROTATION.into())),
         }
     }
@@ -943,6 +966,20 @@ impl Live {
             Backend::Ios(ios) => format!("{}, {}", ios.model, ios.os),
         }
     }
+}
+
+/// Whether the display took `orientation` within three seconds. A display that cannot be read
+/// counts as turned: the reply then says what was asked, as before.
+async fn turned(device: &crate::android::Device, orientation: Orientation) -> bool {
+    let wanted = orientation == Orientation::Landscape;
+    for _ in 0..12 {
+        match device.on_its_side().await {
+            None => return true,
+            Some(side) if side == wanted => return true,
+            Some(_) => tokio::time::sleep(Duration::from_millis(250)).await,
+        }
+    }
+    false
 }
 
 fn send_input(ios: &IosLive, input: PaneInput) -> Result<(), Error> {
@@ -1069,6 +1106,11 @@ struct State {
     tracking: bool,
     reaping: bool,
     notified: Instant,
+    /// What is installed has been looked at since o7 started.
+    looked: bool,
+    /// Each chat's latest summon, and the last number given.
+    summons: HashMap<String, u32>,
+    summoned: u32,
 }
 
 /// One iPhone simulator o7 keeps.
@@ -1182,6 +1224,9 @@ impl Manager {
                     tracking: false,
                     reaping: false,
                     notified: Instant::now(),
+                    looked: false,
+                    summons: HashMap::new(),
+                    summoned: 0,
                 }),
             }),
         }
@@ -1278,6 +1323,15 @@ impl Manager {
             })
             .collect();
         chats.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
+        let mut summons: Vec<Summon> = state
+            .summons
+            .iter()
+            .map(|(chat_id, seq)| Summon {
+                chat_id: chat_id.clone(),
+                seq: *seq,
+            })
+            .collect();
+        summons.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
         MobileStatus {
             enabled: self.enabled(),
             unavailable: self
@@ -1301,6 +1355,7 @@ impl Manager {
             },
             devices,
             chats,
+            summons,
         }
     }
 
@@ -1332,9 +1387,36 @@ impl Manager {
             state.acceleration = acceleration;
         }
         self.refresh_ios().await;
+        lock(&self.inner.state).looked = true;
         self.changed();
         self.watch_phones();
         self.reap_idle();
+    }
+
+    /// Looks at what is installed before an agent's first call. Until the pane was opened
+    /// nothing had been looked at, so an agent was told Android was not set up when it was.
+    pub(crate) async fn look_once(&self) {
+        let looked = lock(&self.inner.state).looked;
+        if !looked {
+            self.refresh().await;
+        }
+    }
+
+    /// Whether what is installed has been looked at since o7 started.
+    #[cfg(test)]
+    pub(crate) fn looked(&self) -> bool {
+        lock(&self.inner.state).looked
+    }
+
+    /// Notes that the chat's agent called on its device, so the window opens the chat's pane.
+    pub(crate) fn summon(&self, chat_id: &str) {
+        {
+            let mut state = lock(&self.inner.state);
+            state.summoned = state.summoned.wrapping_add(1);
+            let seq = state.summoned;
+            state.summons.insert(chat_id.to_owned(), seq);
+        }
+        self.changed();
     }
 
     /// Looks for Xcode unless it was found, and at the simulators o7 made: one Xcode no longer
@@ -2701,7 +2783,7 @@ fn ios_setup(ios: &IosState) -> IosSetup {
 /// What a device answers when Mobile is off.
 pub const TURNED_OFF: &str =
     "Mobile is turned off in Settings > Plugins & MCP. Ask the person to turn it on.";
-const NOT_SET_UP: &str = "Android is not set up on this computer yet. Ask the person to open the Device pane and set it up.";
+pub(crate) const NOT_SET_UP: &str = "Android is not set up on this computer yet. Ask the person to open the Device pane and set it up.";
 const NO_DEVICE: &str = "This chat has no device yet. Call mobile_start first.";
 const NOT_ALLOWED: &str = "This chat's device is the person's phone, and they have not allowed agents to use it. Ask them to turn on \"Let the agent use this phone\" in the Device pane.";
 
@@ -2853,7 +2935,7 @@ pub(crate) mod tests {
     use super::*;
 
     pub(crate) fn manager(folder: &std::path::Path) -> Manager {
-        Manager::new(
+        let manager = Manager::new(
             Config {
                 root: folder.to_owned(),
                 places: Places::default(),
@@ -2862,7 +2944,11 @@ pub(crate) mod tests {
                 max_running: DEFAULT_RUNNING,
             },
             || {},
-        )
+        );
+        // A test sets what is installed itself: the first tool call must not look at this
+        // computer (a Mac runner's real Xcode made `mobile_start` reach for an iPhone).
+        lock(&manager.inner.state).looked = true;
+        manager
     }
 
     /// Puts a phone in adb's list and gives it to `chat_id`, as if the person had picked it.
@@ -2907,6 +2993,9 @@ pub(crate) mod tests {
             tracking: false,
             reaping: false,
             notified: Instant::now(),
+            looked: false,
+            summons: HashMap::new(),
+            summoned: 0,
         };
         for (number, (phase, chat)) in slots.into_iter().enumerate() {
             let mut slot = Slot::numbered(number + 1);

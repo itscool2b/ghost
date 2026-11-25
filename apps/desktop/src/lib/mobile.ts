@@ -108,18 +108,34 @@ const NOTHING: MobileStatus = {
   },
   devices: [],
   chats: [],
+  summons: [],
 };
+
+/**
+ * Calls closer together than this are one stretch of the agent's work: a pane the person closed
+ * during it stays closed until the agent has been quiet this long.
+ */
+export const SUMMON_QUIET_MS = 60_000;
 
 /** The devices as React reads them: one status, replaced whole on every change. */
 export class MobileStore {
   readonly api: MobileApi;
   readonly #listeners = new Set<() => void>();
+  readonly #now: () => number;
   #status: MobileStatus | null = null;
   #version = 0;
   #stop: (() => void) | null = null;
+  /** The latest summon number seen for each chat. */
+  readonly #seen = new Map<string, number>();
+  /** Chats whose agent called on the device since their pane last answered. */
+  readonly #pending = new Set<string>();
+  /** When each chat's agent last called, and the chats whose pane the person closed meanwhile. */
+  readonly #called = new Map<string, number>();
+  readonly #closed = new Set<string>();
 
-  constructor(api: MobileApi) {
+  constructor(api: MobileApi, now: () => number = Date.now) {
     this.api = api;
+    this.#now = now;
   }
 
   /** Starts listening (once, on first use). */
@@ -170,7 +186,47 @@ export class MobileStore {
     );
   }
 
+  /**
+   * Whether the chat's agent called on its device since the pane last answered: the pane should
+   * open beside the chat (owner, 24 November 2026: "the agent should be able to open the phone
+   * and start working").
+   */
+  summoned(chatId: string): boolean {
+    const called = this.#called.get(chatId);
+    // A call from a stretch of work that has ended opens nothing later.
+    return (
+      this.#pending.has(chatId) && called !== undefined && this.#now() - called < SUMMON_QUIET_MS
+    );
+  }
+
+  /** The pane answered the chat's summon (it opened, or was open). */
+  answer(chatId: string): void {
+    this.#pending.delete(chatId);
+  }
+
+  /** The person closed the chat's pane: the agent's next calls in this stretch leave it closed. */
+  closed(chatId: string): void {
+    this.#pending.delete(chatId);
+    const called = this.#called.get(chatId);
+    if (called !== undefined && this.#now() - called < SUMMON_QUIET_MS) this.#closed.add(chatId);
+  }
+
+  #summons(status: MobileStatus, first: boolean): void {
+    for (const { chat_id: chatId, seq } of status.summons ?? []) {
+      if (this.#seen.get(chatId) === seq) continue;
+      this.#seen.set(chatId, seq);
+      // What was called before this window started is not a reason to open anything.
+      if (first) continue;
+      const now = this.#now();
+      const before = this.#called.get(chatId);
+      if (before === undefined || now - before >= SUMMON_QUIET_MS) this.#closed.delete(chatId);
+      this.#called.set(chatId, now);
+      if (!this.#closed.has(chatId)) this.#pending.add(chatId);
+    }
+  }
+
   #take(status: MobileStatus): void {
+    this.#summons(status, this.#status === null);
     this.#status = status;
     this.#version += 1;
     for (const listener of [...this.#listeners]) listener();

@@ -1,9 +1,11 @@
 /*
  * The device beside the chat (docs/superpowers/plans/2026-11-21-mobile.md). On a wide window it is
  * a pane of its own beside the chat's, as wide as a phone needs; narrower, it covers the chat's
- * work area under the header. Its name and actions sit in the header's band, what it has to say
- * in pill bars under them, and the device's screen fills the rest with its buttons at the foot.
- * Nothing glows.
+ * work area under the header. Its name and actions sit in the header's band, where what the agent
+ * is doing takes the name's place; a phone's question sits in a pill bar under them, notices float
+ * over the foot of the stage, and the device's screen fills the rest with its buttons at the foot.
+ * Nothing that comes and goes changes the screen's place (owner, 24 November 2026: it "jitters
+ * up and down"). Nothing glows.
  */
 
 .device-panel {
@@ -12,6 +14,15 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  /* It slides in from its side, whether the person or the agent opened it. */
+  animation: device-panel-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+@keyframes device-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
 }
 
 /* Narrow windows: the device covers the work area; the chat stays behind it. */
@@ -35,11 +46,11 @@
   padding: 0 var(--g-space-8) 0 var(--g-space-12);
 }
 
+/* The name and what the agent is doing share one cell and cross over each other. */
 .device-title {
-  display: inline-flex;
+  display: grid;
   flex: 1;
   align-items: center;
-  gap: var(--g-space-8);
   min-width: 0;
   color: var(--g-fg-1);
   font-size: var(--g-text-ui);
@@ -47,9 +58,39 @@
   line-height: var(--g-leading-ui);
 }
 
-.device-title > svg {
+.device-title-name,
+.device-title-agent {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-width: 0;
+  transition:
+    opacity var(--g-dur-base) var(--g-ease),
+    transform var(--g-dur-base) var(--g-ease);
+}
+
+.device-title-name > svg {
   flex: none;
   color: var(--g-fg-3);
+}
+
+.device-title-agent {
+  color: var(--g-fg-2);
+  font-weight: var(--g-weight-regular);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+}
+
+.device-title[data-agent] .device-title-name {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.device-title[data-agent] .device-title-agent {
+  opacity: 1;
+  transform: none;
 }
 
 .device-title-text {
@@ -112,6 +153,50 @@
   margin-right: var(--g-space-6);
 }
 
+/* A problem or a saved picture, over the foot of the stage: the screen keeps its place. */
+.device-notices {
+  position: absolute;
+  inset: auto 0 var(--g-space-8);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-6);
+  pointer-events: none;
+}
+
+.device-notices > .device-bar {
+  margin-bottom: 0;
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  pointer-events: auto;
+  animation: device-notice-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+@keyframes device-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+/* The header's phone button while the agent works on a device whose pane is closed. */
+.chat-device-toggle[data-agent] {
+  position: relative;
+}
+
+.chat-device-toggle[data-agent]::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-volt);
+}
+
 /* ---------------------------------------------------------------- the stage */
 
 .device-stage {
@@ -153,6 +238,17 @@
 .device-canvas:focus-visible {
   outline: 2px solid var(--g-focus);
   outline-offset: 2px;
+}
+
+/* The first frame fades up in place of the waiting box. */
+.device-screen[data-state="live"] .device-canvas {
+  animation: device-screen-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+@keyframes device-screen-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* Until the first frame arrives the canvas has no size of its own. */
@@ -357,10 +453,37 @@
     opacity: 0.4;
     animation: none;
   }
+
+  .device-panel,
+  .device-notices > .device-bar,
+  .device-screen[data-state="live"] .device-canvas {
+    animation: none;
+  }
+
+  .device-title-name,
+  .device-title-agent {
+    transform: none;
+    transition: none;
+  }
 }
 
 :root:is([data-motion="reduced"], [data-motion="off"]) .device-progress::after {
   width: 100%;
   opacity: 0.4;
   animation: none;
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"])
+  :is(
+    .device-panel,
+    .device-notices > .device-bar,
+    .device-screen[data-state="live"] .device-canvas
+  ) {
+  animation: none;
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"])
+  :is(.device-title-name, .device-title-agent) {
+  transform: none;
+  transition: none;
 }

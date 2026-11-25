@@ -31,6 +31,35 @@ how what is built works.
 - **Settings > Mobile** has the switch (on by default), what agents get, and what is installed.
   Off stops every device o7 started, closes the pane everywhere and makes every tool answer that
   Mobile is off, in running chats too.
+- **Setup** has a page for it, Your phone, after Your assistant: what the phone is for, Android's
+  setup with Google's offer and licence exactly as the pane shows them, and on a Mac the iPhone's
+  state. It is a page of the agents step, like Your assistant, and Continue never needs it.
+
+## The agent opens it
+
+The person never has to open the pane first (owner, 24 November 2026: "the agent should be able
+to open the phone and start working"). Every tool call but `mobile_devices` and `mobile_stop` is
+a summon: the manager gives the chat a new number (`MobileStatus.summons`), and a number the
+window has not seen opens that chat's pane, sliding in from its side. If Android is not set up,
+the agent's `mobile_start` is told the pane opened with the setup, and the pane shows Google's
+offer and licence at once; accepting stays the person's.
+
+- The pane takes the side from the browser, never from Changes or a task the person opened: then
+  the header's phone button carries a dot and says the agent is using the device, and the pane
+  opens when they close what they were reading.
+- A pane the person closes while the agent works stays closed for the rest of that stretch of
+  work (calls less than a minute apart), and an unanswered summon expires with it
+  (`MobileStore`, `apps/desktop/src/lib/mobile.ts`).
+- The first call of an app run looks at what is installed (`Manager::look_once`). Before, nothing
+  was looked at until the pane was opened, so an agent was told Android was not set up when it
+  was.
+- What the agent is doing takes the device's name's place in the pane's header, and stays a
+  moment (1.2 s) after each call so a run of calls reads as one line. Notices (a problem, a saved
+  picture) float over the foot of the stage. Nothing that comes and goes moves the screen (owner,
+  24 November 2026: it "jitters up and down"); `check-device.mjs` measures it.
+- The instructions, the skill and `mobile_start`'s own description tell agents to start the
+  device themselves whenever they build, run, fix or test a phone app, and to check their work
+  on it before they report.
 
 ## One device per chat
 
@@ -165,6 +194,11 @@ with the tools, reads the screen as an outline, acts on refs, and takes a screen
 matters. `mobile_start` waits for the device (up to 200 seconds); `platform: "ios"` asks for an
 iPhone simulator, and without it a chat gets an emulator when Android is set up, else an iPhone
 when the Mac has one. For an iPhone it says the simulator's UDID to build for.
+
+`mobile_settings` answers once the change is drawn (1.5 s for appearance, text size and turning).
+Turning reads the main display's size back from the window manager (`dumpsys window displays`);
+a system that did not follow Android's setting is asked again with `wm user-rotation lock`, and
+the reply says plainly when the device did not turn.
 
 ## Security
 

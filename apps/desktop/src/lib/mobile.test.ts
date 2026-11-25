@@ -8,6 +8,7 @@ import {
   megabytes,
   ScreenPlayer,
   type ScreenState,
+  SUMMON_QUIET_MS,
   videoPoint,
 } from "./mobile";
 
@@ -35,6 +36,42 @@ describe("the devices' store", () => {
     stop();
     fake.change({ chats: [] });
     expect(changes).toBe(2);
+  });
+
+  it("opens a chat's pane when its agent calls on the device, until the person closes it", async () => {
+    let now = 1_000_000;
+    const fake = new FakeMobile(mobileStatus({ summons: [{ chat_id: "old", seq: 1 }] }));
+    const store = new MobileStore(fake, () => now);
+    store.subscribe(() => {});
+    await flush();
+    // A call from before the window started opens nothing.
+    expect(store.summoned("old")).toBe(false);
+
+    fake.change({ summons: [{ chat_id: "chat", seq: 2 }] });
+    expect(store.summoned("chat")).toBe(true);
+    expect(store.summoned("other")).toBe(false);
+    store.answer("chat");
+    expect(store.summoned("chat")).toBe(false);
+    // The same number again is not a new call.
+    fake.change({ summons: [{ chat_id: "chat", seq: 2 }] });
+    expect(store.summoned("chat")).toBe(false);
+
+    // The person closes the pane while the agent works: its next calls leave it closed.
+    now += 1_000;
+    fake.change({ summons: [{ chat_id: "chat", seq: 3 }] });
+    store.closed("chat");
+    now += 5_000;
+    fake.change({ summons: [{ chat_id: "chat", seq: 4 }] });
+    expect(store.summoned("chat")).toBe(false);
+
+    // After a quiet minute, a new stretch of work opens it again.
+    now += SUMMON_QUIET_MS;
+    fake.change({ summons: [{ chat_id: "chat", seq: 5 }] });
+    expect(store.summoned("chat")).toBe(true);
+
+    // A call nobody answered expires with its stretch of work.
+    now += SUMMON_QUIET_MS;
+    expect(store.summoned("chat")).toBe(false);
   });
 
   it("is not offered while Mobile is off or Android's tools do not exist here", async () => {
