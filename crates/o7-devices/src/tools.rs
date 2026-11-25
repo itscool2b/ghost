@@ -651,7 +651,7 @@ async fn settings(live: &Live, arguments: &Value) -> Result<ToolReply, Error> {
         done.push(match (orientation, turned) {
             (Orientation::Portrait, true) => "The device is upright.".to_owned(),
             (Orientation::Landscape, true) => "The device is on its side.".to_owned(),
-            (_, false) => "The device did not turn: Android kept it as it was. Take a screenshot to see it, and try again.".to_owned(),
+            (_, false) => "The device did not turn: the app in front (or the home screen) keeps its own way up. Take a screenshot to see it.".to_owned(),
         });
     }
     // A change of look is drawn a moment after the device takes it.
