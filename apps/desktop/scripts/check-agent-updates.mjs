@@ -31,6 +31,24 @@ export async function checkAgentUpdates(browser, url, out, engine) {
         await notice("claude").waitFor();
       };
 
+      // A copy that never accepted the Terms of Service and Privacy Policy is shown them once, with
+      // both links, until OK; a reload after OK shows nothing.
+      await page.goto(`${url}/?preview=agent-updates&theme=${theme}&legal=new`);
+      const legal = page.getByTestId("legal-banner");
+      await legal.waitFor();
+      assert.match(await legal.textContent(), /o7 has Terms of Service and a Privacy Policy/);
+      assert.equal(
+        await legal.getByRole("link", { name: "Privacy Policy" }).getAttribute("href"),
+        "https://o7.codes/privacy",
+      );
+      await page.screenshot({ path: resolve(out, `${engine}-${theme}-legal.png`) });
+      await legal.getByRole("button", { name: "OK" }).click();
+      await legal.waitFor({ state: "detached" });
+      assert.equal(
+        await page.evaluate(() => localStorage.getItem("o7.legal.accepted")),
+        "2026-11-25",
+      );
+
       // New releases wait behind the bell: nothing floats over the pane, the bell has its dot.
       await page.goto(`${url}/?preview=agent-updates&theme=${theme}`);
       await bell.waitFor();

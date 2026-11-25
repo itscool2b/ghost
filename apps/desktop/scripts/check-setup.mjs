@@ -69,6 +69,22 @@ try {
       await page.goto(`${url}/?preview=setup`);
       await page.getByRole("button", { name: "Get started" }).waitFor();
       await page.waitForFunction(() => !document.querySelector("[data-cinematic]"));
+      // Continuing accepts BASH.AI LLC's Terms of Service and Privacy Policy, linked in the line;
+      // nothing is accepted by looking.
+      const legal = page.getByTestId("setup-legal");
+      assert.match(
+        await legal.textContent(),
+        /By continuing, you agree to o7’s Terms of Service and Privacy Policy\./,
+      );
+      assert.equal(
+        await legal.getByRole("link", { name: "Terms of Service" }).getAttribute("href"),
+        "https://o7.codes/terms",
+      );
+      assert.equal(
+        await legal.getByRole("link", { name: "Privacy Policy" }).getAttribute("href"),
+        "https://o7.codes/privacy",
+      );
+      assert.equal(await page.evaluate(() => localStorage.getItem("o7.legal.accepted")), null);
       await page.screenshot({ path: resolve(out, `${engine}-welcome.png`) });
       // The setup column, wordmark and Skip setup stay clear of each other at both sizes.
       const checkLayout = async () => {
@@ -127,6 +143,11 @@ try {
       await page
         .getByRole("heading", { name: /^Found 3 agents\.\s*6 more can be installed\.$/ })
         .waitFor();
+      assert.equal(
+        await page.evaluate(() => localStorage.getItem("o7.legal.accepted")),
+        "2026-11-25",
+        `${engine}: continuing accepted the Terms and Privacy`,
+      );
       // What this computer has leads; every shown row is whole, inside the column and clear of the
       // next, and the six missing agents fold into one row.
       const rows = await page.evaluate(() => {

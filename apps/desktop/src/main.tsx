@@ -17,6 +17,7 @@ import { tauriTransport } from "./lib/chat/transport";
 import { installDraftQuit } from "./lib/draftQuit";
 import { cancelDemoStream, inTauri, startDemoStream } from "./lib/ipc";
 import { readLaunchLists } from "./lib/launchCache";
+import { acceptLegal } from "./lib/legal";
 import { installProfileEvents } from "./lib/profiles";
 import { StreamStore } from "./lib/session";
 import { setMotionPreference, setupApi } from "./lib/setup";
@@ -66,6 +67,11 @@ void appearanceReady.then((setUp) => {
   if (container) {
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("preview")) {
       const mode = new URLSearchParams(location.search).get("preview");
+      // A preview stands for a copy that accepted the current Terms of Service and Privacy
+      // Policy; `&legal=new` shows the notice a copy that never did sees (lib/legal.ts).
+      if (new URLSearchParams(location.search).get("legal") === "new")
+        localStorage.removeItem("o7.legal.accepted");
+      else if (mode !== "setup") acceptLegal();
       if (new URLSearchParams(location.search).has("glass"))
         void import("./dev/glassPreview").then(({ emulateGlass }) => emulateGlass());
       if (new URLSearchParams(location.search).has("quit"))

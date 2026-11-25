@@ -9,6 +9,10 @@ adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-25
+
+- o7 now has Terms of Service and a Privacy Policy, from BASH.AI LLC. Setup says that continuing accepts them, and if you set up o7 before today it shows them to you once with an OK. Settings > About links both. ([#212](https://github.com/itscool2b/o7/pull/212))
+
 ## 2026-11-24
 
 - Agents now open the phone themselves. When you ask an agent to build, fix or test a phone app, it starts the phone beside the chat on its own and the Device pane slides open; if Android is not set up yet, the pane shows the download for you to accept. The phone no longer jumps up and down while the agent works, and setup has a new page about it. ([#210](https://github.com/itscool2b/o7/pull/210))

@@ -1417,6 +1417,25 @@ describe("turns and the transcript", () => {
 });
 
 describe("the banners", () => {
+  it("show the Terms of Service and Privacy Policy with their links until OK", () => {
+    const html = renderToStaticMarkup(
+      <Banners
+        storage={null}
+        legal={{
+          title: "o7 has Terms of Service and a Privacy Policy",
+          detail: "From BASH.AI LLC.",
+          onAccept: noop,
+        }}
+      />,
+    );
+    expect(html).toContain("o7 has Terms of Service and a Privacy Policy");
+    expect(html).toContain('href="https://o7.codes/terms"');
+    expect(html).toContain('href="https://o7.codes/privacy"');
+    expect(html).toContain('target="_blank"');
+    expect(buttons(html)).toEqual([{ label: "OK", disabled: false }]);
+    expect(renderToStaticMarkup(<Banners storage={null} legal={null} />)).toBe("");
+  });
+
   it("show the database repair notice until the shell confirms its dismissal", () => {
     const message = "Your database was damaged, so o7 rebuilt it.";
     const shown = renderToStaticMarkup(

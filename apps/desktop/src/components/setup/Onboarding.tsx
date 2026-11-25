@@ -23,6 +23,7 @@ import type { AppStore } from "../../lib/chat/appStore";
 import type { Transport } from "../../lib/chat/transport";
 import { errorMessage } from "../../lib/errors";
 import { inTauri } from "../../lib/ipc";
+import { acceptLegal, PRIVACY_URL, TERMS_URL } from "../../lib/legal";
 import { type RemoteApi, remoteApi } from "../../lib/remote";
 import { type SetupApi, setMotionPreference, setupApi } from "../../lib/setup";
 import { type CloneApi, cloneApi } from "../../lib/setup-actions/api";
@@ -309,10 +310,13 @@ export function Onboarding({
   /** Opens a page: its saved step, and whether the agents step shows its second page. */
   const open = (page: Page) =>
     void run(async () => {
+      // Leaving the first page is continuing, which the page says accepts the Terms and Privacy.
+      acceptLegal();
       if (saves(page) !== saving) await apply({ type: "visit", step: saves(page) });
       setLater(page === "bots" || page === "phone" ? page : null);
     });
   const advance = () => {
+    acceptLegal();
     const next = STEPS[index + 1]?.id;
     if (next === undefined) void run(() => apply({ type: "finish" }));
     else open(next);
@@ -421,7 +425,11 @@ export function Onboarding({
           type="button"
           className="g-button g-button-ghost g-button-28 setup-skip"
           disabled={busy}
-          onClick={() => (saved ? void run(() => apply({ type: "finish" })) : onDone())}
+          onClick={() => {
+            acceptLegal();
+            if (saved) void run(() => apply({ type: "finish" }));
+            else onDone();
+          }}
         >
           Skip setup
         </button>
@@ -480,6 +488,19 @@ export function Onboarding({
                   Run the coding agents on this computer side by side, and steer them from your
                   phone or your own assistant when you are away. Each agent keeps its own sign-in,
                   and o7 itself needs no account.
+                </p>
+              ) : null}
+              {step === "welcome" ? (
+                <p className="setup-footnote setup-legal" data-testid="setup-legal">
+                  By continuing, you agree to o7’s{" "}
+                  <a href={TERMS_URL} target="_blank" rel="noreferrer noopener">
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a href={PRIVACY_URL} target="_blank" rel="noreferrer noopener">
+                    Privacy Policy
+                  </a>
+                  .
                 </p>
               ) : null}
               {step === "bots" ? (

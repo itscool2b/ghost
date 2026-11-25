@@ -26,6 +26,7 @@ const COLUMNS: readonly { heading: string; links: readonly { href: string; text:
       { href: "/privacy", text: "Privacy" },
       { href: "/terms", text: "Terms" },
       { href: "/third-party-notices", text: "Notices" },
+      { href: "mailto:bashllc25@gmail.com", text: "Contact" },
     ],
   },
 ];
@@ -44,6 +45,11 @@ export function SiteFooter() {
               <Wordmark size={17} />
             </a>
             <p className="footer-statement">Your agents. Your machine.</p>
+            <p className="footer-legal" data-testid="footer-copyright">
+              © 2026 BASH.AI LLC. All rights reserved.
+              <br />
+              o7 is a product of BASH.AI LLC. Source code is available under the MIT License.
+            </p>
           </div>
           <nav className="footer-links" aria-label="Footer">
             <div className="footer-cols">

@@ -30,6 +30,7 @@ import {
 import type { Transport } from "../../lib/chat/transport";
 import { type CoordinatorApi, coordinatorApi, useCoordinationMembers } from "../../lib/coordinator";
 import { restoreFocusSoon } from "../../lib/focusReturn";
+import { acceptLegal, legalNotice } from "../../lib/legal";
 import { navigationTarget } from "../../lib/nativeNavigation";
 import {
   agentEditText,
@@ -207,6 +208,8 @@ export function ChatsScreen({
   const memoryEdits = useAgentMemoryEdits(memory);
   // A memory edit's toast moves on by itself; the edit stays in the notifications panel.
   const [toastedEdits, setToastedEdits] = useState<ReadonlySet<string>>(new Set());
+  // The Terms of Service and Privacy Policy, once, until this copy accepts them (lib/legal.ts).
+  const [legal, setLegal] = useState(() => legalNotice());
   // Startup notices put away for this run, and agents whose last update failed (a red bell).
   const [dismissedNotices, setDismissedNotices] = useState<ReadonlySet<string>>(new Set());
   const [failedUpdates, setFailedUpdates] = useState<ReadonlySet<string>>(new Set());
@@ -585,6 +588,17 @@ export function ChatsScreen({
           storage={snapshot.storage}
           memoryEdits={memoryBanners.filter((edit) => !toastedEdits.has(edit.key))}
           onExpire={(key) => setToastedEdits((current) => toggled(current, key, true))}
+          legal={
+            legal
+              ? {
+                  ...legal,
+                  onAccept: () => {
+                    acceptLegal();
+                    setLegal(null);
+                  },
+                }
+              : null
+          }
         />
         {boardPage ? (
           <ProjectPage

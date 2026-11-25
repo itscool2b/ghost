@@ -1330,3 +1330,14 @@ html[data-motion="off"] * {
 .setup-phone-fetch .device-license {
   max-height: 104px;
 }
+
+/* Welcome: continuing accepts the Terms of Service and Privacy Policy, linked in the line. */
+.setup-legal a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.setup-legal a:hover {
+  color: var(--g-fg-1);
+}
