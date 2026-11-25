@@ -8,7 +8,7 @@ public import O7Wire
 /// to it through `MockTransport` exactly as they would through the relay.
 public actor MockComputer {
     public nonisolated let hostId: String
-    public let hostName: String
+    public nonisolated let hostName: String
     public var look = Look(theme: "claude", appearance: "dark")
     public var features = ["pickers", "inbox", "search"]
     /// Seconds between the scripted agent's steps.
@@ -198,9 +198,13 @@ public actor MockComputer {
                 return refuse(re, "not_found", "That chat is gone.", to: id)
             }
             sessions[id]?.following = chatId
+            var snapshot = ChatSnapshot(chat: chat.summary.chat, session: SessionInfo(status: chat.summary.chat.status))
+            snapshot.tasks = chat.events.compactMap { item in
+                if case .taskUpdated(let task) = item.event, task.status == .running { return task }
+                return nil
+            }
             let attach = ChatAttach(
-                subscriptionId: "s\(id)", nextSeq: Int64(chat.events.count),
-                snapshot: ChatSnapshot(chat: chat.summary.chat, session: SessionInfo(status: chat.summary.chat.status)),
+                subscriptionId: "s\(id)", nextSeq: Int64(chat.events.count), snapshot: snapshot,
                 history: HistoryPage(chatId: chatId, items: chat.events, hasMore: false))
             reply(re, (try? JSONValue.of(attach)) ?? .null, to: id)
         case "close":

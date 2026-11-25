@@ -93,14 +93,35 @@ public struct O7TextStyle: Sendable, Hashable {
 /// sized for the text size in effect when it is made; `View.o7Font(_:)` also follows a change
 /// while the view is on screen and sets the style's line height and tracking.
 public enum O7Font {
-    /// Geist at `size`, scaled as `relativeTo` scales.
+    /// Geist at `size`, scaled by SwiftUI as `relativeTo` scales, live, as Dynamic Type asks.
     public static func ui(_ size: CGFloat, weight: O7Weight = .regular, relativeTo: Font.TextStyle = .body) -> Font {
-        font(size: scaled(size, relativeTo: relativeTo), weight: boldened(weight.value), mono: false, tabular: false)
+        dynamic(size: size, weight: weight, mono: false, tabular: false, relativeTo: relativeTo, bold: false)
     }
 
-    /// Geist Mono at `size`, scaled as `relativeTo` scales.
+    /// Geist Mono at `size`, scaled by SwiftUI as `relativeTo` scales.
     public static func mono(_ size: CGFloat, weight: O7Weight = .regular, relativeTo: Font.TextStyle = .body) -> Font {
-        font(size: scaled(size, relativeTo: relativeTo), weight: boldened(weight.value), mono: true, tabular: false)
+        dynamic(size: size, weight: weight, mono: true, tabular: false, relativeTo: relativeTo, bold: false)
+    }
+
+    /// A face SwiftUI scales itself with Dynamic Type, by its named instance. Text Styles scale fonts
+    /// this way, and accessibility checks recognise it; the `wght` axis values the desktop grades
+    /// for its own screens (420, 510) round to the instances (400, 500) here. Bold Text takes the
+    /// next heavier instance.
+    static func dynamic(
+        size: CGFloat, weight: O7Weight, mono: Bool, tabular: Bool, relativeTo: Font.TextStyle, bold: Bool
+    ) -> Font {
+        O7Fonts.register()
+        let instance =
+            switch (weight, bold) {
+            case (.regular, false): "Regular"
+            case (.medium, false): "Medium"
+            case (.semibold, false): "SemiBold"
+            case (.regular, true): "SemiBold"
+            case (.medium, true): "Bold"
+            case (.semibold, true): "ExtraBold"
+            }
+        let font = Font.custom("\(mono ? "GeistMono" : "Geist")-\(instance)", size: size, relativeTo: relativeTo)
+        return tabular ? font.monospacedDigit() : font
     }
 
     /// A size that never scales: marks, the wordmark, anything drawn to a fixed box.
@@ -108,11 +129,11 @@ public enum O7Font {
         font(size: size, weight: weight.value, mono: mono, tabular: false)
     }
 
-    /// A role's font, scaled for the text size in effect now.
+    /// A role's font, scaled by SwiftUI with Dynamic Type.
     public static func font(_ style: O7TextStyle) -> Font {
-        font(
-            size: scaled(style.size, relativeTo: style.relativeTo), weight: boldened(style.weight.value),
-            mono: style.mono, tabular: style.tabular)
+        dynamic(
+            size: style.size, weight: style.weight, mono: style.mono, tabular: style.tabular,
+            relativeTo: style.relativeTo, bold: false)
     }
 
     /// A role's font at a given Dynamic Type size, with Bold Text on or off.
@@ -240,7 +261,10 @@ private struct O7FontModifier: ViewModifier {
         let size = O7Font.scaled(style.size, relativeTo: style.relativeTo, dynamicTypeSize: dynamicTypeSize)
         let lineHeight = O7Font.scaled(style.lineHeight, relativeTo: style.relativeTo, dynamicTypeSize: dynamicTypeSize)
         content
-            .font(O7Font.font(style, dynamicTypeSize: dynamicTypeSize, boldText: legibilityWeight == .bold))
+            .font(
+                O7Font.dynamic(
+                    size: style.size, weight: style.weight, mono: style.mono, tabular: style.tabular,
+                    relativeTo: style.relativeTo, bold: legibilityWeight == .bold))
             .lineHeight(.exact(points: lineHeight))
             .tracking(style.tracking * size)
     }

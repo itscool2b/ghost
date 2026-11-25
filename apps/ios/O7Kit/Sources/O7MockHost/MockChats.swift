@@ -131,6 +131,10 @@ enum Script {
                             ToolCall(
                                 toolCallId: "c2-t2", kind: .execute, title: "Run `swift test`",
                                 status: .inProgress)),
+                        .taskUpdated(
+                            backgroundTask(
+                                id: "c2-k1", title: "Review the diff", activity: "Reading 4 files",
+                                prompt: "Read the branch's changes and list what is wrong, most serious first.")),
                     ], turn: "c2-t0")),
             MockChat(
                 summary: tidy,
@@ -159,6 +163,19 @@ enum Script {
                         .turnEnded(turnId: "c4-t0", stopReason: .error, usage: nil, durationMs: 41_000, recovered: false),
                     ], turn: "c4-t0")),
         ]
+    }
+
+    /// A background subagent, as the desktop reports one.
+    static func backgroundTask(id: String, title: String, activity: String, prompt: String) -> BackgroundTask {
+        let json: JSONValue = .object([
+            "task_id": .string(id), "kind": .string("agent"), "title": .string(title),
+            "agent_type": .string("reviewer"), "tool_call_id": .null, "parent_task_id": .null,
+            "backgrounded": .bool(true), "status": .string("running"), "activity": .string(activity),
+            "tool_uses": .number(6), "tokens": .number(18_400), "duration_ms": .null,
+            "started_at": .number(Double(now - 95_000)), "ended_at": .null, "prompt": .string(prompt),
+            "summary": .null, "summary_truncated": .null,
+        ])
+        return try! json.decode(BackgroundTask.self)
     }
 
     static let projects = [
