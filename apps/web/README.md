@@ -31,18 +31,19 @@ shared Geist font package and semantic tokens from `@o7/ui`.
 
 ## Reference evidence
 
-The website was rebuilt on 10 November 2026 as a close copy of dot.com (the Grok Bot page), and again on 17 November 2026 against dot.com as it now stands, measured in dark and light at 1440, 1024, 768 and 390 wide, as [visual-language.md](../../docs/design/visual-language.md) describes. [reference-audit.md](../../docs/design/reference-audit.md) records the actual observations and their limits. The owner has not yet visually approved the pass. No third-party reference artwork or brand assets are shipped.
+The website was rebuilt for Main on 26 November 2026, as [visual-language.md](../../docs/design/visual-language.md) describes under "Website composition": always dark, one ink and one grey, two-tone headings at the left edge, chapters on hairlines and the product on monochrome stages. [reference-audit.md](../../docs/design/reference-audit.md) records the pages it was measured against (polar.sh, linear.app, ghost.ai and x.ai/bot) and their limits. No third-party reference artwork or brand assets are shipped.
 
-The product image is a capture of the real desktop interface in its local preview mode, not a
-fabricated mock. Regenerate it whenever the app changes visibly with
-`node apps/web/scripts/product-images.mjs`: it captures the desktop's `?preview=settled` at 1440 by
-760 and 2x, in light and in dark, with the window flat and opaque as the desktop draws it since its
-restyle of 17 November 2026, and writes the WebP sources (480, 960, 1440 and 2240 wide) and
-the light PNG fallback. The hero window and the card views are drawn from tokens after the app's
-own flat look and preview modes (New chat, a pending handoff, the queue, the Changes panel, a
-terminal chat, the browser in Annotate and the Dashboard); update them with the app. The favicons and social card are generated at build time by `scripts/site-images.ts` from the
-logo's own paths. Without JavaScript the site still follows the system appearance, the agents' chips show the
-default choice and the FAQ opens natively. The standalone notices page is script-free and follows the system appearance too. The changelog page is built from the repository's `CHANGELOG.md` by `scripts/changelog.ts`. The website has no appearance control or persisted theme. Reduced motion disables the live window and transitions.
+The page shows no screenshot of the app. The hero window and the views of what the app does are
+drawn in HTML from tokens, after the app's own Main look and preview modes (a pending handoff, the
+queue, the Changes panel, a terminal chat, the browser in Annotate and the Dashboard); update them
+with the app. The stages' field is drawn by one function in `app/home/Stage.tsx`, as an SVG when
+the page is built and on a canvas once the page can move. The favicons and social card are
+generated at build time by `scripts/site-images.ts` from the logo's own paths. Without JavaScript
+the page is whole: every row's words are in the markup, the first view stands, the field is its
+still drawing and the FAQ opens natively. The site is always dark, with no appearance control and
+no persisted theme; the standalone notices page is script-free and dark too. The changelog page is
+built from the repository's `CHANGELOG.md` by `scripts/changelog.ts`. Reduced motion holds the
+live window, the field and the list of views still.
 
 ## Deployment prerequisites
 

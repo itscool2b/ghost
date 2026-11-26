@@ -179,17 +179,18 @@ test("desktop imports the notice text as a virtual module without fetching", () 
   assert.match(source, /transcribe-cpp-sys/);
 });
 
-test("website and desktop notices follow System, each in its own colours", () => {
+test("the website's notices are always dark and the desktop's follow System", () => {
   const assets = [];
   noticesPlugin("web").generateBundle.call({ emitFile: (asset) => assets.push(asset) });
   const html = assets.find((asset) => asset.fileName.endsWith("index.html")).source;
-  // The website's plain page: white in light and near-black in dark, as the site is.
-  assert.match(html, /color-scheme:light dark;/);
-  assert.match(html, /--notice-bg:#ffffff/);
-  assert.match(html, /@media\(prefers-color-scheme:dark\)\{html\{--notice-bg:#0a0a0a/);
+  // The website's plain page: near-black, as the site is, whatever the system asks for.
+  assert.match(html, /color-scheme:dark;/);
+  assert.match(html, /--notice-bg:#0a0a0a/);
+  assert.doesNotMatch(html, /prefers-color-scheme/);
   assert.doesNotMatch(html, /<script/);
-  // The desktop keeps Graphite's surfaces.
+  // The desktop keeps Graphite's surfaces, light and dark.
   const desktop = renderHtml("Desktop");
+  assert.match(desktop, /color-scheme:light dark;/);
   assert.match(desktop, /--notice-bg:#fafafa/);
   assert.match(desktop, /@media\(prefers-color-scheme:dark\)\{html\{--notice-bg:#101112/);
 });

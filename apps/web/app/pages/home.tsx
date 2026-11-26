@@ -1,13 +1,14 @@
-import { AgentPicker } from "../home/AgentPicker";
+import { Away } from "../home/Away";
+import { Explorer } from "../home/Explorer";
 import { Faq } from "../home/Faq";
 import { Finale } from "../home/Finale";
 import { GetIt } from "../home/GetIt";
 import { Hero } from "../home/Hero";
 import { News } from "../home/News";
-import { Showcase } from "../home/Showcase";
+import { Roster } from "../home/Roster";
 import { AgentSprite } from "../home/Sprite";
-import { Statement } from "../home/Statement";
-import { Work } from "../home/Work";
+import { Workspace } from "../home/Workspace";
+import { Yours } from "../home/Yours";
 
 export const meta = () => [
   { title: "o7 · One window for every coding agent" },
@@ -19,21 +20,24 @@ export const meta = () => [
 ];
 
 /**
- * The page in dot.com's order: the name over the live app, what it is with every agent's mark, the
- * real app in one frame, what it does in a grid of cards, the agents as chips, where to get it,
- * what shipped, answers, and the last call over the mark drawn large.
+ * The page in Main's order (docs/design/visual-language.md, "Website composition"): the name over
+ * the live app on its stage; every agent in one table; what the app does, one part in view at a
+ * time; the rest of the workspace as tiles; o7 from a phone or an assistant; what stays yours;
+ * what shipped as a timeline; where to get it; answers; and the last call over the mark drawn
+ * large. Every part after the opening starts on one hairline.
  */
 export default function Home() {
   return (
     <main id="main" className="home">
       <AgentSprite />
       <Hero />
-      <Statement />
-      <Showcase />
-      <Work />
-      <AgentPicker />
-      <GetIt />
+      <Roster />
+      <Explorer />
+      <Workspace />
+      <Away />
+      <Yours />
       <News />
+      <GetIt />
       <Faq />
       <Finale />
     </main>

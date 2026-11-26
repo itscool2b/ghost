@@ -17,13 +17,28 @@ const settled = (page) =>
     document.getAnimations().every((animation) => !(animation instanceof CSSTransition)),
   );
 
+/** The page is always dark: the same near-black whatever the system asks for. */
+const PAGE = "rgb(10, 10, 10)";
+const pageColour = (page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+const audit = async (page, where, include) => {
+  let builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]);
+  if (include) builder = builder.include(include);
+  const axe = await builder.analyze();
+  assert.deepEqual(
+    axe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
+    [],
+    where,
+  );
+};
+
 /**
- * The agents' chips: every agent named once, each wholly inside the viewport and none overlapping
- * the next, and nothing in them moving.
+ * The agents' table: every agent named once, each cell wholly inside the viewport and none
+ * overlapping the next, and nothing in it moving on its own.
  */
 const agentWall = (page) =>
   page.evaluate(() => {
-    const shown = [...document.querySelectorAll(".agent-chip")].filter(
+    const shown = [...document.querySelectorAll(".roster-agent")].filter(
       (item) => item.getClientRects().length > 0,
     );
     const boxes = shown.map((item) => item.getBoundingClientRect());
@@ -42,17 +57,18 @@ const agentWall = (page) =>
             other.bottom <= box.top + 0.5,
         ),
       ),
-      moving: shown.some((item) => item.getAnimations({ subtree: true }).length > 0),
     };
   });
 
 const assertWall = (wall, where) => {
-  assert.equal(wall.names.length, 9, `${where}: the row names every agent`);
+  assert.equal(wall.names.length, 9, `${where}: the table names every agent`);
   assert.equal(new Set(wall.names).size, 9, `${where}: each agent once`);
-  assert.ok(wall.inView, `${where}: the row fits the page`);
-  assert.ok(wall.apart, `${where}: no two names overlap`);
-  assert.equal(wall.moving, false, `${where}: the row holds still`);
+  assert.ok(wall.inView, `${where}: the table fits the page`);
+  assert.ok(wall.apart, `${where}: no two cells overlap`);
 };
+
+const sideways = (page) =>
+  page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 
 const root = resolve(fileURLToPath(new URL("../build/client/", import.meta.url)));
 const headerText = await readFile(join(root, "_headers"), "utf8");
@@ -113,52 +129,33 @@ try {
         if (!url.startsWith(base)) return route.abort();
         return route.continue();
       });
-      await page.addInitScript(() => localStorage.setItem("auracode-appearance", "dark"));
+      await page.addInitScript(() => localStorage.setItem("auracode-appearance", "light"));
       await page.goto(base);
       const heroStage = page.locator(".hero-detail .handoff-stage");
       assert.equal(await heroStage.locator(".handoff-prior").isVisible(), true);
       assert.equal(await heroStage.locator(".handoff-next").isVisible(), true);
-      // The site follows the system appearance: this context asks for dark, so the page is dark,
-      // with no switch, nothing pinned on the root and nothing read from storage.
-      assert.equal(await page.locator("html").getAttribute("data-theme"), null);
+      // The site is always dark: pinned on the root, with no switch and nothing read from
+      // storage (the stored value above asks for light and changes nothing).
+      assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
       assert.equal(await page.getByLabel("Appearance").count(), 0);
-      assert.equal(
-        await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
-        "rgb(10, 10, 10)",
-      );
-      // The agents' chips: every agent once, in view.
+      assert.equal(await pageColour(page), PAGE);
+      // The agents' table: every agent once, in view.
       assertWall(await agentWall(page), "1440px");
       assert.equal(await page.getByRole("list", { name: "Agents o7 runs" }).count(), 1);
       assert.equal(
         await page.getByRole("navigation", { name: "Main" }).getByRole("link").count(),
         5,
       );
-      const shot = () =>
-        page.waitForFunction(() => {
-          const image = document.querySelector(".showcase-frame img");
-          return image?.complete && image.naturalWidth > 0;
-        });
-      await shot();
       await settled(page);
       await page.screenshot({ path: join(artifacts, `${name}-home-dark.png`), fullPage: true });
       await page.reload();
-      await page.getByRole("heading", { name: "Meet o7" }).waitFor();
-      await shot();
-      // The real app is shown in the appearance the page is in.
-      assert.match(
-        await page.locator(".showcase-frame img").evaluate((image) => image.currentSrc),
-        /desktop-dark-\d+\.webp$/,
-      );
+      // One heading opens the page, in two tones: the name, then what it is.
+      await page
+        .getByRole("heading", { level: 1, name: "Meet o7. One window for every coding agent." })
+        .waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: join(artifacts, `${name}-home.png`), fullPage: true });
       await settled(page);
-      let axe = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze();
-      assert.deepEqual(
-        axe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
-        [],
-      );
+      await audit(page, "the home page");
       // This Windows WebKit harness does not expose OS full-keyboard-access settings.
       // Chromium verifies Tab order; WebKit verifies the same link's explicit focus and activation.
       if (name === "webkit") await page.getByRole("link", { name: "Skip to content" }).focus();
@@ -170,17 +167,35 @@ try {
       await page.keyboard.press("Enter");
       assert.equal(new URL(page.url()).hash, "#main");
       await page.evaluate(() => document.activeElement?.blur());
-      // No canvas anywhere (the window is CSS) and no film Pause button.
-      assert.equal(await page.locator("canvas").count(), 0);
+      // The stages' fields are decoration: a still drawing and a canvas each, both hidden from
+      // assistive technology. Where motion is not welcome the canvas never draws, so the still
+      // drawing is what shows. Nothing plays that would need a Pause button.
+      assert.equal(await page.locator("canvas").count(), 3);
+      assert.equal(await page.locator('canvas:not([aria-hidden="true"])').count(), 0);
+      assert.equal(await page.locator(".stage[data-live]").count(), 0);
+      assert.equal(await page.locator(".hero-field .stage-field").isVisible(), true);
       assert.equal(await page.getByRole("button", { name: /pause|play/i }).count(), 0);
-      // The feature cards: six, two to a row as dot.com's, each a title over a product view; the
-      // handoff shows both its parts.
-      assert.equal(await page.locator(".work-card").count(), 6);
-      // The FAQ opens on its first answer, as dot.com's does, and keeps one open at a time.
+      // No page shows a screenshot: the app is drawn in HTML.
+      assert.equal(await page.locator("main img, main picture").count(), 0);
+      // The FAQ opens on its first answer and keeps one open at a time.
       assert.equal(await page.locator("details.faq-item[open]").count(), 1);
       assert.equal(await page.locator("details.faq-item").first().getAttribute("open"), "");
-      const handoff = page.locator(".work-view .handoff-stage");
+      // What the app does: six rows, the first chosen, each a toggle button whose two lines are
+      // always shown. The chosen row's picture stands on the stage; the handoff shows both its
+      // parts.
+      const rows = page.locator(".explorer-item");
+      const pressed = page.locator('.explorer-item[aria-pressed="true"]');
+      const shown = page.locator(".explorer-view:visible");
+      assert.equal(await rows.count(), 6);
+      assert.equal(await pressed.count(), 1);
+      assert.equal(await rows.first().getAttribute("aria-pressed"), "true");
+      for (const row of await rows.all()) {
+        assert.equal(await row.locator(".explorer-item-title").isVisible(), true);
+        assert.equal(await row.locator(".explorer-item-text").isVisible(), true);
+      }
+      const handoff = page.locator('.explorer-view[data-card="handoff"] .handoff-stage');
       await handoff.scrollIntoViewIfNeeded();
+      assert.equal(await shown.count(), 1);
       assert.equal(await handoff.locator(".handoff-prior").isVisible(), true);
       assert.equal(await handoff.locator(".handoff-next").isVisible(), true);
       assert.match(await handoff.locator(".handoff-prior").textContent(), /Frame pacing now waits/);
@@ -189,55 +204,47 @@ try {
         /Next message includes a handoff to Codex/,
       );
       await handoff.screenshot({ path: join(artifacts, `${name}-handoff.png`) });
-      // The agents' chips are toggle buttons: one is pressed, choosing another names it under the
-      // chips and picks it in the New chat view, by pointer and by keyboard.
-      const chips = page.locator(".agent-chip");
-      const pressed = page.locator(".agent-chip[aria-pressed=true]");
-      assert.equal(await chips.count(), 9);
-      assert.equal(await pressed.count(), 1);
-      for (const agent of ["Codex", "Hermes", "Pi"]) {
-        const chip = page.getByRole("button", { name: agent, exact: true });
-        await chip.click();
-        assert.equal(await chip.getAttribute("aria-pressed"), "true");
+      // Choosing another row shows its picture and nothing else, by pointer and by keyboard, and
+      // where motion is not welcome the list never moves on by itself.
+      for (const [title, card] of [
+        ["Queue and steer", "queue"],
+        ["Chat or terminal", "terminal"],
+        ["A dashboard for every chat", "dashboard"],
+      ]) {
+        const row = page.getByRole("button", { name: new RegExp(`^${title}`) });
+        await row.click();
+        assert.equal(await row.getAttribute("aria-pressed"), "true");
         assert.equal(await pressed.count(), 1);
-        assert.match(await page.locator(".agents-note").textContent(), new RegExp(`^${agent}, as`));
+        assert.equal(await shown.count(), 1);
+        assert.equal(await shown.getAttribute("data-card"), card);
         await settled(page);
-        axe = await new AxeBuilder({ page })
-          .include(".agents")
-          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-          .analyze();
-        assert.deepEqual(
-          axe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
-          [],
-          `agent ${agent}`,
-        );
+        await audit(page, `the ${card} view`, ".explorer");
       }
-      const cursor = page.getByRole("button", { name: "Cursor", exact: true });
-      await cursor.focus();
+      const changes = page.getByRole("button", { name: /^Every change in view/ });
+      await changes.focus();
       await page.keyboard.press("Enter");
-      assert.equal(await cursor.getAttribute("aria-pressed"), "true");
-      assert.equal(await page.locator(".agents-view .m-pill.is-on").textContent(), "Cursor");
-      // The chosen chip shows its mark, in its agent's own colour; the others are names alone.
-      assert.equal(
-        await page.locator(".agent-chip[aria-pressed=true] .g-agent-mark").isVisible(),
-        true,
-      );
-      assert.equal(
-        await page.locator(".agent-chip[aria-pressed=false] .g-agent-mark:visible").count(),
-        0,
-      );
+      assert.equal(await changes.getAttribute("aria-pressed"), "true");
+      assert.equal(await shown.getAttribute("data-card"), "changes");
+      await page.waitForTimeout(400);
+      assert.equal(await shown.getAttribute("data-card"), "changes");
+      assert.equal(await page.locator(".explorer-grid[data-auto]").count(), 0);
+      await rows.first().click();
       await page.evaluate(() => document.activeElement?.blur());
       await page.setViewportSize({ width: 390, height: 844 });
       await handoff.screenshot({ path: join(artifacts, `${name}-handoff-mobile.png`) });
       await page.screenshot({ path: join(artifacts, `${name}-mobile.png`), fullPage: true });
-      assert.ok(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      );
-      // A chip's colours settle over a moment after it is chosen; measure them once they have.
+      assert.ok(await sideways(page));
       await settled(page);
       assertWall(await agentWall(page), "390px");
+      // In one column the picture stands over the list that chooses it.
+      const stacked = await page.evaluate(() => {
+        const stage = document.querySelector(".explorer-stage").getBoundingClientRect();
+        const list = document.querySelector(".explorer-list").getBoundingClientRect();
+        return stage.bottom <= list.top + 0.5;
+      });
+      assert.ok(stacked, "the explorer's picture stands over its list on a phone");
       // Below 1024px the bar's Download waits while the hero's own is in view, and comes back
-      // once that has scrolled away, as dot.com's does.
+      // once that has scrolled away.
       const barAction = () =>
         page.evaluate(() => getComputedStyle(document.querySelector(".nav-cta")).visibility);
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -269,23 +276,15 @@ try {
           .every((animation) => animation.playState === "finished"),
       );
       await settled(page);
-      axe = await new AxeBuilder({ page })
-        .include(".nav-sheet")
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze();
-      assert.deepEqual(
-        axe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
-        [],
-        "the phone menu",
-      );
+      await audit(page, "the phone menu", ".nav-sheet");
       assert.equal(
         await page
           .locator(".nav-sheet")
           .evaluate((sheet) => getComputedStyle(sheet).backgroundColor),
-        "rgb(10, 10, 10)",
+        PAGE,
         "the phone menu is solid",
       );
-      // And it covers the page from under the bar to the screen's foot, as dot.com's does.
+      // And it covers the page from under the bar to the screen's foot.
       const cover = await page.locator(".nav-sheet").evaluate((sheet) => {
         const box = sheet.getBoundingClientRect();
         const hit = document.elementFromPoint(window.innerWidth / 2, window.innerHeight - 140);
@@ -306,11 +305,10 @@ try {
       await page.evaluate(() => window.scrollTo(0, 0));
       // The narrowest phones still in use: nothing may scroll sideways at 320px either.
       await page.setViewportSize({ width: 320, height: 640 });
-      assert.ok(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        "the home page scrolls sideways at 320px",
-      );
+      assert.ok(await sideways(page), "the home page scrolls sideways at 320px");
       assertWall(await agentWall(page), "320px");
+      await settled(page);
+      await audit(page, "the home page at 320px");
       // The changelog page is built from CHANGELOG.md: its newest day leads, every change names its
       // pull request without a link, and it holds at the narrowest width.
       await page.goto(`${base}/changelog`);
@@ -318,17 +316,9 @@ try {
       assert.ok((await page.locator(".change").count()) > 100, "the changelog lists its changes");
       assert.equal(await page.locator(".change a").count(), 0);
       assert.match(await page.locator(".release-meta").first().textContent(), /20\d\d/);
-      assert.ok(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        "the changelog scrolls sideways at 320px",
-      );
+      assert.ok(await sideways(page), "the changelog scrolls sideways at 320px");
       await settled(page);
-      axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-      assert.deepEqual(
-        axe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
-        [],
-        "the changelog page",
-      );
+      await audit(page, "the changelog page");
       await page.goto(`${base}/download`);
       // The download page follows the committed catalog: its installers once one is published,
       // and three disabled buttons until then.
@@ -345,25 +335,26 @@ try {
             counted(download.url),
           );
         assert.equal(await waiting.count(), 0);
-        assert.ok(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-          "the download page scrolls sideways at 320px",
-        );
+        assert.ok(await sideways(page), "the download page scrolls sideways at 320px");
         await settled(page);
-        axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-        assert.deepEqual(
-          axe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
-          [],
-          "the download page",
-        );
+        await audit(page, "the download page");
       } else {
         assert.equal(await waiting.count(), 3);
       }
+      for (const path of ["privacy", "terms"]) {
+        await page.goto(`${base}/${path}`);
+        await page.getByRole("heading", { level: 1 }).waitFor();
+        assert.equal(await pageColour(page), PAGE, path);
+        assert.ok(await sideways(page), `the ${path} page scrolls sideways at 320px`);
+        await settled(page);
+        await audit(page, `the ${path} page`);
+      }
       // The stored value is left as it was: the site keeps no appearance of its own.
-      assert.equal(await page.evaluate(() => localStorage.getItem("auracode-appearance")), "dark");
+      assert.equal(await page.evaluate(() => localStorage.getItem("auracode-appearance")), "light");
       assert.deepEqual(failures, []);
-      // Full motion: the hero's handoff loop, the reveals and the capability cycle run without
-      // errors or sideways scrolling, and the loop leaves its printed first frame.
+      // Full motion, under a system that asks for light: the page is dark all the same, the
+      // hero's field and its handoff loop run, the list of what the app does moves on by itself,
+      // and nothing errors or scrolls sideways.
       const moving = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         reducedMotion: "no-preference",
@@ -386,69 +377,73 @@ try {
           timeout: 10000,
         },
       );
+      // The field's canvas has drawn and taken over from the still drawing.
+      await motion.locator(".hero-field[data-live]").waitFor();
+      assert.equal(await motion.locator(".hero-field .stage-field").isVisible(), false);
+      assert.equal(await motion.locator(".hero-field .stage-canvas").isVisible(), true);
       await motion.waitForTimeout(1200);
       await motion.screenshot({ path: join(artifacts, `${name}-motion-hero.png`) });
-      // The agents' chips hold still and fit at every width, with motion on as well. This context
-      // asks for light, so the page is white and shows the light capture of the app.
-      assert.equal(
-        await motion.evaluate(() => getComputedStyle(document.body).backgroundColor),
-        "rgb(255, 255, 255)",
-      );
+      assert.equal(await pageColour(motion), PAGE);
+      assert.equal(await motion.locator("html").getAttribute("data-theme"), "dark");
       for (const width of [1440, 2560, 1024, 768, 390, 320]) {
         await motion.setViewportSize({ width, height: 900 });
         await motion.evaluate(() => window.scrollTo(0, 0));
         assertWall(await agentWall(motion), `${width}px with motion`);
+        assert.ok(await sideways(motion), `the moving home page scrolls sideways at ${width}px`);
       }
       await motion.setViewportSize({ width: 1440, height: 900 });
-      await motion.locator(".showcase-frame").scrollIntoViewIfNeeded();
-      await motion.waitForFunction(() => {
-        const image = document.querySelector(".showcase-frame img");
-        return image?.complete && image.naturalWidth > 0;
-      });
-      assert.match(
-        await motion.locator(".showcase-frame img").evaluate((image) => image.currentSrc),
-        /desktop-light-\d+\.webp$/,
+      // In view and left alone, the list moves on to its second row by itself.
+      await motion.locator(".explorer-grid").scrollIntoViewIfNeeded();
+      await motion.mouse.move(2, 2);
+      await motion.locator(".explorer-grid[data-auto]").waitFor();
+      await motion.waitForFunction(
+        () =>
+          document.querySelectorAll(".explorer-item")[1]?.getAttribute("aria-pressed") === "true",
+        null,
+        { timeout: 15000 },
       );
-      for (const top of [1100, 2200, 3300, 4400, 5500, 6400, 1e6]) {
+      assert.equal(
+        await motion.locator(".explorer-view:visible").getAttribute("data-card"),
+        "queue",
+      );
+      const pageHeight = await motion.evaluate(() => document.documentElement.scrollHeight);
+      for (let top = 900; top < pageHeight; top += 900) {
         await motion.evaluate((y) => window.scrollTo(0, y), top);
-        await motion.waitForTimeout(600);
-        assert.ok(
-          await motion.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-          `the moving home page scrolls sideways at ${top}`,
-        );
+        await motion.waitForTimeout(350);
+        assert.ok(await sideways(motion), `the moving home page scrolls sideways at ${top}`);
       }
-      // Every block has arrived by now, so the light page can be audited whole.
+      await motion.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      // Every block has arrived by now, so the page can be audited whole.
       await motion.waitForFunction(
         () => document.querySelectorAll("[data-reveal]:not([data-revealed])").length === 0,
       );
       await motion.waitForTimeout(1200);
-      const lightAxe = await new AxeBuilder({ page: motion })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze();
-      assert.deepEqual(
-        lightAxe.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
-        [],
-        "the home page in light",
-      );
+      await audit(motion, "the home page with motion, under a light system");
       await motion.screenshot({ path: join(artifacts, `${name}-motion-end.png`) });
       await motion.setViewportSize({ width: 390, height: 844 });
       await motion.evaluate(() => window.scrollTo(0, 0));
       await motion.waitForTimeout(600);
       await motion.screenshot({ path: join(artifacts, `${name}-motion-mobile.png`) });
-      assert.ok(
-        await motion.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        "the moving home page scrolls sideways at 390px",
-      );
+      assert.ok(await sideways(motion), "the moving home page scrolls sideways at 390px");
       assert.deepEqual(motionFailures, []);
       await moving.close();
-      const nojs = await browser.newContext({ javaScriptEnabled: false, colorScheme: "dark" });
+      const nojs = await browser.newContext({ javaScriptEnabled: false, colorScheme: "light" });
       const staticPage = await nojs.newPage();
-      // Without scripts the agents' chips are the same complete list, at desktop and phone widths.
+      // Without scripts the page is whole: the agents' table, the six parts of the app with
+      // their words and the first one's picture, and the field as a still drawing.
       await staticPage.goto(base);
       for (const width of [1440, 390]) {
         await staticPage.setViewportSize({ width, height: 900 });
         assertWall(await agentWall(staticPage), `${width}px without scripts`);
       }
+      assert.equal(await staticPage.locator(".explorer-item-text:visible").count(), 6);
+      assert.equal(
+        await staticPage.locator(".explorer-view:visible").getAttribute("data-card"),
+        "handoff",
+      );
+      assert.equal(await staticPage.locator(".hero-field .stage-field").isVisible(), true);
+      assert.equal(await staticPage.locator(".tile").count(), 8);
+      assert.equal(await staticPage.locator(".timeline-day").count(), 3);
       await staticPage.goto(`${base}/download`);
       // Without scripts the page names every system, and every installer once one is published.
       for (const name of release
@@ -463,15 +458,12 @@ try {
               .getAttribute("href"),
             counted(download.url),
           );
-      // The appearance needs no script: dark under a dark system.
-      assert.equal(
-        await staticPage.evaluate(() => getComputedStyle(document.body).backgroundColor),
-        "rgb(10, 10, 10)",
-      );
+      // The appearance needs no script: dark, under a system that asks for light.
+      assert.equal(await pageColour(staticPage), PAGE);
       await nojs.close();
       await context.close();
       console.log(
-        `${name}: dark and light with the system, desktop/mobile, no-JS download, keyboard and accessibility passed`,
+        `${name}: always dark, desktop/mobile, motion and stillness, no-JS, keyboard and accessibility passed`,
       );
     } finally {
       await browser.close();

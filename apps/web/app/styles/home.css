@@ -1,9 +1,10 @@
 /*
- * The home page, section for section after dot.com (measured 17 November 2026): a centred opening
- * over the app, a statement with every agent's mark, the real app in one frame, a centred statement
- * over a grid of cards, chips beside a product view, download rows, what shipped as three cards,
- * FAQs, and a closing call over the mark drawn large. Nothing divides the sections but space:
- * 112px above and below each (80 on phones), as dot.com's.
+ * The home page in Main (docs/design/visual-language.md, "Website composition"): an opening at
+ * the left edge over the live app on its stage, then chapters that each start on one hairline with
+ * a two-tone heading at the left and one grey paragraph at the right. The skeleton and restraint
+ * are polar.sh's, the product drawn in HTML is Linear's and dot.com's, and a stage's grain is
+ * ghost.ai's (docs/design/reference-audit.md). One ink, one grey, no colour but what means
+ * something inside the product, and no glow.
  */
 
 .home {
@@ -13,77 +14,131 @@
 /* ---------------------------------------------------------------------------------- hero */
 
 .hero {
-  padding: 112px 0 var(--s-section);
+  padding: 88px 0 var(--s-section);
 }
 
 .hero-copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  box-sizing: border-box;
-  width: min(100% - 2 * var(--s-gutter), 672px);
-  margin: 0 auto;
-  text-align: center;
+  align-items: flex-start;
 }
 
-/*
- * The name with its mark set into the line, as dot.com sets its own: 60 on 60, medium, a hair
- * tight. The mark is the wing itself in the page's ink, one and a half times as wide as the type is
- * tall, centred on the lowercase letters.
- */
+/* The name in ink and what it is in grey, one heading on two lines, set large and tight. */
 .hero-title {
+  max-width: 920px;
   color: var(--s-ink);
-  font-size: 60px;
-  line-height: 60px;
+  font-size: clamp(40px, 5.4vw, 68px);
+  line-height: 1.04;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.038em;
+}
+
+.hero-line {
+  display: block;
   text-wrap: balance;
-  perspective: 1200px;
+  animation: line-in 900ms var(--s-expo) both;
 }
 
-/* Each word flips up into place after the one before it (dot.com's, measured: 45% down, -40deg). */
-.hero-word {
-  display: inline-block;
-  animation: word-in 760ms var(--s-expo) both;
-  animation-delay: calc(var(--w, 0) * 70ms);
+.hero-line + .hero-line {
+  animation-delay: 80ms;
 }
 
-/*
- * The wing flies up into the line from below, nose first, banked and large as if it were close,
- * and levels out; then it hovers there. It turns a little toward the pointer (Wing.tsx).
- */
+.hero-lead {
+  max-width: 560px;
+  margin-top: 28px;
+  color: var(--s-soft);
+  font-size: 18px;
+  line-height: 29px;
+  text-wrap: pretty;
+  animation: line-in 900ms var(--s-expo) 160ms both;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+  animation: line-in 900ms var(--s-expo) 240ms both;
+}
+
+/* One line of facts, a small dot between each. */
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--s-soft);
+  font-size: 13px;
+  line-height: 20px;
+  animation: line-in 900ms var(--s-expo) 320ms both;
+}
+
+.hero-facts li + li {
+  position: relative;
+  padding-left: 21px;
+}
+
+.hero-facts li + li::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: var(--s-line-strong);
+}
+
+/* The lines arrive by position alone, so the words are readable from the first frame. */
+@keyframes line-in {
+  from {
+    transform: translateY(18px);
+  }
+}
+
+.hero-stage {
+  margin-top: 72px;
+}
+
+/* The app stands on the field, under a band of open ground, and runs off the stage's foot. */
+.hero-field {
+  padding: 136px 72px 0;
+}
+
+.hero-detail {
+  position: relative;
+  margin-bottom: -56px;
+  animation: frame-in 1100ms var(--s-expo) 200ms both;
+}
+
+@keyframes frame-in {
+  from {
+    transform: translateY(40px);
+  }
+}
+
+/* The wing flies over the open ground at the stage's top right, hovering in place. */
 .hero-wing {
-  display: inline-block;
-  width: 1.5em;
-  margin: 0 0.04em;
+  position: absolute;
+  top: 44px;
+  right: 104px;
+  width: 92px;
   color: var(--s-ink);
-  vertical-align: middle;
-  animation: wing-arrive 1300ms var(--s-expo) 140ms both;
 }
 
 .hero-wing-float {
   display: block;
-  animation: wing-hover 5200ms ease-in-out 1500ms infinite;
+  animation: wing-hover 5200ms ease-in-out infinite;
 }
 
 .hero-wing .wing {
   rotate: calc(var(--look-x, 0) * 5deg);
 }
 
-@keyframes wing-arrive {
-  from {
-    opacity: 0;
-    transform: translate(-22vw, 52vh) rotate(26deg) scale(2.2);
-  }
-
-  35% {
-    opacity: 1;
-  }
-}
-
 @keyframes wing-hover {
   50% {
-    transform: translateY(-0.05em);
+    transform: translateY(-4px);
   }
 }
 
@@ -136,361 +191,228 @@
   vector-effect: non-scaling-stroke;
 }
 
-/* The lines and the pills settle down out of a blur, then the window follows. */
-.hero-lead {
-  margin-top: 20px;
-  color: var(--s-soft);
-  font-size: 18px;
-  line-height: 29.25px;
-  text-wrap: pretty;
-  animation: drop-in 1000ms var(--s-expo) 350ms both;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 28px;
-  animation: drop-in 1000ms var(--s-expo) 590ms both;
-}
-
-.hero-stage {
-  margin-top: 64px;
-}
-
-.hero-detail {
-  animation: frame-in 1000ms var(--s-expo) 670ms both;
-}
-
-@keyframes word-in {
-  from {
-    opacity: 0;
-    transform: translateY(45%) rotateX(-40deg);
-  }
-}
-
-@keyframes drop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-    filter: blur(12px);
-  }
-}
-
-@keyframes frame-in {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-}
-
-/* ----------------------------------------------------------------------------- statement */
-
-/* What it is: a large title at left, two paragraphs in ink at right, then every agent's mark. */
-.statement {
-  padding: 0 0 48px;
-}
-
-.statement-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px 64px;
-}
-
-.title-xl {
-  color: var(--s-ink);
-  font-size: 48px;
-  line-height: 48px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  text-wrap: balance;
-}
-
-/* The paragraphs sit 4px down, so their first line meets the title's capitals. */
-.statement-text {
-  display: grid;
-  gap: 12px;
-  max-width: 576px;
-  padding-top: 4px;
-}
-
-.statement-text p {
-  color: var(--s-ink);
-  font-size: 18px;
-  line-height: 28px;
-  text-wrap: pretty;
-}
+/* --------------------------------------------------------------------------------- stage */
 
 /*
- * Every agent across the column, where dot.com sets its row of bots: each mark at the website's
- * 24px beside its name (third-party/brand-marks.md keeps marks small and unaltered).
+ * A stage (Stage.tsx): a panel a step off the page with one hairline, a field of contour lines
+ * drawn in the page's ink at a low strength, and fine grain over it. The field fades out toward
+ * the top and the foot, so what stands on it reads first. Texture, not light: nothing glows.
  */
-.statement-roster {
+.stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 24px;
+  background-color: var(--s-stage);
+  box-shadow: inset 0 0 0 1px var(--s-line);
+}
+
+.stage-field,
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 66%, transparent);
+  mask-image: linear-gradient(transparent, #000 14%, #000 66%, transparent);
+}
+
+.stage-field path {
+  fill: none;
+  stroke: var(--s-ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The still drawing shows until the canvas has drawn, then gives way to it. */
+.stage[data-live] .stage-field,
+.stage:not([data-live]) .stage-canvas {
+  visibility: hidden;
+}
+
+.stage-quiet :is(.stage-field, .stage-canvas) {
+  opacity: 0.55;
+}
+
+.stage-grain {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------------- roster */
+
+/* Every agent in one table of hairline cells, five to a row. */
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 56px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--s-line);
+  border-left: 1px solid var(--s-line);
+}
+
+.roster-grid > li {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 20px 32px;
+  gap: 12px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 88px;
+  padding: 16px 24px;
+  border-right: 1px solid var(--s-line);
+  border-bottom: 1px solid var(--s-line);
+  color: var(--s-ink);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.roster-grid > li > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.roster-grid .g-agent-mark {
+  flex: none;
+}
+
+.roster-more {
+  color: var(--s-soft);
+  font-weight: 400;
+}
+
+.roster-plus {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--s-line-strong);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------------------ explorer */
+
+/* The list of what the app does at the left, the chosen part on its stage at the right. */
+.explorer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
   margin-top: 56px;
 }
 
-/* On one line across the full column, the agents spread to its edges as dot.com's bots do. */
-@media (min-width: 1280px) {
-  .statement-roster {
-    justify-content: space-between;
-  }
+.explorer-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--s-line);
 }
 
-.statement-agent {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 10px;
-  color: var(--s-ink);
+/* A row: a name and two grey lines between hairlines. The chosen one takes the ink. */
+.explorer-item {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 18px 0 19px;
+  border: 0;
+  border-top: 1px solid var(--s-line);
+  background: none;
+  color: var(--s-soft);
+  font-family: var(--g-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: color 200ms var(--s-swift);
+}
+
+.explorer-item-title {
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
-  white-space: nowrap;
 }
 
-/*
- * The agents arrive one after another when the row scrolls in, each rising with a small overshoot
- * as dot.com's bots land. Only once scripts are in (html.js), so the row is whole without them.
- */
-html.js .statement-roster[data-reveal] .statement-agent {
-  transition:
-    opacity 500ms var(--s-swift),
-    transform 900ms cubic-bezier(0.2, 1.4, 0.4, 1);
-  transition-delay: calc(var(--i, 0) * 70ms);
-}
-
-html.js .statement-roster[data-reveal]:not([data-revealed]) .statement-agent {
-  opacity: 0;
-  transform: translateY(22px) scale(0.86) rotate(-4deg);
-}
-
-/*
- * A flock of o7's wing in nine colours across the column (Flock.tsx), where dot.com sets its row
- * of coloured bots. Each wing has its own colour, height and bank; together they are the page's
- * one run of colour that is not an agent's mark. The eyes are holes, so they show the page.
- */
-.flock {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 28px 20px;
-  margin-top: 80px;
-  /* Room for the wings that fly above and below the row's line. */
-  padding-block: 20px;
-}
-
-@media (min-width: 1280px) {
-  .flock {
-    flex-wrap: nowrap;
-    justify-content: space-between;
-  }
-}
-
-.flock-wing {
-  display: block;
-  flex: none;
-  width: calc(clamp(76px, 8.6vw, 116px) * var(--size, 1));
-  color: var(--flock);
-  transform: translateY(calc(var(--rise, 0) * 100%)) rotate(var(--tilt, 0deg));
-}
-
-/* On white a pure hue reads thin, so each is mixed a little toward the ink. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .flock-wing {
-    color: color-mix(in srgb, var(--flock) 86%, #0a0a0a);
-  }
-}
-
-:root[data-theme="light"] .flock-wing {
-  color: color-mix(in srgb, var(--flock) 86%, #0a0a0a);
-}
-
-/* Each hovers at its own pace, out of step with its neighbours. */
-.flock-float {
-  display: block;
-  animation: flock-hover calc(4200ms + var(--i, 0) * 310ms) ease-in-out infinite;
-  animation-delay: calc(var(--i, 0) * -730ms);
-  transition: transform 420ms cubic-bezier(0.2, 1.6, 0.4, 1);
-}
-
-@keyframes flock-hover {
-  50% {
-    translate: 0 -9%;
-  }
-}
-
-/* And blinks in its own time. */
-.flock-wing .wing-eye {
-  animation-delay: calc(900ms + var(--i, 0) * 610ms);
-}
-
-.flock-wing .wing-look {
-  transform: translate(calc(var(--look-x, 0) * 22px), calc(var(--look-y, 0) * 12px));
-}
-
-/* The pointer over one makes it hop. */
-@media (hover: hover) {
-  .flock-wing:hover .flock-float {
-    transform: translateY(-16%) rotate(calc(var(--tilt, 0deg) * -1.4)) scale(1.06);
-  }
-}
-
-/*
- * The wings land one after another when the row scrolls in, each dropping in from above its
- * place with a small overshoot. Only once scripts are in (html.js), so the row is whole without
- * them.
- */
-html.js .flock[data-reveal] .flock-wing {
-  transition:
-    opacity 420ms var(--s-swift),
-    transform 1000ms cubic-bezier(0.2, 1.5, 0.4, 1);
-  transition-delay: calc(var(--i, 0) * 80ms);
-}
-
-html.js .flock[data-reveal]:not([data-revealed]) .flock-wing {
-  opacity: 0;
-  transform: translateY(calc(var(--rise, 0) * 100% - 90%)) rotate(calc(var(--tilt, 0deg) + 14deg))
-    scale(0.7);
-}
-
-/*
- * A faint wing crosses behind the statement as the page moves past it, nose first, the way
- * dot.com's dim mascot drifts by its own. It exists only where the browser can tie an animation to
- * scrolling, and only when motion is welcome; everywhere else it is not drawn at all.
- */
-.flyby {
-  display: none;
-}
-
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .statement {
-      position: relative;
-    }
-
-    .statement > .wrap {
-      position: relative;
-      z-index: 1;
-    }
-
-    .flyby {
-      display: block;
-      position: absolute;
-      top: 50%;
-      left: 0;
-      z-index: 0;
-      width: clamp(150px, 20vw, 280px);
-      color: var(--s-art);
-      pointer-events: none;
-      animation: flyby linear both;
-      animation-timeline: view();
-      animation-range: entry 0% exit 100%;
-    }
-
-    .flyby .wing-eye {
-      animation: none;
-    }
-  }
-}
-
-/* Up and to the right across the section, pointing where it goes. */
-@keyframes flyby {
-  from {
-    transform: translate(-30vw, 320px) rotate(62deg);
-  }
-
-  to {
-    transform: translate(115vw, -360px) rotate(62deg);
-  }
-}
-
-/* ---------------------------------------------------------------------------------- film */
-
-/* The real app in one large rounded frame across the column, where dot.com sets its film. */
-.film {
-  padding: 64px 0;
-}
-
-.showcase-frame {
-  overflow: hidden;
-  border-radius: var(--s-radius);
-  background-color: var(--s-card);
-  box-shadow: 0 0 0 1px var(--m-frame);
-}
-
-.showcase-frame img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.film-caption {
-  margin-top: 16px;
-  color: var(--s-soft);
+.explorer-item-text {
   font-size: 14px;
-  line-height: 20px;
-  text-align: center;
-}
-
-/* ---------------------------------------------------------------------------------- work */
-
-.work-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 40px;
-  margin-top: 56px;
-}
-
-/* A card: its title and two lines, then a picture of the product running off the card's foot. */
-.work-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  padding: 32px 32px 0;
-}
-
-.work-text {
-  min-height: 88px;
-}
-
-.work-text h3 {
-  color: var(--s-ink);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-
-.work-text p {
-  max-width: 532px;
-  margin-top: 8px;
-  color: var(--s-ink);
-  font-size: 16px;
-  line-height: 26px;
+  line-height: 22px;
   text-wrap: pretty;
 }
 
-.work-view {
-  position: relative;
-  height: 262px;
-  min-width: 0;
-  margin-top: 32px;
+.explorer-item:hover,
+.explorer-item[aria-pressed="true"] {
+  color: var(--s-ink);
 }
 
-/* The pane runs past the card's foot, so only its top corners show. */
-.work-view > * {
+.explorer-item .explorer-item-text {
+  color: var(--s-soft);
+}
+
+/* The chosen row's top hairline is drawn in ink; while the list moves on by itself it fills. */
+.explorer-item-bar {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-color: var(--s-ink);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+.explorer-item[aria-pressed="true"] .explorer-item-bar {
+  transform: none;
+}
+
+.explorer-grid[data-auto] .explorer-item[aria-pressed="true"] .explorer-item-bar {
+  animation: bar-run 7000ms linear both;
+}
+
+@keyframes bar-run {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* The stage keeps the chosen picture in view beside the list as the list scrolls. */
+.explorer-stage {
+  position: sticky;
+  top: calc(var(--s-nav-h) + 24px);
+  height: 440px;
+}
+
+.explorer-view {
+  position: absolute;
+  inset: 56px 56px 0;
+  display: none;
+}
+
+.explorer-view[data-active] {
+  display: block;
+  animation: view-in 520ms var(--s-expo) both;
+}
+
+/* The pane runs past the stage's foot, so only its top corners show. */
+.explorer-view > * {
   height: calc(100% + 24px);
 }
 
-/* The terminal: a chat in its agent's own interface, dark in both appearances. */
+@keyframes view-in {
+  from {
+    transform: translateY(18px) scale(0.985);
+  }
+}
+
+/* The terminal: a chat in its agent's own interface. */
 .tm {
   box-sizing: border-box;
   width: 100%;
@@ -508,7 +430,7 @@ html.js .flock[data-reveal]:not([data-revealed]) .flock-wing {
   gap: 12px;
   height: 40px;
   padding: 0 10px 0 16px;
-  border-bottom: 1px solid #2c2c2c;
+  border-bottom: 1px solid #242424;
   font-size: 12.5px;
   line-height: 18px;
 }
@@ -534,7 +456,7 @@ html.js .flock[data-reveal]:not([data-revealed]) .flock-wing {
   gap: 2px;
   padding: 2px;
   border-radius: 999px;
-  background-color: rgb(245 245 245 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(245 245 245 / 0.08);
 }
 
 .tm-switch > span {
@@ -543,12 +465,12 @@ html.js .flock[data-reveal]:not([data-revealed]) .flock-wing {
   color: var(--s-night-fg-2);
   font-size: 12px;
   line-height: 16px;
-  font-weight: 500;
 }
 
 .tm-switch > span[data-on] {
   background-color: rgb(245 245 245 / 0.1);
   color: var(--s-night-fg-1);
+  font-weight: 500;
 }
 
 .tm-screen {
@@ -565,16 +487,6 @@ html.js .flock[data-reveal]:not([data-revealed]) .flock-wing {
 .tm-line {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* The session prints line by line once its card arrives (scripts and motion only). */
-html.js .work-card[data-reveal] .tm-line {
-  transition: opacity 240ms var(--s-swift);
-  transition-delay: calc(var(--l, 0) * 130ms + 300ms);
-}
-
-html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
-  opacity: 0;
 }
 
 .tm-line[data-kind="prompt"],
@@ -630,56 +542,392 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
   }
 }
 
-/* The rest of the workspace: four smaller cards in one row. */
-.more-grid {
+/* --------------------------------------------------------------------------------- tiles */
+
+/*
+ * The rest of the workspace: tiles between hairlines, four to a row, with a tick where the lines
+ * meet, as a drawing marks its sheet.
+ */
+.tiles {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 40px;
-  margin-top: 40px;
+  margin: 56px 0 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--s-line);
+  border-left: 1px solid var(--s-line);
 }
 
-.more-card {
-  display: flex;
-  flex-direction: column;
+.tile {
+  position: relative;
+  box-sizing: border-box;
   min-width: 0;
-  padding: 28px 28px 32px;
+  padding: 28px 24px 32px;
+  border-right: 1px solid var(--s-line);
+  border-bottom: 1px solid var(--s-line);
 }
 
-.more-glyph {
+.tile::before,
+.tile::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background:
+    linear-gradient(var(--s-tick, #4d4d4d), var(--s-tick, #4d4d4d)) center / 100% 1px no-repeat,
+    linear-gradient(var(--s-tick, #4d4d4d), var(--s-tick, #4d4d4d)) center / 1px 100% no-repeat;
+  pointer-events: none;
+}
+
+.tile::before {
+  top: -5px;
+  left: -5px;
+}
+
+.tile::after {
+  right: -5px;
+  bottom: -5px;
+}
+
+.tile-glyph {
   display: block;
   margin-bottom: 20px;
   color: var(--s-ink);
 }
 
-.more-card h3 {
+.tile h3 {
+  color: var(--s-ink);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.tile p {
+  margin-top: 6px;
+  color: var(--s-soft);
+  font-size: 14px;
+  line-height: 22px;
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------------------------- away */
+
+.away-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: stretch;
+  margin-top: 56px;
+}
+
+.away-list {
+  display: grid;
+  align-content: start;
+  align-self: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--s-line);
+}
+
+.away-list li {
+  padding: 24px 0 25px;
+  border-top: 1px solid var(--s-line);
+}
+
+.away-list h3 {
   color: var(--s-ink);
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
 }
 
-.more-card p {
+.away-list p {
+  max-width: 480px;
   margin-top: 6px;
   color: var(--s-soft);
   font-size: 15px;
-  line-height: 22px;
+  line-height: 24px;
   text-wrap: pretty;
 }
 
-/* -------------------------------------------------------------------------------- agents */
-
-.agents-grid,
-.two-col {
+.away-stage {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 40px 64px;
-  align-items: start;
+  place-items: end center;
+  min-height: 460px;
+  padding: 48px 24px 0;
 }
 
-.agents-grid {
-  padding: 40px 0;
+/* A phone drawn in CSS, standing on the stage and running off its foot. */
+.phone {
+  box-sizing: border-box;
+  width: 288px;
+  height: 440px;
+  margin-bottom: -32px;
+  padding: 9px 9px 0;
+  border-radius: 38px 38px 0 0;
+  background-color: var(--m-raised);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  color: var(--m-ink);
+  font-family: var(--g-sans);
+  text-align: left;
+}
+
+.phone-screen {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 18px 12px 0;
+  overflow: hidden;
+  border-radius: 29px 29px 0 0;
+  background-color: var(--m-surface);
+}
+
+.phone-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 6px 14px;
+}
+
+.phone-title {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.phone-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--m-fg-3);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.phone-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--m-green);
+}
+
+.phone-chats {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.phone-chats li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  border-radius: 12px;
+}
+
+.phone-chats li[data-state="needs"] {
+  background-color: var(--m-fill);
+}
+
+.phone-chat {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.phone-chat strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-chat span {
+  color: var(--m-fg-3);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.phone-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.phone-chats li[data-state="needs"] .phone-dot {
+  background-color: var(--m-ink);
+}
+
+.phone-chats li[data-state="working"] .phone-dot {
+  box-shadow: inset 0 0 0 1px var(--m-fg-3);
+}
+
+.phone-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  margin-top: 14px;
+  padding: 0 8px 0 14px;
+  border-radius: 20px;
+  background-color: var(--m-raised);
+  box-shadow: inset 0 0 0 1px var(--m-rim);
+  color: var(--m-fg-3);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.phone-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: rgb(var(--m-k) / 0.13);
+}
+
+/* --------------------------------------------------------------------------------- facts */
+
+/* Four figures in a row between hairlines, each a number in ink over one grey line. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 56px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--s-line);
+  border-bottom: 1px solid var(--s-line);
+}
+
+.facts li {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 32px 24px 36px 0;
+}
+
+.facts li + li {
+  padding-left: 24px;
+  border-left: 1px solid var(--s-line);
+}
+
+.fact-figure {
+  color: var(--s-ink);
+  font-size: 56px;
+  line-height: 56px;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fact-text {
+  max-width: 240px;
+  color: var(--s-soft);
+  font-size: 15px;
+  line-height: 24px;
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------------------------ timeline */
+
+/* What shipped: a rail with a dot for each of the three newest days, the newest lit. */
+.timeline {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 32px;
+  margin: 72px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background-color: var(--s-line-strong);
+}
+
+.timeline-day {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding-top: 32px;
+  color: var(--s-ink);
+  text-decoration: none;
+}
+
+.timeline-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: var(--s-bg);
+  box-shadow: inset 0 0 0 1px var(--s-soft);
+  transition: background-color 200ms var(--s-swift);
+}
+
+.timeline li[data-latest] .timeline-dot,
+.timeline-day:hover .timeline-dot {
+  background-color: var(--s-ink);
+  box-shadow: none;
+}
+
+.timeline-day time {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.timeline-count {
+  color: var(--s-soft);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.timeline-text {
+  display: -webkit-box;
+  max-width: 340px;
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--s-soft);
+  font-size: 15px;
+  line-height: 24px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  transition: color 200ms var(--s-swift);
+}
+
+.timeline-text code {
+  font-family: var(--g-mono);
+  font-size: 13px;
+}
+
+.timeline-day:hover .timeline-text {
+  color: var(--s-ink);
+}
+
+/* ------------------------------------------------------------------------------ two columns */
+
+/* A heading at the left and its rows at the right, under one hairline (downloads, questions). */
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px 48px;
+  align-items: start;
+  padding-top: 40px;
+  border-top: 1px solid var(--s-line);
 }
 
 .two-col-head {
@@ -688,141 +936,45 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
   justify-items: start;
 }
 
-.two-col-head .lead {
-  max-width: 448px;
-}
-
-.agents-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 32px;
-}
-
-.agent-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/*
- * A chip, as dot.com's: the agent's name in a hairline pill. The chosen one shows its mark and
- * takes its agent's own colour: a faint tint, a ring of it, and its words in it (darkened in light
- * so they hold 4.5:1).
- */
-.agent-chip {
-  --agent-ink: var(--agent);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  box-sizing: border-box;
-  height: 32px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 999px;
-  background-color: transparent;
-  box-shadow: inset 0 0 0 1px var(--s-line);
-  color: var(--s-chip);
-  font-family: var(--g-sans);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color 300ms var(--s-swift),
-    box-shadow 300ms var(--s-swift),
-    color 300ms var(--s-swift);
-}
-
-.agent-chip:hover {
-  color: var(--s-ink);
-}
-
-.agent-chip .g-agent-mark {
-  display: none;
-}
-
-.agent-chip[aria-pressed="true"] {
-  padding-left: 5px;
-  background-color: color-mix(in srgb, var(--agent) 10%, var(--s-bg));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent) 30%, transparent);
-  color: var(--agent-ink);
-}
-
-.agent-chip[aria-pressed="true"] .g-agent-mark {
-  display: inline-flex;
-}
-
-:root[data-theme="light"] .agent-chip {
-  --agent-ink: color-mix(in srgb, var(--agent) 45%, #0a0a0a);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .agent-chip {
-    --agent-ink: color-mix(in srgb, var(--agent) 45%, #0a0a0a);
-  }
-}
-
-.agents-note {
-  max-width: 456px;
-  min-height: 104px;
-  color: var(--s-soft);
-  font-size: 16px;
-  line-height: 24px;
-  text-wrap: pretty;
-}
-
-.agents-note strong {
-  color: var(--s-quiet-ink);
-  font-weight: 500;
-}
-
-.agents-view {
-  height: 560px;
-  min-width: 0;
-}
-
-.agents-view .m-window {
-  height: 100%;
-  border-radius: var(--s-radius);
-}
-
 /* ------------------------------------------------------------------------------ download */
 
 .getit-rows {
   display: grid;
-  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
+  border-bottom: 1px solid var(--s-line);
 }
 
-/* A row, as dot.com's: a 16px card, a glyph, the system in ink over what it needs in grey. */
+.getit-rows li + li {
+  border-top: 1px solid var(--s-line);
+}
+
+/* A row: a thin glyph, the system in ink over what it needs in grey, an arrow at the end. */
 .getit-row {
   display: flex;
   align-items: center;
   gap: 16px;
   box-sizing: border-box;
   min-height: 80px;
-  padding: 16px 20px;
-  border-radius: 16px;
-  background-color: var(--s-card);
+  padding: 16px 4px;
   color: var(--s-ink);
   text-decoration: none;
-  transition: background-color 150ms var(--s-swift);
 }
 
-.getit-row:hover {
-  background-color: var(--s-quiet-strong);
+.getit-rows li:first-child .getit-row {
+  padding-top: 6px;
 }
 
 .getit-glyph {
   flex: none;
-  width: 48px;
+  width: 32px;
+  color: var(--s-soft);
+  transition: color 200ms var(--s-swift);
+}
+
+.getit-row:hover .getit-glyph {
+  color: var(--s-ink);
 }
 
 .getit-name {
@@ -831,110 +983,29 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
 }
 
 .getit-name strong {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 500;
 }
 
 .getit-name span {
   color: var(--s-soft);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .getit-arrow {
   flex: none;
   margin-left: auto;
   color: var(--s-soft);
+  transition:
+    color 200ms var(--s-swift),
+    transform 400ms var(--s-glide);
 }
 
-/* ---------------------------------------------------------------------------------- news */
-
-/* What shipped: three cards, each the day set large on a block over its first change. */
-.news-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 40px;
-  padding: 0;
-  list-style: none;
-}
-
-.news-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+.getit-row:hover .getit-arrow {
   color: var(--s-ink);
-  text-decoration: none;
-}
-
-.news-art {
-  display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  height: 166px;
-}
-
-.news-day {
-  display: grid;
-  place-items: center;
-  background-color: var(--s-primary);
-  color: var(--s-on-primary);
-  font-size: 56px;
-  line-height: 1;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.news-month {
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  background-color: var(--s-quiet-strong);
-  font-size: 20px;
-  line-height: 22px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  transition: background-color 150ms var(--s-swift);
-}
-
-.news-card:hover .news-month {
-  background-color: var(--s-quiet-strong-hover);
-}
-
-.news-body {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  padding: 20px 20px 24px;
-}
-
-.news-count {
-  color: var(--s-soft);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.news-text {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 15px;
-  line-height: 20.6px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-}
-
-.news-text code {
-  font-family: var(--g-mono);
-  font-size: 0.88em;
-}
-
-.news-action {
-  display: flex;
-  justify-content: center;
-  margin-top: 32px;
+  transform: translateY(2px);
 }
 
 /* ----------------------------------------------------------------------------------- faq */
@@ -963,6 +1034,10 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
   cursor: pointer;
 }
 
+.faq-item:first-child > summary {
+  padding-top: 6px;
+}
+
 .faq-item > summary::-webkit-details-marker {
   display: none;
 }
@@ -979,11 +1054,10 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
 
 .faq-icon > span {
   position: absolute;
-  top: 6.25px;
+  top: 6.5px;
   left: 0;
   width: 14px;
-  height: 1.5px;
-  border-radius: 2px;
+  height: 1px;
   background-color: currentColor;
 }
 
@@ -1011,9 +1085,9 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
 }
 
 .faq-answer > p {
-  max-width: 412px;
+  max-width: 480px;
   padding: 0 0 24px;
-  color: var(--s-ink);
+  color: var(--s-soft);
   font-size: 16px;
   line-height: 28px;
   text-wrap: pretty;
@@ -1034,34 +1108,37 @@ html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
 /* -------------------------------------------------------------------------------- finale */
 
 .finale {
-  padding-top: 128px;
   overflow: hidden;
 }
 
 .finale-head {
-  gap: 12px;
+  display: grid;
+  gap: 32px;
+  justify-items: start;
+  padding-top: 56px;
+  border-top: 1px solid var(--s-line);
 }
 
-.finale-head .lead {
-  font-size: 16px;
-  line-height: 24px;
+.finale-title {
+  color: var(--s-ink);
+  font-size: clamp(40px, 6.4vw, 84px);
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: -0.045em;
 }
 
 .finale-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 12px;
-  margin-top: 12px;
 }
 
 /*
- * The wing drawn very large in one hairline across the column, fading into the footer, where
- * dot.com draws its bot. When the section arrives the line draws itself; without scripts it is
- * simply there.
+ * The wing drawn very large in one hairline across the column, fading into the footer. When the
+ * section arrives the line draws itself; without scripts it is simply there.
  */
 .finale-art {
-  margin-top: 80px;
+  margin-top: 72px;
   padding: 0 1px 8px;
   overflow: hidden;
   color: var(--s-art);
@@ -1087,90 +1164,73 @@ html.js .finale-art[data-reveal]:not([data-revealed]) :is(.wing-body, .wing-eye)
   stroke-dashoffset: 3200;
 }
 
-/* --------------------------------------------------------------- reduced motion, sizes */
-
 /* ---------------------------------------------------------------------- scroll motion */
 
 /*
- * The page's pictures and cards rise into place as they scroll in, and settle before they reach the
- * middle of the window: 36px and 3% for a card, more for the workspace frame. Tied to the scroll
- * itself (a view timeline), so it needs no script, runs both ways, and cannot leave anything
- * hidden: only position and size move, never opacity, so the text stays readable throughout.
- * Browsers without view timelines, and visitors who ask for less motion, get the page at rest.
+ * Rows, tiles and stages rise into place as they scroll in, and settle before they reach the
+ * middle of the window. Tied to the scroll itself (a view timeline), so it needs no script, runs
+ * both ways, and cannot leave anything hidden: only position moves, never opacity, so the text
+ * stays readable throughout. Browsers without view timelines, and visitors who ask for less
+ * motion, get the page at rest.
  */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    :is(.work-card, .more-card, .news-card, .getit-row, .faq-item, .agents-view) {
+    :is(
+        .roster-grid > li,
+        .tile,
+        .facts li,
+        .timeline li,
+        .away-list li,
+        .getit-row,
+        .faq-item,
+        .explorer-stage,
+        .away-stage
+      ) {
       animation: rise-in linear both;
       animation-timeline: view();
-      animation-range: entry 0% entry 70%;
-    }
-
-    .showcase-frame {
-      transform-origin: 50% 0;
-      animation: frame-rise linear both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 34%;
+      animation-range: entry 0% entry 80%;
     }
   }
 }
 
 @keyframes rise-in {
   from {
-    transform: translateY(36px) scale(0.97);
-  }
-}
-
-@keyframes frame-rise {
-  from {
-    transform: translateY(56px) scale(0.92);
+    transform: translateY(28px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-wing,
+  .hero-line,
+  .hero-lead,
+  .hero-actions,
+  .hero-facts,
+  .hero-detail,
   .hero-wing-float,
-  .flock-float,
-  .wing-eye {
+  .wing-eye,
+  .tm-cursor,
+  .explorer-view[data-active],
+  .explorer-grid[data-auto] .explorer-item[aria-pressed="true"] .explorer-item-bar {
     animation: none;
-  }
-
-  .flock-float,
-  html.js .flock[data-reveal] .flock-wing {
-    transition: none;
-  }
-
-  .flock-wing:hover .flock-float {
-    transform: none;
   }
 
   .wing-look {
     transform: none;
   }
 
-  .hero-word,
-  .hero-lead,
-  .hero-actions,
-  .hero-detail,
-  .tm-cursor {
-    animation: none;
-  }
-
   .faq-body,
   .faq-icon,
-  .agent-chip,
-  .getit-row,
-  html.js .work-card[data-reveal] .tm-line {
+  .explorer-item,
+  .getit-arrow,
+  .timeline-dot,
+  .timeline-text {
     transition: none;
-  }
-
-  html.js .work-card[data-reveal]:not([data-revealed]) .tm-line {
-    opacity: 1;
   }
 }
 
+/* ------------------------------------------------------------------------------- sizes */
+
 @media (min-width: 1024px) {
-  /* The FAQ's title stays in view beside its questions, as dot.com's does. */
+  /* The questions' heading stays in view beside them. */
   .faq-head {
     position: sticky;
     top: calc(var(--s-nav-h) + 32px);
@@ -1179,88 +1239,94 @@ html.js .finale-art[data-reveal]:not([data-revealed]) :is(.wing-body, .wing-eye)
 
 @media (max-width: 1023px) {
   .hero {
-    padding-top: 96px;
+    padding-top: 64px;
   }
 
-  .hero-title {
-    font-size: 48px;
-    line-height: 48px;
+  .hero-stage {
+    margin-top: 56px;
   }
 
-  .statement-grid,
+  .hero-field {
+    padding: 88px 32px 0;
+  }
+
+  .hero-wing {
+    top: 26px;
+    right: 48px;
+    width: 64px;
+  }
+
+  .roster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .explorer-grid,
+  .away-grid,
   .two-col {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .title-xl {
-    font-size: 36px;
-    line-height: 40px;
+  .explorer-grid {
+    gap: 32px;
   }
 
-  .statement-roster {
-    justify-content: center;
-    gap: 16px 28px;
+  /* In one column the picture stands over the list that chooses it. */
+  .explorer-stage {
+    position: relative;
+    top: auto;
+    order: -1;
+    height: 420px;
   }
 
-  .more-grid {
+  .explorer-view {
+    inset: 32px 32px 0;
+  }
+
+  .tiles,
+  .facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .facts li:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .facts li:nth-child(n + 3) {
+    border-top: 1px solid var(--s-line);
+  }
+
+  .timeline {
+    grid-template-columns: minmax(0, 1fr);
     gap: 32px;
-    margin-top: 32px;
+    margin-top: 56px;
   }
 
-  .work-grid {
-    gap: 32px;
+  .timeline::before {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: 4px;
+    width: 1px;
+    height: auto;
   }
 
-  /* The agents stack and centre, the view between the chips and what they say, as dot.com's. */
-  .agents-grid {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 32px;
-    text-align: center;
+  .timeline-day {
+    padding: 0 0 0 32px;
   }
 
-  .agents-text {
-    display: contents;
-  }
-
-  .agent-chips {
-    justify-content: center;
-    max-width: 640px;
-  }
-
-  .agents-view {
-    order: 1;
-    width: min(100%, 456px);
-  }
-
-  .agents-note {
-    order: 2;
-    min-height: 0;
-  }
-
-  .agents-text > .btn {
-    order: 3;
-  }
-
-  .news-grid {
-    gap: 12px;
+  .timeline-dot {
+    top: 6px;
   }
 }
 
 @media (max-width: 639px) {
   .hero {
-    padding-top: 56px;
-  }
-
-  .hero-title {
-    font-size: 36px;
-    line-height: 38px;
+    padding-top: 48px;
   }
 
   .hero-lead {
-    margin-top: 16px;
+    margin-top: 20px;
     font-size: 16px;
     line-height: 26px;
   }
@@ -1271,101 +1337,90 @@ html.js .finale-art[data-reveal]:not([data-revealed]) :is(.wing-body, .wing-eye)
   }
 
   .hero-stage {
-    margin-top: 48px;
-  }
-
-  .title-xl {
-    font-size: 30px;
-    line-height: 36px;
-  }
-
-  .statement-text p {
-    font-size: 16px;
-    line-height: 26px;
-  }
-
-  .statement-roster {
-    gap: 14px 22px;
-    margin-top: 48px;
-  }
-
-  .statement-agent {
-    gap: 8px;
-    font-size: 15px;
-  }
-
-  .film {
-    padding: 48px 0;
-  }
-
-  /*
-   * A phone shows the real screenshot nearly twice as large, cropped to the chat pane (x 248 to
-   * 1052 of 1440): the transcript, the code block and the composer read as the app rather than as
-   * a thumbnail of it.
-   */
-  .showcase-frame img {
-    width: 179.1%;
-    max-width: none;
-    translate: -17.22% 0;
-  }
-
-  .work-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
     margin-top: 40px;
   }
 
-  .work-card {
-    padding: 24px 24px 0;
+  /* The systems take a line of their own, so no line starts on a dot. */
+  .hero-facts li:last-child {
+    flex-basis: 100%;
+    padding-left: 0;
   }
 
-  .work-text {
-    min-height: 0;
+  .hero-facts li:last-child::before {
+    display: none;
   }
 
-  .work-view {
-    margin-top: 24px;
+  .stage {
+    border-radius: 18px;
   }
 
-  .more-grid {
+  .hero-field {
+    padding: 56px 12px 0;
+  }
+
+  .hero-wing {
+    top: 16px;
+    right: 24px;
+    width: 44px;
+  }
+
+  .roster-grid,
+  .tiles,
+  .explorer-grid,
+  .away-grid,
+  .facts {
+    margin-top: 40px;
+  }
+
+  .roster-grid > li {
+    gap: 10px;
+    min-height: 68px;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .explorer-stage {
+    height: 380px;
+  }
+
+  .explorer-view {
+    inset: 16px 12px 0;
+  }
+
+  .tiles {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    margin-top: 24px;
   }
 
-  .more-card {
-    padding: 24px;
+  .tile {
+    padding: 24px 20px 28px;
   }
 
-  .agents-grid {
-    padding: 0;
+  .away-stage {
+    min-height: 400px;
+    padding: 32px 12px 0;
   }
 
-  .agents-view {
-    height: 480px;
+  .phone {
+    width: min(100%, 272px);
+    height: 400px;
   }
 
-  .getit-row {
-    gap: 12px;
-    padding: 16px;
+  .facts li {
+    padding: 24px 12px 28px 0;
   }
 
-  .getit-glyph {
-    width: 32px;
+  .facts li + li {
+    padding-left: 12px;
   }
 
-  .news-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .fact-figure {
+    font-size: 44px;
+    line-height: 44px;
   }
 
-  .finale {
-    padding-top: 96px;
-  }
-
-  /* The closing pair stacks, centred, as dot.com's does on a phone. */
-  .finale-actions {
-    flex-direction: column;
-    align-items: center;
+  .finale-head {
+    padding-top: 40px;
   }
 
   .finale-art {

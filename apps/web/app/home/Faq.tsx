@@ -117,10 +117,10 @@ export function Faq() {
 
   return (
     <section className="section faq" id="faq" aria-labelledby="faq-title">
-      <div className="inner two-col">
+      <div className="wrap two-col">
         <div className="two-col-head faq-head">
           <h2 id="faq-title" className="title">
-            FAQs
+            Questions. <span className="tone">Answered plainly.</span>
           </h2>
           <a className="text-link faq-link" href="/privacy">
             Privacy notice <Arrow />
@@ -128,7 +128,7 @@ export function Faq() {
         </div>
         <div className="faq-list" ref={list}>
           {QUESTIONS.map((item, index) => (
-            // The first answer stands open, as dot.com's does.
+            // The first answer stands open.
             <details className="faq-item" key={item.question} open={index === 0}>
               <summary>
                 <span className="faq-question">{item.question}</span>

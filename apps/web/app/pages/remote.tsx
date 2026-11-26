@@ -134,6 +134,17 @@ export default function RemotePage() {
   // connects, and "Not now" then connects to what is already paired.
   const started = useRef(false);
   useEffect(() => {
+    // Development only: `/remote?fixture` stands in for a paired computer, so the page can be
+    // looked at without one (remote/fixture.ts). A build drops this branch and its module.
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has("fixture")) {
+      let wanted = true;
+      void import("../remote/fixture").then(({ fixtureClient }) => {
+        if (wanted) setClient(fixtureClient(new URLSearchParams(location.search)));
+      });
+      return () => {
+        wanted = false;
+      };
+    }
     const next = new RemoteClient(relayOrigin());
     const link = takePairingLink(window);
     if (link === "") {

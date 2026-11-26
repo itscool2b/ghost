@@ -387,15 +387,16 @@ export function renderHtml(text, distribution = "desktop") {
     /[&<>"']/g,
     (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
   );
-  // Both documents follow System, each in its own surface's colours (the website's plain page,
-  // the desktop's Graphite); both remain script-free and leave the notice text unchanged.
-  const scheme = "light dark";
+  // Each document wears its own surface's colours: the website's page is always dark, as the
+  // site is (owner, 25 November 2026), and the desktop's follows System in Graphite's. Both
+  // remain script-free and leave the notice text unchanged.
   const web = distribution === "web";
+  const scheme = web ? "dark" : "light dark";
   const light = web
-    ? "--notice-bg:#ffffff;--notice-fg:#6e7278;--notice-title:#0a0a0a;--notice-line:#d5d9e2;--notice-selection:#dde2ea"
+    ? "--notice-bg:#0a0a0a;--notice-fg:#8f8f8f;--notice-title:#f2f2f2;--notice-line:#1c1c1c;--notice-selection:#333"
     : "--notice-bg:#fafafa;--notice-fg:#52525b;--notice-title:#18181b;--notice-line:#e4e4e7;--notice-selection:#dde2ea";
   const dark = web
-    ? "@media(prefers-color-scheme:dark){html{--notice-bg:#0a0a0a;--notice-fg:#80848a;--notice-title:#ffffff;--notice-line:#1f2228;--notice-selection:#333}}"
+    ? ""
     : "@media(prefers-color-scheme:dark){html{--notice-bg:#101112;--notice-fg:#a1a1aa;--notice-title:#fafafa;--notice-line:#303236;--notice-selection:#333}}";
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="${scheme}"><title>Third-party notices | o7</title><style>html{color-scheme:${scheme};${light};background:var(--notice-bg);color:var(--notice-fg);font:14px/1.6 ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}${dark}body{max-width:72rem;margin:clamp(2rem,6vw,6rem) auto;padding:0 1.25rem}h1{margin:0 0 2rem;color:var(--notice-title);font-size:2rem;line-height:1.2;font-weight:500;letter-spacing:-0.03em}pre{margin:0;padding-top:2rem;border-top:1px solid var(--notice-line);white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.65 ui-monospace,Menlo,Consolas,monospace}::selection{background:var(--notice-selection);color:var(--notice-title)}</style><body><h1>Third-party notices</h1><pre>${safe}</pre></body></html>`;
 }

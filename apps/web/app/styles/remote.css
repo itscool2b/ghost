@@ -14,7 +14,8 @@
 .remote {
   --remote-column: 720px;
   --remote-pad: 16px;
-  --remote-paper: color-mix(in srgb, var(--g-fg-1) 14%, var(--g-glass-layer));
+  /* The sent message is Main's: a soft step of the theme's ink over the pane, 10% in dark. */
+  --remote-paper: color-mix(in srgb, var(--g-fg-1) 10%, var(--g-glass-layer));
   --remote-paper-ink: var(--g-fg-1);
   --remote-text: 15px;
   --remote-leading: 24px;
@@ -37,10 +38,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* In light, the sent message is solid ink with the page's colour for its words, as on the desktop. */
+/* In light the same soft step, a little fainter on white (7%), with the ink for its words, as
+   on the desktop since Main (solid ink before, which striped a long thread). */
 :root[data-theme="light"] .remote {
-  --remote-paper: var(--g-fg-1);
-  --remote-paper-ink: var(--g-bg);
+  --remote-paper: color-mix(in srgb, var(--g-fg-1) 7%, var(--g-glass-layer));
+  --remote-paper-ink: var(--g-fg-1);
 }
 
 /* The page's own buttons (rows and icons) start from nothing: no bevel, the page's face. */
@@ -367,7 +369,7 @@
   max-width: var(--remote-column);
   margin: 4px 12px 8px;
   padding: 12px;
-  border-radius: var(--g-radius-18);
+  border-radius: var(--g-radius-16);
   background-color: var(--g-glass-pop);
   box-shadow:
     inset 0 0 0 1px var(--g-glass-rim),
@@ -423,7 +425,7 @@
   max-width: 85%;
   margin: 0;
   padding: 9px 14px;
-  border-radius: var(--g-radius-18);
+  border-radius: var(--g-radius-16);
   background-color: var(--remote-paper);
   color: var(--remote-paper-ink);
   font-size: var(--remote-text);
@@ -628,7 +630,7 @@
   display: grid;
   gap: 12px;
   padding: 14px 16px 16px;
-  border-radius: var(--g-radius-18);
+  border-radius: var(--g-radius-16);
   background-color: var(--g-glass-pop);
   box-shadow:
     inset 0 0 0 1px var(--g-glass-rim-strong),
@@ -761,7 +763,7 @@
   align-items: flex-end;
   gap: 6px;
   padding: 6px 6px 6px 4px;
-  border-radius: var(--g-radius-18);
+  border-radius: var(--g-radius-20);
   background-color: var(--g-glass-pop);
   box-shadow:
     inset 0 0 0 1px var(--g-glass-rim),
