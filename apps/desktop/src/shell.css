@@ -1837,12 +1837,24 @@ details.setup-install-review[open] > summary::before {
   color: var(--g-fg-1);
 }
 
+/* A field with its one action beside it, on the field's own line. */
+.dialog-inline-field {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--g-space-8);
+}
+
+.dialog-inline-field > .ui-field {
+  flex: 1;
+  min-width: 0;
+}
+
 /* The section's hairline is drawn inset, so its content starts 16px down, on the grid. */
 .dialog-section {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--g-space-8);
+  gap: var(--g-space-12) var(--g-space-8);
   padding-top: var(--g-space-16);
   box-shadow: inset 0 1px 0 var(--g-line);
 }

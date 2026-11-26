@@ -163,19 +163,23 @@ export function ChatActionsDialog({
           save(() => store.api.rename(chat.id, title));
         }}
       >
-        <label className="ui-field">
-          Chat name
-          <input
-            className="g-input"
-            value={title}
-            maxLength={512}
-            required
-            onChange={(event) => setTitle(event.currentTarget.value)}
-          />
-        </label>
-        <button type="submit" className="g-button" disabled={saving || !title.trim()}>
-          Rename chat
-        </button>
+        {/* The name with its one action beside it; the dialog opens on the name. */}
+        <div className="dialog-inline-field">
+          <label className="ui-field">
+            Chat name
+            <input
+              className="g-input"
+              data-autofocus
+              value={title}
+              maxLength={512}
+              required
+              onChange={(event) => setTitle(event.currentTarget.value)}
+            />
+          </label>
+          <button type="submit" className="g-button" disabled={saving || !title.trim()}>
+            Rename chat
+          </button>
+        </div>
         <div className="dialog-section">
           <button
             type="button"
