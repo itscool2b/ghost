@@ -26,7 +26,7 @@ struct SettingsView: View {
                             Spacer()
                             // The computer's theme, as the app wears it while that computer is in view.
                             let swatch = Palettes.palette(
-                                ThemeID(rawValue: computer.look.theme) ?? .claude, dark: computer.look.appearance != "light")
+                                ThemeID(rawValue: computer.look.theme) ?? .default, dark: computer.look.appearance != "light")
                             Circle()
                                 .fill(Color(swatch.primary))
                                 .overlay(Circle().strokeBorder(Color(swatch.window), lineWidth: 3))

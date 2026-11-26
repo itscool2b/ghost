@@ -95,12 +95,12 @@
 }
 
 /*
- * The sent message, as the Grok Bot app sets it: a soft step of ink in dark, solid ink in light
- * with the page's colour for its words.
+ * The sent message in light: the same soft step of ink as in dark, a little fainter on white (7%),
+ * with the ink for its words. Solid black blocks (the Grok Bot app's own) striped a long thread.
  */
 :root[data-theme="light"] {
-  --ui-paper: var(--g-fg-1);
-  --ui-paper-ink: var(--g-bg);
+  --ui-paper: color-mix(in srgb, var(--g-fg-1) 7%, var(--g-glass-layer));
+  --ui-paper-ink: var(--g-fg-1);
 }
 
 /*

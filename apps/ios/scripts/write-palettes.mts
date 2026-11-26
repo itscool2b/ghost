@@ -1,13 +1,14 @@
 /**
  * Writes the iPhone app's palettes, apps/ios/O7Kit/Sources/O7Theme/Palettes.generated.swift, from
  * the desktop's themes, never by hand:
- *   - Aura is Graphite itself: GRAPHITE_COLORS and GRAPHITE_LIGHT_COLORS (tokens.ts), plus the
+ *   - Main (the case `aura`, its saved name) is the base palette itself: GRAPHITE_COLORS and
+ *     GRAPHITE_LIGHT_COLORS (tokens.ts), plus the
  *     values only tokens.css declares (the ink ladder, tints, the brand plate). Light cascades over
  *     dark, as the stylesheet does.
- *   - Every other theme lays themeTokens() (themes.ts) over Aura for each appearance, as
+ *   - Every other theme lays themeTokens() (themes.ts) over Main for each appearance, as
  *     themes.css does on the desktop.
- *   - The sent message's paper comes from apps/desktop/src/ui-tokens.css: in dark, fg-1 mixed 10%
- *     into the pane with fg-1 words; in light, solid fg-1 with the page's colour for the words.
+ *   - The sent message's paper comes from apps/desktop/src/ui-tokens.css: fg-1 mixed into the
+ *     pane, 10% in dark and 7% in light, with fg-1 for the words in both.
  *
  *   node apps/ios/scripts/write-palettes.mts          write the file
  *   node apps/ios/scripts/write-palettes.mts --check  fail when it is out of date (CI)
@@ -182,14 +183,14 @@ const FIELDS: readonly Field[] = [
   ),
   {
     name: "paper",
-    doc: "The sent message's bubble: fg-1 mixed 10% into the pane in dark, solid fg-1 in light.",
+    doc: "The sent message's bubble: fg-1 mixed into the pane, 10% in dark and 7% in light.",
     derive: (color, appearance) =>
-      appearance === "dark" ? mix(color("fg-1"), 0.1, color("glass-layer")) : color("fg-1"),
+      mix(color("fg-1"), appearance === "dark" ? 0.1 : 0.07, color("glass-layer")),
   },
   {
     name: "onPaper",
-    doc: "The words on the paper: fg-1 in dark, the page's colour in light.",
-    derive: (color, appearance) => (appearance === "dark" ? color("fg-1") : color("bg")),
+    doc: "The words on the paper: fg-1 in both appearances.",
+    derive: (color) => color("fg-1"),
   },
   field("codeBackground", "code-bg", "Behind code blocks (`--g-code-bg`)."),
   field("codeText", "code-fg", "Code's own text, between fg-1 and fg-2 (`--g-code-fg`)."),
@@ -314,7 +315,7 @@ for (const id of THEME_IDS) {
       `ansi: [\n${ANSI.map((token) => `            ${swiftColor(color(token))},`).join("\n")}\n        ]`,
     ];
     palettes.push(
-      `    /// ${theme?.name ?? "Aura"}, ${appearance}.\n` +
+      `    /// ${theme?.name ?? "Main"}, ${appearance}.\n` +
         `    static let ${name} = Palette(\n${args.map((arg) => `        ${arg}`).join(",\n")}\n    )`,
     );
   }
@@ -337,7 +338,7 @@ const themeCases = THEME_IDS.map((id) =>
 );
 const names = THEME_IDS.map((id) => {
   const theme = THEMES.find((candidate) => candidate.id === id);
-  return `        case .${caseName(id)}: ${swiftString(theme?.name ?? "Aura")}`;
+  return `        case .${caseName(id)}: ${swiftString(theme?.name ?? "Main")}`;
 });
 const agents = THEME_IDS.map((id) => {
   const theme = THEMES.find((candidate) => candidate.id === id);
@@ -349,7 +350,8 @@ const swift = `${swiftHeader(
   "packages/ui/src/graphite/themes.ts, tokens.ts and tokens.css, and apps/desktop/src/ui-tokens.css",
   `${SCRIPT} --check`,
 )}
-/// The desktop's themes, Aura first: o7's own, then one per supported agent.
+/// The desktop's themes, Main first (its case is aura, the saved name): o7's own, then one per
+/// supported agent.
 public enum ThemeID: String, CaseIterable, Sendable {
 ${themeCases.join("\n")}
 
@@ -360,7 +362,7 @@ ${names.join("\n")}
         }
     }
 
-    /// The agent whose mark Settings shows beside the theme; Aura shows o7's own wing.
+    /// The agent whose mark Settings shows beside the theme; Main shows o7's own wing.
     public var agent: String? {
         switch self {
 ${agents.join("\n")}

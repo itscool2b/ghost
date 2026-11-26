@@ -98,7 +98,7 @@ public struct Look: Codable, Hashable, Sendable {
         self.theme = theme
         self.appearance = appearance
     }
-    public static let fallback = Look(theme: "claude", appearance: "system")
+    public static let fallback = Look(theme: "aura", appearance: "system")
 }
 
 /// The computer's first sealed message of a session: it proved it holds the key.
