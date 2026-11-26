@@ -1,0 +1,14 @@
+{"d":"note","note":{"text":"The agent dies mid-turn: no TurnEnded from the driver (the session ends the turn), Crashed with the raw stderr tail."}}
+{"d":"note","note":{"start":{"agent_id":"acp-agent","dialect":"generic","resume":null,"autonomy":"full_auto","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"ghost","title":"Ghost ADE","version":"0.0.0-replay"}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"acp-agent","title":"ACP Agent","version":"1.0.0"}}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"<CWD>","mcpServers":[]}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":2,"result":{"sessionId":"<SESSION_1>"}}}
+{"d":"cmd","cmd":{"type":"prompt","turn_id":"019a0000-0001-7000-8000-000000000001","parts":[{"type":"text","text":"Refactor everything"}]}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"<SESSION_1>","prompt":[{"type":"text","text":"Refactor everything"}]}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Working on it"}}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"tool_call","toolCallId":"call_1","title":"Read lib.rs","kind":"read","status":"in_progress"}}}}
+{"d":"err","line":"thread 'main' panicked at src/agent.rs:88:14:"}
+{"d":"err","line":"index out of bounds: the len is 0 but the index is 0"}
+{"d":"agent","agent":{"exit":{"code":101}}}
+{"d":"agent","agent":"eof"}

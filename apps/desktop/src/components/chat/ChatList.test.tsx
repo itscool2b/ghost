@@ -6,7 +6,7 @@ import { ChatList } from "./ChatList";
 
 const noop = () => {};
 const workspace = {
-  projects: [{ id: "p1", name: "o7", color: null, folders: [], created_at: 1, updated_at: 1 }],
+  projects: [{ id: "p1", name: "Ghost", color: null, folders: [], created_at: 1, updated_at: 1 }],
   chats: [
     {
       chat: chatSummary("a", { title: "Fix login" }),
@@ -32,7 +32,7 @@ describe("the sidebar while the app opens", () => {
       />,
     );
     expect(html).toContain("Fix login");
-    expect(html).toContain("o7");
+    expect(html).toContain("Ghost");
     expect(html).not.toContain("chats-skeleton");
     expect(html).not.toContain("chats-opening");
     expect(html).not.toContain("chats-error");
@@ -61,7 +61,7 @@ describe("the sidebar while the app opens", () => {
     const html = renderToStaticMarkup(
       <ChatList
         chats={null}
-        error="o7's database is not available: The disk is full."
+        error="Ghost's database is not available: The disk is full."
         selected={null}
         onSelect={noop}
         onNewChat={noop}

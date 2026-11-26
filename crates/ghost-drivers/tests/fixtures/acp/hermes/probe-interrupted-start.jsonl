@@ -1,0 +1,41 @@
+{"d":"note","note":{"text":"Recorded scenario probe-interrupted-start: hermes (hermes-agent 0.22.5), curated by aura-cli."}}
+{"t":0,"d":"note","note":{"spawn":{"label":"hermes acp","program":"<HOME>/.local/bin/hermes","args":["acp"],"cwd":"<CWD>","removed":[],"set":["TMPDIR"],"pid":42677}}}
+{"t":6,"d":"note","note":{"start":{"agent_id":"hermes","dialect":"hermes","resume":"<SESSION_1>","autonomy":"full_auto","desired":{"mode":{"type":"choice","value":"dont_ask"},"model":{"type":"choice","value":"nous:nous/welcome"}},"spawn_id":"01a17352-d5e2-7687-ae01-3d83d9c46366"}}}
+{"t":6,"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"ghost","title":"Ghost ADE","version":"0.1.0"}}}}
+{"t":460,"d":"err","line":"<TIME> [INFO] acp_adapter.entry: Loaded env from <HOME>/.hermes/.env"}
+{"t":460,"d":"err","line":"<TIME> [INFO] acp_adapter.entry: Starting hermes-agent ACP adapter"}
+{"t":557,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'browser-browser-use' registered browser provider: browser-use"}
+{"t":559,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'browser-browserbase' registered browser provider: browserbase"}
+{"t":560,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'browser-firecrawl' registered browser provider: firecrawl"}
+{"t":703,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'default' registered delegation provider: default"}
+{"t":705,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'deepinfra' registered image_gen provider: deepinfra"}
+{"t":706,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'fal' registered image_gen provider: fal"}
+{"t":707,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'krea' registered image_gen provider: krea"}
+{"t":708,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai"}
+{"t":709,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'openai' registered image_gen provider: openai"}
+{"t":709,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'openai-codex' registered image_gen provider: openai-codex"}
+{"t":745,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: openrouter"}
+{"t":746,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: nous"}
+{"t":748,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'xai' registered image_gen provider: xai"}
+{"t":762,"d":"err","line":"<TIME> [INFO] agent.credential_pool: credential pool: no available entries (all exhausted or empty)"}
+{"t":771,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'deepinfra' registered video_gen provider: deepinfra"}
+{"t":772,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'fal' registered video_gen provider: fal"}
+{"t":772,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'openrouter' registered video_gen provider: openrouter"}
+{"t":773,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'xai' registered video_gen provider: xai"}
+{"t":774,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-brave-free' registered web provider: brave-free"}
+{"t":775,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-ddgs' registered web provider: ddgs"}
+{"t":776,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-exa' registered web provider: exa"}
+{"t":778,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-firecrawl' registered web provider: firecrawl"}
+{"t":779,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-keenable' registered web provider: keenable"}
+{"t":780,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-openai-native' registered web provider: openai-native"}
+{"t":781,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-parallel' registered web provider: parallel"}
+{"t":784,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-perplexity' registered web provider: perplexity"}
+{"t":785,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-searxng' registered web provider: searxng"}
+{"t":786,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-tavily' registered web provider: tavily"}
+{"t":788,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin 'web-xai' registered web provider: xai"}
+{"t":796,"d":"err","line":"<TIME> [INFO] hermes_cli.plugin_capabilities: capability_check plugin=orca-status capability=tools.override decision=deny checked_by=plugin_capability_granted evidence=not granted"}
+{"t":797,"d":"err","line":"<TIME> [INFO] hermes_cli.plugins: Plugin discovery complete: 63 found, 59 enabled"}
+{"t":822,"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true},"sessionCapabilities":{"fork":{},"list":{},"resume":{}}},"agentInfo":{"name":"hermes-agent","version":"0.22.5"},"authMethods":[{"description":"Authenticate Hermes using the currently configured nous runtime credentials.","id":"nous","name":"nous runtime credentials"},{"args":["--setup"],"description":"Open Hermes' interactive model/provider setup in a terminal. Use this when Hermes has not been configured on this machine yet.","id":"hermes-setup","name":"Configure Hermes provider","type":"terminal"}],"protocolVersion":1}}}
+{"t":822,"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"<SESSION_1>","cwd":"<CWD>","mcpServers":[]}}}
+{"t":876,"d":"note","note":{"exit":{"code":null,"signal":15}}}
+{"t":932,"d":"note","note":{"shutdown":{"steps":["SentSigterm { processes: 1 }","ExitedAfterSigterm"],"took_ms":91}}}

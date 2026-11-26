@@ -28,7 +28,7 @@ const BRANCHES = [
   "fix/pacing-test",
   "docs/changelog",
 ];
-const GENERATED = ["aura/7f3a9c2e", "aura/b41d06a7", "aura/2e9c5f18"];
+const GENERATED = ["ghost/7f3a9c2e", "ghost/b41d06a7", "ghost/2e9c5f18"];
 const SETUP: WorktreeSetupInput = {
   files: [".env.local", "config/development.json"],
   command: { program: "pnpm", args: ["install", "--frozen-lockfile"] },
@@ -168,7 +168,7 @@ export function newChatFixture(scenario: NewChatScenario): {
             mode: "direct",
             starting_branch: null,
             branch: null,
-            label: "Direct in o7",
+            label: "Direct in Ghost",
           },
         };
       if (scenario === "unavailable")
@@ -187,7 +187,7 @@ export function newChatFixture(scenario: NewChatScenario): {
         const reason = refusal(typed);
         if (reason) throw new Error(reason);
       }
-      const branch = typed ?? GENERATED[generated++ % GENERATED.length] ?? "aura/7f3a9c2e";
+      const branch = typed ?? GENERATED[generated++ % GENERATED.length] ?? "ghost/7f3a9c2e";
       const setup = scenario === "setup" && input.run_setup ? SETUP : null;
       const warnings: string[] = [];
       if (input.bring_changes)

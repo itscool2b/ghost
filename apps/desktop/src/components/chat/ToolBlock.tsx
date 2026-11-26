@@ -1,5 +1,5 @@
-import { prefersReducedMotion } from "@o7/ui";
-import { CopyButton, StatusDot } from "@o7/ui/graphite";
+import { prefersReducedMotion } from "@ghost/ui";
+import { CopyButton, StatusDot } from "@ghost/ui/graphite";
 import {
   ArrowRightLeft,
   Brain,

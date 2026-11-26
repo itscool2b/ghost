@@ -1,4 +1,4 @@
-import type { AgentBrandId } from "@o7/ui";
+import type { AgentBrandId } from "@ghost/ui";
 import {
   Check,
   ChevronRight,

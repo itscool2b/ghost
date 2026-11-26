@@ -142,7 +142,7 @@ for (const [name, program] of [
     version_exit: version.status,
   };
   results.agents.push(entry);
-  const mcpServers = { o7_native_probe: { command: process.execPath, args: [server] } };
+  const mcpServers = { ghost_native_probe: { command: process.execPath, args: [server] } };
   const peer = start(
     program,
     name === "codex"
@@ -196,10 +196,10 @@ for (const [name, program] of [
         peer.send({
           id,
           method: "mcpServerStatus/list",
-          params: { threadId, serverName: "o7_native_probe", limit: 1, detail: "full" },
+          params: { threadId, serverName: "ghost_native_probe", limit: 1, detail: "full" },
         });
         const reply = await peer.wait((v) => v.id === id);
-        const row = reply.result?.data?.find((row) => row.name === "o7_native_probe");
+        const row = reply.result?.data?.find((row) => row.name === "ghost_native_probe");
         entry.mcp_state = row?.runtimeStatus ?? "unknown";
         entry.tool_count = Object.keys(row?.tools ?? {}).length;
         if (entry.mcp_state === "connected") break;
@@ -222,7 +222,7 @@ for (const [name, program] of [
           (v) => v.type === "control_response" && v.response?.request_id === request_id,
         );
         const row = reply.response?.response?.mcpServers?.find(
-          (row) => row.name === "o7_native_probe",
+          (row) => row.name === "ghost_native_probe",
         );
         entry.mcp_state = row?.status ?? "unknown";
         entry.tool_count = row?.tools?.length ?? 0;
@@ -255,10 +255,10 @@ if (pi) {
   const extension = resolve(realm, "shared-mcp.ts");
   await writeFile(
     extension,
-    await readFile(new URL("../../../crates/o7-drivers/src/pi/shared-mcp.ts", import.meta.url)),
+    await readFile(new URL("../../../crates/ghost-drivers/src/pi/shared-mcp.ts", import.meta.url)),
   );
-  env.O7_SHARED_MCP = JSON.stringify({
-    o7_native_probe: { command: process.execPath, args: [server] },
+  env.GHOST_SHARED_MCP = JSON.stringify({
+    ghost_native_probe: { command: process.execPath, args: [server] },
   });
   const peer = start(process.execPath, [pi, "--mode", "rpc", "--extension", extension]);
   try {
@@ -268,7 +268,8 @@ if (pi) {
     peer.send({ id: "pi-commands", type: "get_commands" });
     const commands = await peer.wait((v) => v.type === "response" && v.id === "pi-commands");
     entry.extension_registered =
-      commands.data?.commands?.some((command) => command.name === "o7-shared-mcp-ready") ?? false;
+      commands.data?.commands?.some((command) => command.name === "ghost-shared-mcp-ready") ??
+      false;
   } catch (error) {
     entry.error = error.message;
   } finally {

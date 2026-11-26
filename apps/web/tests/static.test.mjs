@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 
 /** A download button goes through the site's counter (app/counted.ts). */
 const counted = (url) =>
-  url.replace(/^https:\/\/github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download\//, "/get/");
+  url.replace(
+    /^https:\/\/github\.com\/itscool2b\/(?:ghost|o7|auracode)\/releases\/download\//,
+    "/get/",
+  );
 
 const root = new URL("../build/client/", import.meta.url);
 /** The committed catalog: `{ release: null }` until installers are published, then one release. */
@@ -66,7 +69,7 @@ test("public pages are prerendered dark, whole without JavaScript", async () => 
       assert.ok(downloads.includes(download.sha256), download.file);
       assert.match(
         download.url,
-        /^https:\/\/(github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download|download\.o7\.codes)\//,
+        /^https:\/\/(github\.com\/itscool2b\/(?:ghost|o7|auracode)\/releases\/download|download\.onghost\.dev)\//,
       );
     }
     assert.ok(downloads.includes(`href="${release.checksums_url}"`));
@@ -74,7 +77,7 @@ test("public pages are prerendered dark, whole without JavaScript", async () => 
     // A build without an updater signature says it never updates itself; one with it says it
     // does. Either way, without a publisher's signature the page says how each system treats it.
     const never = /These installers are unsigned and do not update themselves/;
-    const itself = /Once installed, o7 updates itself/;
+    const itself = /Once installed, Ghost updates itself/;
     if (release.signed) assert.doesNotMatch(downloads, never);
     else assert.match(downloads, never);
     if (release.publisher_signed === true) {
@@ -90,7 +93,7 @@ test("public pages are prerendered dark, whole without JavaScript", async () => 
     assert.match(downloads, /Not published/);
     assert.doesNotMatch(downloads, /href="[^"]+\.(exe|dmg)"/);
     assert.doesNotMatch(downloads, /These installers are unsigned/);
-    assert.doesNotMatch(downloads, /o7 updates itself/);
+    assert.doesNotMatch(downloads, /Ghost updates itself/);
   }
   const home = await readFile(new URL("index.html", root), "utf8");
   // The app on the page is drawn in HTML, so the page ships no screenshot of it, and its one
@@ -138,11 +141,11 @@ test("the changelog page lists every pull request in CHANGELOG.md, newest first"
 test("every page links the public repository from its header, menu and footer", async () => {
   for (const path of ["", "download/", "privacy/", "terms/", "changelog/"]) {
     const html = await readFile(new URL(`${path}index.html`, root), "utf8");
-    const links = html.match(/href="https:\/\/github\.com\/itscool2b\/o7"/g) ?? [];
+    const links = html.match(/href="https:\/\/github\.com\/itscool2b\/ghost"/g) ?? [];
     assert.ok(links.length >= 3, `${path}: ${links.length} links to the repository`);
     assert.match(
       html,
-      /class="btn btn-quiet btn-sm nav-github"[^>]*aria-label="o7 on GitHub"/,
+      /class="btn btn-quiet btn-sm nav-github"[^>]*aria-label="Ghost on GitHub"/,
       path,
     );
   }
@@ -194,9 +197,9 @@ test("the site is for a local app: no account pages, and no page offers one", as
   }
   const home = await readFile(new URL("index.html", root), "utf8");
   assert.match(home, /free/);
-  assert.match(home, /There is no o7 account/);
+  assert.match(home, /There is no Ghost account/);
   const privacy = await readFile(new URL("privacy/index.html", root), "utf8");
-  assert.match(privacy, /There is no o7 account, no sign-in, and no payment/);
+  assert.match(privacy, /There is no Ghost account, no sign-in, and no payment/);
   assert.match(privacy, /BASH\.AI LLC/);
   const terms = await readFile(new URL("terms/index.html", root), "utf8");
   assert.match(terms, /Governing law and venue/);
@@ -239,5 +242,8 @@ test("the remote page is a tool of its own, never cached, framed or indexed", as
   assert.match(headers, /\n\/remote\*\n {2}Content-Security-Policy: frame-ancestors 'none'\n/);
   // The page talks to the relay on this site and nowhere else.
   const connect = /connect-src ([^;]*);/.exec(headers)?.[1];
-  assert.equal(connect, "'self' wss://o7.codes wss://preview.o7.codes wss://auracode.si");
+  assert.equal(
+    connect,
+    "'self' wss://onghost.dev wss://preview.onghost.dev wss://o7.codes wss://auracode.si",
+  );
 });

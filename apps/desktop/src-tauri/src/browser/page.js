@@ -1,8 +1,8 @@
-// o7's page agent (docs/superpowers/plans/2026-11-09-browser.md), injected into every top
+// Ghost's page agent (docs/superpowers/plans/2026-11-09-browser.md), injected into every top
 // document of the browser beside the chat before the page's own scripts run. It reads the page
 // for agents (an outline with refs), acts on it where the engine has no trusted input of its own,
-// keeps the console, forwards the browser's own shortcuts to o7, and runs Annotate's picker.
-// It talks to o7 only through `window.ipc` (wry's message handler), which accepts a few typed
+// keeps the console, forwards the browser's own shortcuts to Ghost, and runs Annotate's picker.
+// It talks to Ghost only through `window.ipc` (wry's message handler), which accepts a few typed
 // messages and trusts none of their contents.
 (() => {
   if (window.top !== window || Object.hasOwn(window, "__auraBrowser")) return;
@@ -1070,7 +1070,7 @@
 
   // ---------------------------------------------------------------- shortcuts and moves
 
-  // The browser's own shortcuts belong to o7, as a browser's belong to it, and never reach
+  // The browser's own shortcuts belong to Ghost, as a browser's belong to it, and never reach
   // the page. Ctrl+K and the rest stay the page's.
   window.addEventListener(
     "keydown",
@@ -1130,7 +1130,7 @@
     annotate: (on, options) => (on ? startAnnotate(options) : stopAnnotate()),
     annotating: () => annotate !== null,
     pickAt,
-    // The page's own password values, so o7 can keep them out of what agents read.
+    // The page's own password values, so Ghost can keep them out of what agents read.
     secrets: () => {
       const values = [];
       const collect = (root) => {

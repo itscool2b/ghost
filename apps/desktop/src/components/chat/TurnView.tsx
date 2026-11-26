@@ -52,7 +52,7 @@ export interface TurnActions extends BlobProps {
   readonly onShowLog: () => void;
   /** Reviews recreating the chat's deleted worktree folder (Git workspace's recreate flow). */
   readonly onRecreateFolder?: () => void;
-  /** The session has no process: a turn interrupted when o7 closed offers Resume session. */
+  /** The session has no process: a turn interrupted when Ghost closed offers Resume session. */
   readonly canResume: boolean;
   /** Opens the Changes panel: the Review beside a finished turn's changed files. */
   readonly onOpenChanges?: () => void;

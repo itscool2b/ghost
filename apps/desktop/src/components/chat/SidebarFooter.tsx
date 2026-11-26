@@ -1,11 +1,11 @@
-import { Logo } from "@o7/ui/graphite";
+import { Logo } from "@ghost/ui/graphite";
 import { Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { commandKey } from "./Keys";
 
 /**
  * The foot of the sidebar, as calm as Grok's: the logo, the notifications bell and one Settings
- * button, and Update before them while a newer o7 is on offer. Profiles, agents and
+ * button, and Update before them while a newer Ghost is on offer. Profiles, agents and
  * diagnostics live in Settings and the command palette.
  */
 export function SidebarFooter({

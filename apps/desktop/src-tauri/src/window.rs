@@ -99,9 +99,9 @@ pub fn set_webview_visible(app: &AppHandle, visible: bool) {
 pub const MAIN_WINDOW: &str = "main";
 
 /// The main window's title in a development build, so it is never taken for the installed app's
-/// window (`auracode`, from tauri.conf.json) by a person, Alt+Tab, or automation that finds
+/// window (`Ghost ADE`, from tauri.conf.json) by a person, Alt+Tab, or automation that finds
 /// windows by title.
-pub const DEVELOPMENT_TITLE: &str = "o7 dev";
+pub const DEVELOPMENT_TITLE: &str = "Ghost dev";
 
 /// The main window's title: tauri.conf.json's for an installed build, [`DEVELOPMENT_TITLE`] for a
 /// development one.
@@ -182,7 +182,7 @@ pub fn create_main(
     let origin = AppOrigin::current(config.use_https_scheme);
     let handle = app.handle().clone();
 
-    let title = main_title(&config.title, o7_core::paths::DEVELOPMENT_BUILD).to_owned();
+    let title = main_title(&config.title, ghost_core::paths::DEVELOPMENT_BUILD).to_owned();
     let mut builder = WebviewWindowBuilder::from_config(app.handle(), &config)?
         .title(title)
         .theme(None)
@@ -520,12 +520,12 @@ fn leave_for_browser(app: &AppHandle, url: &Url) {
 
 #[cfg(test)]
 mod tests {
-    /// A development window was titled `auracode` like the installed app's.
+    /// A development window was once titled like the installed app's.
     #[test]
     fn a_development_window_has_its_own_title() {
-        assert_eq!(super::main_title("o7", false), "o7");
-        assert_eq!(super::main_title("o7", true), super::DEVELOPMENT_TITLE);
-        assert_ne!(super::DEVELOPMENT_TITLE, "o7");
+        assert_eq!(super::main_title("Ghost", false), "Ghost");
+        assert_eq!(super::main_title("Ghost", true), super::DEVELOPMENT_TITLE);
+        assert_ne!(super::DEVELOPMENT_TITLE, "Ghost");
     }
 
     /// Native chrome must track both CSS palettes so switching appearance leaves no dark band.
@@ -768,7 +768,7 @@ mod tests {
     fn everything_else_is_blocked() {
         let dev = url("http://localhost:1420");
         for blocked in [
-            "https://o7.codes/docs",
+            "https://onghost.dev/docs",
             "http://localhost:1421/",
             "https://localhost:1420/",
             "http://evil.tauri.localhost.example/",

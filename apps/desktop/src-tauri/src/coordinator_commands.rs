@@ -1,9 +1,9 @@
 //! Coordinated projects (an experiment), as the project page reaches them. Every command here is
 //! the person acting in the window: the session layer treats it as theirs, and an agent's own
-//! changes come through its chat's project grant instead (`o7_core::coordinator_service`).
+//! changes come through its chat's project grant instead (`ghost_core::coordinator_service`).
 //! Writes keep the active-profile lease until the writer has answered.
 use crate::{error::AppError, state::AppState};
-use o7_protocol::coordinator::*;
+use ghost_protocol::coordinator::*;
 use tauri::{Emitter, Manager, State};
 
 /// Sent with a [`CoordinatorChanged`] after every committed change to a project's coordination,

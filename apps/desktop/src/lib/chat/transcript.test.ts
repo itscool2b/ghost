@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { O7Event } from "../../bindings";
+import type { GhostEvent } from "../../bindings";
 import { compactHistory, ev, numbered } from "./testing";
 import {
   applyEntries,
@@ -26,7 +26,7 @@ const GOLDEN = new URL("./fixtures/live-stream.transcript.json", import.meta.url
 function liveStream(): EventEntry[] {
   const tagged = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
     turn: string | null;
-    event: O7Event;
+    event: GhostEvent;
   }[];
   return numbered(tagged.map(({ turn, event }) => [turn, event] as const));
 }
@@ -62,7 +62,7 @@ function shownKinds(model: Transcript, live = true): string[][] {
 
 describe("the transcript reducer", () => {
   it("keeps steering delivery on its original message across deltas and later turns", () => {
-    const pending: O7Event = {
+    const pending: GhostEvent = {
       type: "steering_status",
       message_id: "steer",
       state: "pending",
@@ -521,7 +521,7 @@ describe("stop reason labels", () => {
     expect(label("refusal")).toBe("The agent declined");
     expect(label("cancelled")).toBe("Stopped");
     expect(label("interrupted")).toBe("Interrupted");
-    expect(label("interrupted", true)).toBe("Interrupted when o7 closed");
+    expect(label("interrupted", true)).toBe("Interrupted when Ghost closed");
     expect(label("error")).toBe("Failed");
     expect(label("other")).toBe("Ended");
   });
@@ -545,7 +545,7 @@ describe("compacted_equals_live", () => {
     expect(thoughtsOf(build(history))).toEqual(thoughtsOf(build(asFrames(live))));
     expect(shownKinds(build(history)).flat()).toContain("thought");
 
-    if (process.env.O7_UPDATE_GOLDEN === "1") {
+    if (process.env.GHOST_UPDATE_GOLDEN === "1") {
       writeFileSync(GOLDEN, `${JSON.stringify(fromLive, null, 2)}\n`);
     }
     const golden = JSON.parse(readFileSync(GOLDEN, "utf8")) as unknown;
@@ -612,7 +612,7 @@ function random(seed: number): () => number {
 function generatedStream(seed: number): EventEntry[] {
   const next = random(seed);
   const pick = <T>(choices: readonly T[]): T => choices[Math.floor(next() * choices.length)] as T;
-  const tagged: [string | null, O7Event][] = [];
+  const tagged: [string | null, GhostEvent][] = [];
   const tools: string[] = [];
   const messages: string[] = [];
   const turns = 1 + Math.floor(next() * 4);

@@ -1,4 +1,4 @@
-import { prefersReducedMotion } from "@o7/ui";
+import { prefersReducedMotion } from "@ghost/ui";
 import { ChevronRight } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
 import type { ThoughtItem } from "../../lib/chat/transcript";

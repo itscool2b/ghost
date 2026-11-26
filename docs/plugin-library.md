@@ -7,21 +7,21 @@ machine-readable listing, and from the agent's files where it does not. It also 
 harness's update status. Every change runs the
 agent's own reviewed command in a terminal after the person reads it (see
 [vendor-integrations.md](vendor-integrations.md)). Instruction files (`CLAUDE.md`, `AGENTS.md`)
-left this surface for the separate Instructions surface. o7-config keeps their inventory and copy
+left this surface for the separate Instructions surface. ghost-config keeps their inventory and copy
 code for its other callers, but the Plugin library does not list them. The complete customization behavior is described in [desktop-customization.md](desktop-customization.md).
 
 Plugins stay with their agent. Shared MCP applies to every compatible agent, or the ones a server is for, in the selected scope.
-Everything here is this device's: nothing syncs between devices (o7's accounts and their sync
+Everything here is this device's: nothing syncs between devices (Ghost's accounts and their sync
 were removed on 16 November 2026; Claude Code and Codex sync plugins natively).
 
 ## Universal plugins
 
-Universal plugins are o7's own, built in for every agent (owner, 9 November 2026: "a universal
+Universal plugins are Ghost's own, built in for every agent (owner, 9 November 2026: "a universal
 plugin" that people cannot add or remove, on by default). Each has a switch and nothing else to
 install: off turns it off for every agent and takes it out of the app. The first is Browser use,
 the browser beside the chat ([plan](superpowers/plans/2026-11-09-browser.md)): the panel, Annotate,
-and the `o7_browser` MCP tools a native Chat session's agent gets, served by o7's own
-executable (`--o7-browser-helper --mcp`) over a per-session loopback grant, with its skill in the
+and the `ghost_browser` MCP tools a native Chat session's agent gets, served by Ghost's own
+executable (`--ghost-browser-helper --mcp`) over a per-session loopback grant, with its skill in the
 server's instructions. Turned off, chats show no browser, sessions that start get no browser
 tools, and a running session's tools answer that it is off. Its card also holds the browser's own
 settings: saved passwords (WebView2's own manager, Windows only), browsing history and Clear
@@ -29,25 +29,25 @@ browsing data (history, cookies and site data, cached files and saved passwords;
 person's own browser). The switches are profile preferences (`browser`, `browser_passwords`).
 Agents never see a password: the page outline never shows a password field's value, and
 `browser_evaluate` answers have the page's password values replaced (best effort: a value a
-script changed past recognising, or sent off the page itself, is beyond what o7 can check).
+script changed past recognising, or sent off the page itself, is beyond what Ghost can check).
 
 The second is Mobile, the device beside the chat ([how it works](mobile.md),
 [plan](superpowers/plans/2026-11-21-mobile.md)): the Device pane, with an Android emulator of the
-chat's own or a phone on a cable, and the `o7_mobile` MCP tools a native Chat session's agent
-gets, served the same way (`--o7-mobile-helper --mcp`). It is Settings > Mobile, and its switch is
-the profile preference `mobile`. Turned off, chats show no device, every device o7 started is
+chat's own or a phone on a cable, and the `ghost_mobile` MCP tools a native Chat session's agent
+gets, served the same way (`--ghost-mobile-helper --mcp`). It is Settings > Mobile, and its switch is
+the profile preference `mobile`. Turned off, chats show no device, every device Ghost started is
 stopped, sessions that start get no device tools, and a running session's tools answer that it is
 off. Setting Android up, accepting Google's SDK licence and letting an agent use a phone are the
 person's alone, in the pane: no tool does any of them.
 
 ## Shared MCP
 
-o7 owns stable server IDs and immutable definition revisions. New definitions default to the selected
+Ghost owns stable server IDs and immutable definition revisions. New definitions default to the selected
 project, covering its folders and worktrees. All-projects definitions are optional. A project definition
 with the same ID replaces the all-projects definition, including when the override is disabled.
 Native server names are inspected before session launch. Conflicting names or an unreadable native
 configuration require review; native files and homes are never rewritten by shared MCP. Agents whose
-own MCP configuration o7 cannot read (Antigravity, oh-my-pi), restricted fallback connections and
+own MCP configuration Ghost cannot read (Antigravity, oh-my-pi), restricted fallback connections and
 agents on another host start without shared servers, and their chat says which were left out.
 
 Each definition is for every agent or only the agents chosen for it (owner, 6 November 2026). The
@@ -87,7 +87,7 @@ and Pi support stdio and streamable HTTP; Claude additionally supports legacy SS
 depends on its initialization capabilities. Restricted text fallbacks and remote hosts do not load
 shared definitions. Unsupported management operations are reported explicitly.
 
-Optional o7 memory tools cannot turn missing transport support into a failed chat. Their omission
+Optional Ghost memory tools cannot turn missing transport support into a failed chat. Their omission
 leaves visible reference context available. Reserved internal server names, including normalized aliases,
 cannot be saved as user definitions. A native collision omits the optional helper with a notice.
 
@@ -175,7 +175,7 @@ acceptance. Browser fixture results and light/dark captures are recorded separat
 
 ## How listings run
 
-`o7-agents::plugins` holds the reviewed recipes. Each command runs through the same bounded helper
+`ghost-agents::plugins` holds the reviewed recipes. Each command runs through the same bounded helper
 launch as version probes (`run_helper`): the detected executable (npm shims resolved to their entry),
 the resolved environment, the home folder as its working directory, `NO_COLOR=1`, a 20-second
 timeout that kills the tree, and at most 6 MB of output. A command that fails, times out, prints too
@@ -189,7 +189,7 @@ provider independently, with at most two providers working at once. Commands wit
 in sequence, and overlapping requests share that provider's listing work.
 
 Listings are cached per agent with the installed version they were read from. A different installed
-version (an update through o7 or any other channel, seen by
+version (an update through Ghost or any other channel, seen by
 detection) reads the listings again and the section says "changed from A to B, so its plugins were
 read again". Refresh keeps the current rows visible while it reprobes the supported providers and
 reruns their listings. A slow provider's detection or listings do not hold up another provider's
@@ -219,7 +219,7 @@ measurements of the core stream, not timings promised for installed vendor CLIs.
 
 ## Harness status
 
-Detection computes one status per agent (`o7-agents::harness`) from the version probe and the
+Detection computes one status per agent (`ghost-agents::harness`) from the version probe and the
 existing release checks: not installed; checking (detection or the first release check is running);
 up to date; update available (with the version, on the agent's section and as a calm line on the
 Agents page, both with the existing reviewed Update); unknown (offline, no release source for the
@@ -228,14 +228,14 @@ installation's channel, or release checks off; the installed version is still sh
 
 ## Checks
 
-- Rust: `cargo test -p o7-agents --lib`, `cargo test -p o7-agents --test plugins`
+- Rust: `cargo test -p ghost-agents --lib`, `cargo test -p ghost-agents --test plugins`
   (fake CLIs that answer only from `fake-listing.json` in the temporary home named by
-  `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `PI_CODING_AGENT_DIR`), `cargo test -p o7-config --test
-  extensions`, `cargo test -p o7-core --lib plugin_library`, `cargo test -p o7-core --test
+  `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `PI_CODING_AGENT_DIR`), `cargo test -p ghost-config --test
+  extensions`, `cargo test -p ghost-core --lib plugin_library`, `cargo test -p ghost-core --test
   plugin_library -- --nocapture` (controlled delayed
   fake CLIs measure cold/warm first usable and all finished latency, initial sections before any
   CLI listing, fast providers before blocked ones, refresh detection, cancellation and explicit
-  unsupported inventory). `o7-agents --test plugins` also verifies the two-provider limit,
+  unsupported inventory). `ghost-agents --test plugins` also verifies the two-provider limit,
   per-provider singleflight, failed refresh retention and stale installation generations.
 - Vitest: `src/components/library/PluginLibraryScreen.test.tsx`, `src/lib/plugins/format.test.ts`,
   `src/lib/plugins/loading.test.ts` (progressive updates and request/unmount lifetime).

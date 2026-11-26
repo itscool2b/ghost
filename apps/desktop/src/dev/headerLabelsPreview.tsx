@@ -49,7 +49,7 @@ const project = (id: string, name: string, folders: ProjectFolder[]): ProjectSum
 const folders = [
   folder("source", "client", "portal-source", SOURCE),
   // Matches Rust workspace_view's format, including the full source path, not just its basename.
-  folder("tree", "client", `aura/9d6cd062 (worktree from ${SOURCE})`, TREE),
+  folder("tree", "client", `ghost/9d6cd062 (worktree from ${SOURCE})`, TREE),
   folder("documents", "client", "Design notes", "C:/Projects/Client Portal/design-notes"),
   folder("notes", "notes", "notes", "C:/Projects/notes"),
 ];

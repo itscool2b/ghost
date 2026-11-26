@@ -29,7 +29,7 @@ export async function mountNewChatSelectionFixture(
     ...source,
     id: "folder-managed",
     path: "/workspace/retained",
-    display_name: "aura/retained (worktree from /workspace/auracode)",
+    display_name: "ghost/retained (worktree from /workspace/auracode)",
     worktree_of: FIXTURE_FOLDER,
   };
   const alternate: ProjectFolder = {
@@ -67,7 +67,7 @@ export async function mountNewChatSelectionFixture(
       path: managed.path as string,
       source: FIXTURE_FOLDER,
       state: "ready",
-      branch: "aura/retained",
+      branch: "ghost/retained",
       base_commit: "1234",
       created_at: 1,
       detail: null,

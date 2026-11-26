@@ -1,0 +1,14 @@
+{"d":"note","note":{"text":"A long replay during session/resume: each update resets the 60 s open deadline, so 200 s of replay still opens."}}
+{"d":"note","note":{"start":{"agent_id":"acp-agent","dialect":"generic","resume":"<SESSION_1>","autonomy":"full_auto","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"ghost","title":"Ghost ADE","version":"0.0.0-replay"}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"acp-agent","title":"ACP Agent","version":"1.0.0"}}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"<SESSION_1>","cwd":"<CWD>","mcpServers":[]}}}
+{"d":"agent","agent":{"wait":{"ms":50000}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"first"}}}}}
+{"d":"agent","agent":{"wait":{"ms":50000}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"first reply"}}}}}
+{"d":"agent","agent":{"wait":{"ms":50000}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"second"}}}}}
+{"d":"agent","agent":{"wait":{"ms":50000}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"second reply"}}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":2,"result":{}}}

@@ -19,12 +19,12 @@ export class ErrorBoundary extends Component<{ readonly children: ReactNode }, S
   }
 
   override componentDidCatch(error: unknown): void {
-    console.error("o7: the interface failed to render", error);
+    console.error("Ghost: the interface failed to render", error);
     // The app may have crashed before reporting its first paint: show the window now rather than
     // after the shell's fallback delay. Idempotent in the shell.
     if (inTauri()) {
       whenPainted(windowReady).catch((reason: unknown) =>
-        console.error("o7: window_ready failed", reason),
+        console.error("Ghost: window_ready failed", reason),
       );
     }
   }
@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<{ readonly children: ReactNode }, S
     if (this.state.error) {
       return (
         <ErrorScreen
-          title="o7's window ran into a problem"
+          title="Ghost's window ran into a problem"
           message={this.state.error.message || "The interface failed to render."}
           dataDir={null}
           os=""

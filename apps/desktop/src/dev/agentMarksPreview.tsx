@@ -1,8 +1,8 @@
 /** Every agent's mark at every size and state, for checking the published logos by eye. */
 import "../styles.css";
 import "../ui-tokens.css";
-import { AGENT_BRAND_IDS, AGENT_BRANDS } from "@o7/ui";
-import { AgentMark } from "@o7/ui/graphite";
+import { AGENT_BRAND_IDS, AGENT_BRANDS } from "@ghost/ui";
+import { AgentMark } from "@ghost/ui/graphite";
 import type { CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 

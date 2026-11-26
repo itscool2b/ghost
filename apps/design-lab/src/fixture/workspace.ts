@@ -1,4 +1,4 @@
-import type { AgentBrandId } from "@o7/ui";
+import type { AgentBrandId } from "@ghost/ui";
 import type {
   AgentEffort,
   AgentInfo,
@@ -227,7 +227,7 @@ export const PROJECTS: readonly Project[] = [
   },
   {
     id: PROJECT_SITE,
-    name: "o7.codes",
+    name: "onghost.dev",
     color: "#8c7dff",
     expanded: false,
     chats: [

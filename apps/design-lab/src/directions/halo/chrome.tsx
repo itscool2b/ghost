@@ -1,4 +1,4 @@
-import { brandCssVariables, getBrand, Orb, type OrbState } from "@o7/ui";
+import { brandCssVariables, getBrand, Orb, type OrbState } from "@ghost/ui";
 import {
   ArrowRight,
   BookOpen,

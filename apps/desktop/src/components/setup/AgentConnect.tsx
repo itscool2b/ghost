@@ -1,4 +1,4 @@
-import { AgentMark, Logo } from "@o7/ui/graphite";
+import { AgentMark, Logo } from "@ghost/ui/graphite";
 import { Check } from "lucide-react";
 import type { AgentPhase } from "./AgentRow";
 import "./agent-connect.css";
@@ -55,7 +55,7 @@ export function placeTiles(count: number): { x: number; y: number }[] {
 }
 
 /**
- * The agents' marks on tiles, each joined to o7's logo (owner, 17 November 2026: "when
+ * The agents' marks on tiles, each joined to Ghost's logo (owner, 17 November 2026: "when
  * you're connecting your agent, add some cool animations of the different logos of the agents").
  * Tiles rise in one after another and their lines draw toward the logo; a connecting agent's line
  * runs toward it and its tile breathes, a connected one's line settles with a check at its middle,
@@ -70,7 +70,7 @@ export function AgentConnect({ agents }: { readonly agents: readonly ConnectAgen
   const label =
     agents.length === 0
       ? "No agents are connected yet."
-      : `${connected} of ${agents.length} agents connected to o7.`;
+      : `${connected} of ${agents.length} agents connected to Ghost.`;
   return (
     <figure className="agent-connect" aria-label={label} data-testid="agent-connect">
       <svg

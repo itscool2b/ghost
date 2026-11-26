@@ -2,7 +2,7 @@
   {
     "name": "inbox",
     "since": 3,
-    "description": "What needs you across every chat, in one call: chats asking for an answer (with the request and its options), chats still working, and chats that finished in the last day with what each came to. Start here when you come back to o7.",
+    "description": "What needs you across every chat, in one call: chats asking for an answer (with the request and its options), chats still working, and chats that finished in the last day with what each came to. Start here when you come back to Ghost.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -76,7 +76,7 @@
   {
     "name": "task",
     "since": 4,
-    "description": "Hand o7 a whole piece of work in one call. It starts an agent on its own Git branch, so nothing else is touched, tells it to plan, build, run the project's checks and commit, and, with review on, has a second agent review the result. o7 tells you when it is all done if this link has a call back; then end your turn. Use it for new work; send continues a chat.",
+    "description": "Hand Ghost a whole piece of work in one call. It starts an agent on its own Git branch, so nothing else is touched, tells it to plan, build, run the project's checks and commit, and, with review on, has a second agent review the result. Ghost tells you when it is all done if this link has a call back; then end your turn. Use it for new work; send continues a chat.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -100,7 +100,7 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 200,
-          "description": "Seconds to wait for the work. Default 0: o7 tells you."
+          "description": "Seconds to wait for the work. Default 0: Ghost tells you."
         },
         "when": {
           "type": "string",

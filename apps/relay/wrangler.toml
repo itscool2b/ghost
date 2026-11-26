@@ -15,7 +15,7 @@ preview_urls = false
 [vars]
 APP_ORIGIN = "http://localhost:1429"
 # Where Apple delivers notifications (the iPhone app), the push key's id and its team's.
-APNS_TOPIC = "codes.o7.mobile"
+APNS_TOPIC = "dev.onghost.mobile"
 APNS_KEY_ID = ""
 APNS_TEAM_ID = ""
 
@@ -41,19 +41,21 @@ enabled = false
 [env.production]
 name = "o7-relay"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
-# More specific than the website's `o7.codes/*`, so these requests reach this Worker.
-# The second route and FORMER_ORIGIN are the address the site had until 19 November 2026: a copy
-# of the app from before the move connects there, and a phone paired there opens the remote page
-# there. Both addresses reach the same rooms. They go once those copies have updated.
+# More specific than the website's own address, so these requests reach this Worker.
+# The other routes and FORMER_ORIGINS are the addresses the site had before (o7.codes until
+# 26 November 2026, auracode.si until 19 November): a copy of the app from before a move connects
+# there, and a phone paired there opens the remote page there. Every address reaches the same
+# rooms. They go once those copies have updated.
 routes = [
+  { pattern = "onghost.dev/api/remote/*", zone_name = "onghost.dev" },
   { pattern = "o7.codes/api/remote/*", zone_name = "o7.codes" },
   { pattern = "auracode.si/api/remote/*", zone_name = "auracode.si" },
 ]
 
 [env.production.vars]
-APP_ORIGIN = "https://o7.codes"
-FORMER_ORIGIN = "https://auracode.si"
-APNS_TOPIC = "codes.o7.mobile"
+APP_ORIGIN = "https://onghost.dev"
+FORMER_ORIGINS = "https://o7.codes https://auracode.si"
+APNS_TOPIC = "dev.onghost.mobile"
 APNS_KEY_ID = ""
 APNS_TEAM_ID = ""
 
@@ -76,11 +78,11 @@ new_sqlite_classes = ["Apns"]
 [env.preview]
 name = "o7-relay-preview"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
-routes = [{ pattern = "preview.o7.codes/api/remote/*", zone_name = "o7.codes" }]
+routes = [{ pattern = "preview.onghost.dev/api/remote/*", zone_name = "onghost.dev" }]
 
 [env.preview.vars]
-APP_ORIGIN = "https://preview.o7.codes"
-APNS_TOPIC = "codes.o7.mobile"
+APP_ORIGIN = "https://preview.onghost.dev"
+APNS_TOPIC = "dev.onghost.mobile"
 APNS_KEY_ID = ""
 APNS_TEAM_ID = ""
 

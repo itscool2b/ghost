@@ -1,6 +1,6 @@
 /**
  * An MCP server's form (MCP elicitation, form mode) while it is filled in, and the answer it
- * sends. The checks mirror `o7_protocol::forms`, which the session runs again before anything
+ * sends. The checks mirror `ghost_protocol::forms`, which the session runs again before anything
  * reaches the agent, so a mistake shows at its field instead of as a refused answer.
  */
 import type { UiAnswer, UiField, UiFieldValue, UiTextFormat } from "../../bindings";

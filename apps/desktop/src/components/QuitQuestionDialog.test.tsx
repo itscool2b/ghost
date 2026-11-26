@@ -8,7 +8,7 @@ const QUESTION: QuitQuestion = {
   message:
     "One project terminal is open. Quitting stops its shell and owned child processes.\n\nOne chat is still active. Quitting stops its agent.",
   quit: "Stop work and quit",
-  keep: "Keep o7 open",
+  keep: "Keep Ghost open",
 };
 
 /** A channel that records what the window tells Rust. */
@@ -40,7 +40,7 @@ describe("the quit question", () => {
     expect(html).toMatch(
       /class="g-button g-button-danger" data-testid="quit-confirm">Stop work and quit</,
     );
-    expect(html).toMatch(/class="g-button" data-testid="quit-keep">Keep o7 open</);
+    expect(html).toMatch(/class="g-button" data-testid="quit-keep">Keep Ghost open</);
   });
 
   it("tells Rust it shows the question, then the one choice, once", () => {

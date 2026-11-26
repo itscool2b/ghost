@@ -532,7 +532,7 @@
   vertical-align: -2px;
 }
 
-/* A prompt o7 sent for the project: one quiet line that opens what was sent. */
+/* A prompt Ghost sent for the project: one quiet line that opens what was sent. */
 .chat-project-event {
   align-self: flex-end;
   max-width: 100%;

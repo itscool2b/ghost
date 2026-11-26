@@ -1,4 +1,4 @@
-import { GlassPanel } from "@o7/ui";
+import { GlassPanel } from "@ghost/ui";
 import { Check, ShieldAlert, X } from "lucide-react";
 import { createContext, useContext, useEffect, useRef } from "react";
 import {

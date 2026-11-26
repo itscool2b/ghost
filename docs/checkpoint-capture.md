@@ -8,12 +8,12 @@ in progress keeps its original completion, failure, and cancellation behavior.
 With automatic checkpoints off, sending skips workspace snapshot discovery, file hashing, object
 verification, and checkpoint publication. The workspace still goes through recovery admission so
 an interrupted file restore cannot race a new agent turn. Chats, transcripts, and queued prompts
-remain persisted. These turns have no o7 file-undo baseline; native harness recovery is not a
+remain persisted. These turns have no Ghost file-undo baseline; native harness recovery is not a
 universal substitute. Earlier saved checkpoints remain available for Changes and selected-file
 revert, and are never presented as the baseline of a later turn that has no checkpoint.
 
 A sent message's Rewind (since 2026-11-05) opens Changes on the files before that message. Where
-the turn has an o7 checkpoint, that is what it restores: every file, including changes made by
+the turn has a Ghost checkpoint, that is what it restores: every file, including changes made by
 commands, with the session stopped. Where it has none, a Claude chat falls back to Claude's own
 file checkpointing, which every Claude session starts with (`CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING`):
 Claude copies a file just before its edit tools change it, so the cost follows the files it edits,
@@ -24,7 +24,7 @@ confirm stops the session, as files may have changed. Claude keeps these copies 
 resumed session. Other agents' turns without a checkpoint show the reason, where Automatic
 checkpoints are, and Edit this message.
 
-When enabled, o7 saves a checkpoint before dispatching an ordinary queued prompt. This provides
+When enabled, Ghost saves a checkpoint before dispatching an ordinary queued prompt. This provides
 consistent Changes and selected-file revert across native harnesses, with a delay before sending.
 The harness still owns model execution and its native tools. A failed capture holds the prompt;
 stopping a capture leaves it unsent. Native steering retains its existing separate lifecycle.
@@ -99,7 +99,7 @@ check cancellation before mutation, then retain ownership through completion or 
 ## Formats and the preference
 
 Checkpoints are private Git objects in the profile. The encrypted capture that account profiles
-used went with o7's accounts on 16 November 2026. Existing checkpoints of Local profiles
+used went with Ghost's accounts on 16 November 2026. Existing checkpoints of Local profiles
 remain readable; the opt-in preference is stored in setup preferences and requires no database
 migration.
 
@@ -120,19 +120,19 @@ them in profile logs. A diagnostic launch must capture stderr to retain phase ti
 Run the focused native regression suite with:
 
 ```text
-cargo test -p o7-core --lib checkpoints
+cargo test -p ghost-core --lib checkpoints
 ```
 
 The ignored `checkpoint_performance` test creates disposable 1,000, 10,000, and 20,000-file
 workspaces and reports cold, unchanged, and one-file-edit captures.
-`O7_CHECKPOINT_BENCH_COUNTS` selects comma-separated sizes and
-`O7_CHECKPOINT_BENCH_WARM` selects the number of unchanged samples, defaulting to one.
+`GHOST_CHECKPOINT_BENCH_COUNTS` selects comma-separated sizes and
+`GHOST_CHECKPOINT_BENCH_WARM` selects the number of unchanged samples, defaulting to one.
 
 ```text
-cargo test -p o7-core checkpoint_performance -- --ignored --nocapture
+cargo test -p ghost-core checkpoint_performance -- --ignored --nocapture
 ```
 
-Set `O7_CHECKPOINT_BENCH_WORKSPACE` to an explicit workspace and run
+Set `GHOST_CHECKPOINT_BENCH_WORKSPACE` to an explicit workspace and run
 `checkpoint_workspace_performance` to measure its cold capture and three unchanged captures.
 It only reads that workspace; its private checkpoint profile is temporary. The separate
 `checkpoint_prompt_performance` fixture measures manager-send to scripted-driver receipt for
@@ -159,7 +159,7 @@ per scenario. Results describe these runs, not tail latency or statistical signi
 fixture excludes desktop UI/IPC, real harness startup, provider/model latency, and production log
 formatting and writes.
 
-`O7_CHECKPOINT_BENCH_DIAGNOSTICS=1` enables a bounded checkpoint-only event collector in the
+`GHOST_CHECKPOINT_BENCH_DIAGNOSTICS=1` enables a bounded checkpoint-only event collector in the
 ignored core fixtures; CI comparisons enable it. Collection adds small bounded allocations and
 mutex locking, but formatting and output occur after each elapsed time is frozen. `CAPTURE_DIAGNOSTIC`
 records retain phase/helper timings and durability selection without messages, IDs, paths, or

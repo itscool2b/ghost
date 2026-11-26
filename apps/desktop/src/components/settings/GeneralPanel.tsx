@@ -1,4 +1,4 @@
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
   AgentEntry,
@@ -79,7 +79,7 @@ export function defaultLevelChoices(
 }
 
 /**
- * Settings' General page: what new chats start with, what o7 does while agents work in the
+ * Settings' General page: what new chats start with, what Ghost does while agents work in the
  * background, and setup. One control per row; each change shows at once and saves in turn.
  */
 export function GeneralPage({
@@ -344,7 +344,7 @@ export function GeneralPage({
           <Row
             title="Check for updates"
             setting="Check for updates automatically"
-            detail="Looks for a newer o7 a few times a day and shows Update. Nothing installs until you choose."
+            detail="Looks for a newer Ghost a few times a day and shows Update. Nothing installs until you choose."
           >
             <Switch
               label="Check for updates automatically"
@@ -372,7 +372,7 @@ export function GeneralPage({
             </button>
           </Row>
           {onTour ? (
-            <Row title="Tour" detail="The wing shows you around o7. About a minute.">
+            <Row title="Tour" detail="The wing shows you around Ghost. About a minute.">
               <button
                 className="g-button g-button-outline g-button-28"
                 type="button"
@@ -417,7 +417,7 @@ export function AppearancePage({ prefs }: { readonly prefs: Preferences }) {
         </Row>
         <Row
           title="Theme"
-          detail="Main is o7's own. Each agent's theme carries its colours through the whole app, in light and dark."
+          detail="Main is Ghost's own. Each agent's theme carries its colours through the whole app, in light and dark."
         >
           <ThemeGallery
             value={shown?.theme ?? getThemePreference()}
@@ -485,7 +485,7 @@ function systemFontText(): string | null {
 
 /**
  * The terminals' font and size, this device's choice (lib/terminalFont.ts): the person's own
- * terminal app's by default, or o7's.
+ * terminal app's by default, or Ghost's.
  */
 function TerminalFontRows() {
   useSyncExternalStore(terminalFonts.subscribe, terminalFonts.getVersion, terminalFonts.getVersion);
@@ -504,8 +504,8 @@ function TerminalFontRows() {
           preference.font === "system"
             ? systemText
               ? `Terminals and terminal chats draw like your own terminal app: ${systemText}.`
-              : "Terminals draw like your own terminal app once o7 finds its font; until then they use o7's."
-            : "Terminals use o7's Geist Mono."
+              : "Terminals draw like your own terminal app once Ghost finds its font; until then they use Ghost's."
+            : "Terminals use Ghost's Geist Mono."
         }
       >
         <Select
@@ -521,7 +521,7 @@ function TerminalFontRows() {
           }
         >
           <option value="system">{matching}</option>
-          <option value="auracode">o7's</option>
+          <option value="auracode">Ghost's</option>
         </Select>
       </Row>
       <Row title="Terminal size" detail="The size of text in terminals and terminal chats.">
@@ -601,8 +601,8 @@ export function ChatsPage({
           title="Open new chats in"
           detail={
             newChatInterface === "terminal"
-              ? "Agents open in their own interface, in o7's terminal. Any chat switches back from its header. This device only."
-              : "o7's chat. Any chat can switch to its agent's own interface from the header."
+              ? "Agents open in their own interface, in Ghost's terminal. Any chat switches back from its header. This device only."
+              : "Ghost's chat. Any chat can switch to its agent's own interface from the header."
           }
         >
           <Select
@@ -673,7 +673,7 @@ export function ChatsPage({
           detail={
             general.automatic_checkpoints
               ? "Save workspace files before each message for per-turn file undo in Changes. Saving delays sending."
-              : "Send without saving a checkpoint first. Aura's per-turn file undo is unavailable for new messages."
+              : "Send without saving a checkpoint first. Ghost's per-turn file undo is unavailable for new messages."
           }
         >
           <Switch

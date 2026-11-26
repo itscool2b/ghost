@@ -33,7 +33,7 @@ let persistent = true;
  * computer paired in one tab appears in the others' lists, and a tab still holding a replaced key
  * moves to the new one. A browser without BroadcastChannel only learns on its next load.
  */
-const CHANGES = "o7-remote-hosts";
+const CHANGES = "ghost-remote-hosts";
 
 function announce() {
   if (typeof BroadcastChannel === "undefined") return;

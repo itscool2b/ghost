@@ -1,4 +1,4 @@
-//! Read aloud (docs/read-aloud.md): o7 speaks an answer in a voice that ships inside the app and
+//! Read aloud (docs/read-aloud.md): Ghost speaks an answer in a voice that ships inside the app and
 //! runs on this device. The text never leaves the computer, nothing makes a network request,
 //! and no audio is written to disk: samples go from the model to the output device and are gone.
 pub mod commands;
@@ -72,7 +72,7 @@ impl Failure {
     pub fn unsupported() -> Self {
         Self::new(
             SpeechFailure::Unsupported,
-            "Reading aloud needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of o7 works as usual.",
+            "Reading aloud needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of Ghost works as usual.",
         )
     }
 }

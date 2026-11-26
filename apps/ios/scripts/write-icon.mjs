@@ -1,4 +1,4 @@
-// Writes the iPhone app icon, apps/ios/O7/Resources/Assets.xcassets/AppIcon.appiconset, from the
+// Writes the iPhone app icon, apps/ios/Ghost/Resources/Assets.xcassets/AppIcon.appiconset, from the
 // wing in packages/ui/src/graphite/logoPaths.ts, rasterised as the desktop's icons are (the Tauri
 // CLI, as apps/desktop/scripts/app-icons.mjs runs it):
 //   AppIcon.png         1024 square and full bleed (iOS masks the corners): the wing in #ededed on
@@ -21,7 +21,7 @@ import { LOGO_PATH, LOGO_VIEWBOX } from "../../../packages/ui/src/graphite/logoP
 import { emit, finish, repo } from "./lib.mjs";
 
 const SCRIPT = "node apps/ios/scripts/write-icon.mjs";
-const CATALOG = repo("apps/ios/O7/Resources/Assets.xcassets");
+const CATALOG = repo("apps/ios/Ghost/Resources/Assets.xcassets");
 const ICONSET = join(CATALOG, "AppIcon.appiconset");
 const SIZE = 1024;
 /** The desktop's macOS icon draws the wing 640px wide on an 824px tile. */
@@ -195,7 +195,7 @@ const image = (filename, appearance) => ({
   size: `${SIZE}x${SIZE}`,
 });
 
-const work = mkdtempSync(join(tmpdir(), "o7-ios-icon-"));
+const work = mkdtempSync(join(tmpdir(), "ghost-ios-icon-"));
 try {
   const opaque = rasterise(SOURCES.opaque, work, "opaque");
   for (let i = 3; i < opaque.rgba.length; i += 4) {

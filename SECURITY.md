@@ -11,7 +11,7 @@ A useful report says what you can do that you should not be able to, the version
 operating system, and the steps. A proof of concept helps. Never include a real key, token or
 pairing link: make a throwaway one.
 
-o7 is maintained by one person. Expect an answer within a week, and a fix or a plan as soon
+Ghost is maintained by one person. Expect an answer within a week, and a fix or a plan as soon
 as the problem is understood. You will be credited in the changelog unless you ask not to be.
 
 ## What is in scope
@@ -23,10 +23,10 @@ as the problem is understood. You will be credited in the changelog unless you a
   phone page. [docs/remote-sessions.md](docs/remote-sessions.md) says who is trusted with what and
   lists the limits that are already known under "Not done"; a report about one of those is still
   welcome when it shows more than the list says.
-- **The website** at o7.codes and its Worker (`apps/web`, `apps/web-worker`).
-- **The build and release tooling** (`.github/`, `crates/o7-release`).
+- **The website** at onghost.dev and its Worker (`apps/web`, `apps/web-worker`).
+- **The build and release tooling** (`.github/`, `crates/ghost-release`).
 
-The coding agents o7 drives (Claude Code, Codex and the others) are their vendors' software:
+The coding agents Ghost drives (Claude Code, Codex and the others) are their vendors' software:
 report a problem in one of them to its vendor.
 
 ## What to know about the installers

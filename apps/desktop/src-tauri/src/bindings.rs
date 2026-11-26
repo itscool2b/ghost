@@ -17,48 +17,48 @@ use crate::{commands, smoke, terminal};
 /// Where the bindings live: `apps/desktop/src/bindings.ts`.
 pub const BINDINGS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/bindings.ts");
 
-const HEADER: &str = "// Regenerate with `cargo test -p o7-desktop export_bindings` (debug builds of the app also\n// regenerate it at startup). CI fails when the committed file is out of date.";
+const HEADER: &str = "// Regenerate with `cargo test -p ghost-desktop export_bindings` (debug builds of the app also\n// regenerate it at startup). CI fails when the committed file is out of date.";
 
 /// The command registry: the invoke handler for Tauri and the type information for the bindings
 /// come from this one list, so they cannot drift apart.
 pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
-        .typ::<o7_protocol::workspace::WorkspaceSnapshot>()
-        .typ::<o7_protocol::workspace::WorkspaceFilter>()
-        .typ::<o7_protocol::workspace::ProjectCreate>()
-        .typ::<o7_protocol::workspace::ChatCreatePreview>()
-        .typ::<o7_protocol::workspace::ProjectChatCreate>()
-        .typ::<o7_protocol::workspace::ChatMove>()
-        .typ::<o7_protocol::changes::ChangesSnapshot>()
-        .typ::<o7_protocol::changes::ChangeDiff>()
-        .typ::<o7_protocol::changes::RevertPreview>()
-        .typ::<o7_protocol::changes::RevertResult>()
-        .typ::<o7_protocol::conversation::ConversationTurns>()
-        .typ::<o7_protocol::conversation::EditablePrompt>()
-        .typ::<o7_protocol::conversation::ContinuationAction>()
-        .typ::<o7_protocol::conversation::ContinuationPreview>()
-        .typ::<o7_protocol::conversation::ContinuationResult>()
-        .typ::<o7_protocol::git::GitWorkspace>()
-        .typ::<o7_protocol::git::IsolationInput>()
-        .typ::<o7_protocol::git::IsolationPreview>()
-        .typ::<o7_protocol::git::IsolationResult>()
-        .typ::<o7_protocol::git::ManagedWorktree>()
-        .typ::<o7_protocol::git::WorktreeAction>()
-        .typ::<o7_protocol::git::WorktreeActionPreview>()
-        .typ::<o7_protocol::git::WorktreeActionResult>()
-        .typ::<o7_protocol::git::WorktreeRecoveryPreview>()
-        .typ::<o7_protocol::git::WorktreeRelocationPreview>()
-        .typ::<o7_protocol::git::PullRequestPreview>()
+        .typ::<ghost_protocol::workspace::WorkspaceSnapshot>()
+        .typ::<ghost_protocol::workspace::WorkspaceFilter>()
+        .typ::<ghost_protocol::workspace::ProjectCreate>()
+        .typ::<ghost_protocol::workspace::ChatCreatePreview>()
+        .typ::<ghost_protocol::workspace::ProjectChatCreate>()
+        .typ::<ghost_protocol::workspace::ChatMove>()
+        .typ::<ghost_protocol::changes::ChangesSnapshot>()
+        .typ::<ghost_protocol::changes::ChangeDiff>()
+        .typ::<ghost_protocol::changes::RevertPreview>()
+        .typ::<ghost_protocol::changes::RevertResult>()
+        .typ::<ghost_protocol::conversation::ConversationTurns>()
+        .typ::<ghost_protocol::conversation::EditablePrompt>()
+        .typ::<ghost_protocol::conversation::ContinuationAction>()
+        .typ::<ghost_protocol::conversation::ContinuationPreview>()
+        .typ::<ghost_protocol::conversation::ContinuationResult>()
+        .typ::<ghost_protocol::git::GitWorkspace>()
+        .typ::<ghost_protocol::git::IsolationInput>()
+        .typ::<ghost_protocol::git::IsolationPreview>()
+        .typ::<ghost_protocol::git::IsolationResult>()
+        .typ::<ghost_protocol::git::ManagedWorktree>()
+        .typ::<ghost_protocol::git::WorktreeAction>()
+        .typ::<ghost_protocol::git::WorktreeActionPreview>()
+        .typ::<ghost_protocol::git::WorktreeActionResult>()
+        .typ::<ghost_protocol::git::WorktreeRecoveryPreview>()
+        .typ::<ghost_protocol::git::WorktreeRelocationPreview>()
+        .typ::<ghost_protocol::git::PullRequestPreview>()
         // The payload of `auracode-project-memory-changed` (memory_commands::MEMORY_CHANGED).
-        .typ::<o7_protocol::memory::ProjectMemoryChanged>()
+        .typ::<ghost_protocol::memory::ProjectMemoryChanged>()
         // The payload of `auracode-coordinator-changed` (coordinator_commands::COORDINATOR_CHANGED).
-        .typ::<o7_protocol::coordinator::CoordinatorChanged>()
+        .typ::<ghost_protocol::coordinator::CoordinatorChanged>()
         // The payload of `auracode-remote-changed` (remote::REMOTE_CHANGED).
-        .typ::<o7_protocol::remote::RemoteStatus>()
+        .typ::<ghost_protocol::remote::RemoteStatus>()
         // The payload of `auracode-browser` (browser::EVENT).
         .typ::<crate::browser::BrowserEvent>()
-        // The payload of `o7-mobile` (mobile::EVENT).
-        .typ::<o7_devices::manager::MobileStatus>()
+        // The payload of `ghost-mobile` (mobile::EVENT).
+        .typ::<ghost_devices::manager::MobileStatus>()
         .commands(tauri_specta::collect_commands![
             commands::app_info,
             crate::browser::commands::browser_status,
@@ -363,7 +363,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::storage_status,
             crate::native_shell::shell_take_navigation,
         ])
-        // o7-protocol's timestamps (`Millis`) are i64 Unix milliseconds and its token counts,
+        // ghost-protocol's timestamps (`Millis`) are i64 Unix milliseconds and its token counts,
         // byte counts and offsets are u64, all sent by serde_json as plain JSON numbers and exact
         // in a JS number until 2^53. Typing them as `bigint` would not match what arrives.
         // The checks each chat smoke scenario must report: the UI names them from these, and the
@@ -623,7 +623,11 @@ mod tests {
         for (name, fields) in [
             (
                 "EventBatch",
-                &["chat_id: string", "seq_start: number", "events: O7Event[]"][..],
+                &[
+                    "chat_id: string",
+                    "seq_start: number",
+                    "events: GhostEvent[]",
+                ][..],
             ),
             (
                 "HistoryItem",
@@ -631,7 +635,7 @@ mod tests {
                     "seq: number",
                     "turn_id: string | null",
                     "at: number",
-                    "event: O7Event",
+                    "event: GhostEvent",
                 ][..],
             ),
             (
@@ -742,7 +746,7 @@ mod tests {
         ] {
             assert!(statuses.contains(&format!("\"{status}\"")), "{statuses}");
         }
-        let events = definition(&first, "O7Event");
+        let events = definition(&first, "GhostEvent");
         for tag in [
             "turn_started",
             "turn_ended",
@@ -767,14 +771,14 @@ mod tests {
         ] {
             assert!(
                 events.contains(&format!("type: \"{tag}\"")),
-                "O7Event lacks {tag}"
+                "GhostEvent lacks {tag}"
             );
         }
         for name in [
             "AppInfo",
             "AppError",
             "AppErrorCode",
-            "O7Event",
+            "GhostEvent",
             "DemoKind",
             "EventBatch",
             "GlassEffect",

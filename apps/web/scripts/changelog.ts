@@ -1,6 +1,6 @@
 // Build glue for the website's changelog: the repository's CHANGELOG.md, parsed when the site is
 // built and written into app/changelog-data.ts as that module is loaded. Every pull request merged
-// into main adds its line to the file (docs/developing-in-o7.md, "Changelog"), and every push to
+// into main adds its line to the file (docs/developing-in-ghost.md, "Changelog"), and every push to
 // main rebuilds the site, so the page is current without anyone editing it.
 // `.github/scripts/check-changelog.mjs` keeps the file in the shape this reads. Only each line's
 // words and its pull request number reach the page; the links stay out, since they lead to a

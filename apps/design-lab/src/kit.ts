@@ -1,7 +1,7 @@
 /**
  * Everything a direction needs, in one import: `import { usePlayhead, parseMarkdown } from "../../kit"`.
  * This is the lab's contract with the directions; the files behind it may move, this list stays.
- * Brands, orbs, the aura field, glass, tokens and motion presets come from `@o7/ui`.
+ * Brands, orbs, the aura field, glass, tokens and motion presets come from `@ghost/ui`.
  */
 
 export type { Direction, DirectionCard, DirectionProps } from "./directions/types";

@@ -274,7 +274,7 @@ async function inspect(engine, launcher) {
     const offer = page.getByTestId("terminal-resume");
     await offer
       .getByText(
-        "Tests and PowerShell were open when o7 last closed. Output from then was not kept.",
+        "Tests and PowerShell were open when Ghost last closed. Output from then was not kept.",
       )
       .waitFor();
     assert.deepEqual(await calls(page), [], "nothing started before Resume");

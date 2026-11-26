@@ -3,7 +3,7 @@ import { type TerminalChats, terminalChats } from "./terminalChatRuntime";
 import "./terminal-chat.css";
 
 /**
- * A terminal chat: its agent's own interface in o7's terminal, in place of the transcript
+ * A terminal chat: its agent's own interface in Ghost's terminal, in place of the transcript
  * and composer. The terminal keeps running while another chat is open; leaving the view only
  * detaches it. Once the agent exits, its output stays readable above Start again and Back to Chat.
  */
@@ -19,7 +19,7 @@ export function TerminalChat({
   readonly runtimes?: TerminalChats;
   /** The chat's new worktree is still setting up: the agent starts once setup succeeds. */
   readonly setupPending?: boolean;
-  /** Back to o7's chat for this chat. */
+  /** Back to Ghost's chat for this chat. */
   readonly onChat: () => void;
 }) {
   const runtime = runtimes.get(chatId, agentName);

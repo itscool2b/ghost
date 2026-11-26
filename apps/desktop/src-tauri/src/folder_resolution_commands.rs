@@ -3,7 +3,7 @@ use crate::{
     error::{AppError, AppErrorCode},
     state::AppState,
 };
-use o7_protocol::{
+use ghost_protocol::{
     folder_resolution::{FolderLocationReview, FolderResolution},
     workspace::ProjectFolder,
 };

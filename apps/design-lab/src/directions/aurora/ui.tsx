@@ -1,4 +1,4 @@
-import { springs, usePrefersReducedMotion } from "@o7/ui";
+import { springs, usePrefersReducedMotion } from "@ghost/ui";
 import { AnimatePresence, motion } from "motion/react";
 import {
   createContext,

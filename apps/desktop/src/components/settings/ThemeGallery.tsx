@@ -1,4 +1,4 @@
-import { AgentMark, GRAPHITE_THEMES, Logo, THEMES, themeTokens } from "@o7/ui/graphite";
+import { AgentMark, GRAPHITE_THEMES, Logo, THEMES, themeTokens } from "@ghost/ui/graphite";
 import { type CSSProperties, useSyncExternalStore } from "react";
 import type { ThemePreference } from "../../bindings";
 import { getResolvedAppearance, subscribeAppearance } from "../../lib/appearance";

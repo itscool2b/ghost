@@ -1,11 +1,11 @@
 /**
  * Remote sessions end to end, on this machine: the relay in the Workers runtime, the desktop's
- * real connection task in front of a scripted agent (`crates/o7-remote/examples/demo_host.rs`),
+ * real connection task in front of a scripted agent (`crates/ghost-remote/examples/demo_host.rs`),
  * the built website's remote page in real browsers, and a bot speaking MCP over HTTP.
  *
- *   corepack pnpm --filter @o7/web build
- *   cargo build -p o7-remote --example demo_host
- *   corepack pnpm --filter @o7/relay worker:build
+ *   corepack pnpm --filter @ghost/web build
+ *   cargo build -p ghost-remote --example demo_host
+ *   corepack pnpm --filter @ghost/relay worker:build
  *   node apps/relay/tests/e2e.mjs [--host <demo_host executable>] [--engines chromium,webkit]
  *     [--shots <folder for screenshots>] [--scheme light|dark]
  *
@@ -406,7 +406,7 @@ async function devicesOf(folder) {
  * there, and another tab still on the old key moves to the new one.
  */
 async function pairingFlow(engine, launcher, host, first, folder) {
-  const otherFolder = await mkdtemp(join(tmpdir(), "o7-remote-e2e-second-"));
+  const otherFolder = await mkdtemp(join(tmpdir(), "ghost-remote-e2e-second-"));
   const second = startHost(otherFolder, "Second computer");
   const browser = await launcher.launch();
   const errors = [];
@@ -569,7 +569,7 @@ async function botFlow(address) {
     capabilities: {},
     clientInfo: { name: "e2e", version: "1" },
   });
-  assert.equal(hello.serverInfo.name, "o7");
+  assert.equal(hello.serverInfo.name, "ghost");
   // The demo's link has the chat tools: the wider ones are not shown to it, and neither is
   // what only a full-control link may choose when it sends.
   const listed = (await rpc("tools/list")).tools;
@@ -679,7 +679,7 @@ await relay.ready;
 
 /** A desktop of its own for each run, so one run's chats are not in the next one's way. */
 async function withHost(work) {
-  const folder = await mkdtemp(join(tmpdir(), "o7-remote-e2e-"));
+  const folder = await mkdtemp(join(tmpdir(), "ghost-remote-e2e-"));
   const host = startHost(folder);
   try {
     const first = await host.line("PAIR");

@@ -63,7 +63,7 @@ export const coordinatorApi: CoordinatorApi = {
   subscribe: subscribeCoordinator,
 };
 
-/** The limits Rust holds every writer to (`o7_protocol::coordinator::limits`), for the page's meters. */
+/** The limits Rust holds every writer to (`ghost_protocol::coordinator::limits`), for the page's meters. */
 export const CONTEXT_FILE_BYTES = 64 * 1024;
 export const DECISION_BYTES = 2 * 1024;
 export const BRIEF_BYTES = 8 * 1024;

@@ -1,4 +1,4 @@
-import { AGENT_BRAND_IDS, Orb } from "@o7/ui";
+import { AGENT_BRAND_IDS, Orb } from "@ghost/ui";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { StressConfig } from "../bindings";
 import { errorMessage } from "../lib/errors";
@@ -26,7 +26,7 @@ export function StressView({
   readonly store: StreamStore;
   readonly config: StressConfig;
   readonly onConfigChange: (config: StressConfig) => void;
-  /** Start streaming on mount (O7_STRESS); the smoke run starts streams itself. */
+  /** Start streaming on mount (GHOST_STRESS); the smoke run starts streams itself. */
   readonly autoStart: boolean;
   readonly onExit: () => void;
 }) {
@@ -211,7 +211,7 @@ function RangeField({
   );
 }
 
-/** The settings as an `O7_STRESS` value: copy it to reproduce a run, or edit it here. */
+/** The settings as a `GHOST_STRESS` value: copy it to reproduce a run, or edit it here. */
 function ConfigLine({
   config,
   onChange,
@@ -241,7 +241,7 @@ function ConfigLine({
   return (
     <div className="field">
       <label htmlFor={id} className="stress-config-label">
-        O7_STRESS=
+        GHOST_STRESS=
       </label>
       <input
         id={id}

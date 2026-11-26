@@ -2,7 +2,7 @@
  * The browser beside the chat (docs/superpowers/plans/2026-11-09-browser.md). On a wide window it
  * is a pane of its own beside the chat's, as Changes is, with a drag handle in the gutter;
  * narrower, or in Full view, it covers the chat's work area under the header. Its tabs sit in the
- * header's band, its toolbar under them, and the page fills the rest: a native view o7
+ * header's band, its toolbar under them, and the page fills the rest: a native view Ghost
  * places over `.browser-page`. Menus and the note are solid, like the composer's popovers.
  * Nothing glows.
  */

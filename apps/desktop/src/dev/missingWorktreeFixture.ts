@@ -20,7 +20,7 @@ export function missingWorktreeGit(): GitWorkspaceApi {
     chat_id: "preview",
     source: "C:\\workspace\\auracode",
     path: MISSING_FOLDER,
-    branch: "aura/sidebar-scan",
+    branch: "ghost/sidebar-scan",
     base_commit: COMMIT,
     state: "missing",
     detail:

@@ -48,8 +48,9 @@ impl Engine {
         // The runtime sizes its pool the first time it works, so this comes before any model.
         static THREADS: std::sync::Once = std::sync::Once::new();
         THREADS.call_once(|| xn::set_num_threads(threads()));
-        let unreadable =
-            |_| Failure::model("The voice model could not be loaded. Reinstall o7 to repair it.");
+        let unreadable = |_| {
+            Failure::model("The voice model could not be loaded. Reinstall Ghost to repair it.")
+        };
         let checkpoint = Checkpoint::resolve(
             folder,
             ResolveOptions {
@@ -76,7 +77,7 @@ impl Engine {
         let voices = synth.voices();
         if !voices.iter().any(|voice| voice == OWN_VOICE_ID) {
             return Err(Failure::model(
-                "The voice model is missing its voice. Reinstall o7 to repair it.",
+                "The voice model is missing its voice. Reinstall Ghost to repair it.",
             ));
         }
         Ok(Self { synth, voices })
@@ -127,12 +128,12 @@ mod tests {
 
     /// With the bundled model fetched (`node scripts/dictation-models.mjs`), the engine loads,
     /// offers its voices and speaks: real samples, several times faster than they play.
-    /// `cargo test -p o7-desktop --lib speech -- --ignored --nocapture`.
+    /// `cargo test -p ghost-desktop --lib speech -- --ignored --nocapture`.
     #[test]
     #[ignore = "needs the bundled voice model in resources/speech"]
     fn the_bundled_model_speaks_faster_than_real_time() {
-        // `O7_SPEECH_MODELS` names another folder holding the fetched files.
-        let folder = std::env::var_os("O7_SPEECH_MODELS").map_or_else(
+        // `GHOST_SPEECH_MODELS` names another folder holding the fetched files.
+        let folder = std::env::var_os("GHOST_SPEECH_MODELS").map_or_else(
             || Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/speech"),
             PathBuf::from,
         );

@@ -1,5 +1,7 @@
 # Main: review record
 
+The product was called o7 while this record was written. It has been Ghost ADE since 26 November 2026 ([name.md](../name.md)); the entries below name it and its addresses as they were then.
+
 The record of how the Main styling pass was checked, one entry a step. What Main is: [visual-language.md](visual-language.md), "Main". What it was measured against: [reference-audit.md](reference-audit.md). The order of work: [the plan](../superpowers/plans/2026-11-25-main-look.md).
 
 Evidence here is of two kinds, and they are not the same thing:

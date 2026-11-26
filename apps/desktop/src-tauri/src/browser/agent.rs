@@ -1,4 +1,4 @@
-//! The browser tools agents get (o7-core's browser grant and the app's `--o7-browser-helper`
+//! The browser tools agents get (ghost-core's browser grant and the app's `--ghost-browser-helper`
 //! MCP server carry them here). Each works in the chat's browser, in the tab in front, and the
 //! panel shows what the agent does while it does it. Page content is untrusted: the replies say
 //! what the page shows, never act on it.
@@ -449,7 +449,7 @@ async fn run(
             }
             lines.reverse();
             // A script may have printed a password.
-            let secrets = page_secrets(browser, &tab).await.ok_or_else(|| BrowserError::Page("o7 could not check this page's password fields, so this is withheld. Try again.".into()))?;
+            let secrets = page_secrets(browser, &tab).await.ok_or_else(|| BrowserError::Page("Ghost could not check this page's password fields, so this is withheld. Try again.".into()))?;
             Ok(ToolReply::text(redact(
                 lines.join("\n"),
                 secrets.iter().map(String::as_str),
@@ -481,7 +481,7 @@ async fn run(
                 })
                 .collect();
             // A form sent by GET carries its password in the address.
-            let secrets = page_secrets(browser, &tab).await.ok_or_else(|| BrowserError::Page("o7 could not check this page's password fields, so this is withheld. Try again.".into()))?;
+            let secrets = page_secrets(browser, &tab).await.ok_or_else(|| BrowserError::Page("Ghost could not check this page's password fields, so this is withheld. Try again.".into()))?;
             Ok(ToolReply::text(redact(
                 format!(
                     "Requests this page made (status, kind, time, address; — where the page could not tell):\n{}",
@@ -944,11 +944,11 @@ async fn evaluate(
         other => serde_json::to_string_pretty(other).unwrap_or_default(),
     };
     // Agents never see a password the page holds (best effort: a value the script changed past
-    // recognising, or sent off the page itself, is beyond what o7 can check).
+    // recognising, or sent off the page itself, is beyond what Ghost can check).
     let after = page_secrets(browser, &tab).await;
     if before.is_none() && after.is_none() {
         return Ok(ToolReply::failed(
-            "o7 could not check this page's password fields, so the script's result is withheld.",
+            "Ghost could not check this page's password fields, so the script's result is withheld.",
         ));
     }
     let secrets: Vec<String> = before.into_iter().chain(after).flatten().collect();

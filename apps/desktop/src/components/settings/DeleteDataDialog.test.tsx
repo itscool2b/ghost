@@ -26,14 +26,14 @@ const REVIEW: DataCleanupReview = {
     {
       path: "C:\\data\\profiles\\local\\worktrees\\a",
       repository: "C:\\code\\shop",
-      branch: "aura/fix-login",
+      branch: "ghost/fix-login",
       summary: "3 uncommitted files",
       unsaved: true,
     },
     {
       path: "C:\\data\\profiles\\local\\worktrees\\b",
       repository: "C:\\code\\shop",
-      branch: "aura/clean",
+      branch: "ghost/clean",
       summary: "Nothing unsaved",
       unsaved: false,
     },
@@ -70,7 +70,7 @@ function render(
   );
 }
 
-describe("Delete all o7 data", () => {
+describe("Delete all Ghost data", () => {
   it("lists exactly what Rust reviewed, with sizes and the agent tokens", () => {
     const html = render(REVIEW);
     expect(html).toContain("<dt>Chats and settings</dt>");
@@ -78,7 +78,7 @@ describe("Delete all o7 data", () => {
     expect(html).toContain("1.2 GB");
     expect(html).toContain("<dt>Window and web data</dt>");
     expect(html).toContain(
-      "Sign-in tokens of agent accounts you added in o7, kept in Windows Credential Manager.",
+      "Sign-in tokens of agent accounts you added in Ghost, kept in Windows Credential Manager.",
     );
     expect(html).toContain("Your agents, their settings and your repositories are not touched.");
   });
@@ -86,9 +86,9 @@ describe("Delete all o7 data", () => {
   it("warns about worktrees with unsaved work and keeps them by default", () => {
     const html = render(REVIEW);
     expect(html).toContain("1 worktree has work saved nowhere else");
-    expect(html).toContain("aura/fix-login");
+    expect(html).toContain("ghost/fix-login");
     expect(html).toContain("3 uncommitted files");
-    expect(html).not.toContain("aura/clean</span>");
+    expect(html).not.toContain("ghost/clean</span>");
     expect(html).toMatch(/data-testid="delete-data-unsaved"(?![^>]*checked)/);
     expect(html).toContain("1 worktree with nothing unsaved is deleted too");
     expect(cleanupChoice(REVIEW, false, false)).toEqual({
@@ -114,16 +114,16 @@ describe("Delete all o7 data", () => {
   });
 
   it("offers the Trash only where the app bundle can move", () => {
-    expect(render(REVIEW)).not.toContain("Also move o7 to the Trash");
+    expect(render(REVIEW)).not.toContain("Also move Ghost to the Trash");
     const mac = {
       ...REVIEW,
-      app_bundle: "/Applications/o7.app",
+      app_bundle: "/Applications/Ghost.app",
       keys: [],
       warnings: [],
       secure_store: "the macOS keychain",
     };
     const html = render(mac, { trash: true, typed: "DELETE" });
-    expect(html).toContain("Also move o7 to the Trash");
+    expect(html).toContain("Also move Ghost to the Trash");
     expect(html).toContain("Delete data and move to Trash");
     expect(cleanupChoice(mac, false, true).move_app_to_trash).toBe(true);
     expect(cleanupChoice(REVIEW, false, true).move_app_to_trash).toBe(false);
@@ -144,12 +144,12 @@ describe("Delete all o7 data", () => {
   });
 
   it("shows loading, a failed review with a retry, and quitting", () => {
-    expect(render(null, { phase: "loading" })).toContain("Reading what o7 keeps on this device");
+    expect(render(null, { phase: "loading" })).toContain("Reading what Ghost keeps on this device");
     const failed = render(null, { error: "The review could not finish." });
     expect(failed).toContain('role="alert"');
     expect(failed).toContain("Review again");
     const quitting = render(REVIEW, { phase: "quitting", typed: "DELETE" });
-    expect(quitting).toContain("o7 is quitting.");
+    expect(quitting).toContain("Ghost is quitting.");
     expect(quitting).toMatch(/data-testid="delete-data-apply" disabled=""/);
   });
 

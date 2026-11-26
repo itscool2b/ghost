@@ -20,10 +20,10 @@ import { Modal } from "../chat/Modal";
 export type DeleteDataPhase = "loading" | "ready" | "applying" | "quitting";
 
 /**
- * "Delete all o7 data" (Settings, About, This device): Rust's review of exactly what goes,
+ * "Delete all Ghost data" (Settings, About, This device): Rust's review of exactly what goes,
  * a plain warning for worktrees with unsaved work (kept unless the person ticks to delete them),
  * what stays, and DELETE typed before the red pill. Applying starts the cleanup and quits; nothing
- * is deleted while o7 runs.
+ * is deleted while Ghost runs.
  */
 export function DeleteDataDialog({
   api = dataCleanupApi,
@@ -81,7 +81,7 @@ export function DeleteDataDialog({
   const busy = phase === "applying" || phase === "quitting";
   return (
     <Modal
-      title={review?.scope === "data_folder" ? "Delete this data folder" : "Delete all o7 data"}
+      title={review?.scope === "data_folder" ? "Delete this data folder" : "Delete all Ghost data"}
       size="lg"
       className="delete-data-dialog"
       closeDisabled={busy}
@@ -143,7 +143,7 @@ export function DeleteDataBody({
       <div className="delete-data" data-testid="delete-data">
         {phase === "loading" ? (
           <p className="delete-data-lead" role="status">
-            Reading what o7 keeps on this device…
+            Reading what Ghost keeps on this device…
           </p>
         ) : null}
         {error ? (
@@ -171,8 +171,8 @@ export function DeleteDataBody({
     <div className="delete-data" data-testid="delete-data">
       <p className="delete-data-lead">
         {folder
-          ? "o7 quits, then deletes what it keeps in this data folder. Your own files in it, the installed app's data, your agents and your repositories are not touched."
-          : "o7 quits, then deletes everything below, so the next start is a fresh install. Your agents, their settings and your repositories are not touched."}
+          ? "Ghost quits, then deletes what it keeps in this data folder. Your own files in it, the installed app's data, your agents and your repositories are not touched."
+          : "Ghost quits, then deletes everything below, so the next start is a fresh install. Your agents, their settings and your repositories are not touched."}
       </p>
       <dl className="delete-data-rows">
         {review.items.map((item) => (
@@ -190,14 +190,14 @@ export function DeleteDataBody({
           <div>
             <dt>Agent tokens</dt>
             <dd>
-              {`Sign-in tokens of agent accounts you added in o7, kept in ${review.secure_store}.`}
+              {`Sign-in tokens of agent accounts you added in Ghost, kept in ${review.secure_store}.`}
             </dd>
           </div>
         ) : null}
         {review.items.length === 0 && !review.secure_store ? (
           <div>
             <dt>Files</dt>
-            <dd>Nothing of o7's is left here.</dd>
+            <dd>Nothing of Ghost's is left here.</dd>
           </div>
         ) : null}
       </dl>
@@ -242,7 +242,7 @@ export function DeleteDataBody({
         {clean > 0
           ? `${clean === 1 ? "1 worktree" : `${clean} worktrees`} with nothing unsaved ${clean === 1 ? "is" : "are"} deleted too; branches stay in your repositories. `
           : ""}
-        Stays: your agents and their folders, files o7 wrote into them at your request, and your
+        Stays: your agents and their folders, files Ghost wrote into them at your request, and your
         repositories and branches.
       </p>
       {review.app_bundle ? (
@@ -254,7 +254,7 @@ export function DeleteDataBody({
             disabled={busy}
             onChange={(event) => onMoveToTrash(event.currentTarget.checked)}
           />
-          Also move o7 to the Trash
+          Also move Ghost to the Trash
         </label>
       ) : null}
       <div className="delete-data-confirm">
@@ -282,7 +282,7 @@ export function DeleteDataBody({
       ) : null}
       {phase === "quitting" ? (
         <p className="delete-data-lead" role="status">
-          o7 is quitting. Your data is deleted as soon as it has closed.
+          Ghost is quitting. Your data is deleted as soon as it has closed.
         </p>
       ) : null}
       <div className="g-dialog-actions">

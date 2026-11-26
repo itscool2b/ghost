@@ -6,19 +6,19 @@
 
 These Terms of Service (the “Terms”) govern your access to and use of:
 
-- the official compiled o7 desktop application (the “App”);
-- the website at [https://o7.codes](https://o7.codes) and related pages (the “Site”); and
-- optional hosted services we operate in connection with o7, including the remote-access relay, download and usage-count endpoints, and related interfaces (together with the App and the Site, the “Services”).
+- the official compiled Ghost desktop application (the “App”);
+- the website at [https://onghost.dev](https://onghost.dev) and related pages (the “Site”); and
+- optional hosted services we operate in connection with Ghost, including the remote-access relay, download and usage-count endpoints, and related interfaces (together with the App and the Site, the “Services”).
 
-o7 is a free, local-first desktop application that lets you run coding agents you choose, side by side, on your own computer. There is no o7 account and no paid tier. The product was previously known as AuraCode and was associated with the domain auracode.si.
+Ghost is a free, local-first desktop application that lets you run coding agents you choose, side by side, on your own computer. There is no Ghost account and no paid tier. The product was previously known as AuraCode and was associated with the domain auracode.si.
 
-The source code for o7 is separately available under the MIT License at [https://github.com/itscool2b/o7](https://github.com/itscool2b/o7). These Terms do not replace the MIT License for rights in that source code. They do govern your use of the official App binaries and of our hosted Services.
+The source code for Ghost is separately available under the MIT License at [https://github.com/itscool2b/ghost](https://github.com/itscool2b/ghost). These Terms do not replace the MIT License for rights in that source code. They do govern your use of the official App binaries and of our hosted Services.
 
 A website’s domain suffix does not determine your legal rights or our jurisdiction. These Terms do.
 
 ## 1. Agreement and acceptance
 
-By downloading, installing, or using the App or the Services, or by clicking a button or checking a box that indicates acceptance (including a first-launch “I agree” or similar clickwrap in the App), you agree to these Terms and to our Privacy Policy at [https://o7.codes/privacy](https://o7.codes/privacy).
+By downloading, installing, or using the App or the Services, or by clicking a button or checking a box that indicates acceptance (including a first-launch “I agree” or similar clickwrap in the App), you agree to these Terms and to our Privacy Policy at [https://onghost.dev/privacy](https://onghost.dev/privacy).
 
 If you do not agree, do not download, install, or use the App or the Services, and uninstall any copy of the App.
 
@@ -34,17 +34,17 @@ We do not knowingly provide the Services to children under 13. If you believe a 
 
 ## 3. The Services
 
-**The App.** o7 runs on your computer. Projects, chats, settings, and local agent sessions are stored on your machine. The App is designed to work without a network connection for local use. Agents you choose may still need a network connection for their own services.
+**The App.** Ghost runs on your computer. Projects, chats, settings, and local agent sessions are stored on your machine. The App is designed to work without a network connection for local use. Agents you choose may still need a network connection for their own services.
 
-**No account; no payments.** There is no o7 account, no sign-in to o7, and no paid tier. We do not process payments for the App.
+**No account; no payments.** There is no Ghost account, no sign-in to Ghost, and no paid tier. We do not process payments for the App.
 
-**Hosted pieces and third-party downloads.** The Site and the optional remote-access relay are hosted by Cloudflare. The App may also contact, as described in the Privacy Policy: GitHub (for o7 update checks and downloads, an optional pinned tool used to drive the iPhone simulator on a Mac, and some agent version lookups); Hugging Face (for an optional on-device speech model); Google at dl.google.com (for optional Android device setup) and, if you type a search in the in-app browser, Google Search; the npm registry; Homebrew; and the Agent Client Protocol registry (for version lookups of agents you have installed).
+**Hosted pieces and third-party downloads.** The Site and the optional remote-access relay are hosted by Cloudflare. The App may also contact, as described in the Privacy Policy: GitHub (for Ghost update checks and downloads, an optional pinned tool used to drive the iPhone simulator on a Mac, and some agent version lookups); Hugging Face (for an optional on-device speech model); Google at dl.google.com (for optional Android device setup) and, if you type a search in the in-app browser, Google Search; the npm registry; Homebrew; and the Agent Client Protocol registry (for version lookups of agents you have installed).
 
 **Preview and signing status.** Official installers may be unsigned by a platform publisher and may not be notarized. Your operating system may warn you or refuse to open the App until you approve it. You should compare the downloaded file’s SHA-256 checksum with the value published on the download page before installing. We may change supported systems, signing status, and known limitations in release notes.
 
-**Updates.** If automatic update checks are enabled, the App periodically looks for a newer version of itself by reading a public file from the project’s GitHub releases. No o7 update is downloaded or installed until you choose to update. When an update is installed, the App checks it against a signature before installing it. You can turn automatic update checks for o7 off in Settings. A signed update channel and a publisher’s platform signature are different things; platform (publisher) signing and notarization may still be absent even when updater signatures are used.
+**Updates.** If automatic update checks are enabled, the App periodically looks for a newer version of itself by reading a public file from the project’s GitHub releases. No Ghost update is downloaded or installed until you choose to update. When an update is installed, the App checks it against a signature before installing it. You can turn automatic update checks for Ghost off in Settings. A signed update channel and a publisher’s platform signature are different things; platform (publisher) signing and notarization may still be absent even when updater signatures are used.
 
-The App also periodically looks up newer versions of agents you have installed. Depending on the agent and how it was installed, that request may go to the npm registry, GitHub, Homebrew, or the Agent Client Protocol registry. Those checks are separate from o7’s own update check. Installing or updating an agent uses that agent’s own installer, which may contact its vendor or those same sources.
+The App also periodically looks up newer versions of agents you have installed. Depending on the agent and how it was installed, that request may go to the npm registry, GitHub, Homebrew, or the Agent Client Protocol registry. Those checks are separate from Ghost’s own update check. Installing or updating an agent uses that agent’s own installer, which may contact its vendor or those same sources.
 
 ## 4. License
 
@@ -52,29 +52,29 @@ The App also periodically looks up newer versions of agents you have installed. 
 
 Subject to these Terms, we grant you a personal, non-exclusive, non-transferable, non-sublicensable, revocable license to download, install, and run the official compiled App on devices you own or control, solely in accordance with these Terms.
 
-This license does not give you any right to our trademarks, service marks, trade names, logos, or domain names, including “o7,” “o7.codes,” “AuraCode,” or “auracode.si,” except for the limited, nominative use needed to describe the unmodified official App.
+This license does not give you any right to our trademarks, service marks, trade names, logos, or domain names, including “Ghost,” “onghost.dev,” “AuraCode,” or “auracode.si,” except for the limited, nominative use needed to describe the unmodified official App.
 
 ### 4.2 Source code (MIT)
 
-The o7 source code is made available under the MIT License. Your rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of that source code, and to compile your own builds, are as stated in the MIT License. The MIT License does not license our trademarks, the Site, or the hosted relay and related Services.
+The Ghost source code is made available under the MIT License. Your rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of that source code, and to compile your own builds, are as stated in the MIT License. The MIT License does not license our trademarks, the Site, or the hosted relay and related Services.
 
 If you run a build against our hosted Services (including the relay or usage-count endpoints), your use of those hosted Services is still subject to these Terms.
 
 ### 4.3 Reservation of rights
 
-Except for the licenses expressly granted in these Terms or in the MIT License, we and our licensors reserve all rights in the Services. These Terms do not grant you any rights in third-party software or marks included with or displayed by o7. Third-party software notices are published at [https://o7.codes/third-party-notices](https://o7.codes/third-party-notices).
+Except for the licenses expressly granted in these Terms or in the MIT License, we and our licensors reserve all rights in the Services. These Terms do not grant you any rights in third-party software or marks included with or displayed by Ghost. Third-party software notices are published at [https://onghost.dev/third-party-notices](https://onghost.dev/third-party-notices).
 
 ## 5. Your content
 
 You retain your rights in your content, including your projects, chats, code, files, prompts, drawings, dictation transcripts, settings, and other materials you create or store with the App (“Your Content”).
 
-You are responsible for Your Content and for keeping your own backups. Because there is no o7 account and no copy of Your Content on our servers as part of ordinary local use, we cannot restore Your Content for you.
+You are responsible for Your Content and for keeping your own backups. Because there is no Ghost account and no copy of Your Content on our servers as part of ordinary local use, we cannot restore Your Content for you.
 
 You represent that you have all rights and permissions needed to use Your Content with the Services and to allow agents and any paired browser, linked bot, or automation to access the systems and information you make available to them.
 
 ## 6. Agents, AI output, and your responsibility
 
-o7 is a workspace for coding agents and related tools that you choose and configure. Those agents are third-party software. Their services, subscriptions, restrictions, and policies remain their own.
+Ghost is a workspace for coding agents and related tools that you choose and configure. Those agents are third-party software. Their services, subscriptions, restrictions, and policies remain their own.
 
 Agents may generate code and other output, edit files, run commands, use tools, commit changes, open or update pull requests, start automations, browse the web, use emulators, simulators, or a phone you allow, and, if you enable remote access, link a bot, or create an automation, take actions from another device, from an assistant you connect, or in response to a webhook you set up.
 
@@ -94,11 +94,11 @@ Agents may generate code and other output, edit files, run commands, use tools, 
 - complying with the terms, usage policies, and restrictions of any third-party agent, model, device platform, or service you use; and
 - any consequences of those actions, including damage to systems or devices, data loss, security incidents, leaked secrets, or harm to others.
 
-We do not warrant that any agent output is accurate, secure, non-infringing, or fit for any purpose. Output may be wrong, incomplete, unsafe, or inconsistent with your intent. o7 does not read, store, or proxy your agent credentials; each agent signs in through its own flow and keeps its own keys. Keys and configuration for MCP servers you add stay on your computer. What an agent sends to its provider is governed by that provider’s terms and privacy policy, not by a promise that the work stays only on your computer.
+We do not warrant that any agent output is accurate, secure, non-infringing, or fit for any purpose. Output may be wrong, incomplete, unsafe, or inconsistent with your intent. Ghost does not read, store, or proxy your agent credentials; each agent signs in through its own flow and keeps its own keys. Keys and configuration for MCP servers you add stay on your computer. What an agent sends to its provider is governed by that provider’s terms and privacy policy, not by a promise that the work stays only on your computer.
 
 ## 7. Remote access and the relay
 
-Remote access is off until you turn it on in Settings. When it is on, a browser you pair, a bot you link, or an automation you create can reach the chats or start tasks on your computer through a relay we host on the Site. The computer opens no inbound port; the App keeps an outbound connection to the relay. Remote access uses pairing links, device keys, and secret addresses, not an o7 account.
+Remote access is off until you turn it on in Settings. When it is on, a browser you pair, a bot you link, or an automation you create can reach the chats or start tasks on your computer through a relay we host on the Site. The computer opens no inbound port; the App keeps an outbound connection to the relay. Remote access uses pairing links, device keys, and secret addresses, not a Ghost account.
 
 A paired browser, bot link, or automation is scoped to one workspace: the profile that was open when you created it. Opening another workspace ends the session for the first workspace.
 
@@ -129,7 +129,7 @@ You agree not to, and not to allow an agent, paired browser, linked bot, or auto
 - use the App, the relay, or the Site to distribute malware, evade access controls, probe or disrupt other people’s systems, or gain unauthorized access to any computer, account, network, device, or data;
 - interfere with or disrupt the Services, including by overloading, flooding, or attempting to bypass rate limits or security controls on the Site or relay;
 - attempt to read, intercept, alter, or take over another person’s relay session, pairing link, device key, bot link, or automation address;
-- misrepresent your identity or your affiliation with BASH.AI or o7, or use the Services to impersonate another person;
+- misrepresent your identity or your affiliation with BASH.AI or Ghost, or use the Services to impersonate another person;
 - use the Services in a way that infringes or violates someone else’s rights, including intellectual property, privacy, or publicity rights;
 - use the Services to develop or operate a competing hosted relay in a way that abuses our infrastructure; or
 - use the Services in violation of export, sanctions, or other regulatory rules described in Section 13.
@@ -245,4 +245,4 @@ If you are a consumer, you may have additional rights under the laws of your sta
 BASH.AI LLC  
 [bashllc25@gmail.com](mailto:bashllc25@gmail.com)
 
-For security vulnerabilities in o7, follow the reporting process in the project’s [SECURITY.md](https://github.com/itscool2b/o7/blob/main/SECURITY.md) rather than opening a public issue.
+For security vulnerabilities in Ghost, follow the reporting process in the project’s [SECURITY.md](https://github.com/itscool2b/ghost/blob/main/SECURITY.md) rather than opening a public issue.

@@ -82,7 +82,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "chat",
     side: "below",
     title: "Chat or Terminal",
-    body: "Read the agent through o7's chat, or switch to the agent's own interface in a terminal. You can switch back.",
+    body: "Read the agent through Ghost's chat, or switch to the agent's own interface in a terminal. You can switch back.",
   },
   {
     id: "browser",
@@ -152,7 +152,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "window",
     side: "right",
     title: "Your assistant",
-    body: "Link Grok Bot, Hermes, OpenClaw or Muse in Settings, Remote access. Hand it whole tasks from anywhere: o7 runs each on its own branch, has it reviewed and reports back.",
+    body: "Link Grok Bot, Hermes, OpenClaw or Muse in Settings, Remote access. Hand it whole tasks from anywhere: Ghost runs each on its own branch, has it reviewed and reports back.",
   },
 ];
 
@@ -163,7 +163,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
 export const NOT_TOURED: Readonly<Record<string, string>> = {
   "Collapse sidebar": "Its name and shortcut say all there is to it.",
   "Expand sidebar": "Its name and shortcut say all there is to it.",
-  "app-update-start": "Shown only while a newer o7 is on offer, and it says what it does.",
+  "app-update-start": "Shown only while a newer Ghost is on offer, and it says what it does.",
 };
 
 /** What the tour's card offers before a flight. */

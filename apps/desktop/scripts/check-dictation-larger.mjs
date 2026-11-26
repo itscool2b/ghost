@@ -9,7 +9,7 @@
  * the built-in one. A failure says why. A copy with nowhere to keep a model offers nothing.
  *
  * A copy that fetches the model by itself (every release) says so before it starts and offers
- * Cancel, which is a no it keeps; a download o7 started shows how far it has come, can be
+ * Cancel, which is a no it keeps; a download Ghost started shows how far it has come, can be
  * cancelled the same way, and ends with the model in use.
  * Usage: node scripts/check-dictation-larger.mjs [--server URL] [--engines chromium,webkit]
  */
@@ -132,13 +132,15 @@ async function inspect(engine, launcher) {
       await control.getByRole("button", { name: "Download" }).click();
       await row.getByText("Downloading Parakeet Ultra", { exact: false }).waitFor();
       await page.evaluate(() =>
-        window.largerFixture.fail("The download is not the file o7 expects, so it was discarded."),
+        window.largerFixture.fail(
+          "The download is not the file Ghost expects, so it was discarded.",
+        ),
       );
       const alert = page.getByTestId("larger-model-error");
       await alert.waitFor();
       assert.equal(
         await alert.textContent(),
-        "The download is not the file o7 expects, so it was discarded.",
+        "The download is not the file Ghost expects, so it was discarded.",
       );
       await dictation
         .getByText("Parakeet TDT-CTC 110M, built in and ready", { exact: false })
@@ -148,7 +150,9 @@ async function inspect(engine, launcher) {
       // A copy that fetches it by itself says so before it starts, and offers the no.
       await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
       await row
-        .getByText("o7 downloads it by itself, once: 486 MB from Hugging Face.", { exact: false })
+        .getByText("Ghost downloads it by itself, once: 486 MB from Hugging Face.", {
+          exact: false,
+        })
         .waitFor();
       assert.equal(await control.getByRole("button", { name: "Cancel" }).count(), 1);
       assert.equal(await control.getByRole("button", { name: /Download|Continue/ }).count(), 0);
@@ -157,9 +161,9 @@ async function inspect(engine, launcher) {
         (await new AxeBuilder({ page }).include('[data-setting="Larger model"]').analyze())
           .violations,
         [],
-        what("before o7 starts it"),
+        what("before Ghost starts it"),
       );
-      // o7 starts it: the row shows how far it has come without having asked for it.
+      // Ghost starts it: the row shows how far it has come without having asked for it.
       await page.evaluate(() => window.largerFixture.begin(0.5));
       await row.getByText("Downloading Parakeet Ultra: 243 of 486 MB.").waitFor();
       // Cancel stops it and is a no that holds: the row offers it again and promises nothing.
@@ -175,9 +179,9 @@ async function inspect(engine, launcher) {
       assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
       await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1500)));
       assert.equal(await control.getByRole("button", { name: "Download" }).count(), 1);
-      // Left alone, o7's own download ends with the model in use.
+      // Left alone, Ghost's own download ends with the model in use.
       await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
-      await row.getByText("o7 downloads it by itself", { exact: false }).waitFor();
+      await row.getByText("Ghost downloads it by itself", { exact: false }).waitFor();
       await page.evaluate(() => window.largerFixture.begin(0.9));
       await row.getByText("Downloading Parakeet Ultra: 438 of 486 MB.").waitFor();
       await page.evaluate(() => window.largerFixture.finish());

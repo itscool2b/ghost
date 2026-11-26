@@ -1,6 +1,6 @@
 /**
  * Run in a worktree chat: the command saved in its folder's setup, started in the chat's worktree in
- * the docked terminal panel, with the worktree's first port in O7_PORT and PORT. Rust builds
+ * the docked terminal panel, with the worktree's first port in GHOST_PORT and PORT. Rust builds
  * and starts the process (`worktree_run_start`); nothing here constructs a command.
  */
 import { commands, type SetupCommand, type WorktreeRun } from "../bindings";

@@ -1,16 +1,16 @@
-// `pnpm host-upgrade`: replaces the installed o7 on this Windows machine with a local build,
+// `pnpm host-upgrade`: replaces the installed Ghost on this Windows machine with a local build,
 // and puts the previous build back when the new one does not work.
 // On Linux, `main` hands over to appimage-upgrade.mjs.
 //
 // The installed app is often the one running the agent session that built the new one, so the
 // install cannot happen while it runs, and an agent cannot wait for it to close: everything an
 // agent starts is in the app's job object and ends with it. `install --after-exit` therefore
-// starts a waiter through WMI, outside the job, and returns. When the person quits o7, the
+// starts a waiter through WMI, outside the job, and returns. When the person quits Ghost, the
 // waiter snapshots the installed app, runs the installer in update mode (which keeps the data
-// folder; see src-tauri/windows/hooks.nsh), starts o7 again, and restores the snapshot if
+// folder; see src-tauri/windows/hooks.nsh), starts Ghost again, and restores the snapshot if
 // the new build does not stay up. `rollback` restores a snapshot by hand and, with
-// `--restore-database`, the databases a newer schema migrated (o7-core backs each one up first).
-// See docs/developing-in-o7.md.
+// `--restore-database`, the databases a newer schema migrated (ghost-core backs each one up first).
+// See docs/developing-in-ghost.md.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -33,9 +33,9 @@ import { parseArgs } from "node:util";
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const REPO = resolve(dirname(SCRIPT), "..", "..", "..");
-const APP_EXE = "o7.exe";
+const APP_EXE = "ghost.exe";
 const UNINSTALLER = "uninstall.exe";
-const HELPER_FLAG = "--o7-memory-helper";
+const HELPER_FLAG = "--ghost-memory-helper";
 const SIDECARS = ["", "-wal", "-shm", "-journal"];
 const BACKUP = /^(?<db>.+)\.v(?<from>\d+)-(?<at>\d+)\.bak$/u;
 
@@ -44,17 +44,18 @@ export const EXIT = { done: 0, usage: 2, running: 3, failed: 4 };
 const USAGE = `Usage: node apps/desktop/scripts/host-upgrade.mjs <command> [options]
 
   install [--installer <setup.exe>] [--after-exit [--wait <minutes>]]
-      Installs a local build over the installed o7, after a snapshot of the installed app.
-      --after-exit arms it instead: it runs once o7 quits (default wait 30 minutes).
+      Installs a local build over the installed Ghost, after a snapshot of the installed app.
+      --after-exit arms it instead: it runs once Ghost quits (default wait 30 minutes).
   rollback [--snapshot <name>] [--restore-database]
       Puts a snapshot back (the newest by default). --restore-database also restores each
-      database a newer build migrated since that snapshot, from o7-core's pre-migration backup.
+      database a newer build migrated since that snapshot, from ghost-core's pre-migration backup.
   status    What is installed, running, armed and kept.
   cancel    Stops an armed install.
 
-  --install-dir, --data-dir and --state-dir override %LOCALAPPDATA%\\o7, the data folder
-  (%LOCALAPPDATA%\\codes.o7.desktop, or si.auracode.desktop on a machine updated from auracode)
-  and %LOCALAPPDATA%\\o7-upgrades (or auracode-upgrades from then).`;
+  --install-dir, --data-dir and --state-dir override %LOCALAPPDATA%\\Ghost, the data folder
+  (%LOCALAPPDATA%\\dev.onghost.desktop, or codes.o7.desktop or si.auracode.desktop on a machine
+  updated from o7 or from auracode) and %LOCALAPPDATA%\\ghost-upgrades (or o7-upgrades or
+  auracode-upgrades from then).`;
 
 /** The folders the commands work on, from `%LOCALAPPDATA%` unless overridden. */
 export function folders(env, overrides = {}) {
@@ -63,29 +64,42 @@ export function folders(env, overrides = {}) {
     throw new Error("LOCALAPPDATA is not set, so the installed app cannot be found.");
   }
   return {
-    installDir: resolve(overrides.installDir ?? join(local, "o7")),
+    installDir: resolve(overrides.installDir ?? join(local, "Ghost")),
     dataDir: resolve(
       overrides.dataDir ??
-        inUse(join(local, "codes.o7.desktop"), join(local, "si.auracode.desktop"), true),
+        inUse(
+          [
+            join(local, "dev.onghost.desktop"),
+            join(local, "codes.o7.desktop"),
+            join(local, "si.auracode.desktop"),
+          ],
+          true,
+        ),
     ),
     stateDir: resolve(
-      overrides.stateDir ?? inUse(join(local, "o7-upgrades"), join(local, "auracode-upgrades")),
+      overrides.stateDir ??
+        inUse([
+          join(local, "ghost-upgrades"),
+          join(local, "o7-upgrades"),
+          join(local, "auracode-upgrades"),
+        ]),
     ),
   };
 }
 
 /**
- * o7 was auracode until 19 November 2026. A machine updated from then keeps its data, and the
- * upgrades kept for it, under the earlier names: `current` when it was used, else `earlier` when
- * that was, else `current`. A data folder is used when it has `device.json` or `profiles`; any
- * other folder when it exists.
+ * Ghost was o7 from 19 to 26 November 2026 and auracode before that. A machine updated from then
+ * keeps its data, and the upgrades kept for it, under the earlier names. So of the names given,
+ * newest first: the first when it was used, else the newest earlier one that was, else the
+ * first. A data folder is used when it has `device.json` or `profiles`; any other folder when it
+ * exists.
  */
-export function inUse(current, earlier, data = false) {
+export function inUse([current, ...earlier], data = false) {
   const used = (path) =>
     data
       ? existsSync(join(path, "device.json")) || existsSync(join(path, "profiles"))
       : existsSync(path);
-  return !used(current) && used(earlier) ? earlier : current;
+  return used(current) ? current : (earlier.find(used) ?? current);
 }
 
 function inside(path, folder) {
@@ -145,7 +159,7 @@ export function toPrune(names, keep) {
 }
 
 /**
- * For each database in `profilesDir/<profile>/`, the first pre-migration backup o7-core made
+ * For each database in `profilesDir/<profile>/`, the first pre-migration backup ghost-core made
  * after `sinceMs`: the database as it was before a newer build first migrated it.
  */
 export function backupsSince(profilesDir, sinceMs) {
@@ -182,7 +196,8 @@ export function backupsSince(profilesDir, sinceMs) {
 export function cleanEnv(env) {
   return Object.fromEntries(
     Object.entries(env).filter(
-      ([name]) => !/^(O7_|AURACODE_|AURA_|CLAUDECODE$|CLAUDE_CODE_|CLAUDE_PID$)/iu.test(name),
+      ([name]) =>
+        !/^(GHOST_|O7_|AURACODE_|AURA_|CLAUDECODE$|CLAUDE_CODE_|CLAUDE_PID$)/iu.test(name),
     ),
   );
 }
@@ -214,7 +229,7 @@ const quoted = (text) => `'${text.replaceAll("'", "''")}'`;
 export const windows = {
   processes() {
     const json = powershell(
-      "@(Get-CimInstance Win32_Process -Filter \"Name='o7.exe' OR Name='node.exe'\" | Select-Object ProcessId, ExecutablePath, CommandLine) | ConvertTo-Json -Compress",
+      "@(Get-CimInstance Win32_Process -Filter \"Name='ghost.exe' OR Name='node.exe'\" | Select-Object ProcessId, ExecutablePath, CommandLine) | ConvertTo-Json -Compress",
     );
     if (!json) return [];
     const parsed = JSON.parse(json);
@@ -272,7 +287,7 @@ function isInstall(dir) {
 
 /**
  * Whether a restore may replace `dir`: it is missing, empty (the folder an installer was handed),
- * or o7's own, including the partial install a failed installer leaves. A folder with only
+ * or Ghost's own, including the partial install a failed installer leaves. A folder with only
  * other things in it is somebody else's and stays.
  */
 function replaceable(dir) {
@@ -331,7 +346,7 @@ function fileHash(path) {
  */
 export function takeSnapshot(paths, installer, now) {
   if (!isInstall(paths.installDir)) {
-    throw new Error(`${paths.installDir} holds no installed o7 to keep.`);
+    throw new Error(`${paths.installDir} holds no installed Ghost to keep.`);
   }
   let name = stampOf(now);
   for (let n = 2; existsSync(join(paths.stateDir, "snapshots", name)); n++) {
@@ -369,7 +384,7 @@ export function restoreApp(snapshot, installDir, now = new Date()) {
   const app = join(snapshot.dir, "app");
   if (!isInstall(app)) throw new Error(`${snapshot.dir} holds no copy of the app.`);
   if (!replaceable(installDir)) {
-    throw new Error(`${installDir} is not an o7 install; nothing was changed.`);
+    throw new Error(`${installDir} is not a Ghost install; nothing was changed.`);
   }
   const aside = `${installDir}.replaced-${now.getTime()}`;
   if (existsSync(installDir)) renameSync(installDir, aside);
@@ -420,7 +435,7 @@ async function waitForExit(system, paths, minutes, log) {
     }
     if (Date.now() >= deadline) return false;
     if (!announced && minutes > 0) {
-      log(`Waiting up to ${minutes} minutes for o7 to quit.`);
+      log(`Waiting up to ${minutes} minutes for Ghost to quit.`);
       announced = true;
     }
     if (minutes === 0) return false;
@@ -516,7 +531,7 @@ export async function install(options, paths, system, log) {
       `${JSON.stringify({ pid, installer: staged, armed: system.now().toISOString() }, null, 2)}\n`,
     );
     log(
-      `Armed (PID ${pid}): ${basename(installer)} installs when o7 quits, within ${options.wait} minutes. Quit o7 to start it; it opens again by itself. Log: ${join(paths.stateDir, "upgrade.log")}`,
+      `Armed (PID ${pid}): ${basename(installer)} installs when Ghost quits, within ${options.wait} minutes. Quit Ghost to start it; it opens again by itself. Log: ${join(paths.stateDir, "upgrade.log")}`,
     );
     return EXIT.done;
   }
@@ -524,8 +539,8 @@ export async function install(options, paths, system, log) {
   if (!(await waitForExit(system, paths, options.wait, log))) {
     log(
       options.wait > 0
-        ? `o7 did not quit within ${options.wait} minutes; nothing was installed.`
-        : "o7 is running. Quit it first, or arm the install with --after-exit.",
+        ? `Ghost did not quit within ${options.wait} minutes; nothing was installed.`
+        : "Ghost is running. Quit it first, or arm the install with --after-exit.",
     );
     return EXIT.running;
   }
@@ -581,7 +596,7 @@ export async function rollback(options, paths, system, log) {
     return EXIT.usage;
   }
   if (hostProcesses(system.processes(), paths.installDir).app.length > 0) {
-    log("o7 is running. Quit it first; nothing was changed.");
+    log("Ghost is running. Quit it first; nothing was changed.");
     return EXIT.running;
   }
   const snapshot = readSnapshot(paths.stateDir, name);

@@ -252,7 +252,7 @@ export async function checkBrowserMedia(browser, url, out, engine) {
     await notice.waitFor();
     assert.match(
       await notice.textContent(),
-      /^Audio and video are off here: GStreamer's base and good plugins are missing\. Install gst-plugins-base and gst-plugins-good, then restart o7\.$/,
+      /^Audio and video are off here: GStreamer's base and good plugins are missing\. Install gst-plugins-base and gst-plugins-good, then restart Ghost\.$/,
       `${engine}: the notice names the packages`,
     );
     assert.equal(await notice.getAttribute("role"), "status", `${engine}: calm, not an alert`);

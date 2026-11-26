@@ -38,12 +38,12 @@ export async function checkSettingsNavigation(page, url) {
       await page.keyboard.press("Enter");
       const heading =
         label === "About"
-          ? page.getByRole("heading", { name: "About o7", exact: true })
+          ? page.getByRole("heading", { name: "About Ghost ADE", exact: true })
           : page.getByRole("heading", { name: label, exact: true, level: 1 });
       await page.waitForFunction(
         (name) =>
           document.activeElement?.tagName === "H1" && document.activeElement.textContent === name,
-        label === "About" ? "About o7" : label,
+        label === "About" ? "About Ghost ADE" : label,
       );
       assert.equal(await link.getAttribute("aria-current"), "page");
       // Mount effects must not take focus back once someone moves on.

@@ -4,7 +4,7 @@
 //! The TypeScript side (`apps/desktop/src/bindings.ts`) is generated from these signatures; see
 //! [`crate::bindings`].
 //!
-//! The chat commands wrap o7-core's `SessionManager` ([`AppState::sessions`]); every
+//! The chat commands wrap ghost-core's `SessionManager` ([`AppState::sessions`]); every
 //! `SessionError` reaches the UI as one `AppErrorCode` with the error's own sentence. Commands that
 //! belong to a webview (a chat view, the status channel) take the injected `Webview`, whose label
 //! owns the subscription: a reloaded page drops every subscription of its webview.
@@ -14,12 +14,12 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use o7_core::session::SessionError;
-use o7_protocol::session::{
+use ghost_core::session::SessionError;
+use ghost_protocol::session::{
     AgentEntry, BlobText, ChatAttach, ChatStatusUpdate, ChatSummary, ConfigChoice, ConfigValue,
     EnvStatus, HistoryPage, PromptAck, QueuedPrompt, SessionLists, StorageStatus,
 };
-use o7_protocol::{Autonomy, EventBatch, UiAnswer};
+use ghost_protocol::{Autonomy, EventBatch, UiAnswer};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State, Webview};
 
@@ -107,8 +107,8 @@ pub async fn acknowledge_recovery(state: State<'_, AppState>) -> Result<(), AppE
     state.acknowledge_recovery().await
 }
 
-/// Smoke mode only: prints `O7_SMOKE_RESULT <json>` on stdout and, with
-/// `O7_SMOKE_EXIT=1`, exits with 0 when the run passed and 1 otherwise, through the quit
+/// Smoke mode only: prints `GHOST_SMOKE_RESULT <json>` on stdout and, with
+/// `GHOST_SMOKE_EXIT=1`, exits with 0 when the run passed and 1 otherwise, through the quit
 /// flow like any other exit. Only the first report counts.
 #[tauri::command]
 #[specta::specta]
@@ -120,7 +120,7 @@ pub fn smoke_report(
     let Some(plan) = state.launch.smoke_plan() else {
         return Err(AppError::new(
             AppErrorCode::NotInSmokeMode,
-            "Smoke reports are only accepted while O7_SMOKE runs a smoke check.",
+            "Smoke reports are only accepted while GHOST_SMOKE runs a smoke check.",
         ));
     };
     if state.smoke_reported.swap(true, Ordering::AcqRel) {
@@ -160,7 +160,7 @@ fn check_blob_request(sha256: &str, len: u32) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Every agent o7 knows, with its cached availability. Never waits: detection runs in the
+/// Every agent Ghost knows, with its cached availability. Never waits: detection runs in the
 /// background, and an agent still being checked reads `checking`.
 #[tauri::command]
 #[specta::specta]
@@ -217,7 +217,7 @@ pub fn env_refresh(state: State<'_, AppState>) -> EnvStatus {
 
 /// Shows the system folder picker and returns the chosen folder, or `null` when the user cancelled.
 /// Resolves when the dialog closes. A chat smoke run's picker answers its folder
-/// (`O7_SMOKE_FOLDER`) at once: automation cannot click through a system dialog.
+/// (`GHOST_SMOKE_FOLDER`) at once: automation cannot click through a system dialog.
 #[tauri::command]
 #[specta::specta]
 pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
@@ -259,7 +259,7 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
 pub async fn chats_list(state: State<'_, AppState>) -> Result<Vec<ChatSummary>, AppError> {
     let chats = state.sessions()?.chats().await?;
     // The next launch's first frame starts from this list.
-    crate::launch_cache::keep(&state, o7_core::launch_cache::Part::Chats, &chats);
+    crate::launch_cache::keep(&state, ghost_core::launch_cache::Part::Chats, &chats);
     Ok(chats)
 }
 
@@ -285,7 +285,7 @@ pub async fn chat_create(
 pub async fn chat_create_on_host(
     state: State<'_, AppState>,
     agent_id: String,
-    agent_host: o7_protocol::agents::AgentHost,
+    agent_host: ghost_protocol::agents::AgentHost,
     folder: String,
 ) -> Result<ChatSummary, AppError> {
     Ok(state
@@ -300,7 +300,7 @@ pub async fn chat_create_on_host(
 pub async fn agent_maintenance(
     state: State<'_, AppState>,
     agent_id: String,
-) -> Result<o7_protocol::agents::AgentMaintenance, AppError> {
+) -> Result<ghost_protocol::agents::AgentMaintenance, AppError> {
     Ok(state.sessions()?.agent_maintenance(&agent_id).await)
 }
 
@@ -310,7 +310,7 @@ pub async fn agent_maintenance(
 pub async fn agent_auth_status(
     state: State<'_, AppState>,
     agent_id: String,
-) -> Result<o7_protocol::agents::AgentAuthStatus, AppError> {
+) -> Result<ghost_protocol::agents::AgentAuthStatus, AppError> {
     Ok(state.sessions()?.agent_auth_status(&agent_id).await)
 }
 
@@ -321,7 +321,7 @@ pub async fn agent_update(state: State<'_, AppState>, agent_id: String) -> Resul
     Ok(state.sessions()?.update_agent(&agent_id).await?)
 }
 
-/// What the agent's last update printed in this run of o7: its last lines as plain text,
+/// What the agent's last update printed in this run of Ghost: its last lines as plain text,
 /// for the person who asked for the update. Kept in memory only, never stored, logged or sent on.
 #[tauri::command]
 #[specta::specta]
@@ -408,7 +408,7 @@ pub async fn chat_lists(
 pub async fn chat_folder_context(
     state: State<'_, AppState>,
     chat_id: String,
-) -> Result<o7_protocol::workspace::ChatFolderContext, AppError> {
+) -> Result<ghost_protocol::workspace::ChatFolderContext, AppError> {
     Ok(state.sessions()?.chat_folder_context(&chat_id).await?)
 }
 
@@ -615,7 +615,7 @@ pub async fn chat_respond_ui(
 pub async fn chat_set_control(
     state: State<'_, AppState>,
     chat_id: String,
-    change: o7_protocol::session::SessionControlChange,
+    change: ghost_protocol::session::SessionControlChange,
 ) -> Result<SessionLists, AppError> {
     Ok(state.sessions()?.set_control(&chat_id, change).await?)
 }

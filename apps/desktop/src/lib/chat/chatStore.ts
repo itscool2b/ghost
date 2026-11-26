@@ -7,9 +7,9 @@ import type {
   ConfigValue,
   ErrorInfo,
   EventBatch,
+  GhostEvent,
   HistoryPage,
   LimitWindow,
-  O7Event,
   QueuedPrompt,
   SendingPrompt,
   SessionControlChange,
@@ -579,7 +579,7 @@ export class ChatStore {
   }
 
   /** The live state a frame's events change: the header, the queue, usage and limits. */
-  #applyLive(state: ChatState, event: O7Event): ChatState {
+  #applyLive(state: ChatState, event: GhostEvent): ChatState {
     switch (event.type) {
       case "turn_started":
         return {

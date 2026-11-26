@@ -4,7 +4,7 @@ import type { ProjectToolsApi } from "./projectTools";
 import type { TerminalState, TerminalTransport } from "./terminal";
 import { localTerminalMemory, type RememberedTab, type TerminalMemory } from "./terminalMemory";
 
-/** Rust allows eight project shells in the app (o7-core terminal.rs); the panel says so first. */
+/** Rust allows eight project shells in the app (ghost-core terminal.rs); the panel says so first. */
 export const PANEL_TERMINAL_LIMIT = 8;
 /** A third of a 1440x900 window: room for a test run without hiding the conversation. */
 export const PANEL_HEIGHT_DEFAULT = 280;
@@ -45,7 +45,7 @@ export interface ChatPanel {
   /** Counts the person's requests to use the terminal (show, a new tab, a tab chosen). */
   readonly focus: number;
   /**
-   * What this chat had open when o7 last closed, offered back until the person resumes
+   * What this chat had open when Ghost last closed, offered back until the person resumes
    * or declines it. Nothing starts by itself.
    */
   readonly resume: readonly RememberedTab[] | null;
@@ -255,7 +255,7 @@ export class TerminalPanels {
   }
 
   /**
-   * The first time a chat shows in this run: what its panel had open when o7 last closed,
+   * The first time a chat shows in this run: what its panel had open when Ghost last closed,
    * offered back, the panel open as it was. Nothing starts until the person resumes.
    */
   restore(chatId: string): void {

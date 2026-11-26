@@ -1,8 +1,8 @@
 /**
- * o7's Terms of Service and Privacy Policy, published by BASH.AI LLC on o7.codes (owner, 25 November
+ * Ghost's Terms of Service and Privacy Policy, published by BASH.AI LLC on onghost.dev (owner, 25 November
  * 2026). Setup's first page says that continuing accepts them; a copy that finished setup before
  * they were published, or before they last changed materially, shows one notice with both links
- * (both documents promise "an in-app notice" for material changes). See docs/developing-in-o7.md
+ * (both documents promise "an in-app notice" for material changes). See docs/developing-in-ghost.md
  * ("Terms and Privacy").
  */
 
@@ -14,8 +14,8 @@ export const LEGAL_VERSION = "2026-11-26";
 /** The same date as people read it. */
 export const LEGAL_DATE = "November 26, 2026";
 
-export const TERMS_URL = "https://o7.codes/terms";
-export const PRIVACY_URL = "https://o7.codes/privacy";
+export const TERMS_URL = "https://onghost.dev/terms";
+export const PRIVACY_URL = "https://onghost.dev/privacy";
 export const OPERATOR = "BASH.AI LLC";
 export const COPYRIGHT = `© 2026 ${OPERATOR}. All rights reserved.`;
 
@@ -57,8 +57,8 @@ export function legalNotice(
   return {
     title:
       accepted === null
-        ? "o7 has Terms of Service and a Privacy Policy"
-        : "o7's Terms of Service and Privacy Policy changed",
-    detail: `From ${OPERATOR}, effective ${LEGAL_DATE}. Using o7 means you agree to them.`,
+        ? "Ghost has Terms of Service and a Privacy Policy"
+        : "Ghost's Terms of Service and Privacy Policy changed",
+    detail: `From ${OPERATOR}, effective ${LEGAL_DATE}. Using Ghost means you agree to them.`,
   };
 }

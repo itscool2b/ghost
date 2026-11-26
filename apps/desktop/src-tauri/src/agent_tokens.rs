@@ -1,4 +1,4 @@
-//! Sign-in tokens of the agent accounts a person adds in o7, one entry per account, in the
+//! Sign-in tokens of the agent accounts a person adds in Ghost, one entry per account, in the
 //! computer's secure storage: Credential Manager on Windows, the login keychain on macOS, the
 //! Secret Service (GNOME Keyring, KWallet) on Linux. There is no plaintext fallback.
 //!

@@ -30,7 +30,7 @@ fn open_failure(kind: cpal::ErrorKind) -> Failure {
             "Another program has the output device to itself. Close it, then try again."
         }
         K::UnsupportedConfig => {
-            "This output device uses a format o7 cannot play to. Choose another in your system's sound settings."
+            "This output device uses a format Ghost cannot play to. Choose another in your system's sound settings."
         }
         _ => {
             "No speaker or headphones could be opened. Check your system's sound output, then try again."
@@ -314,19 +314,20 @@ mod tests {
     }
 
     /// Opt-in, with the bundled voice model: one sentence in three voices, through the converter
-    /// the speakers get, written to `O7_SPEECH_WAV_DIR` as 16 kHz WAVs. Dictation's own model
+    /// the speakers get, written to `GHOST_SPEECH_WAV_DIR` as 16 kHz WAVs. Dictation's own model
     /// then says what it heard
-    /// (`O7_DICTATION_FIXTURE_DIR=<the same folder> cargo test -p o7-desktop --lib
+    /// (`GHOST_DICTATION_FIXTURE_DIR=<the same folder> cargo test -p ghost-desktop --lib
     /// bundled_models_transcribe -- --ignored --nocapture`): the nearest thing to a listener a
-    /// test has. `O7_SPEECH_WAV_TEXTS` names a file of other sentences, one a line: each is
+    /// test has. `GHOST_SPEECH_WAV_TEXTS` names a file of other sentences, one a line: each is
     /// spoken by each voice and saved with its words beside it, which is how dictation's bench
     /// gets developers' vocabulary (docs/local-dictation.md).
     #[test]
-    #[ignore = "needs the bundled voice model and O7_SPEECH_WAV_DIR"]
+    #[ignore = "needs the bundled voice model and GHOST_SPEECH_WAV_DIR"]
     fn the_voices_speak_into_fixture_audio_for_dictation_to_hear() {
         use std::path::{Path, PathBuf};
-        let out = PathBuf::from(std::env::var_os("O7_SPEECH_WAV_DIR").expect("a folder for WAVs"));
-        let folder = std::env::var_os("O7_SPEECH_MODELS").map_or_else(
+        let out =
+            PathBuf::from(std::env::var_os("GHOST_SPEECH_WAV_DIR").expect("a folder for WAVs"));
+        let folder = std::env::var_os("GHOST_SPEECH_MODELS").map_or_else(
             || Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/speech"),
             PathBuf::from,
         );
@@ -338,7 +339,7 @@ mod tests {
                 .find(|voice| voice.locale == locale && voice.id != "default")
                 .expect("a voice of each kind")
         };
-        let texts = std::env::var_os("O7_SPEECH_WAV_TEXTS").map(|path| {
+        let texts = std::env::var_os("GHOST_SPEECH_WAV_TEXTS").map(|path| {
             std::fs::read_to_string(path)
                 .unwrap()
                 .lines()

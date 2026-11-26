@@ -1,0 +1,40 @@
+[package]
+name = "ghost-cli"
+description = "Ghost's headless dev tool: lists agents, probes and smoke-tests them through a headless session manager, curates protocol logs into replay fixtures, and replays them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+default-run = "ghost-cli"
+
+[dependencies]
+ghost-agents.workspace = true
+ghost-core.workspace = true
+# `replay`: the harness `ghost-cli replay` and `ghost-cli fixture` run (spec 5.8). It turns on tokio's
+# `test-util` too, for the paused clock replays run on.
+ghost-drivers = { workspace = true, features = ["replay"] }
+ghost-process.workspace = true
+ghost-protocol.workspace = true
+# The home folder curation replaces with `<HOME>`.
+dirs.workspace = true
+futures.workspace = true
+# The host name curation replaces with `<HOST>`; ghost-core reads it the same way.
+hostname = "0.4.2"
+serde.workspace = true
+serde_json.workspace = true
+# The run folder of each probe or smoke run: its temporary data root and its chat folder.
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Paused time for the replay tests.
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

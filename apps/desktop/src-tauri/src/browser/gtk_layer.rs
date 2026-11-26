@@ -78,7 +78,7 @@ const PARKED_BEFORE: i32 = -10_000;
 /// its last control) would carry focus to a browser page, shown or parked off the window, or to
 /// nothing. So focus moves between pages only by a click (or a page's own focus call) into a page
 /// on screen, and focus that ends on nothing, or on a page hidden or parked, returns to the page
-/// that held it. `O7_FOCUS_PROBE=1` logs every focus change and key the window sees.
+/// that held it. `GHOST_FOCUS_PROBE=1` logs every focus change and key the window sees.
 fn keep_focus(window: &gtk::Window) {
     // GTK moving focus between the window's widgets by keyboard: never. A page moves focus among
     // its own controls itself.
@@ -176,12 +176,12 @@ fn release_focus(holder: &gtk::Widget) {
 
 fn probing() -> bool {
     static PROBING: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *PROBING.get_or_init(|| std::env::var_os("O7_FOCUS_PROBE").is_some_and(|v| v == "1"))
+    *PROBING.get_or_init(|| std::env::var_os("GHOST_FOCUS_PROBE").is_some_and(|v| v == "1"))
 }
 
 fn probe(message: impl FnOnce() -> String) {
     if probing() {
-        tracing::info!(target: "o7::focus", "{}", message());
+        tracing::info!(target: "ghost::focus", "{}", message());
     }
 }
 

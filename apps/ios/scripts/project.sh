@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generates apps/ios/O7.xcodeproj from project.yml with XcodeGen 2.45.4.
+# Generates apps/ios/Ghost.xcodeproj from project.yml with XcodeGen 2.45.4.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 want="2.45.4"
@@ -10,4 +10,4 @@ if [ "$have" != "$want" ]; then
 fi
 cd "$here"
 xcodegen generate --spec project.yml --quiet
-echo "Generated $here/O7.xcodeproj"
+echo "Generated $here/Ghost.xcodeproj"

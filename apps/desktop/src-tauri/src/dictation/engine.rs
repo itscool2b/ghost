@@ -32,7 +32,7 @@ static LOADED: Mutex<Option<(PathBuf, Arc<Engine>)>> = Mutex::new(None);
 fn threads() -> i32 {
     // The opt-in bench (`bundled_models_transcribe_fixture_audio_live`) tries other counts.
     #[cfg(test)]
-    if let Some(count) = std::env::var("O7_DICTATION_THREADS")
+    if let Some(count) = std::env::var("GHOST_DICTATION_THREADS")
         .ok()
         .and_then(|count| count.parse().ok())
     {
@@ -68,14 +68,14 @@ impl Engine {
         static QUIET: std::sync::Once = std::sync::Once::new();
         QUIET.call_once(transcribe_cpp::disable_logging);
         let unreadable = |_| {
-            Failure::model("The dictation model could not be loaded. Reinstall o7 to repair it.")
+            Failure::model("The dictation model could not be loaded. Reinstall Ghost to repair it.")
         };
         let asr = Model::load(asr).map_err(unreadable)?;
         let vad = Model::load(vad).map_err(unreadable)?;
         let info = vad.vad_info().map_err(unreadable)?;
         if info.sample_rate != SAMPLE_RATE as i32 || info.frame_samples <= 0 {
             return Err(Failure::model(
-                "The voice detection model is not the one this build expects. Reinstall o7.",
+                "The voice detection model is not the one this build expects. Reinstall Ghost.",
             ));
         }
         Ok(Self {

@@ -22,7 +22,7 @@ describe("the status line over the golden turn", () => {
     expect(statusAt(GOLDEN, 20)).toMatchObject({ verb: "Editing", target: "pacing.ts" });
     expect(statusAt(GOLDEN, 24)).toMatchObject({
       verb: "Running",
-      target: "pnpm --filter @o7/ui test pacing",
+      target: "pnpm --filter @ghost/ui test pacing",
       mono: true,
     });
     expect(statusAt(GOLDEN, 35)).toMatchObject({ verb: "Writing" });

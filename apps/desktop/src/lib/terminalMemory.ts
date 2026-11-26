@@ -1,5 +1,5 @@
 /**
- * Which terminals each chat's docked panel had open, kept so that after o7 restarts the
+ * Which terminals each chat's docked panel had open, kept so that after Ghost restarts the
  * panel can offer them back. Only the shell, the tab's name and whether Run was going are kept:
  * never a command, never output (the panel says output is not saved, and it is not).
  */

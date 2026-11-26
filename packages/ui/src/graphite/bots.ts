@@ -1,5 +1,5 @@
 /*
- * The assistants o7 names where a bot is linked (Settings, Remote access; setup; the website):
+ * The assistants Ghost names where a bot is linked (Settings, Remote access; setup; the website):
  * personal agents that run somewhere else and reach this computer's coding agents through a bot
  * link (docs/remote-sessions.md). Any assistant that takes an MCP server can be linked; these four
  * are the ones named, each with its maker's mark (third-party/brand-marks.md).

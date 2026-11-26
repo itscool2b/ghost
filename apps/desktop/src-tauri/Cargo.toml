@@ -1,6 +1,6 @@
 [package]
-name = "o7-desktop"
-description = "The o7 desktop shell: Tauri window, typed commands and channels over o7-core's sessions"
+name = "ghost-desktop"
+description = "The Ghost desktop shell: Tauri window, typed commands and channels over ghost-core's sessions"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,17 +8,17 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
-default-run = "o7"
+default-run = "ghost"
 
 # The library holds everything (so tests and the bindings export can reach it); the binary only
 # calls `run`. They have different names on purpose: a bin and a lib that share a name collide on
 # Windows debug artifacts.
 [lib]
-name = "o7_desktop"
+name = "ghost_desktop"
 path = "src/lib.rs"
 
 [[bin]]
-name = "o7"
+name = "ghost"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -30,16 +30,16 @@ tauri-build.workspace = true
 [dependencies]
 # Encodes pictures as JPEG and PNG off the main thread: the browser's page pictures on Linux
 # (src/browser/snapshot.rs) and what a bot is shown (remote.rs). Already in the tree through
-# o7-core, at this version and with these codecs.
+# ghost-core, at this version and with these codecs.
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
-o7-agents.workspace = true
-o7-config.workspace = true
-o7-core.workspace = true
-o7-devices.workspace = true
-o7-drivers.workspace = true
-o7-process.workspace = true
-o7-protocol.workspace = true
-o7-remote.workspace = true
+ghost-agents.workspace = true
+ghost-config.workspace = true
+ghost-core.workspace = true
+ghost-devices.workspace = true
+ghost-drivers.workspace = true
+ghost-process.workspace = true
+ghost-protocol.workspace = true
+ghost-remote.workspace = true
 # The computer's secure storage for added agent accounts' tokens (agent_tokens.rs): entry names
 # are base64url digests, and secret bytes are cleared when dropped.
 base64 = "0.22.1"
@@ -61,7 +61,7 @@ uuid = { workspace = true, features = ["v4"] }
 reqwest.workspace = true
 # Native TLS matches the rest of the desktop; signed-version verification is required.
 tauri-plugin-updater = { version = "=2.14.0", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
-# Same release o7-drivers uses: its `run_script` takes a `CancellationToken`.
+# Same release ghost-drivers uses: its `run_script` takes a `CancellationToken`.
 tokio-util = "0.7.20"
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -98,7 +98,7 @@ windows-version = "0.1.7"
 # back and forward state, crashes, saved sign-ins): the releases wry itself uses.
 webview2-com = "=0.39.1"
 windows = { version = "=0.62.2", features = ["Win32_Foundation"] }
-# Opening o7 at sign-in (login_start.rs): the current user's Run key. Already in the tree through
+# Opening Ghost at sign-in (login_start.rs): the current user's Run key. Already in the tree through
 # hyper-util, at this version.
 windows-registry = "=0.6.1"
 # The data cleanup mode (uninstall.rs): its dialogs, attaching to a terminal, waiting for the app
@@ -141,14 +141,14 @@ webkit2gtk = { version = "=2.0.2", features = ["v2_38"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 # The login keychain, for added agent accounts' tokens.
 apple-native-keyring-store = { version = "1.0.2", default-features = false, features = ["keychain"] }
-# "Delete data and move o7 to the Trash" (uninstall.rs): NSFileManager's trashItemAtURL.
+# "Delete data and move Ghost to the Trash" (uninstall.rs): NSFileManager's trashItemAtURL.
 # Already in the tree through Tauri, at this version.
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSError", "NSFileManager", "NSString", "NSURL"] }
 
 [dev-dependencies]
 # The quit, page-load and signal tests run the session manager on fake processes and scripted drivers.
-o7-drivers = { workspace = true, features = ["testing"] }
-o7-process = { workspace = true, features = ["testing"] }
+ghost-drivers = { workspace = true, features = ["testing"] }
+ghost-process = { workspace = true, features = ["testing"] }
 # Paused time makes the window fallback and the demo stream tests instant and deterministic.
 tokio = { workspace = true, features = ["test-util"] }
 

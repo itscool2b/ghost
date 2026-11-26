@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ChatSnapshot,
+  GhostEvent,
   HistoryPage,
-  O7Event,
   PromptAck,
   QueuedPrompt,
   SendingPrompt,
@@ -145,12 +145,12 @@ describe("joining a chat (the join protocol)", () => {
     const pending = fake.lastAttach();
     // The shell drops the refused view's channel as well.
     pending.onEnd();
-    pending.reject(new CommandError("storage_unavailable", "o7's database is not available."));
+    pending.reject(new CommandError("storage_unavailable", "Ghost's database is not available."));
     await opening;
     await settled();
     expect(store.getSnapshot()).toMatchObject({
       phase: "failed",
-      attachError: "o7's database is not available.",
+      attachError: "Ghost's database is not available.",
     });
     expect(fake.attaches).toHaveLength(1);
 
@@ -577,7 +577,7 @@ describe("the session's live state", () => {
       };
       if (ackOrder === "before") await acknowledge();
       let seq = 0;
-      const emit = (events: O7Event[]) => {
+      const emit = (events: GhostEvent[]) => {
         channel.onFrame(frame(CHAT, seq, events));
         seq += events.length;
       };
@@ -1285,7 +1285,7 @@ describe("history errors", () => {
       history: () =>
         fail
           ? Promise.reject(
-              new CommandError("storage_unavailable", "o7's database is not available: busy"),
+              new CommandError("storage_unavailable", "Ghost's database is not available: busy"),
             )
           : Promise.resolve(historyPage(CHAT, [], { has_more: false })),
     });
@@ -1293,7 +1293,7 @@ describe("history errors", () => {
     await store.loadEarlier();
     expect(store.getSnapshot()).toMatchObject({
       loadingEarlier: false,
-      earlierError: "o7's database is not available: busy",
+      earlierError: "Ghost's database is not available: busy",
       historyRevision: 0,
       hasMore: true,
     });

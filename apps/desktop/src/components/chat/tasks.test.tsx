@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { O7Event } from "../../bindings";
+import type { GhostEvent } from "../../bindings";
 import { newestTurnKey } from "../../lib/chat/tasks";
 import { ev, numbered } from "../../lib/chat/testing";
 import {
@@ -15,7 +15,7 @@ import { TaskPanel } from "./TaskPanel";
 import { ToolBlock } from "./ToolBlock";
 import { TaskLinkContext } from "./taskLinks";
 
-function transcript(events: readonly O7Event[]): Transcript {
+function transcript(events: readonly GhostEvent[]): Transcript {
   return applyEntries(emptyTranscript(), numbered(events.map((event) => ["t", event] as const)));
 }
 

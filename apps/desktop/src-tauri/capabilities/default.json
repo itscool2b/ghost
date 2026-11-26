@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Everything the main window's page may call besides o7's own commands: dragging the window by its title area, and opening http and https links in the browser. Nothing that reveals, reads or opens paths (the data folder is shown by o7's own reveal_data_dir command, which takes no path), opens other URL schemes, spawns processes, or builds menus and trays.",
+  "description": "Everything the main window's page may call besides Ghost's own commands: dragging the window by its title area, and opening http and https links in the browser. Nothing that reveals, reads or opens paths (the data folder is shown by Ghost's own reveal_data_dir command, which takes no path), opens other URL schemes, spawns processes, or builds menus and trays.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",

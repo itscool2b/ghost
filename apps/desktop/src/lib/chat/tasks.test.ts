@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { O7Event } from "../../bindings";
+import type { GhostEvent } from "../../bindings";
 import { ChatStore } from "./chatStore";
 import {
   childTasks,
@@ -29,7 +29,7 @@ import { applyEntries, emptyTranscript, type Transcript, withTasks } from "./tra
 
 const CHAT = "c1";
 
-function transcript(events: readonly (readonly [string | null, O7Event])[]): Transcript {
+function transcript(events: readonly (readonly [string | null, GhostEvent])[]): Transcript {
   return applyEntries(emptyTranscript(), numbered(events));
 }
 

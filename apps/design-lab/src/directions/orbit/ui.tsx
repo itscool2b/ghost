@@ -1,4 +1,4 @@
-import { usePrefersReducedMotion } from "@o7/ui";
+import { usePrefersReducedMotion } from "@ghost/ui";
 import type { LucideIcon } from "lucide-react";
 import { type ButtonHTMLAttributes, type ReactNode, type Ref, useEffect } from "react";
 import { type Autonomy, formatElapsed, type Player, usePlayhead } from "../../kit";

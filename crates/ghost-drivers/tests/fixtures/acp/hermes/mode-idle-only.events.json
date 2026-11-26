@@ -1,0 +1,394 @@
+{
+  "events": [
+    {
+      "type": "status",
+      "data": "spawning"
+    },
+    {
+      "type": "status",
+      "data": "initializing"
+    },
+    {
+      "type": "status",
+      "data": "opening"
+    },
+    {
+      "type": "status",
+      "data": "configuring"
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:anthropic/claude-sonnet-4.5",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "dont_ask",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:anthropic/claude-sonnet-4.5",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "full_auto",
+        "native_mode": "dont_ask",
+        "auto_answer": {
+          "type": "kinds",
+          "kinds": [
+            "execute"
+          ]
+        },
+        "note": null
+      }
+    },
+    {
+      "type": "status",
+      "data": "ready"
+    },
+    {
+      "type": "ready",
+      "data": {
+        "native_session_id": "<SESSION_1>",
+        "agent_name": "hermes-agent",
+        "agent_version": "0.22.5",
+        "capabilities": {
+          "images": true,
+          "steer": false,
+          "interrupt": true,
+          "resume": true,
+          "fork": false,
+          "rewind": false,
+          "set_model": true,
+          "set_effort": false,
+          "permissions": true,
+          "plans": true,
+          "usage": true,
+          "limits": false,
+          "slash_commands": true,
+          "add_dirs": false,
+          "autonomy_levels": [
+            "full_auto",
+            "auto_edit",
+            "ask"
+          ]
+        },
+        "resumed": {
+          "type": "new"
+        },
+        "spawn_id": "019a0000-0000-7000-8000-0000000000a1",
+        "replay": null
+      }
+    },
+    {
+      "type": "status",
+      "data": "prompting"
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "dont_ask",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": {
+            "type": "choice",
+            "value": "default"
+          }
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:anthropic/claude-sonnet-4.5",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "data": {
+        "turn": "019a0000-0001-7000-8000-000000000001",
+        "event": {
+          "type": "notice",
+          "level": "info",
+          "message": "Hermes changes mode when the current turn ends."
+        }
+      }
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "full_auto",
+        "native_mode": "default",
+        "auto_answer": {
+          "type": "never"
+        },
+        "note": "You picked the Default mode by hand, so Ghost asks before every action. Choose an autonomy level to hand control back."
+      }
+    },
+    {
+      "type": "event",
+      "data": {
+        "turn": "019a0000-0001-7000-8000-000000000001",
+        "event": {
+          "type": "message_delta",
+          "message_id": "019a0000-0001-7000-8000-000000000001.m1",
+          "text": "Writing..."
+        }
+      }
+    },
+    {
+      "type": "event",
+      "data": {
+        "turn": "019a0000-0001-7000-8000-000000000001",
+        "event": {
+          "type": "message_completed",
+          "message_id": "019a0000-0001-7000-8000-000000000001.m1"
+        }
+      }
+    },
+    {
+      "type": "turn_ended",
+      "data": {
+        "turn_id": "019a0000-0001-7000-8000-000000000001",
+        "stop_reason": "end_turn",
+        "usage": null,
+        "error": null
+      }
+    },
+    {
+      "type": "status",
+      "data": "ready"
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:anthropic/claude-sonnet-4.5",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "status",
+      "data": "closing"
+    }
+  ],
+  "replies": [
+    {
+      "set_option": "mode",
+      "reply": {
+        "ok": null
+      }
+    }
+  ],
+  "exit": {
+    "type": "closed"
+  }
+}

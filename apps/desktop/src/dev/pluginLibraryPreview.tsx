@@ -199,7 +199,7 @@ export function pluginFixture(mode: string): PluginLibrary {
     harness: {
       state: "unknown",
       version: "0.162.1",
-      reason: "GitHub stable release did not answer. You may be offline; o7 checks again later.",
+      reason: "GitHub stable release did not answer. You may be offline; Ghost checks again later.",
     },
     updated_at: NOW - 60_000,
     version_change: null,
@@ -299,7 +299,7 @@ export function pluginFixture(mode: string): PluginLibrary {
     features: [
       files(
         "plugins",
-        "OpenCode installs its plugins and checks its servers whenever it runs, so o7 reads ~/.config/opencode instead.",
+        "OpenCode installs its plugins and checks its servers whenever it runs, so Ghost reads ~/.config/opencode instead.",
         [],
       ),
     ],
@@ -340,7 +340,7 @@ export function pluginFixture(mode: string): PluginLibrary {
         state: {
           state: "unavailable",
           reason:
-            "This agent has no qualified structured plugin-management interface in o7. Use its native customization where available.",
+            "This agent has no qualified structured plugin-management interface in Ghost. Use its native customization where available.",
         },
         command: null,
         entries: [],

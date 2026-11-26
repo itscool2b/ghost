@@ -5,8 +5,8 @@ import { Banners, type MemoryEditBanner, MemoryEditBannerView, noticeItems } fro
 const banner = (state: MemoryEditBanner["state"]): MemoryEditBanner => ({
   key: "one:r2",
   title: "Project memory updated",
-  detail: "Claude Code · Fix the login flow · o7",
-  text: "Claude Code in Fix the login flow updated project memory for o7.",
+  detail: "Claude Code · Fix the login flow · Ghost",
+  text: "Claude Code in Fix the login flow updated project memory for Ghost.",
   state,
   onReview: vi.fn(),
   onUndo: vi.fn(),
@@ -24,10 +24,10 @@ describe("an agent's memory edit banner", () => {
     const edit = banner({ status: "shown" });
     const html = view(edit);
     expect(html).toContain(">Project memory updated<");
-    expect(html).toContain(">Claude Code · Fix the login flow · o7<");
+    expect(html).toContain(">Claude Code · Fix the login flow · Ghost<");
     // The whole sentence stays in the tooltip, for a line shortened to fit.
     expect(html).toContain(
-      'title="Claude Code in Fix the login flow updated project memory for o7."',
+      'title="Claude Code in Fix the login flow updated project memory for Ghost."',
     );
     expect(html).toContain('role="status"');
     for (const label of [">Open<", ">Undo<", 'aria-label="Dismiss"']) expect(html).toContain(label);

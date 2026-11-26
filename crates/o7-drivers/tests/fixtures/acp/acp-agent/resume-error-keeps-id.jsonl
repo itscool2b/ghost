@@ -1,7 +1,0 @@
-{"d":"note","note":{"text":"Any other resume error ends the start (the session keeps the native id for Retry); the raw stderr tail is the detail."}}
-{"d":"note","note":{"start":{"agent_id":"acp-agent","dialect":"generic","resume":"<SESSION_1>","autonomy":"full_auto","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
-{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"auracode","title":"auracode","version":"0.0.0-replay"}}}}
-{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"acp-agent","title":"ACP Agent","version":"1.0.0"}}}}
-{"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"<SESSION_1>","cwd":"<CWD>","mcpServers":[]}}}
-{"d":"err","line":"ERROR session store is locked by another process"}
-{"d":"in","msg":{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Internal error: session store is locked"}}}

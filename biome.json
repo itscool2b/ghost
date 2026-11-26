@@ -9,8 +9,8 @@
       "!**/node_modules",
       "!**/src-tauri/gen",
       "!**/bindings.ts",
-      "!crates/o7-drivers/tests/fixtures",
-      "!crates/o7-drivers/tests/schemas",
+      "!crates/ghost-drivers/tests/fixtures",
+      "!crates/ghost-drivers/tests/schemas",
       "!**/pnpm-lock.yaml",
       "!docs/spikes/**/target",
       "!packages/ui/src/graphite/bot-logos/hermes.svg",
@@ -21,9 +21,9 @@
       "!apps/ios/**/*.xcodeproj",
       "!apps/ios/**/*.icon",
       "!apps/ios/**/Package.resolved",
-      "!apps/ios/O7Kit/Sources/O7Highlight/Resources",
-      "!apps/ios/O7Kit/Tests/**/Goldens",
-      "!apps/ios/O7Kit/Tests/**/Fixtures"
+      "!apps/ios/GhostKit/Sources/GhostHighlight/Resources",
+      "!apps/ios/GhostKit/Tests/**/Goldens",
+      "!apps/ios/GhostKit/Tests/**/Fixtures"
     ]
   },
   "formatter": {

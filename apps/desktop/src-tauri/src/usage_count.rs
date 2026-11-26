@@ -1,4 +1,4 @@
-//! Once a day, a copy of o7 adds one to the site's count of copies that ran (`/api/count`,
+//! Once a day, a copy of Ghost adds one to the site's count of copies that ran (`/api/count`,
 //! `apps/web-worker/src/count.rs`).
 //!
 //! What is sent, and who decides:
@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-const COUNT: &str = "https://o7.codes/api/count";
+const COUNT: &str = "https://onghost.dev/api/count";
 const FILE: &str = "counted.json";
 /// A US Eastern day is 23 to 25 hours long; anything else in an answer is not believed.
 const LONGEST_WAIT: u64 = 25 * 60 * 60;
@@ -78,7 +78,7 @@ async fn count(endpoint: &str, file: &Path, version: &str, now: u64) -> Result<(
         .https_only(endpoint.starts_with("https://"))
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(20))
-        .user_agent(concat!("o7/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("ghost/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|error| error.to_string())?;
     let response = client

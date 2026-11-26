@@ -1,5 +1,5 @@
-import { usePrefersReducedMotion } from "@o7/ui";
-import { Wing } from "@o7/ui/graphite";
+import { usePrefersReducedMotion } from "@ghost/ui";
+import { Wing } from "@ghost/ui/graphite";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -98,7 +98,7 @@ function ringOf(node: HTMLElement): Shown["ring"] {
 }
 
 /**
- * The tour: o7's wing lifts off from the logo at the sidebar's foot, flies to one control after
+ * The tour: Ghost's wing lifts off from the logo at the sidebar's foot, flies to one control after
  * another and settles beside each, nose toward it, while a card says what it is. Before a flight
  * it sits on the logo and asks. Nothing dims and nothing is covered but the card's own box: the
  * window stays live under it, and the tour ends at Escape, at its last stop, or when it is told

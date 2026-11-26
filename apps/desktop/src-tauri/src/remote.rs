@@ -1,23 +1,23 @@
-//! Remote access: paired browsers, o7 for iPhone and linked bots reaching this computer's chats
-//! through the relay (`o7-remote`, `docs/remote-sessions.md`). Off until the person turns it on
+//! Remote access: paired browsers, Ghost for iPhone and linked bots reaching this computer's chats
+//! through the relay (`ghost-remote`, `docs/remote-sessions.md`). Off until the person turns it on
 //! in Settings.
 //!
 //! The service belongs to the installation: one connection to the relay, whichever profile is
 //! open. A device or a bot link belongs to the profile it was made in and reaches no other
-//! (`o7_remote::Registry`): when another profile opens, browsers are told to start over, the
+//! (`ghost_remote::Registry`): when another profile opens, browsers are told to start over, the
 //! other profile's devices are ended, and the relay is given only this profile's bot links.
 
 use std::sync::Arc;
 
-use o7_core::session::{FrameSink, SinkGone, StatusSink};
-use o7_protocol::{
+use ghost_core::session::{FrameSink, SinkGone, StatusSink};
+use ghost_protocol::{
     EventBatch, UiAnswer,
     remote::{RemoteBotLink, RemotePairing, RemoteStatus},
     search::ChatSearchHit,
     session::{Availability, ChatAttach, ChatStatusUpdate, HistoryPage, PromptAck},
     workspace::{ProjectChatCreate, WorkspaceChat, WorkspaceFilter},
 };
-use o7_remote::{
+use ghost_remote::{
     Backend, BackendError, BoxFuture, Frames, Overview, RegistryError, RemoteAgent, Service,
     Statuses,
 };
@@ -40,22 +40,22 @@ const PICTURE_QUALITY: u8 = 75;
 const PICTURE_BYTES: usize = 1536 * 1024;
 
 /// A pull request as GitHub CLI read it, as the remote service takes one.
-fn pull_request(view: o7_core::gitworkspaces::PullRequestView) -> o7_remote::PullRequest {
-    use o7_core::gitworkspaces::Checks;
-    o7_remote::PullRequest {
+fn pull_request(view: ghost_core::gitworkspaces::PullRequestView) -> ghost_remote::PullRequest {
+    use ghost_core::gitworkspaces::Checks;
+    ghost_remote::PullRequest {
         number: view.number,
         url: view.url,
         state: view.state,
         checks: match view.checks {
-            Checks::None => o7_remote::PrChecks::None,
-            Checks::Pending => o7_remote::PrChecks::Pending,
-            Checks::Passed => o7_remote::PrChecks::Passed,
-            Checks::Failed(names) => o7_remote::PrChecks::Failed(names),
+            Checks::None => ghost_remote::PrChecks::None,
+            Checks::Pending => ghost_remote::PrChecks::Pending,
+            Checks::Passed => ghost_remote::PrChecks::Passed,
+            Checks::Failed(names) => ghost_remote::PrChecks::Failed(names),
         },
         notes: view
             .notes
             .into_iter()
-            .map(|note| o7_remote::PrNote {
+            .map(|note| ghost_remote::PrNote {
                 author: note.author,
                 kind: note.kind,
                 body: note.body,
@@ -68,14 +68,14 @@ fn pull_request(view: o7_core::gitworkspaces::PullRequestView) -> o7_remote::Pul
 /// How long a reading reuses what GitHub CLI said of a chat's pull request: a bot reads often,
 /// and each look is a call to GitHub.
 const PR_FRESH: std::time::Duration = std::time::Duration::from_secs(120);
-/// How long what GitHub CLI said is kept for o7 for iPhone's Inbox, which shows it beside a chat
+/// How long what GitHub CLI said is kept for Ghost for iPhone's Inbox, which shows it beside a chat
 /// that finished in the last day and never asks GitHub itself.
 const PR_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
 /// What GitHub CLI last said of each chat's pull request, and when, by chat: a bot's reading
-/// names it in one line, and o7 for iPhone shows its parts, from the same look.
+/// names it in one line, and Ghost for iPhone shows its parts, from the same look.
 type PrSaid = std::sync::Mutex<
-    std::collections::HashMap<String, (std::time::Instant, Option<o7_remote::PullRequest>)>,
+    std::collections::HashMap<String, (std::time::Instant, Option<ghost_remote::PullRequest>)>,
 >;
 
 fn pr_said() -> &'static PrSaid {
@@ -86,9 +86,9 @@ fn pr_said() -> &'static PrSaid {
 /// The pull request open from `chat_id`'s branch: what GitHub CLI said within [`PR_FRESH`], or
 /// what it says now, kept for the next reading.
 async fn pull_request_of(
-    sessions: &o7_core::session::SessionManager,
+    sessions: &ghost_core::session::SessionManager,
     chat_id: &str,
-) -> Result<Option<o7_remote::PullRequest>, AppError> {
+) -> Result<Option<ghost_remote::PullRequest>, AppError> {
     let fresh = pr_said()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -105,7 +105,7 @@ async fn pull_request_of(
 
 /// Keeps what GitHub CLI said of `chat_id`'s pull request. What is a day old goes, so the cache
 /// holds only the chats looked at in the last day.
-fn keep_pull_request(chat_id: &str, said: Option<o7_remote::PullRequest>) {
+fn keep_pull_request(chat_id: &str, said: Option<ghost_remote::PullRequest>) {
     let mut kept = pr_said()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -114,7 +114,7 @@ fn keep_pull_request(chat_id: &str, said: Option<o7_remote::PullRequest>) {
 }
 
 /// What GitHub CLI last said of `chat_id`'s pull request in the last day, without asking again.
-fn known_pull_request(chat_id: &str) -> Option<o7_remote::PullRequest> {
+fn known_pull_request(chat_id: &str) -> Option<ghost_remote::PullRequest> {
     pr_said()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -124,11 +124,11 @@ fn known_pull_request(chat_id: &str) -> Option<o7_remote::PullRequest> {
 }
 
 /// The words the remote service uses for how a file changed.
-fn change_word(kind: o7_protocol::changes::ChangeKind) -> &'static str {
+fn change_word(kind: ghost_protocol::changes::ChangeKind) -> &'static str {
     match kind {
-        o7_protocol::changes::ChangeKind::Added => "added",
-        o7_protocol::changes::ChangeKind::Modified => "modified",
-        o7_protocol::changes::ChangeKind::Deleted => "deleted",
+        ghost_protocol::changes::ChangeKind::Added => "added",
+        ghost_protocol::changes::ChangeKind::Modified => "modified",
+        ghost_protocol::changes::ChangeKind::Deleted => "deleted",
     }
 }
 
@@ -238,22 +238,22 @@ fn shrink(bytes: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The relay and the website it belongs to. Release builds reach only o7's own; a
+/// The relay and the website it belongs to. Release builds reach only Ghost's own; a
 /// development build may name a relay on this machine. The site was auracode.si until
 /// 19 November 2026: the relay still answers there for copies from before the move
 /// (docs/remote-sessions.md), and a copy from after it never goes there.
 fn origins() -> (String, String) {
     if cfg!(debug_assertions)
         && let (Ok(relay), Ok(site)) = (
-            std::env::var("O7_REMOTE_RELAY"),
-            std::env::var("O7_REMOTE_SITE"),
+            std::env::var("GHOST_REMOTE_RELAY"),
+            std::env::var("GHOST_REMOTE_SITE"),
         )
     {
         return (relay, site);
     }
-    let site = match option_env!("O7_API_ORIGIN") {
-        Some("https://preview.o7.codes") => "https://preview.o7.codes",
-        _ => "https://o7.codes",
+    let site = match option_env!("GHOST_API_ORIGIN") {
+        Some("https://preview.onghost.dev") => "https://preview.onghost.dev",
+        _ => "https://onghost.dev",
     };
     (site.replacen("https://", "wss://", 1), site.to_owned())
 }
@@ -275,7 +275,7 @@ pub(crate) fn setup(app: &tauri::AppHandle, runtime: &tokio::runtime::Handle) {
         .filter(|name| !name.trim().is_empty())
         .unwrap_or_else(|| "This computer".into());
     let notify = app.clone();
-    let config = o7_remote::Config {
+    let config = ghost_remote::Config {
         path: folder.join("remote.json"),
         relay,
         site,
@@ -462,7 +462,7 @@ pub fn remote_create_bot(
     service(&app)?
         .create_bot(
             &name,
-            o7_remote::bot::Rights {
+            ghost_remote::bot::Rights {
                 full,
                 read_only,
                 approve,
@@ -472,8 +472,8 @@ pub fn remote_create_bot(
         .map_err(refused)
 }
 
-/// This program's path, for an assistant on this computer that starts o7's helper
-/// (`--o7-bot-helper`) to reach its door without the relay.
+/// This program's path, for an assistant on this computer that starts Ghost's helper
+/// (`--ghost-bot-helper`) to reach its door without the relay.
 #[tauri::command]
 #[specta::specta]
 pub fn remote_local_program() -> Result<String, AppError> {
@@ -542,12 +542,12 @@ pub async fn remote_remove_bot(
     Ok(service.status())
 }
 
-fn callback_kind(kind: &str) -> Result<o7_remote::CallbackKind, AppError> {
+fn callback_kind(kind: &str) -> Result<ghost_remote::CallbackKind, AppError> {
     match kind {
-        "grok" => Ok(o7_remote::CallbackKind::Grok),
-        "hermes" => Ok(o7_remote::CallbackKind::Hermes),
-        "openclaw" => Ok(o7_remote::CallbackKind::Openclaw),
-        "webhook" => Ok(o7_remote::CallbackKind::Webhook),
+        "grok" => Ok(ghost_remote::CallbackKind::Grok),
+        "hermes" => Ok(ghost_remote::CallbackKind::Hermes),
+        "openclaw" => Ok(ghost_remote::CallbackKind::Openclaw),
+        "webhook" => Ok(ghost_remote::CallbackKind::Webhook),
         _ => Err(AppError::invalid_argument(
             "Choose which assistant this address is.",
         )),
@@ -594,16 +594,18 @@ pub async fn remote_set_bot_callback(
     let service = service(&app)?;
     let kind = callback_kind(&kind)?;
     // Kept as the parser wrote it: what is sent to is exactly what was checked.
-    let url = o7_remote::callback::check_url(url.trim())
+    let url = ghost_remote::callback::check_url(url.trim())
         .map_err(|refusal| AppError::invalid_argument(refusal.0))?;
     let (channel, to) = (
         short_field(channel, "channel")?,
         short_field(to, "recipient")?,
     );
     let (channel, to) = match (kind, channel, to) {
-        (o7_remote::CallbackKind::Openclaw, Some(channel), Some(to)) => (Some(channel), Some(to)),
-        (o7_remote::CallbackKind::Openclaw, None, None) => (None, None),
-        (o7_remote::CallbackKind::Openclaw, ..) => {
+        (ghost_remote::CallbackKind::Openclaw, Some(channel), Some(to)) => {
+            (Some(channel), Some(to))
+        }
+        (ghost_remote::CallbackKind::Openclaw, None, None) => (None, None),
+        (ghost_remote::CallbackKind::Openclaw, ..) => {
             return Err(AppError::invalid_argument(
                 "Give both the channel and who to send to, or neither.",
             ));
@@ -635,7 +637,7 @@ pub async fn remote_set_bot_callback(
     service
         .set_bot_callback(
             &id,
-            Some(o7_remote::Callback {
+            Some(ghost_remote::Callback {
                 kind,
                 url,
                 channel,
@@ -675,7 +677,7 @@ pub async fn remote_test_bot_callback(
     Ok(service.status())
 }
 
-/// Sends o7 for iPhone `id` a test notification now, through the relay and Apple, as its row's
+/// Sends Ghost for iPhone `id` a test notification now, through the relay and Apple, as its row's
 /// "Send test notification" does: at most one every ten seconds, and only through a relay that
 /// sends notifications. The status says when Apple last took one for it.
 #[tauri::command]
@@ -764,7 +766,7 @@ impl AppBackend {
     /// The bound profile's session manager, under a command lease.
     fn sessions(
         &self,
-    ) -> Result<crate::state::ProfileLease<o7_core::session::SessionManager>, AppError> {
+    ) -> Result<crate::state::ProfileLease<ghost_core::session::SessionManager>, AppError> {
         self.state().sessions_of(&self.profile)
     }
 
@@ -808,10 +810,10 @@ impl AppBackend {
 }
 
 /// The open profile's theme and appearance, by their saved names, for a paired page to wear.
-fn look(state: &AppState) -> Option<o7_remote::Look> {
+fn look(state: &AppState) -> Option<ghost_remote::Look> {
     let preferences = state.setup_service()?.preferences().ok()?;
     let name = |value: serde_json::Value| value.as_str().map(str::to_owned);
-    Some(o7_remote::Look {
+    Some(ghost_remote::Look {
         theme: name(serde_json::to_value(preferences.theme).ok()?)?,
         appearance: name(serde_json::to_value(preferences.appearance).ok()?)?,
     })
@@ -850,18 +852,18 @@ fn on_this_computer(path: &str) -> bool {
 }
 
 /// The words a bot uses for the three access levels.
-fn access_word(autonomy: o7_protocol::Autonomy) -> &'static str {
+fn access_word(autonomy: ghost_protocol::Autonomy) -> &'static str {
     match autonomy {
-        o7_protocol::Autonomy::Ask => "ask",
-        o7_protocol::Autonomy::AutoEdit => "auto_edit",
-        o7_protocol::Autonomy::FullAuto => "full_auto",
+        ghost_protocol::Autonomy::Ask => "ask",
+        ghost_protocol::Autonomy::AutoEdit => "auto_edit",
+        ghost_protocol::Autonomy::FullAuto => "full_auto",
     }
 }
 
 /// A chat's model and thinking choices as its pickers show them, and its access levels.
-fn chat_options(lists: &o7_protocol::session::SessionLists) -> o7_remote::ChatOptions {
-    use o7_protocol::session::{ConfigCategory, ConfigKind};
-    use o7_remote::Choice;
+fn chat_options(lists: &ghost_protocol::session::SessionLists) -> ghost_remote::ChatOptions {
+    use ghost_protocol::session::{ConfigCategory, ConfigKind};
+    use ghost_remote::Choice;
     let select = |category: ConfigCategory| {
         lists
             .options
@@ -888,9 +890,9 @@ fn chat_options(lists: &o7_protocol::session::SessionLists) -> o7_remote::ChatOp
     let native = &lists.controls.access.choices;
     let access = if native.is_empty() {
         [
-            o7_protocol::Autonomy::Ask,
-            o7_protocol::Autonomy::AutoEdit,
-            o7_protocol::Autonomy::FullAuto,
+            ghost_protocol::Autonomy::Ask,
+            ghost_protocol::Autonomy::AutoEdit,
+            ghost_protocol::Autonomy::FullAuto,
         ]
         .into_iter()
         .map(|level| Choice {
@@ -909,7 +911,7 @@ fn chat_options(lists: &o7_protocol::session::SessionLists) -> o7_remote::ChatOp
             })
             .collect()
     };
-    o7_remote::ChatOptions {
+    ghost_remote::ChatOptions {
         models,
         model,
         thinking,
@@ -927,7 +929,7 @@ impl Backend for AppBackend {
         })
     }
 
-    fn look(&self) -> Option<o7_remote::Look> {
+    fn look(&self) -> Option<ghost_remote::Look> {
         look(&self.state())
     }
 
@@ -935,10 +937,10 @@ impl Backend for AppBackend {
     /// lease and only while this backend's profile is the open one.
     fn act(
         &self,
-        action: o7_remote::Action,
-    ) -> BoxFuture<'_, Result<o7_remote::Outcome, BackendError>> {
-        use o7_protocol::session::{ConfigCategory, ConfigValue, SessionControlChange};
-        use o7_remote::{Action, Outcome};
+        action: ghost_remote::Action,
+    ) -> BoxFuture<'_, Result<ghost_remote::Outcome, BackendError>> {
+        use ghost_protocol::session::{ConfigCategory, ConfigValue, SessionControlChange};
+        use ghost_remote::{Action, Outcome};
         Box::pin(async move {
             let sessions = self.sessions().map_err(failed)?;
             // A model or a thinking level, by the value its picker would send.
@@ -1011,8 +1013,8 @@ impl Backend for AppBackend {
                             .unwrap_or_else(|| "Project".into())
                     });
                     let project = sessions
-                        .project_create(o7_protocol::workspace::ProjectCreate {
-                            project: o7_protocol::workspace::ProjectInput {
+                        .project_create(ghost_protocol::workspace::ProjectCreate {
+                            project: ghost_protocol::workspace::ProjectInput {
                                 name,
                                 color: None,
                                 default_agent: None,
@@ -1042,9 +1044,9 @@ impl Backend for AppBackend {
                 }
                 Action::SetAccess { chat_id, access } => {
                     let wanted = match access.as_str() {
-                        "ask" => o7_protocol::Autonomy::Ask,
-                        "auto_edit" => o7_protocol::Autonomy::AutoEdit,
-                        "full_auto" => o7_protocol::Autonomy::FullAuto,
+                        "ask" => ghost_protocol::Autonomy::Ask,
+                        "auto_edit" => ghost_protocol::Autonomy::AutoEdit,
+                        "full_auto" => ghost_protocol::Autonomy::FullAuto,
                         _ => return Err(BackendError::new("invalid", "No such access level.")),
                     };
                     let lists = sessions
@@ -1088,7 +1090,9 @@ impl Backend for AppBackend {
                     let preview = sessions
                         .continuation_preview(
                             &chat_id,
-                            o7_protocol::conversation::ContinuationAction::SwitchAgent { agent_id },
+                            ghost_protocol::conversation::ContinuationAction::SwitchAgent {
+                                agent_id,
+                            },
                         )
                         .await
                         .map_err(|error| failed(error.into()))?;
@@ -1203,7 +1207,7 @@ impl Backend for AppBackend {
                         return Err(conflict());
                     }
                     let saved = sessions
-                        .save_project_memory(o7_protocol::memory::SaveProjectMemory {
+                        .save_project_memory(ghost_protocol::memory::SaveProjectMemory {
                             project_id: project_id.clone(),
                             expected_revision: current.revision.clone(),
                             markdown,
@@ -1248,7 +1252,7 @@ impl Backend for AppBackend {
                     // Saved as a bot's, not as the person's: the window shows the edit and
                     // offers to undo it, as it does for an agent's.
                     sessions
-                        .bot_save_project_memory(o7_protocol::memory::SaveProjectMemory {
+                        .bot_save_project_memory(ghost_protocol::memory::SaveProjectMemory {
                             project_id,
                             expected_revision: current.revision,
                             markdown,
@@ -1432,8 +1436,8 @@ impl Backend for AppBackend {
         folder_id: &'a str,
         agent_id: Option<&'a str>,
         title: &'a str,
-    ) -> BoxFuture<'a, Result<o7_remote::TaskChat, BackendError>> {
-        use o7_protocol::git::{WorktreeChatInput, WorktreeChatPreview};
+    ) -> BoxFuture<'a, Result<ghost_remote::TaskChat, BackendError>> {
+        use ghost_protocol::git::{WorktreeChatInput, WorktreeChatPreview};
         Box::pin(async move {
             let agent_id = self.agent_for(folder_id, agent_id).await.map_err(failed)?;
             let sessions = self.sessions().map_err(failed)?;
@@ -1455,14 +1459,14 @@ impl Backend for AppBackend {
                         .worktree_chat_apply(&plan.token)
                         .await
                         .map_err(|error| failed(error.into()))?;
-                    Ok(o7_remote::TaskChat {
+                    Ok(ghost_remote::TaskChat {
                         chat: made.chat,
                         branch: Some(made.worktree.branch),
                         path: Some(made.worktree.path),
                         base: Some(made.worktree.base_commit),
                     })
                 }
-                WorktreeChatPreview::NotGitRepository { .. } => Ok(o7_remote::TaskChat {
+                WorktreeChatPreview::NotGitRepository { .. } => Ok(ghost_remote::TaskChat {
                     chat: sessions
                         .chat_project_create(ProjectChatCreate {
                             agent_id,
@@ -1490,7 +1494,7 @@ impl Backend for AppBackend {
     fn pull_request<'a>(
         &'a self,
         chat_id: &'a str,
-    ) -> BoxFuture<'a, Result<Option<o7_remote::PullRequest>, BackendError>> {
+    ) -> BoxFuture<'a, Result<Option<ghost_remote::PullRequest>, BackendError>> {
         Box::pin(async move {
             let sessions = self.sessions().map_err(failed)?;
             pull_request_of(&sessions, chat_id).await.map_err(failed)
@@ -1499,7 +1503,7 @@ impl Backend for AppBackend {
 
     /// What GitHub CLI said of the chat's pull request in the last day, only while this
     /// backend's profile is the open one. It asks GitHub nothing.
-    fn known_pull_request(&self, chat_id: &str) -> Option<o7_remote::PullRequest> {
+    fn known_pull_request(&self, chat_id: &str) -> Option<ghost_remote::PullRequest> {
         drop(self.sessions().ok()?);
         known_pull_request(chat_id)
     }
@@ -1509,14 +1513,16 @@ impl Backend for AppBackend {
     fn picture<'a>(
         &'a self,
         chat_id: &'a str,
-        of: o7_remote::PictureOf,
-    ) -> BoxFuture<'a, Result<o7_remote::Picture, BackendError>> {
+        of: ghost_remote::PictureOf,
+    ) -> BoxFuture<'a, Result<ghost_remote::Picture, BackendError>> {
         use base64::Engine as _;
         Box::pin(async move {
             drop(self.sessions().map_err(failed)?);
             let taken = match of {
-                o7_remote::PictureOf::Browser => crate::browser::picture(&self.app, chat_id).await,
-                o7_remote::PictureOf::Device => crate::mobile::picture(&self.app, chat_id).await,
+                ghost_remote::PictureOf::Browser => {
+                    crate::browser::picture(&self.app, chat_id).await
+                }
+                ghost_remote::PictureOf::Device => crate::mobile::picture(&self.app, chat_id).await,
             }
             .map_err(|message| BackendError::new("unavailable", message))?;
             let jpeg = tokio::task::spawn_blocking(move || shrink(&taken))
@@ -1530,7 +1536,7 @@ impl Backend for AppBackend {
                     "The picture is too large to send.",
                 ));
             }
-            Ok(o7_remote::Picture {
+            Ok(ghost_remote::Picture {
                 mime: "image/jpeg".into(),
                 data,
             })
@@ -1541,7 +1547,7 @@ impl Backend for AppBackend {
         &'a self,
         chat_id: &'a str,
         agent_id: &'a str,
-    ) -> BoxFuture<'a, Result<o7_remote::ChatFacts, BackendError>> {
+    ) -> BoxFuture<'a, Result<ghost_remote::ChatFacts, BackendError>> {
         Box::pin(async move {
             let sessions = self.sessions().map_err(failed)?;
             let git = sessions.git_workspace(chat_id).await.ok();
@@ -1571,11 +1577,11 @@ impl Backend for AppBackend {
                     .await
                     .ok()
                     .flatten()
-                    .map(|pr| o7_remote::render::pull_request(&pr))
+                    .map(|pr| ghost_remote::render::pull_request(&pr))
             } else {
                 None
             };
-            Ok(o7_remote::ChatFacts {
+            Ok(ghost_remote::ChatFacts {
                 pull_request,
                 branch,
                 worktree,
@@ -1609,15 +1615,17 @@ impl Backend for AppBackend {
     fn picture_within<'a>(
         &'a self,
         chat_id: &'a str,
-        of: o7_remote::PictureOf,
+        of: ghost_remote::PictureOf,
         max_bytes: usize,
-    ) -> BoxFuture<'a, Result<o7_remote::Picture, BackendError>> {
+    ) -> BoxFuture<'a, Result<ghost_remote::Picture, BackendError>> {
         use base64::Engine as _;
         Box::pin(async move {
             drop(self.sessions().map_err(failed)?);
             let taken = match of {
-                o7_remote::PictureOf::Browser => crate::browser::picture(&self.app, chat_id).await,
-                o7_remote::PictureOf::Device => crate::mobile::picture(&self.app, chat_id).await,
+                ghost_remote::PictureOf::Browser => {
+                    crate::browser::picture(&self.app, chat_id).await
+                }
+                ghost_remote::PictureOf::Device => crate::mobile::picture(&self.app, chat_id).await,
             }
             .map_err(|message| BackendError::new("unavailable", message))?;
             let jpeg = tokio::task::spawn_blocking(move || {
@@ -1634,7 +1642,7 @@ impl Backend for AppBackend {
                     "The picture is too large to send to this device.",
                 )
             })?;
-            Ok(o7_remote::Picture {
+            Ok(ghost_remote::Picture {
                 mime: "image/jpeg".into(),
                 data: base64::engine::general_purpose::STANDARD.encode(jpeg.0),
             })
@@ -1649,15 +1657,16 @@ impl Backend for AppBackend {
         bytes: Vec<u8>,
         name: &'a str,
         _mime: &'a str,
-    ) -> BoxFuture<'a, Result<o7_remote::PreparedImage, BackendError>> {
+    ) -> BoxFuture<'a, Result<ghost_remote::PreparedImage, BackendError>> {
         Box::pin(async move {
             let name = name.to_owned();
-            let photo =
-                tokio::task::spawn_blocking(move || o7_core::session::prepare_photo(&bytes, &name))
-                    .await
-                    .map_err(|error| BackendError::new("failed", error.to_string()))?
-                    .map_err(|error| failed(error.into()))?;
-            Ok(o7_remote::PreparedImage {
+            let photo = tokio::task::spawn_blocking(move || {
+                ghost_core::session::prepare_photo(&bytes, &name)
+            })
+            .await
+            .map_err(|error| BackendError::new("failed", error.to_string()))?
+            .map_err(|error| failed(error.into()))?;
+            Ok(ghost_remote::PreparedImage {
                 bytes: photo.bytes,
                 name: photo.name,
                 mime: photo.mime.into(),
@@ -1696,7 +1705,7 @@ impl Backend for AppBackend {
             sessions
                 .composer_send(
                     chat_id,
-                    o7_protocol::composer::ComposerInput {
+                    ghost_protocol::composer::ComposerInput {
                         text,
                         attachments,
                         mentions: Vec::new(),
@@ -1713,15 +1722,15 @@ impl Backend for AppBackend {
     fn image<'a>(
         &'a self,
         chat_id: &'a str,
-        source: o7_protocol::composer::ChatImageSource,
+        source: ghost_protocol::composer::ChatImageSource,
         full: bool,
         max_bytes: usize,
-    ) -> BoxFuture<'a, Result<o7_remote::ImagePreview, BackendError>> {
+    ) -> BoxFuture<'a, Result<ghost_remote::ImagePreview, BackendError>> {
         use base64::Engine as _;
         Box::pin(async move {
             if matches!(
                 source,
-                o7_protocol::composer::ChatImageSource::Project { .. }
+                ghost_protocol::composer::ChatImageSource::Project { .. }
             ) {
                 return Err(BackendError::new(
                     "invalid",
@@ -1734,7 +1743,7 @@ impl Backend for AppBackend {
                 .await
                 .map_err(|error| failed(error.into()))?;
             if preview.png_base64.len() <= max_bytes {
-                return Ok(o7_remote::ImagePreview {
+                return Ok(ghost_remote::ImagePreview {
                     mime: "image/png".into(),
                     data: preview.png_base64,
                     width: preview.width,
@@ -1758,7 +1767,7 @@ impl Backend for AppBackend {
                     "The image is too large to send to this device.",
                 )
             })?;
-            Ok(o7_remote::ImagePreview {
+            Ok(ghost_remote::ImagePreview {
                 mime: "image/jpeg".into(),
                 data: base64::engine::general_purpose::STANDARD.encode(jpeg),
                 width,
@@ -1776,11 +1785,11 @@ impl Backend for AppBackend {
         chat_id: &'a str,
         base: Option<&'a str>,
         max_files: usize,
-    ) -> BoxFuture<'a, Result<o7_remote::BranchChanges, BackendError>> {
+    ) -> BoxFuture<'a, Result<ghost_remote::BranchChanges, BackendError>> {
         Box::pin(async move {
             let sessions = self.sessions().map_err(failed)?;
             match sessions.chat_branch_changes(chat_id, base, max_files).await {
-                Ok(Some(changes)) => Ok(o7_remote::BranchChanges {
+                Ok(Some(changes)) => Ok(ghost_remote::BranchChanges {
                     files: changes
                         .files
                         .into_iter()
@@ -1789,21 +1798,21 @@ impl Backend for AppBackend {
                     base: Some(changes.base),
                     unavailable: None,
                 }),
-                Ok(None) => Ok(o7_remote::BranchChanges {
+                Ok(None) => Ok(ghost_remote::BranchChanges {
                     unavailable: Some(
                         "This chat has no branch of its own: it works in the project folder."
                             .into(),
                     ),
-                    ..o7_remote::BranchChanges::default()
+                    ..ghost_remote::BranchChanges::default()
                 }),
                 Err(error) => {
                     let error = failed(error.into());
                     if error.code == "not_found" {
                         return Err(error);
                     }
-                    Ok(o7_remote::BranchChanges {
+                    Ok(ghost_remote::BranchChanges {
                         unavailable: Some(error.message),
-                        ..o7_remote::BranchChanges::default()
+                        ..ghost_remote::BranchChanges::default()
                     })
                 }
             }
@@ -1818,7 +1827,7 @@ impl Backend for AppBackend {
         base: Option<&'a str>,
         path: &'a str,
         max_bytes: usize,
-    ) -> BoxFuture<'a, Result<o7_remote::Diff, BackendError>> {
+    ) -> BoxFuture<'a, Result<ghost_remote::Diff, BackendError>> {
         Box::pin(async move {
             let sessions = self.sessions().map_err(failed)?;
             let diff = sessions
@@ -1828,7 +1837,7 @@ impl Backend for AppBackend {
                 .ok_or_else(|| {
                     BackendError::new("not_found", "This chat's branch did not change that file.")
                 })?;
-            Ok(o7_remote::Diff {
+            Ok(ghost_remote::Diff {
                 before: diff.before,
                 after: diff.after,
                 binary: diff.binary,
@@ -1863,11 +1872,11 @@ mod tests {
     /// branch had no pull request.
     #[test]
     fn a_pull_request_once_read_is_known_without_asking_again() {
-        let said = o7_remote::PullRequest {
+        let said = ghost_remote::PullRequest {
             number: 12,
             url: "https://github.com/o/r/pull/12".into(),
             state: "open".into(),
-            checks: o7_remote::PrChecks::Passed,
+            checks: ghost_remote::PrChecks::Passed,
             notes: vec![],
         };
         super::keep_pull_request("known-chat", Some(said.clone()));

@@ -1,4 +1,4 @@
-import type { OrbState } from "@o7/ui";
+import type { OrbState } from "@ghost/ui";
 import {
   basename,
   type PermissionModel,

@@ -3,10 +3,10 @@ import source from "../legal/privacy.md?raw";
 import { Arrow, Page } from "../ui";
 
 export const meta = () => [
-  { title: "Privacy Policy · o7" },
+  { title: "Privacy Policy · Ghost" },
   {
     name: "description",
-    content: "How o7, its website and its hosted services handle personal information.",
+    content: "How Ghost, its website and its hosted services handle personal information.",
   },
 ];
 

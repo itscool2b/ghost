@@ -33,5 +33,5 @@ export async function checkNotices(page, out, engine) {
   );
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
-  await page.getByRole("heading", { name: "About o7", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "About Ghost ADE", exact: true }).waitFor();
 }

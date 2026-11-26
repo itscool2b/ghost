@@ -7,9 +7,9 @@
 # both configure and Ninja. Keep normal executable compiler/link checks enabled here.
 set(CMAKE_SYSTEM_NAME Windows)
 set(CMAKE_SYSTEM_PROCESSOR ARM64)
-find_program(O7_CLANG_CL NAMES clang-cl REQUIRED)
-set(CMAKE_C_COMPILER "${O7_CLANG_CL}")
-set(CMAKE_CXX_COMPILER "${O7_CLANG_CL}")
+find_program(GHOST_CLANG_CL NAMES clang-cl REQUIRED)
+set(CMAKE_C_COMPILER "${GHOST_CLANG_CL}")
+set(CMAKE_CXX_COMPILER "${GHOST_CLANG_CL}")
 set(CMAKE_C_COMPILER_TARGET aarch64-pc-windows-msvc)
 set(CMAKE_CXX_COMPILER_TARGET aarch64-pc-windows-msvc)
 # cmake-rs supplies CMAKE_CXX_FLAGS itself, replacing CMake's default /EHsc. GGUF uses

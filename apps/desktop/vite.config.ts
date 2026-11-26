@@ -25,7 +25,7 @@ export const WEBVIEW2_TARGET = "chrome130";
 export default defineConfig({
   plugins: [react(), noticesPlugin("desktop")],
   resolve: {
-    // Mermaid's optional ELK layout needs elkjs, which is EPL-2.0 or GPL-3.0: o7 ships a stub
+    // Mermaid's optional ELK layout needs elkjs, which is EPL-2.0 or GPL-3.0: Ghost ships a stub
     // in its place (src/lib/elkStub.ts), and the third-party notices leave elkjs out.
     alias: [
       {

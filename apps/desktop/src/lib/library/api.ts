@@ -10,7 +10,7 @@ import type {
   LibraryItemRef,
 } from "./bindings";
 
-/** Thin native transport. DTOs are generated from o7-config; all paths and mutations are Rust-owned. */
+/** Thin native transport. DTOs are generated from ghost-config; all paths and mutations are Rust-owned. */
 async function call<T>(command: string, args: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(command, args);

@@ -1,8 +1,8 @@
 /**
- * A prompt o7 itself sent to a chat for its coordinated project: the brief that starts a
+ * A prompt Ghost itself sent to a chat for its coordinated project: the brief that starts a
  * coordinator, a worker's assignment, a worker's report on its way to the coordinator, a routine.
  *
- * `EVENT_PREFIX` in `crates/o7-core/src/session/coordinator.rs` begins each one:
+ * `EVENT_PREFIX` in `crates/ghost-core/src/session/coordinator.rs` begins each one:
  *
  *     [auracode project event] <title>\n
  *     \n

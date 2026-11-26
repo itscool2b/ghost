@@ -206,7 +206,7 @@ try {
       await page.getByRole("switch", { name: "Keep awake" }).uncheck();
       await page.getByRole("switch", { name: "Keep running in the tray" }).uncheck();
       await page.waitForFunction(() => !window.settingsFixture.general().close_to_tray);
-      // Looking for a newer o7 is on until turned off, and the switch saves at once.
+      // Looking for a newer Ghost is on until turned off, and the switch saves at once.
       const automatic = page.getByRole("switch", { name: "Check for updates automatically" });
       assert.equal(await automatic.isChecked(), true);
       await automatic.uncheck();
@@ -315,7 +315,7 @@ try {
       await sounds.waitFor();
       assert.equal(await sounds.isDisabled(), true, `${engine}: Sounds waits where none can play`);
       const why =
-        "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart o7.";
+        "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart Ghost.";
       await page.getByText(why, { exact: true }).waitFor();
       assert.equal(await page.getByText(why, { exact: true }).count(), 1, `${engine}: said once`);
       // Every switch waits while the saved preferences load; Notifications is free once they have.

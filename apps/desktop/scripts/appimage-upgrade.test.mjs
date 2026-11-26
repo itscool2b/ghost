@@ -98,14 +98,14 @@ function fakeSystem({
 function setup() {
   const root = temp();
   const paths = {
-    link: join(root, "Applications", "o7.AppImage"),
+    link: join(root, "Applications", "Ghost.AppImage"),
     dataDir: join(root, "data"),
     stateDir: join(root, "state"),
   };
-  const installed = appImage(join(root, "Applications", "o7_0.1.0_amd64.AppImage"), "old");
+  const installed = appImage(join(root, "Applications", "Ghost_0.1.0_amd64.AppImage"), "old");
   symlinkSync(basename(installed), paths.link);
   const built = appImage(
-    join(root, "repo", "target", "release", "bundle", "appimage", "o7_0.1.0_amd64.AppImage"),
+    join(root, "repo", "target", "release", "bundle", "appimage", "Ghost_0.1.0_amd64.AppImage"),
     "new",
   );
   return { root, paths, installed, built };
@@ -123,17 +123,17 @@ const quiet = () => {};
 
 test("folders follow the XDG variables and the overrides", { skip: LINUX_ONLY }, () => {
   const paths = folders({ HOME: "/home/me" });
-  assert.equal(paths.link, "/home/me/Applications/o7.AppImage");
-  assert.equal(paths.dataDir, "/home/me/.local/share/codes.o7.desktop");
-  assert.equal(paths.stateDir, "/home/me/.local/state/o7-upgrades");
+  assert.equal(paths.link, "/home/me/Applications/Ghost.AppImage");
+  assert.equal(paths.dataDir, "/home/me/.local/share/dev.onghost.desktop");
+  assert.equal(paths.stateDir, "/home/me/.local/state/ghost-upgrades");
   const xdg = folders(
     { HOME: "/home/me", XDG_DATA_HOME: "/d", XDG_STATE_HOME: "/s" },
     { link: "/x/a.AppImage" },
   );
   assert.deepEqual(xdg, {
     link: "/x/a.AppImage",
-    dataDir: "/d/codes.o7.desktop",
-    stateDir: "/s/o7-upgrades",
+    dataDir: "/d/dev.onghost.desktop",
+    stateDir: "/s/ghost-upgrades",
   });
 });
 
@@ -149,7 +149,7 @@ test("only a type 2 AppImage passes the header check", () => {
 
 test("the newest AppImage under a target folder is found, with or without a triple", () => {
   const dir = temp();
-  const older = appImage(join(dir, "release", "bundle", "appimage", "o7_0.1.0_amd64.AppImage"));
+  const older = appImage(join(dir, "release", "bundle", "appimage", "Ghost_0.1.0_amd64.AppImage"));
   const newer = appImage(
     join(
       dir,
@@ -157,7 +157,7 @@ test("the newest AppImage under a target folder is found, with or without a trip
       "release",
       "bundle",
       "appimage",
-      "o7_0.1.1_amd64.AppImage",
+      "Ghost_0.1.1_amd64.AppImage",
     ),
   );
   utimesSync(older, new Date(2026, 0, 1), new Date(2026, 0, 1));
@@ -168,10 +168,10 @@ test("the newest AppImage under a target folder is found, with or without a trip
 test("a staged build keeps its name with the time added", () => {
   const at = new Date(2026, 10, 16, 9, 5, 7);
   assert.equal(
-    stagedName("/t/o7_0.1.0_amd64.AppImage", at),
-    "o7_0.1.0_amd64_20261116-090507.AppImage",
+    stagedName("/t/Ghost_0.1.0_amd64.AppImage", at),
+    "Ghost_0.1.0_amd64_20261116-090507.AppImage",
   );
-  assert.equal(stagedName("/t/other.AppImage", at), "o7_other_20261116-090507.AppImage");
+  assert.equal(stagedName("/t/other.AppImage", at), "Ghost_other_20261116-090507.AppImage");
 });
 
 test("the launch env loses an agent session and an AppImage launcher, and keeps the rest", () => {
@@ -179,7 +179,7 @@ test("the launch env loses an agent session and an AppImage launcher, and keeps 
     HOME: "/home/me",
     WAYLAND_DISPLAY: "wayland-1",
     CLAUDECODE: "1",
-    O7_MCP_0_env_1: "secret",
+    GHOST_MCP_0_env_1: "secret",
     APPDIR: "/tmp/.mount_x",
     APPIMAGE: "/a.AppImage",
     LD_LIBRARY_PATH: "/tmp/.mount_x/usr/lib/:",
@@ -190,7 +190,7 @@ test("the launch env loses an agent session and an AppImage launcher, and keeps 
   assert.deepEqual(env, { HOME: "/home/me", WAYLAND_DISPLAY: "wayland-1", PATH: "/usr/bin" });
 });
 
-test("install refuses while o7 runs, unless armed", async () => {
+test("install refuses while Ghost runs, unless armed", async () => {
   const { paths, installed, built } = setup();
   const system = fakeSystem({ running: [installed] });
   assert.equal(await install(options({ appimage: built }), paths, system, quiet, {}), EXIT.running);
@@ -253,7 +253,7 @@ test("an installed file that is not a link is kept as a build", async () => {
   void built;
 });
 
-test("an armed install stages at once, and the waiter installs when o7 quits", async () => {
+test("an armed install stages at once, and the waiter installs when Ghost quits", async () => {
   const { paths, installed, built } = setup();
   const system = fakeSystem({ running: [installed] });
   assert.equal(
@@ -283,7 +283,7 @@ test("an armed install stages at once, and the waiter installs when o7 quits", a
   assert.equal(existsSync(join(paths.stateDir, "armed.json")), false);
 });
 
-test("a waiter gives up when o7 does not quit in time", async () => {
+test("a waiter gives up when Ghost does not quit in time", async () => {
   const { paths, installed, built } = setup();
   const system = fakeSystem({ running: [installed] });
   await install(options({ appimage: built, afterExit: true, wait: 1 }), paths, system, quiet, {});
@@ -329,7 +329,7 @@ test("status names the link, what runs and what is kept", async () => {
   await install(options({ appimage: built }), paths, system, quiet, {});
   const lines = [];
   status(paths, system, (line) => lines.push(line));
-  assert.match(lines[0], /o7\.AppImage -> .*_20261116-170000\.AppImage/u);
+  assert.match(lines[0], /Ghost\.AppImage -> .*_20261116-170000\.AppImage/u);
   assert.ok(lines.some((line) => line.startsWith("Running: 100")));
   assert.ok(lines.some((line) => line.includes(`Kept builds: ${basename(installed)}`)));
 });
@@ -339,24 +339,24 @@ test("old builds beyond --keep are pruned, never the previous one", async () => 
   const system = fakeSystem();
   const dir = dirname(paths.link);
   for (const [index, name] of ["a", "b", "c", "d"].entries()) {
-    const file = appImage(join(dir, `o7_${name}.AppImage`));
+    const file = appImage(join(dir, `Ghost_${name}.AppImage`));
     utimesSync(file, new Date(2026, 0, 1 + index), new Date(2026, 0, 1 + index));
   }
   utimesSync(installed, new Date(2025, 0, 1), new Date(2025, 0, 1));
-  const staged = appImage(join(dir, "o7_new.AppImage"), "new");
+  const staged = appImage(join(dir, "Ghost_new.AppImage"), "new");
   assert.equal(await activate(staged, options({ keep: 2 }), paths, system, quiet, {}), EXIT.done);
   const left = readdirSync(dir).sort();
   // Current, the previous (oldest, but the rollback target) and the newest spare one.
   assert.deepEqual(
     left,
-    ["o7.AppImage", basename(installed), "o7_d.AppImage", "o7_new.AppImage"].sort(),
+    ["Ghost.AppImage", basename(installed), "Ghost_d.AppImage", "Ghost_new.AppImage"].sort(),
   );
 });
 
 test("a build runs as its runtime or as the app inside its mount", () => {
   // As /proc names it: resolved, which macOS's temporary folder (/var, a link to /private/var) is not.
   const dir = realpathSync(temp());
-  const file = appImage(join(dir, "o7_0.1.0_amd64.AppImage"));
+  const file = appImage(join(dir, "Ghost_0.1.0_amd64.AppImage"));
   const env = (image) => Buffer.from(`HOME=/home/me\0APPIMAGE=${image}\0APPDIR=/tmp/.mount_x\0`);
   assert.equal(buildOf(file, undefined, dir), file);
   assert.equal(buildOf(`${file} (deleted)`, undefined, dir), file);

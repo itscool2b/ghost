@@ -8,7 +8,7 @@
 //! the system's. The window's own page runs the same risk, since Settings' Sounds play through Web
 //! Audio.
 //!
-//! So o7 decides once, at startup, whether the plugin files WebKit's media needs are in the
+//! So Ghost decides once, at startup, whether the plugin files WebKit's media needs are in the
 //! folders GStreamer will search, by GStreamer's own rules ([`plugin_dirs`]). It never starts
 //! GStreamer in its own process for that: the first registry scan is slow and writes a registry.
 //! When the plugins are missing, every page starts with audio, video, Web Audio, Media Source,
@@ -61,7 +61,7 @@ const LIBRARY_LIMIT: u64 = 32 * 1024 * 1024;
 
 /// What Settings says once the window's page has lost its process.
 const WINDOW_RESTARTED: &str =
-    "Sounds are off until o7 restarts, because the window's page stopped working once.";
+    "Sounds are off until Ghost restarts, because the window's page stopped working once.";
 
 /// What startup found.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,7 +215,7 @@ fn collect(dir: &Path, depth: u32, budget: &mut usize, found: &mut HashSet<OsStr
     }
 }
 
-/// The AppImage's mount, when o7 runs from one.
+/// The AppImage's mount, when Ghost runs from one.
 fn appdir(var: &dyn Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     var("APPDIR")
         .map(PathBuf::from)
@@ -286,9 +286,9 @@ fn number(digits: &[u8]) -> Option<u32> {
     })
 }
 
-/// What `main` sets, before anything starts, when o7 runs from an AppImage:
+/// What `main` sets, before anything starts, when Ghost runs from an AppImage:
 ///
-/// - GStreamer's registry in o7's own cache folder, unless the person chose one. The image's
+/// - GStreamer's registry in Ghost's own cache folder, unless the person chose one. The image's
 ///   plugins sit at a mount that moves with every launch, so in the shared registry they would make
 ///   the person's other GStreamer apps scan everything again after each launch.
 /// - When the image carries no plugins: the system's plugin folders. The image's launcher puts its
@@ -314,7 +314,7 @@ pub fn launch_env(
         set.push((
             "GST_REGISTRY_1_0",
             cache
-                .join(o7_core::paths::DEFAULT_FOLDER)
+                .join(ghost_core::paths::DEFAULT_FOLDER)
                 .join("gstreamer-1.0")
                 .join(file)
                 .into_os_string(),
@@ -358,19 +358,19 @@ fn cache_dir(var: &dyn Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 }
 
 /// What Settings and the browser say while sound and video are off, naming the packages to
-/// install on this distribution (by its `os-release`) where o7 knows them.
+/// install on this distribution (by its `os-release`) where Ghost knows them.
 pub fn notice_for(found: &Detection, os_release: Option<&str>) -> Option<String> {
     if found.available() {
         return None;
     }
     if found.missing.is_empty() {
         return Some(
-            "Audio and video are off here: this copy of o7 was built without its own GStreamer plugins, and the system's are newer than it can load.".into(),
+            "Audio and video are off here: this copy of Ghost was built without its own GStreamer plugins, and the system's are newer than it can load.".into(),
         );
     }
     let install = os_release.and_then(packages).map_or_else(
-        || "Install them with your package manager, then restart o7.".to_owned(),
-        |names| format!("Install {names}, then restart o7."),
+        || "Install them with your package manager, then restart Ghost.".to_owned(),
+        |names| format!("Install {names}, then restart Ghost."),
     );
     Some(format!(
         "Audio and video are off here: GStreamer's base and good plugins are missing. {install}"
@@ -769,7 +769,7 @@ mod tests {
         ]);
         let set = launch_env(&env.var(), root.path());
         let registry = PathBuf::from("/home/someone/.cache")
-            .join(o7_core::paths::DEFAULT_FOLDER)
+            .join(ghost_core::paths::DEFAULT_FOLDER)
             .join(format!(
                 "gstreamer-1.0/system-{}.bin",
                 std::env::consts::ARCH
@@ -847,7 +847,7 @@ mod tests {
         assert_eq!(
             notice_for(&found, Some("NAME=\"Omarchy\"\nID=omarchy\nID_LIKE=arch\n")).as_deref(),
             Some(
-                "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart o7."
+                "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart Ghost."
             )
         );
         for (release, names) in [
@@ -879,7 +879,7 @@ mod tests {
         assert!(
             notice_for(&found, None)
                 .unwrap()
-                .ends_with("Install them with your package manager, then restart o7.")
+                .ends_with("Install them with your package manager, then restart Ghost.")
         );
         let fine = Detection {
             missing: vec![],

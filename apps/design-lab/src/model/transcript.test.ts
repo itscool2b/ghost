@@ -609,7 +609,7 @@ describe("the golden turn", () => {
     expect(runs.map((run) => run.label)).toEqual([
       "Read 2 files, searched 1 pattern",
       "Edited 2 files",
-      "Running pnpm --filter @o7/ui test pacing",
+      "Running pnpm --filter @ghost/ui test pacing",
     ]);
     expect(runs[1]).toMatchObject({ added: 59, removed: 23 });
     expect(runs[2]?.calls[0]?.terminal).toMatchObject({ running: true, exitCode: null });

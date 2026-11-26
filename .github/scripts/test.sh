@@ -8,8 +8,8 @@
 set -uo pipefail
 # The retry settings (lib.sh) and the smoke switches come from the tests alone, never from the
 # caller's environment.
-unset CI_GH_ATTEMPTS CI_GH_RETRY_DELAY O7_SMOKE O7_SMOKE_EXIT O7_SMOKE_FOLDER \
-  O7_SMOKE_AGENT
+unset CI_GH_ATTEMPTS CI_GH_RETRY_DELAY GHOST_SMOKE GHOST_SMOKE_EXIT GHOST_SMOKE_FOLDER \
+  GHOST_SMOKE_AGENT
 
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REAL_JQ="$(command -v jq)" || {
@@ -377,21 +377,21 @@ test_ci_runs_only_when_dispatched() {
 # --- check-open-pr.sh ----------------------------------------------------------------------------
 
 open_pr_env() {
-  export GITHUB_REPOSITORY=itscool2b/o7 GITHUB_REPOSITORY_OWNER=itscool2b BRANCH=m0-scaffold \
+  export GITHUB_REPOSITORY=itscool2b/ghost GITHUB_REPOSITORY_OWNER=itscool2b BRANCH=m0-scaffold \
     GITHUB_SHA="$SHA"
   fake_gh
 }
 
 # The routes are the exact requests, so these tests also pin them: the open PRs whose head is
 # owner:branch, URL-encoded, and then the one pull request.
-PULLS='repos/itscool2b/o7/pulls?state=open&head=itscool2b%3Am0-scaffold&per_page=1'
-PULL_7='repos/itscool2b/o7/pulls/7'
-LISTED_7='[{"number":7,"html_url":"https://github.com/itscool2b/o7/pull/7"}]'
-PR_7='#7 (https://github.com/itscool2b/o7/pull/7)'
+PULLS='repos/itscool2b/ghost/pulls?state=open&head=itscool2b%3Am0-scaffold&per_page=1'
+PULL_7='repos/itscool2b/ghost/pulls/7'
+LISTED_7='[{"number":7,"html_url":"https://github.com/itscool2b/ghost/pull/7"}]'
+PR_7='#7 (https://github.com/itscool2b/ghost/pull/7)'
 EARLIER=fedcba9876543210fedcba9876543210fedcba98 # the branch's commit before the push ($SHA)
 
 a_pull() { # <state> <head commit> <mergeable as JSON>
-  printf '{"number":7,"state":"%s","head":{"ref":"m0-scaffold","sha":"%s"},"mergeable":%s,"html_url":"https://github.com/itscool2b/o7/pull/7"}' \
+  printf '{"number":7,"state":"%s","head":{"ref":"m0-scaffold","sha":"%s"},"mergeable":%s,"html_url":"https://github.com/itscool2b/ghost/pull/7"}' \
     "$1" "$2" "$3"
 }
 
@@ -553,7 +553,7 @@ test_open_pr_fails_open_on_an_unexpected_answer() {
 
 test_open_pr_fails_open_on_a_listed_pull_request_without_a_number() {
   open_pr_env
-  route "$PULLS" '[{"html_url":"https://github.com/itscool2b/o7/pull/7"}]'
+  route "$PULLS" '[{"html_url":"https://github.com/itscool2b/ghost/pull/7"}]'
   run check-open-pr.sh
   assert_status 0
   assert_step_output covered false
@@ -582,7 +582,7 @@ test_open_pr_fails_open_on_an_unexpected_pull_request() {
 test_open_pr_encodes_the_branch() {
   open_pr_env
   export BRANCH='m1a/core+acp'
-  route 'repos/itscool2b/o7/pulls?state=open&head=itscool2b%3Am1a%2Fcore%2Bacp&per_page=1' '[]'
+  route 'repos/itscool2b/ghost/pulls?state=open&head=itscool2b%3Am1a%2Fcore%2Bacp&per_page=1' '[]'
   run check-open-pr.sh
   assert_status 0
   assert_step_output covered false
@@ -621,23 +621,23 @@ test_open_pr_writes_its_documented_output() {
 # --- plan-nightly-bundle.sh ----------------------------------------------------------------------
 
 nightly_env() {
-  export GITHUB_REPOSITORY=itscool2b/o7 GITHUB_SHA=abcdef0123456789abcdef0123456789abcdef01 \
+  export GITHUB_REPOSITORY=itscool2b/ghost GITHUB_SHA=abcdef0123456789abcdef0123456789abcdef01 \
     GITHUB_RUN_ID=900 BRANCH=main WORKFLOW_FILE=build.yml BUNDLE_JOB_PREFIX='bundle ('
   fake_gh
 }
 
 runs_route() { # <json run objects, comma-separated>
-  route "repos/itscool2b/o7/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&per_page=100" \
+  route "repos/itscool2b/ghost/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&per_page=100" \
     "{\"total_count\":9,\"workflow_runs\":[$1]}"
 }
 
 a_run() { # <id> <event> <status> <conclusion as JSON>
-  printf '{"id":%s,"event":"%s","status":"%s","conclusion":%s,"html_url":"https://github.com/itscool2b/o7/actions/runs/%s"}' \
+  printf '{"id":%s,"event":"%s","status":"%s","conclusion":%s,"html_url":"https://github.com/itscool2b/ghost/actions/runs/%s"}' \
     "$1" "$2" "$3" "$4" "$1"
 }
 
 jobs_route() { # <run id> <bundle conclusions as JSON: macOS, Windows, Linux>
-  route "repos/itscool2b/o7/actions/runs/$1/jobs?filter=latest&per_page=100" \
+  route "repos/itscool2b/ghost/actions/runs/$1/jobs?filter=latest&per_page=100" \
     "{\"total_count\":4,\"jobs\":[{\"name\":\"plan\",\"conclusion\":\"success\"},{\"name\":\"bundle (macos-26)\",\"conclusion\":$2},{\"name\":\"bundle (windows-2025)\",\"conclusion\":$3},{\"name\":\"bundle (ubuntu-22.04)\",\"conclusion\":$4}]}"
 }
 
@@ -660,7 +660,7 @@ test_nightly_skips_a_commit_a_push_built() {
   run plan-nightly-bundle.sh
   assert_status 0
   assert_step_output build false
-  assert_out "Run https://github.com/itscool2b/o7/actions/runs/801 (push) already built every bundle for abcdef0"
+  assert_out "Run https://github.com/itscool2b/ghost/actions/runs/801 (push) already built every bundle for abcdef0"
 }
 
 test_nightly_skips_a_commit_a_manual_run_built() {
@@ -678,7 +678,7 @@ test_nightly_skips_while_a_push_is_building() {
   run plan-nightly-bundle.sh
   assert_status 0
   assert_step_output build false
-  assert_out "Run https://github.com/itscool2b/o7/actions/runs/803 (push) is building abcdef0 right now"
+  assert_out "Run https://github.com/itscool2b/ghost/actions/runs/803 (push) is building abcdef0 right now"
 }
 
 test_nightly_retries_after_a_nightly_that_only_skipped() {
@@ -697,7 +697,7 @@ test_nightly_does_not_retry_a_commit_it_already_tried() {
   run plan-nightly-bundle.sh
   assert_status 0
   assert_step_output build false
-  assert_out "The nightly already tried abcdef0 in run https://github.com/itscool2b/o7/actions/runs/700 (failure)"
+  assert_out "The nightly already tried abcdef0 in run https://github.com/itscool2b/ghost/actions/runs/700 (failure)"
 }
 
 test_nightly_rebuilds_after_a_failed_push() {
@@ -730,10 +730,10 @@ test_nightly_fails_loudly_when_github_cannot_be_asked() {
 test_nightly_fails_when_a_runs_jobs_cannot_be_read() {
   nightly_env
   runs_route "$SELF,$(a_run 801 push completed '"success"')"
-  route 'repos/itscool2b/o7/actions/runs/801/jobs*' '' 1
+  route 'repos/itscool2b/ghost/actions/runs/801/jobs*' '' 1
   run plan-nightly-bundle.sh
   assert_status 1
-  assert_out "Could not list the jobs of run https://github.com/itscool2b/o7/actions/runs/801"
+  assert_out "Could not list the jobs of run https://github.com/itscool2b/ghost/actions/runs/801"
 }
 
 test_nightly_fails_on_an_unexpected_answer() {
@@ -912,8 +912,8 @@ fake_app() { # <shell code>
   chmod +x "$tmp/app"
 }
 
-PASSING='O7_SMOKE_RESULT {"ok":true,"scenario":"stream","stream":{"events_received":120,"frames_received":40,"seq_gaps":0,"rendered_chars":900,"fps_min":55.5,"fps_avg":59.8},"checks":[],"errors":[]}'
-FAILING='O7_SMOKE_RESULT {"ok":false,"scenario":"stream","stream":{"events_received":3,"frames_received":1,"seq_gaps":2,"rendered_chars":0,"fps_min":0,"fps_avg":0},"checks":[],"errors":["the demo answer did not render","the stream skipped sequence numbers 2 time(s)"]}'
+PASSING='GHOST_SMOKE_RESULT {"ok":true,"scenario":"stream","stream":{"events_received":120,"frames_received":40,"seq_gaps":0,"rendered_chars":900,"fps_min":55.5,"fps_avg":59.8},"checks":[],"errors":[]}'
+FAILING='GHOST_SMOKE_RESULT {"ok":false,"scenario":"stream","stream":{"events_received":3,"frames_received":1,"seq_gaps":2,"rendered_chars":0,"fps_min":0,"fps_avg":0},"checks":[],"errors":["the demo answer did not render","the stream skipped sequence numbers 2 time(s)"]}'
 
 smoke_env() {
   mkdir -p "$tmp/runner"
@@ -935,9 +935,9 @@ exit 0"
 test_smoke_runs_the_app_in_smoke_mode_with_fresh_data() {
   smoke_env
   fake_app "{
-  echo \"smoke=\$O7_SMOKE exit=\$O7_SMOKE_EXIT\"
-  echo \"data=\$O7_DATA_DIR\"
-  if [ -d \"\$O7_DATA_DIR\" ] && [ -z \"\$(ls -A \"\$O7_DATA_DIR\")\" ]; then echo fresh=yes; fi
+  echo \"smoke=\$GHOST_SMOKE exit=\$GHOST_SMOKE_EXIT\"
+  echo \"data=\$GHOST_DATA_DIR\"
+  if [ -d \"\$GHOST_DATA_DIR\" ] && [ -z \"\$(ls -A \"\$GHOST_DATA_DIR\")\" ]; then echo fresh=yes; fi
   if read -r line; then echo stdin=open; else echo stdin=eof; fi
 } >'$tmp/seen'
 echo '$PASSING'"
@@ -953,11 +953,11 @@ test_smoke_gives_windows_apps_windows_paths() {
   smoke_env
   fake_cygpath
   export RUNNER_TEMP='C:\fake\runner'
-  fake_app "echo \"\$O7_DATA_DIR\" >'$tmp/seen'
+  fake_app "echo \"\$GHOST_DATA_DIR\" >'$tmp/seen'
 echo '$PASSING'"
   run run-smoke.sh "$tmp/app" stream
   assert_status 0
-  grep -Fq 'C:\fake\runner\auracode-smoke.' "$tmp/seen" || fail "O7_DATA_DIR is not a Windows path" "$(cat "$tmp/seen")"
+  grep -Fq 'C:\fake\runner\auracode-smoke.' "$tmp/seen" || fail "GHOST_DATA_DIR is not a Windows path" "$(cat "$tmp/seen")"
 }
 
 test_smoke_fails_on_a_failing_report() {
@@ -973,7 +973,7 @@ exit 1"
 
 test_smoke_reads_the_minimal_fallback_report() {
   smoke_env
-  fake_app "echo 'O7_SMOKE_RESULT {\"ok\":false,\"errors\":[\"could not serialize the report: boom\"]}'
+  fake_app "echo 'GHOST_SMOKE_RESULT {\"ok\":false,\"errors\":[\"could not serialize the report: boom\"]}'
 exit 1"
   run run-smoke.sh "$tmp/app" stream
   assert_status 1
@@ -996,7 +996,7 @@ test_smoke_fails_without_a_result_line() {
 exit 0"
   run run-smoke.sh "$tmp/app" stream
   assert_status 1
-  assert_out "The stream launch exited with code 0 without printing an O7_SMOKE_RESULT line"
+  assert_out "The stream launch exited with code 0 without printing a GHOST_SMOKE_RESULT line"
 }
 
 test_smoke_reports_a_crash() {
@@ -1005,7 +1005,7 @@ test_smoke_reports_a_crash() {
 exit 101"
   run run-smoke.sh "$tmp/app" stream
   assert_status 1
-  assert_out "The stream launch exited with code 101 without printing an O7_SMOKE_RESULT line"
+  assert_out "The stream launch exited with code 101 without printing a GHOST_SMOKE_RESULT line"
 }
 
 test_smoke_fails_when_a_pass_is_followed_by_a_crash() {
@@ -1024,12 +1024,12 @@ test_smoke_rejects_two_reports() {
 echo '$PASSING'"
   run run-smoke.sh "$tmp/app" stream
   assert_status 1
-  assert_out "The stream launch printed 2 O7_SMOKE_RESULT lines; it must report exactly once."
+  assert_out "The stream launch printed 2 GHOST_SMOKE_RESULT lines; it must report exactly once."
 }
 
 test_smoke_rejects_a_report_that_is_not_json() {
   smoke_env
-  fake_app "echo 'O7_SMOKE_RESULT {\"ok\":'"
+  fake_app "echo 'GHOST_SMOKE_RESULT {\"ok\":'"
   run run-smoke.sh "$tmp/app" stream
   assert_status 1
   assert_out "is not a JSON object with a boolean \"ok\""
@@ -1037,7 +1037,7 @@ test_smoke_rejects_a_report_that_is_not_json() {
 
 test_smoke_rejects_a_report_without_a_boolean_ok() {
   smoke_env
-  fake_app "echo 'O7_SMOKE_RESULT {\"ok\":\"yes\",\"errors\":[]}'"
+  fake_app "echo 'GHOST_SMOKE_RESULT {\"ok\":\"yes\",\"errors\":[]}'"
   run run-smoke.sh "$tmp/app" stream
   assert_status 1
   assert_out "is not a JSON object with a boolean \"ok\""
@@ -1053,7 +1053,7 @@ test_smoke_reads_crlf_output() {
 
 test_smoke_counts_only_lines_that_start_with_the_marker() {
   smoke_env
-  fake_app "echo 'debug: will print O7_SMOKE_RESULT {\"ok\":false} when done'
+  fake_app "echo 'debug: will print GHOST_SMOKE_RESULT {\"ok\":false} when done'
 echo '$PASSING'"
   run run-smoke.sh "$tmp/app" stream
   assert_status 0
@@ -1075,30 +1075,30 @@ test_smoke_rejects_an_unknown_scenario() {
   refute_path "$tmp/ran"
 }
 
-CHAT_PASSING='O7_SMOKE_RESULT {"ok":true,"scenario":"chat","stream":null,"checks":[{"name":"create-chat","ok":true,"detail":"ready after 300 ms"},{"name":"echo-turn","ok":true,"detail":"the reply read hi"}],"errors":[]}'
-REOPEN_PASSING='O7_SMOKE_RESULT {"ok":true,"scenario":"chat_reopen","stream":null,"checks":[{"name":"reopen-history","ok":true,"detail":"28 segments"}],"errors":[]}'
-AGENT_PASSING='O7_SMOKE_RESULT {"ok":true,"scenario":"agent","stream":null,"checks":[{"name":"agent-replies","ok":true,"detail":"got ok"}],"errors":[]}'
-CHAT_FAILING='O7_SMOKE_RESULT {"ok":false,"scenario":"chat","stream":null,"checks":[{"name":"create-chat","ok":true,"detail":"ready"},{"name":"echo-turn","ok":false,"detail":"timed out after 20 s waiting for the reply"},{"name":"demo-turn","ok":false,"detail":"not run: echo-turn failed"}],"errors":["2 of 3 checks failed: echo-turn, demo-turn"]}'
+CHAT_PASSING='GHOST_SMOKE_RESULT {"ok":true,"scenario":"chat","stream":null,"checks":[{"name":"create-chat","ok":true,"detail":"ready after 300 ms"},{"name":"echo-turn","ok":true,"detail":"the reply read hi"}],"errors":[]}'
+REOPEN_PASSING='GHOST_SMOKE_RESULT {"ok":true,"scenario":"chat_reopen","stream":null,"checks":[{"name":"reopen-history","ok":true,"detail":"28 segments"}],"errors":[]}'
+AGENT_PASSING='GHOST_SMOKE_RESULT {"ok":true,"scenario":"agent","stream":null,"checks":[{"name":"agent-replies","ok":true,"detail":"got ok"}],"errors":[]}'
+CHAT_FAILING='GHOST_SMOKE_RESULT {"ok":false,"scenario":"chat","stream":null,"checks":[{"name":"create-chat","ok":true,"detail":"ready"},{"name":"echo-turn","ok":false,"detail":"timed out after 20 s waiting for the reply"},{"name":"demo-turn","ok":false,"detail":"not run: echo-turn failed"}],"errors":["2 of 3 checks failed: echo-turn, demo-turn"]}'
 
 # A fake app for the chat launches: it logs what each launch was given (one line per launch in
-# $tmp/launches, tab-separated: O7_SMOKE, O7_SMOKE_EXIT, O7_SMOKE_AGENT,
-# O7_DATA_DIR, O7_SMOKE_FOLDER, whether that folder exists, stdin) and answers each
+# $tmp/launches, tab-separated: GHOST_SMOKE, GHOST_SMOKE_EXIT, GHOST_SMOKE_AGENT,
+# GHOST_DATA_DIR, GHOST_SMOKE_FOLDER, whether that folder exists, stdin) and answers each
 # scenario with a passing report. <extra> runs before it reports.
 chat_app() { # [extra shell code]
   cat >"$tmp/app" <<EOF
 #!/usr/bin/env bash
-if [ -d "\${O7_SMOKE_FOLDER:-/nonexistent}" ]; then exists=yes; else exists=no; fi
+if [ -d "\${GHOST_SMOKE_FOLDER:-/nonexistent}" ]; then exists=yes; else exists=no; fi
 if read -r line; then stdin=open; else stdin=eof; fi
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "\$O7_SMOKE" "\$O7_SMOKE_EXIT" \
-  "\${O7_SMOKE_AGENT-unset}" "\$O7_DATA_DIR" "\${O7_SMOKE_FOLDER-unset}" \
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "\$GHOST_SMOKE" "\$GHOST_SMOKE_EXIT" \
+  "\${GHOST_SMOKE_AGENT-unset}" "\$GHOST_DATA_DIR" "\${GHOST_SMOKE_FOLDER-unset}" \
   "\$exists" "\$stdin" >>'$tmp/launches'
 ${1:-}
-case "\$O7_SMOKE:\${O7_SMOKE_AGENT:-}" in
+case "\$GHOST_SMOKE:\${GHOST_SMOKE_AGENT:-}" in
 1:) echo '$PASSING' ;;
 chat:) echo '$CHAT_PASSING' ;;
 chat-reopen:) echo '$REOPEN_PASSING' ;;
 chat:*) echo '$AGENT_PASSING' ;;
-*) echo "fake app: unexpected launch \$O7_SMOKE" >&2; exit 2 ;;
+*) echo "fake app: unexpected launch \$GHOST_SMOKE" >&2; exit 2 ;;
 esac
 EOF
   chmod +x "$tmp/app"
@@ -1180,7 +1180,7 @@ test_smoke_chat_gives_windows_apps_windows_paths() {
 
 test_smoke_chat_lists_each_check_and_skips_the_reopen_after_a_failure() {
   smoke_env
-  chat_app "if [ \"\$O7_SMOKE\" = chat ]; then echo '$CHAT_FAILING'; exit 1; fi"
+  chat_app "if [ \"\$GHOST_SMOKE\" = chat ]; then echo '$CHAT_FAILING'; exit 1; fi"
   run run-smoke.sh "$tmp/app" chat
   assert_status 1
   assert_eq 1 "$(launch_count)" "the number of launches"
@@ -1194,7 +1194,7 @@ test_smoke_chat_lists_each_check_and_skips_the_reopen_after_a_failure() {
 
 test_smoke_chat_fails_when_the_quit_left_its_registry_file() {
   smoke_env
-  chat_app "mkdir -p \"\$O7_DATA_DIR/run\" && echo '{}' >\"\$O7_DATA_DIR/run/4242-17.json\""
+  chat_app "mkdir -p \"\$GHOST_DATA_DIR/run\" && echo '{}' >\"\$GHOST_DATA_DIR/run/4242-17.json\""
   run run-smoke.sh "$tmp/app" chat
   assert_status 1
   assert_out "::error::The chat launch's quit left its leftover registry file behind:"
@@ -1204,7 +1204,7 @@ test_smoke_chat_fails_when_the_quit_left_its_registry_file() {
 
 test_smoke_chat_fails_when_the_quit_left_the_write_ahead_log() {
   smoke_env
-  chat_app "if [ \"\$O7_SMOKE\" = chat-reopen ]; then mkdir -p \"\$O7_DATA_DIR/profiles/local\" && echo pages >\"\$O7_DATA_DIR/profiles/local/aura.db-wal\"; fi"
+  chat_app "if [ \"\$GHOST_SMOKE\" = chat-reopen ]; then mkdir -p \"\$GHOST_DATA_DIR/profiles/local\" && echo pages >\"\$GHOST_DATA_DIR/profiles/local/aura.db-wal\"; fi"
   run run-smoke.sh "$tmp/app" chat
   assert_status 1
   assert_out "::error::The chat-reopen launch's quit left the database's write-ahead log behind, so it never closed the database:"
@@ -1215,16 +1215,16 @@ test_smoke_chat_fails_when_the_quit_left_the_write_ahead_log() {
 # database was not closed.
 test_smoke_chat_accepts_an_empty_write_ahead_log() {
   smoke_env
-  chat_app "mkdir -p \"\$O7_DATA_DIR/profiles/local\" && : >\"\$O7_DATA_DIR/profiles/local/aura.db-wal\""
+  chat_app "mkdir -p \"\$GHOST_DATA_DIR/profiles/local\" && : >\"\$GHOST_DATA_DIR/profiles/local/aura.db-wal\""
   run run-smoke.sh "$tmp/app" chat
   assert_status 0
 }
 
-# An app older than this script ignores O7_SMOKE=chat and runs the stream check, whose
+# An app older than this script ignores GHOST_SMOKE=chat and runs the stream check, whose
 # report would otherwise pass.
 test_smoke_chat_rejects_a_report_for_another_scenario() {
   local report
-  for report in "$PASSING" 'O7_SMOKE_RESULT {"ok":true,"events_received":1,"frames_received":1,"seq_gaps":0,"rendered_chars":1,"fps_min":60,"fps_avg":60,"errors":[]}'; do
+  for report in "$PASSING" 'GHOST_SMOKE_RESULT {"ok":true,"events_received":1,"frames_received":1,"seq_gaps":0,"rendered_chars":1,"fps_min":60,"fps_avg":60,"errors":[]}'; do
     smoke_env
     : >"$tmp/launches"
     chat_app "echo '$report'; exit 0"
@@ -1237,7 +1237,7 @@ test_smoke_chat_rejects_a_report_for_another_scenario() {
 
 test_smoke_runs_every_scenario_by_default_and_keeps_going_after_a_failure() {
   smoke_env
-  chat_app "if [ \"\$O7_SMOKE\" = 1 ]; then echo '$FAILING'; exit 1; fi"
+  chat_app "if [ \"\$GHOST_SMOKE\" = 1 ]; then echo '$FAILING'; exit 1; fi"
   run run-smoke.sh "$tmp/app"
   assert_status 1
   assert_eq 3 "$(launch_count)" "the number of launches"
@@ -1265,7 +1265,7 @@ test_smoke_all_passes_when_every_scenario_passes() {
 test_smoke_stream_gets_none_of_the_callers_chat_switches() {
   smoke_env
   unset CI GITHUB_ACTIONS
-  export O7_SMOKE=chat O7_SMOKE_FOLDER="$tmp" O7_SMOKE_AGENT=claude-acp
+  export GHOST_SMOKE=chat GHOST_SMOKE_FOLDER="$tmp" GHOST_SMOKE_AGENT=claude-acp
   chat_app
   run run-smoke.sh "$tmp/app" stream
   assert_status 0
@@ -1276,7 +1276,7 @@ test_smoke_stream_gets_none_of_the_callers_chat_switches() {
 test_smoke_agent_runs_one_minimal_chat_locally() {
   smoke_env
   unset CI GITHUB_ACTIONS
-  export O7_SMOKE_AGENT=' claude-acp '
+  export GHOST_SMOKE_AGENT=' claude-acp '
   chat_app
   run run-smoke.sh "$tmp/app" chat
   assert_status 0
@@ -1293,17 +1293,17 @@ test_smoke_agent_is_refused_under_ci() {
   for ci in CI GITHUB_ACTIONS; do
     smoke_env
     unset CI GITHUB_ACTIONS
-    export O7_SMOKE_AGENT=claude-acp "$ci"=true
+    export GHOST_SMOKE_AGENT=claude-acp "$ci"=true
     chat_app
     run run-smoke.sh "$tmp/app" stream
     assert_status 1
-    assert_out "::error::O7_SMOKE_AGENT=claude-acp runs a real agent, which spends its user's quota: it is for local runs only, and CI must never set it."
+    assert_out "::error::GHOST_SMOKE_AGENT=claude-acp runs a real agent, which spends its user's quota: it is for local runs only, and CI must never set it."
     assert_eq 0 "$(launch_count)" "the number of launches under $ci"
     unset "$ci"
   done
   # Off values are not CI.
   smoke_env
-  export O7_SMOKE_AGENT=claude-acp CI=false GITHUB_ACTIONS=0
+  export GHOST_SMOKE_AGENT=claude-acp CI=false GITHUB_ACTIONS=0
   chat_app
   run run-smoke.sh "$tmp/app" chat
   assert_status 0

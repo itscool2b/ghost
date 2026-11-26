@@ -14,19 +14,19 @@ edition = "2024"
 rust-version = "1.95"
 authors = ["BASH.AI LLC"]
 license = "MIT"
-repository = "https://github.com/itscool2b/o7"
+repository = "https://github.com/itscool2b/ghost"
 publish = false
 
 [workspace.dependencies]
 # internal
-o7-protocol = { path = "crates/o7-protocol" }
-o7-process = { path = "crates/o7-process" }
-o7-agents = { path = "crates/o7-agents" }
-o7-core = { path = "crates/o7-core" }
-o7-drivers = { path = "crates/o7-drivers" }
-o7-config = { path = "crates/o7-config" }
-o7-remote = { path = "crates/o7-remote" }
-o7-devices = { path = "crates/o7-devices" }
+ghost-protocol = { path = "crates/ghost-protocol" }
+ghost-process = { path = "crates/ghost-process" }
+ghost-agents = { path = "crates/ghost-agents" }
+ghost-core = { path = "crates/ghost-core" }
+ghost-drivers = { path = "crates/ghost-drivers" }
+ghost-config = { path = "crates/ghost-config" }
+ghost-remote = { path = "crates/ghost-remote" }
+ghost-devices = { path = "crates/ghost-devices" }
 
 # async + errors + logging
 # `signal`: the desktop's quit flow listens for SIGTERM, SIGINT and SIGHUP.

@@ -1,7 +1,7 @@
 import type {
   EventBatch,
+  GhostEvent,
   LimitWindow,
-  O7Event,
   PermissionRequest,
   PlanEntry,
   SessionInfo,
@@ -200,7 +200,7 @@ class Draft {
     this.#turn = base.turn;
   }
 
-  apply(event: O7Event): void {
+  apply(event: GhostEvent): void {
     switch (event.type) {
       case "turn_started":
         this.#turn = { id: event.turn_id, ended: false, stopReason: null, usage: null };

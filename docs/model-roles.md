@@ -21,9 +21,9 @@ The offer needs the role's agent to be ready on this computer. If it stops being
 ## Where it is saved and read
 
 - The `chat_roles` table (migration `0020_chat_roles.sql`): one row a chat and role, only for a role that was chosen, removed with the chat. It stays on this device. A fork takes its source chat's rows.
-- `WorkspaceChat.roles` carries them to the window with the rest of the chat's organization; `chat_set_role(chat_id, role, choice)` sets or clears one (`crates/o7-core/src/session/workspace.rs`). An agent is saved as the agent, not a connection of it, as the default agent is. The agent (128 bytes), model (256) and thinking level (128) must be non-empty and free of control characters; anything else is refused and nothing changes. Nothing runs when a role is saved.
+- `WorkspaceChat.roles` carries them to the window with the rest of the chat's organization; `chat_set_role(chat_id, role, choice)` sets or clears one (`crates/ghost-core/src/session/workspace.rs`). An agent is saved as the agent, not a connection of it, as the default agent is. The agent (128 bytes), model (256) and thinking level (128) must be non-empty and free of control characters; anything else is refused and nothing changes. Nothing runs when a role is saved.
 - The window applies them (`apps/desktop/src/lib/roles.ts`, `ChatView.tsx`, `RolePicker.tsx`) with only what the pickers and the agent switch already do: `chat_set_option`, `respond_permission`, `chat_stop`, `continuation_preview` and `continuation_apply`, `composer_send`. Starting a worker on another agent goes through the coordinator's own checks, which refuse an agent that is not ready.
-- Rust reads the coordinator chat's Build with when it starts a worker (`crates/o7-core/src/session/coordinator.rs`).
+- Rust reads the coordinator chat's Build with when it starts a worker (`crates/ghost-core/src/session/coordinator.rs`).
 
 ## Limits
 
@@ -34,7 +34,7 @@ The offer needs the role's agent to be ready on this computer. If it stops being
 
 ## Verification
 
-- `cargo test -p o7-core --lib chatstore::organization` and `session::tests::workspace` (saved per chat, replaced not duplicated, cleared, refused when not an identifier or for a missing or deleted chat, a connection kept as its agent, the chat's place in the list unchanged) and `chatstore::conversation` (a fork keeps them).
-- `cargo test -p o7-core --lib onboarding` (a profile saved with Settings roles still opens).
-- `pnpm --filter @o7/desktop exec vitest run src/lib/roles.test.ts src/components/chat/PlanCard.test.tsx`.
+- `cargo test -p ghost-core --lib chatstore::organization` and `session::tests::workspace` (saved per chat, replaced not duplicated, cleared, refused when not an identifier or for a missing or deleted chat, a connection kept as its agent, the chat's place in the list unchanged) and `chatstore::conversation` (a fork keeps them).
+- `cargo test -p ghost-core --lib onboarding` (a profile saved with Settings roles still opens).
+- `pnpm --filter @ghost/desktop exec vitest run src/lib/roles.test.ts src/components/chat/PlanCard.test.tsx`.
 - `node apps/desktop/scripts/check-chat.mjs` (`planAndBuild`: choosing, applying on Plan, clearing, and Accept and build with on the chat's own agent).

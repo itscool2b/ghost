@@ -74,15 +74,15 @@ try {
       const legal = page.getByTestId("setup-legal");
       assert.match(
         await legal.textContent(),
-        /By continuing, you agree to o7’s Terms of Service and Privacy Policy\./,
+        /By continuing, you agree to Ghost’s Terms of Service and Privacy Policy\./,
       );
       assert.equal(
         await legal.getByRole("link", { name: "Terms of Service" }).getAttribute("href"),
-        "https://o7.codes/terms",
+        "https://onghost.dev/terms",
       );
       assert.equal(
         await legal.getByRole("link", { name: "Privacy Policy" }).getAttribute("href"),
-        "https://o7.codes/privacy",
+        "https://onghost.dev/privacy",
       );
       assert.equal(await page.evaluate(() => localStorage.getItem("o7.legal.accepted")), null);
       await page.screenshot({ path: resolve(out, `${engine}-welcome.png`) });
@@ -282,7 +282,7 @@ try {
         [],
         `${engine} project accessibility`,
       );
-      await page.getByRole("button", { name: "Open o7", exact: true }).click();
+      await page.getByRole("button", { name: "Open Ghost", exact: true }).click();
       await page.getByRole("heading", { name: "Workspace ready" }).waitFor();
       await page.reload();
       await page.getByRole("heading", { name: "Workspace ready" }).waitFor();

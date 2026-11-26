@@ -2,7 +2,7 @@
  * Local native check (not part of any suite): the real debug app, in a data folder of its own,
  * reached through a relay on this machine from a separate browser and from an MCP client.
  *
- *   node apps/relay/tests/native.local.mjs <o7.exe> [--prompt]
+ *   node apps/relay/tests/native.local.mjs <ghost.exe> [--prompt]
  *
  * `--prompt` also sends one short message to a real agent. Everything else starts no turn.
  */
@@ -58,8 +58,8 @@ function serveSite() {
   return new Promise((done) => server.listen(SITE_PORT, "127.0.0.1", () => done(server)));
 }
 
-const data = await mkdtemp(join(tmpdir(), "o7-remote-native-data-"));
-const project = await mkdtemp(join(tmpdir(), "o7-remote-native-project-"));
+const data = await mkdtemp(join(tmpdir(), "ghost-remote-native-data-"));
+const project = await mkdtemp(join(tmpdir(), "ghost-remote-native-project-"));
 await writeFile(join(project, "README.md"), "# Remote check\n");
 const site = await serveSite();
 const relay = new Miniflare(
@@ -82,14 +82,16 @@ await relay.ready;
 
 // A clean environment: nothing of the chat this runs from reaches the app under test.
 const env = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !/^(CLAUDECODE$|CLAUDE_CODE_|O7_MCP_)/.test(key)),
+  Object.entries(process.env).filter(
+    ([key]) => !/^(CLAUDECODE$|CLAUDE_CODE_|GHOST_MCP_)/.test(key),
+  ),
 );
 const app = spawn(exe, [], {
   env: {
     ...env,
-    O7_DATA_DIR: data,
-    O7_REMOTE_RELAY: `ws://127.0.0.1:${RELAY_PORT}`,
-    O7_REMOTE_SITE: SITE,
+    GHOST_DATA_DIR: data,
+    GHOST_REMOTE_RELAY: `ws://127.0.0.1:${RELAY_PORT}`,
+    GHOST_REMOTE_SITE: SITE,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}`,
   },
   stdio: "ignore",

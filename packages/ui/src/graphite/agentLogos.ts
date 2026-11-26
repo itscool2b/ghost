@@ -13,7 +13,7 @@ import pi from "./agent-logos/pi.svg?raw";
  * The coding agents' own marks, as their makers publish them (third-party/brand-marks.md records
  * each source, guideline and term). Each file is the vendor's shapes, flattened to plain path,
  * circle, rect, ellipse or polygon elements with no raster, script, style, id or reference, and
- * names its agent. The marks are trademarks of their owners, are not covered by o7's
+ * names its agent. The marks are trademarks of their owners, are not covered by Ghost's
  * license, and only say which agent a chat uses. An agent without one (a custom ACP agent) keeps
  * its two-letter code (AgentMark).
  */

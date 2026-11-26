@@ -1,16 +1,16 @@
 /*
  * The desktop app's own layout values (docs/design/visual-language.md). Every colour, type size,
- * space, radius and duration is a --g-* token from @o7/ui; stylesheets read them directly.
+ * space, radius and duration is a --g-* token from @ghost/ui; stylesheets read them directly.
  *
  * The window is flat and soft, after the Grok Bot app (owner, 17 November 2026): the sidebar sits
  * on the window's colour (over the native material on macOS and Windows, under a tint), and the
  * work happens on solid panes a step lighter in dark and white in light, 8px in from its edges.
  * Depth is tone and one faint edge, never blur.
  */
-@import "@o7/ui/graphite.css";
+@import "@ghost/ui/graphite.css";
 /* Desktop themes, one per supported agent: palettes over these tokens (themes.ts). */
-@import "@o7/ui/themes.css";
-@import "@o7/ui/desktop-fonts.css";
+@import "@ghost/ui/themes.css";
+@import "@ghost/ui/desktop-fonts.css";
 
 :root {
   /* Use the desktop font's default glyphs. */

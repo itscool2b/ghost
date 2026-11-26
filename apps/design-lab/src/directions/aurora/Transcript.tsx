@@ -6,7 +6,7 @@ import {
   type OrbState,
   springs,
   usePrefersReducedMotion,
-} from "@o7/ui";
+} from "@ghost/ui";
 import {
   ArrowDown,
   ChevronDown,

@@ -3,7 +3,7 @@
 # set: AVX2 with FMA and F16C, the level every Mac that runs macOS 13.3 has and that Intel (2013)
 # and AMD (2015) processors share. Without it the engine runs scalar code, several times slower.
 # ggml applies these flags to its CPU backend (ggml-cpu) only, which has no startup initializers,
-# and the app checks the processor before dictation calls into it, so o7 still starts and
+# and the app checks the processor before dictation calls into it, so Ghost still starts and
 # works on older processors; only dictation needs them. ARM builds ignore the x86 flags.
 #
 # transcribe-cpp-sys forwards TRANSCRIBE_CMAKE_ARGS to CMake after its own defaults and rebuilds

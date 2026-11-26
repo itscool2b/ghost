@@ -7,10 +7,10 @@ use std::process::Command;
 const WINDOWS_MANIFEST: &str = "windows-app-manifest.xml";
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=O7_UPDATER_CHANNEL");
-    match env::var("O7_UPDATER_CHANNEL").as_deref() {
+    println!("cargo:rerun-if-env-changed=GHOST_UPDATER_CHANNEL");
+    match env::var("GHOST_UPDATER_CHANNEL").as_deref() {
         Err(env::VarError::NotPresent) | Ok("stable" | "staging") => {}
-        _ => panic!("O7_UPDATER_CHANNEL must be stable or staging"),
+        _ => panic!("GHOST_UPDATER_CHANNEL must be stable or staging"),
     }
     // tauri-build embeds its Windows manifest in binaries only, so this crate's own test binaries
     // started without Common Controls v6 and Windows refused to load them (exit 0xc0000139,

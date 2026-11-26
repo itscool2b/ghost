@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sends a sealed o7 notification to the app on a simulator, as the computer and the relay would:
+// Sends a sealed Ghost notification to the app on a simulator, as the computer and the relay would:
 // the payload sealed with the push key of a device (`push.rs`), inside Apple's fixed outer words.
 // The notification extension opens it, or leaves the fixed words when it cannot.
 //
@@ -13,7 +13,7 @@
 //     [--chat c3] [--title "Tidy the changelog"] [--line "Run pnpm lint --fix?"]
 //     [--host <host id>] [--device <device id>] [--key <device key, hex>]
 //
-// Without --host, --device and --key it seals for the app's mock computer (`-O7Backend mock`),
+// Without --host, --device and --key it seals for the app's mock computer (`-GhostBackend mock`),
 // whose pairing uses a fixed device id and key in debug builds.
 
 import { execFileSync } from "node:child_process";
@@ -95,22 +95,22 @@ const payload = {
 
 const blob = await seal(payload, Buffer.from(values.key, "hex"), values.host, values.device);
 const notification = {
-  "Simulator Target Bundle": "codes.o7.mobile",
+  "Simulator Target Bundle": "dev.onghost.mobile",
   aps: {
-    alert: { title: "o7", body: "Something changed on your computer." },
+    alert: { title: "Ghost", body: "Something changed on your computer." },
     sound: "default",
     "mutable-content": 1,
-    ...(values.buttons && values.kind === "asking" ? { category: "o7.permission" } : {}),
+    ...(values.buttons && values.kind === "asking" ? { category: "ghost.permission" } : {}),
   },
-  o7: { v: 1, d: values.device, b: blob },
+  ghost: { v: 1, d: values.device, b: blob },
 };
 
 if (values.print || !values.udid) {
   console.log(JSON.stringify(notification, null, 2));
 } else {
-  const file = join(mkdtempSync(join(tmpdir(), "o7-push-")), "push.apns");
+  const file = join(mkdtempSync(join(tmpdir(), "ghost-push-")), "push.apns");
   writeFileSync(file, JSON.stringify(notification));
-  execFileSync("xcrun", ["simctl", "push", values.udid, "codes.o7.mobile", file], {
+  execFileSync("xcrun", ["simctl", "push", values.udid, "dev.onghost.mobile", file], {
     stdio: "inherit",
   });
 }

@@ -1,4 +1,0 @@
-{"d":"note","note":{"text":"An agent that speaks protocol version 2: ProtocolMismatch, and the process is stopped."}}
-{"d":"note","note":{"start":{"agent_id":"acp-agent","dialect":"generic","resume":null,"autonomy":"full_auto","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
-{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"auracode","title":"auracode","version":"0.0.0-replay"}}}}
-{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":2,"agentCapabilities":{},"authMethods":[]}}}

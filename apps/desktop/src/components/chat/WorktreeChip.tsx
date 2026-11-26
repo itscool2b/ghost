@@ -1,4 +1,4 @@
-import { PixelLoader } from "@o7/ui/graphite";
+import { PixelLoader } from "@ghost/ui/graphite";
 import { ChevronDown, Folder, GitBranch } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 import {
@@ -280,7 +280,7 @@ export function WorktreeChip({
                       className="g-input"
                       value={draft}
                       placeholder={
-                        view.plan?.branch_generated ? view.plan.branch : "aura/new-branch"
+                        view.plan?.branch_generated ? view.plan.branch : "ghost/new-branch"
                       }
                       maxLength={200}
                       spellCheck={false}

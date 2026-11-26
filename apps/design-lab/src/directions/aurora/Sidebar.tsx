@@ -1,4 +1,4 @@
-import { type AgentBrandId, getBrand, type OrbState, orbPosterBackground } from "@o7/ui";
+import { type AgentBrandId, getBrand, type OrbState, orbPosterBackground } from "@ghost/ui";
 import {
   ArrowUp,
   ChevronRight,

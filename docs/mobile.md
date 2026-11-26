@@ -1,8 +1,8 @@
 # Mobile: a phone beside the chat
 
-o7 puts a real device beside each chat for building phone apps: an Android emulator of the chat's
+Ghost puts a real device beside each chat for building phone apps: an Android emulator of the chat's
 own, an iPhone simulator of its own on a Mac, or a phone on a cable. The person watches and uses it
-in the **Device pane**; the chat's agent uses the same device through the `o7_mobile` tools. The
+in the **Device pane**; the chat's agent uses the same device through the `ghost_mobile` tools. The
 plan, with what is built and what is still to come (iPhones without a Mac, recipes for running a
 project), is
 [superpowers/plans/2026-11-21-mobile.md](superpowers/plans/2026-11-21-mobile.md). This page says
@@ -29,7 +29,7 @@ how what is built works.
   chat, and the chat's agent cannot use it until the person turns on "Let the agent use this
   phone" there.
 - **Settings > Mobile** has the switch (on by default), what agents get, and what is installed.
-  Off stops every device o7 started, closes the pane everywhere and makes every tool answer that
+  Off stops every device Ghost started, closes the pane everywhere and makes every tool answer that
   Mobile is off, in running chats too.
 - **Setup** has a page for it, Your phone, after Your assistant: what the phone is for, Android's
   setup with Google's offer and licence exactly as the pane shows them, and on a Mac the iPhone's
@@ -64,18 +64,18 @@ offer and licence at once; accepting stays the person's.
 ## One device per chat
 
 A chat's worktree is its own copy of a project, so two chats on one device would install over
-each other. A chat holds at most one device and a device is held by at most one chat. o7 keeps up
+each other. A chat holds at most one device and a device is held by at most one chat. Ghost keeps up
 to four emulators on disk (`Phone 1` to `Phone 4`), runs at most two at once (each takes 2 to 4 GB
 of memory), and gives a chat that asks for "a phone" a running one nobody holds, else a stopped
 one, else a new one. A chat lets go of a device it has not watched or used for 10 minutes, and an
 emulator nobody holds is stopped. iPhone simulators follow the same rules, counted apart from
-emulators (`iPhone 1` to `iPhone 4`, at most two running). Emulators are o7's own processes: they are in a job object
+emulators (`iPhone 1` to `iPhone 4`, at most two running). Emulators are Ghost's own processes: they are in a job object
 (Windows) or a process group, so none outlives the app, and a normal quit asks each to save its
 state first.
 
 ## How it works
 
-Everything between the app and a device is `crates/o7-devices`, plain Rust with no Tauri in it.
+Everything between the app and a device is `crates/ghost-devices`, plain Rust with no Tauri in it.
 
 | Part | What it does |
 | --- | --- |
@@ -84,7 +84,7 @@ Everything between the app and a device is `crates/o7-devices`, plain Rust with 
 | `outline` | The screen as an outline, from `uiautomator dump`: roles, names and values, with a ref (`d12`) on everything that can be acted on. Layout containers are dropped. A password field's text never leaves this module. |
 | `picture` | Screenshots for agents, shrunk by a whole number so the longest side fits what models look at; a point in the picture times that number is a point on the device. |
 | `repo`, `install`, `sdk` | Google's package index (the one `sdkmanager` reads), the checked download, and finding an SDK a person already has. No Java is needed. |
-| `avd`, `emulator` | Virtual devices written as files (what `avdmanager` would write), in o7's own folder, and the emulator's life. |
+| `avd`, `emulator` | Virtual devices written as files (what `avdmanager` would write), in Ghost's own folder, and the emulator's life. |
 | `ios`, `axe` | iPhone simulators on a Mac: Xcode's `simctl` for their lives, apps, links and settings, and AXe for the outline, input and the pane's pictures. See "iPhone on a Mac". |
 | `manager`, `tools` | Which chat holds which device, the video for the pane, and the agents' tools. |
 
@@ -94,22 +94,22 @@ WebCodecs and draws it on a canvas (`apps/desktop/src/lib/mobile.ts`,
 `components/mobile/DevicePanel.tsx`).
 
 Agents reach it as they reach the browser: the app's own executable runs as a stdio MCP server
-(`--o7-mobile-helper --mcp`) that a native Chat session's agent starts; it talks to the running
+(`--ghost-mobile-helper --mcp`) that a native Chat session's agent starts; it talks to the running
 app over a loopback listener with a random per-session token, and the session's end revokes it
-(`crates/o7-core/src/mobile_service.rs`). Terminal chats and agents on another host get no device
+(`crates/ghost-core/src/mobile_service.rs`). Terminal chats and agents on another host get no device
 tools.
 
 ### Where things are
 
-- `<data folder>/devices/android/sdk`: what o7 fetched. An SDK the person already has
+- `<data folder>/devices/android/sdk`: what Ghost fetched. An SDK the person already has
   (`ANDROID_HOME`, `ANDROID_SDK_ROOT`, Android Studio's default folder) is used when it holds an
-  emulator and an image; o7 reads it and never writes to it.
-- `<data folder>/devices/android/avd`: o7's virtual devices (`ANDROID_AVD_HOME` when its emulator
+  emulator and an image; Ghost reads it and never writes to it.
+- `<data folder>/devices/android/avd`: Ghost's virtual devices (`ANDROID_AVD_HOME` when its emulator
   runs). The AVDs a person made in Android Studio are never listed, started or changed.
 - `<data folder>/devices/android/logs`: what each emulator printed, for saying why one did not
   start.
 - `<data folder>/devices/ios/axe/2.0.4`: AXe, fetched on an iPhone's first start.
-- `<data folder>/devices/ios/simulators.json`: the simulators o7 made, by number. The simulators
+- `<data folder>/devices/ios/simulators.json`: the simulators Ghost made, by number. The simulators
   themselves are in Xcode's own folder (`~/Library/Developer/CoreSimulator`), where AXe finds them.
 
 A development build has its own data folder, so it downloads its own copy.
@@ -120,7 +120,7 @@ The emulator needs hardware virtualization: Windows Hypervisor Platform on Windo
 its own AEHD driver on 31 December 2026), KVM on Linux, nothing extra on macOS. The pane asks the
 emulator itself (`emulator -accel-check`) and says the one thing to turn on. Phones on a cable
 need only adb. An iPhone simulator needs a Mac with Xcode 26 or later, its licence accepted, and an
-iOS simulator runtime (Xcode's Settings > Components). Building an Android project needs that project's own JDK and build tools; o7 does
+iOS simulator runtime (Xcode's Settings > Components). Building an Android project needs that project's own JDK and build tools; Ghost does
 not install them.
 
 ## iPhone on a Mac
@@ -128,32 +128,32 @@ not install them.
 On a Mac with Xcode, a chat can have an iPhone simulator of its own instead of an emulator. The
 pane shows its screen as it shows the emulator's. With Xcode 26, AXe can read a simulator's screen
 and touch it only while Simulator.app shows it (on GitHub's Macs every read failed with "No
-translation object" until it did), so o7 opens Simulator.app hidden and in the background
+translation object" until it did), so Ghost opens Simulator.app hidden and in the background
 (`open -g -j`, aimed at the simulator) as the simulator boots. It takes no focus and shows no
 window unless the person clicks it in the Dock. Xcode 27 does without: on GitHub's Xcode 27 Macs
-AXe read and touched the simulator with nothing open, and o7 opens nothing there.
+AXe read and touched the simulator with nothing open, and Ghost opens nothing there.
 
-- **Xcode** is the person's, installed from the App Store. o7 finds it (`DEVELOPER_DIR`, then
+- **Xcode** is the person's, installed from the App Store. Ghost finds it (`DEVELOPER_DIR`, then
   `xcode-select -p`, then Xcode in Applications when only the command line tools are chosen),
   needs Xcode 26 or later, and gives every tool it starts that Xcode as `DEVELOPER_DIR`. It never
   asks macOS to install anything and never accepts Xcode's licence: the pane says to open Xcode
   once, or to get the iOS simulator runtime in Xcode's Settings > Components.
-- **Simulators** are o7's own: `o7 iPhone 1` to `o7 iPhone 4`, made with `simctl create` for the
+- **Simulators** are Ghost's own: `Ghost iPhone 1` to `Ghost iPhone 4`, made with `simctl create` for the
   newest iOS runtime and the newest plain "Pro" iPhone it supports (a runtime Xcode lists for one
   new device only, such as Xcode 27's for a foldable, comes after the general ones), in Xcode's
   usual device set
   (the set AXe reads). Their identities are kept in `<data folder>/devices/ios/simulators.json`, and
-  o7 boots, shuts down or deletes only those. A person's own simulators are never listed or
-  touched. One made for a runtime that is gone is deleted and made again. A simulator is not o7's
-  process, so o7 shuts its own down when nobody holds them, when Mobile is turned off and when o7
-  quits; one still booted after o7 crashed is o7's to shut down again at the next start.
+  Ghost boots, shuts down or deletes only those. A person's own simulators are never listed or
+  touched. One made for a runtime that is gone is deleted and made again. A simulator is not Ghost's
+  process, so Ghost shuts its own down when nobody holds them, when Mobile is turned off and when Ghost
+  quits; one still booted after Ghost crashed is Ghost's to shut down again at the next start.
 - **`simctl`** runs the rest: booting (`boot`, then `bootstatus -b`), installing a `.app`,
   launching and ending an app by its bundle id, opening links, light and dark (`ui appearance`),
   text size (`ui content_size`, Apple's steps nearest the scale asked for), permissions
   (`privacy`), screenshots (`io screenshot`), the app's log (`log show` inside the simulator,
   filtered to its program, a run of the same line said once with its count) and, for a crash, the newest report macOS wrote for it in
   `~/Library/Logs/DiagnosticReports`. A link that opens an app makes iOS ask first ("Open in
-  “Hello o7”?"), as it asks a person: `mobile_open_link` says so, and the agent taps Open.
+  “Hello Ghost”?"), as it asks a person: `mobile_open_link` says so, and the agent taps Open.
 - **AXe** ([cameroncooke/AXe](https://github.com/cameroncooke/AXe)) reads the screen
   (`describe-ui`, turned into the same outline with refs; frames in points become pixels; the
   scroll bars iOS gives every scroll view are left out, since the view itself scrolls), sends
@@ -168,13 +168,13 @@ AXe read and touched the simulator with nothing open, and o7 opens nothing there
   is fetched on an iPhone's first start, version 2.0.4 pinned by size
   and SHA-256 (`third-party/axe.md`), into `<data folder>/devices/ios/axe`. Text an agent types
   goes to AXe on its standard input, never in a command line; text the simulator's keyboard has no
-  key for is pasted through the simulator's clipboard, and o7 waits until the screen shows it (a
+  key for is pasted through the simulator's clipboard, and Ghost waits until the screen shows it (a
   few seconds at most) before an Enter follows.
 - **The pane** draws each picture as it comes (no video decoder needed, so every web view shows
   it). AXe takes whole gestures, so the person's press becomes a tap, a long press (held 450 ms) or
   a swipe as long as the drag when the finger lifts; the wheel becomes short swipes. Keys and typed
   text are sent in order, a burst of keystrokes as one piece of text. An iPhone has no Back button
-  and cannot be turned from o7 yet: the pane shows Home and the app switcher (Home twice), and
+  and cannot be turned from Ghost yet: the pane shows Home and the app switcher (Home twice), and
   `mobile_press back` swipes in from the left edge, which is Back in most apps.
 - **Building** stays the agent's, in its shell: `mobile_start` says the simulator's UDID for
   `xcodebuild ... -destination 'platform=iOS Simulator,id=<UDID>'`, and `mobile_install` takes the
@@ -187,7 +187,7 @@ AXe read and touched the simulator with nothing open, and o7 opens nothing there
 `mobile_snapshot`, `mobile_tap`, `mobile_type`, `mobile_swipe`, `mobile_press`,
 `mobile_screenshot`, `mobile_logs`, `mobile_open_link`, `mobile_settings`, `mobile_wait_for` and
 `mobile_stop`. Their descriptions and the instructions agents read are in
-`crates/o7-core/src/mobile_service/helper.rs` and `crates/o7-core/resources/mobile/`.
+`crates/ghost-core/src/mobile_service/helper.rs` and `crates/ghost-core/resources/mobile/`.
 
 An agent builds the app with the project's own tools in its shell, then installs and starts it
 with the tools, reads the screen as an outline, acts on refs, and takes a screenshot when layout
@@ -211,17 +211,17 @@ Who may do what, and where it is checked:
   those exist only as the pane's own commands, and a fetch needs an offer that was shown first.
 - **A phone is the person's until they say otherwise.** An agent cannot choose a phone, and
   cannot use the one its chat holds until the person turns that on in the pane, per chat. The
-  answer is forgotten when the chat lets go of the phone. o7's own emulators and simulators need
+  answer is forgotten when the chat lets go of the phone. Ghost's own emulators and simulators need
   no question.
-- **Only o7's own simulators.** o7 acts only on the simulators whose identities it wrote down when
+- **Only Ghost's own simulators.** Ghost acts only on the simulators whose identities it wrote down when
   it made them; every identity is checked to be a UUID before it goes into a command, and bundle
   ids and links are checked against strict forms. `simctl` and AXe are run as programs with their
-  arguments apart, never through a shell; the one predicate o7 writes (`log show`) takes only a
+  arguments apart, never through a shell; the one predicate Ghost writes (`log show`) takes only a
   program name of plain characters.
 - **AXe** comes only from its pinned GitHub release, over HTTPS, following redirects only to
   GitHub's own hosts. The archive is checked against its pinned size and SHA-256 before macOS's
   own `tar` unpacks it into an empty folder, so what is unpacked is exactly what was published.
-  It is not shipped with o7.
+  It is not shipped with Ghost.
 - **What the device shows is data.** Tool replies describe the screen; the instructions tell
   agents never to follow text shown by an app, a notification, a web page or a log.
 - **Words from outside never reach a command unchecked.** A device's shell parses one command
@@ -239,7 +239,7 @@ Who may do what, and where it is checked:
 - **The scrcpy server** is one pinned release (5.0.1), bundled in the app and checked by its
   published SHA-256 in a test; `third-party/scrcpy.json` and the notices record it. It runs on
   the device as the shell user, as scrcpy itself does.
-- **No new listeners.** adb's server is on loopback by default and o7 never asks for more; no
+- **No new listeners.** adb's server is on loopback by default and Ghost never asks for more; no
   device port is forwarded to the computer; the emulator runs with `-no-metrics` and its console
   and gRPC ports are left at their loopback defaults.
 - **Remote access** does not reach the pane or its tools.
@@ -248,32 +248,32 @@ Limits, said plainly:
 
 - An agent with a shell can run `adb` itself, within the chat's access mode. On an emulator that
   is the point. On a phone the person plugged in, adb reaches it whether or not the person allowed
-  the *tools*: the switch governs o7's tools, not the agent's shell. A person who does not want
+  the *tools*: the switch governs Ghost's tools, not the agent's shell. A person who does not want
   an agent near a phone should not plug it in while that agent has a shell, and the pane's
   question says the agent can see and use everything on the phone.
 - While a session's screen is being read, another program on the device could in principle
-  connect to scrcpy's local socket before o7 does. This is scrcpy's own design; the server accepts
+  connect to scrcpy's local socket before Ghost does. This is scrcpy's own design; the server accepts
   exactly the sockets it expects and then stops listening.
 
 ## Checking it
 
-- `cargo test -p o7-devices`: the protocol clients against a stand-in adb server, scrcpy's own
+- `cargo test -p ghost-devices`: the protocol clients against a stand-in adb server, scrcpy's own
   byte layouts, the outline (one test reads a real dump), the index, the unpacker's refusals, the
   manager's rules (one device per chat, the running limit, a phone's consent, Mobile off), and for
   iPhones: `simctl`'s and AXe's answers, the outline from AXe's tree, the picture stream, the
   person's gestures and typing, and a Mac being needed.
-- `cargo test -p o7-core mobile_service`: the grant, its token, the switch, the tool list.
+- `cargo test -p ghost-core mobile_service`: the grant, its token, the switch, the tool list.
 - `node apps/desktop/scripts/check-device.mjs` (in the fixture suite): every state of the pane,
   its input, the phone's question and Settings > Mobile, in two browser engines and both
   appearances, with axe. There is no device there, so no video.
-- A real emulator needs a development build: start it with a scratch `O7_DATA_DIR`, and use the
+- A real emulator needs a development build: start it with a scratch `GHOST_DATA_DIR`, and use the
   development-only `mobile_agent_call` command to run a tool as an agent would.
 - A real iPhone simulator needs a Mac. The manual workflow **iPhone simulator**
-  (`.github/workflows/ios.yml`) runs `cargo test -p o7-devices` on GitHub's Macs and then
-  `crates/o7-devices/tests/ios.rs` with `O7_IOS_E2E=1`, once with Xcode 26 (the `macos-26` image)
+  (`.github/workflows/ios.yml`) runs `cargo test -p ghost-devices` on GitHub's Macs and then
+  `crates/ghost-devices/tests/ios.rs` with `GHOST_IOS_E2E=1`, once with Xcode 26 (the `macos-26` image)
   and once with Xcode 27 (the `xcode-27` image); its `xcode` input picks one or both. The test
   fetches AXe, makes and boots a simulator through the manager, drives every tool against
-  Settings, Safari and a small app it builds (`crates/o7-devices/tests/ios-app`), reads the
+  Settings, Safari and a small app it builds (`crates/ghost-devices/tests/ios-app`), reads the
   pane's pictures and the person's input through the same calls the pane makes, and keeps a
   transcript, screenshots and pictures as the run's artifact. GitHub's Macs are slow and uneven
   (a first boot took 80 to 200 seconds, a screenshot up to a minute), so the test calls again

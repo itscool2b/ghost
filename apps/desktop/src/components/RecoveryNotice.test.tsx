@@ -7,7 +7,7 @@ import { InfoCard } from "./InfoCard";
 import { dismissRecovery, RecoveryNoticeView } from "./RecoveryNotice";
 
 const NOTICE =
-  "Your database was damaged, so o7 rebuilt it. Nothing was lost; the damaged copy was kept at /data/profiles/local/backups/aura.db.corrupt-1.";
+  "Your database was damaged, so Ghost rebuilt it. Nothing was lost; the damaged copy was kept at /data/profiles/local/backups/aura.db.corrupt-1.";
 
 const INFO: AppInfo = {
   app_version: "0.1.0",
@@ -50,12 +50,12 @@ describe("the database repair notice", () => {
   it("is listed with a Dismiss button, beside notices that cannot be dismissed", () => {
     const html = renderToStaticMarkup(
       <InfoCard
-        info={{ ...INFO, notices: ["O7_STRESS was ignored."] }}
+        info={{ ...INFO, notices: ["GHOST_STRESS was ignored."] }}
         onRecoveryDismissed={() => {}}
       />,
     );
     expect(html).toContain(NOTICE);
-    expect(html).toContain("O7_STRESS was ignored.");
+    expect(html).toContain("GHOST_STRESS was ignored.");
     expect(html.match(/>Dismiss<\/button>/g)).toHaveLength(1);
     expect(html).toMatch(ENABLED_BUTTON);
   });

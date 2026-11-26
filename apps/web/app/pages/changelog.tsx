@@ -4,7 +4,7 @@ import catalog from "#release-catalog";
 import days from "../changelog-data";
 import { Arrow, Page } from "../ui";
 
-export const meta = () => [{ title: "Changelog · o7" }];
+export const meta = () => [{ title: "Changelog · Ghost" }];
 
 /** A line's text with its `code` set in the mono face. */
 function Inline({ text }: { text: string }) {
@@ -20,7 +20,7 @@ function Inline({ text }: { text: string }) {
 }
 
 /**
- * Every change merged into o7, by the day it merged, straight from CHANGELOG.md. Each line
+ * Every change merged into Ghost, by the day it merged, straight from CHANGELOG.md. Each line
  * opens in ink and explains itself in grey, and ends with its pull request's number.
  */
 export default function Changelog() {

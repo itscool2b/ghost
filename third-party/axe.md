@@ -1,11 +1,11 @@
 # AXe
 
-o7 drives iPhone simulators on a Mac with AXe (<https://github.com/cameroncooke/AXe>, by Cameron
+Ghost drives iPhone simulators on a Mac with AXe (<https://github.com/cameroncooke/AXe>, by Cameron
 Cooke): it reads the simulator's screen, sends taps, typing, keys and buttons, and streams the
-pictures the Device pane shows (`crates/o7-devices/src/ios.rs`, `docs/mobile.md`).
+pictures the Device pane shows (`crates/ghost-devices/src/ios.rs`, `docs/mobile.md`).
 
-**o7 does not ship AXe.** On an iPhone's first start, o7 downloads one pinned release from AXe's
-own GitHub release page into its data folder (`crates/o7-devices/src/axe.rs`):
+**Ghost does not ship AXe.** On an iPhone's first start, Ghost downloads one pinned release from AXe's
+own GitHub release page into its data folder (`crates/ghost-devices/src/axe.rs`):
 
 | | |
 | --- | --- |
@@ -21,7 +21,7 @@ The archive holds the `axe` program, Meta's IDB frameworks it is built on (`FBCo
 
 Why this version: it is the last release under the MIT licence. From 2.1.0 (2026-11-19) AXe is
 GPL-3.0-only, with a commercial licence for software that is not released under the GPL. 2.0.4
-supports Xcode 26 and 27, which is what o7 needs. Moving to a later release means checking its
+supports Xcode 26 and 27, which is what Ghost needs. Moving to a later release means checking its
 licence again, then changing `VERSION`, `URL`, `SHA256` and `SIZE` in `axe.rs` and this record
 together, and running the **iPhone simulator** workflow.
 

@@ -3,7 +3,7 @@ import type { AgentEntry, ChatSummary, SessionStatus } from "../bindings";
 /**
  * Agent updates as the window's notices show them. Detection compares each installed agent with
  * its latest release (at startup, then every 15 minutes); an agent with a newer release gets a
- * notice that stays until its X. Dismissing lasts for this run of o7 only, so the notice
+ * notice that stays until its X. Dismissing lasts for this run of Ghost only, so the notice
  * returns at the next start until the agent is updated, and a newer release than the one
  * dismissed shows again at once.
  */
@@ -57,7 +57,7 @@ export function workingChats(chats: readonly ChatSummary[] | null, agentId: stri
     .length;
 }
 
-/** The releases dismissed in this run of o7, as an external store for React. */
+/** The releases dismissed in this run of Ghost, as an external store for React. */
 export class UpdateNotices {
   #dismissed: ReadonlySet<string> = new Set();
   readonly #listeners = new Set<() => void>();
@@ -76,5 +76,5 @@ export class UpdateNotices {
   }
 }
 
-/** One per window: it lives as long as o7 runs, so a restart shows every notice again. */
+/** One per window: it lives as long as Ghost runs, so a restart shows every notice again. */
 export const updateNotices = new UpdateNotices();

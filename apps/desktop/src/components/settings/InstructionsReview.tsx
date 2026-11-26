@@ -198,7 +198,7 @@ export function ReviewDialog({
                     {[
                       ...file.notes,
                       ...(file.backup && file.action !== "remove"
-                        ? ["The replaced text is backed up in o7's data folder."]
+                        ? ["The replaced text is backed up in Ghost's data folder."]
                         : []),
                     ].map((note) => (
                       <p className="instructions-review-note" key={note}>

@@ -21,7 +21,7 @@ targets are installed before the universal build. The Linux packages link Ubuntu
 they run there and on newer distributions; the runner installs WebKitGTK 4.1, the AppIndicator,
 librsvg, ALSA, libxdo, patchelf and rpm first. WSL agent hosts are separate from these packages.
 
-These artifacts are labeled `auracode-unsigned-<target>-<SHA>`, expire after seven days, and are
+These artifacts are labeled `ghost-unsigned-<target>-<SHA>`, expire after seven days, and are
 never published automatically. macOS uses an explicit ad-hoc signature. Neither an ad-hoc signature
 nor an unsigned Windows installer establishes a trusted public release. No platform security
 settings are changed to make a development installer run.
@@ -48,18 +48,18 @@ the app was built and published by itself.)
    versions in between are never published, which is fine.
 2. **The build is numbered by `VERSION`**, three numbers the pull request that changed the
    app chose (owner, 23 November 2026): the minor number up for a big feature, the patch for a
-   small change (docs/developing-in-o7.md, "Version"). It must be newer than every published
+   small change (docs/developing-in-ghost.md, "Version"). It must be newer than every published
    version, or installed copies would never be offered it; the workflow refuses one that is not.
    A version already published is skipped when nothing in the app changed since it (a rerun, or
    release tooling alone) and refused when the app did change: raise `VERSION` in a pull request
    and its merge publishes. `pnpm bundle --app-version` gives the number to Tauri; the workspace
-   version in `Cargo.toml` stays as it is. People see the number as it is, "o7 0.2.1".
+   version in `Cargo.toml` stays as it is. People see the number as it is, "Ghost 0.2.1".
    Until 23 November 2026 the number was `0.1.N`, N the count of commits on main (the last was
    0.1.1787); the first chosen version, 0.2.0, is newer than all of those.
 3. **Four targets build with their updater signatures** (`pnpm bundle --signed-updater`): the
    universal macOS app and DMG, Windows x64 and ARM64 NSIS installers, and the Linux AppImage, deb
    and rpm. macOS is signed ad hoc. No publisher signs the installers for the operating systems.
-4. **`o7-release prepare` and `verify` check every byte.** They refuse a missing or doubled
+4. **`ghost-release prepare` and `verify` check every byte.** They refuse a missing or doubled
    package, a package without its signature, a signature that does not verify against the trusted
    public key or is bound to another version, and a package built as another version. They write
    `latest.json` (what installed copies read), `downloads.json` (what the download page reads)
@@ -103,7 +103,7 @@ was built in US Eastern time.
 
 | Where | Name | What |
 |---|---|---|
-| Repository variable | `O7_UPDATER_PUBLIC_KEY` | The updater's public key, as `tauri signer generate` wrote it |
+| Repository variable | `GHOST_UPDATER_PUBLIC_KEY` | The updater's public key, as `tauri signer generate` wrote it |
 | Repository secret | `TAURI_SIGNING_PRIVATE_KEY` | The updater's private key |
 | Repository secret | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password |
 
@@ -118,14 +118,14 @@ is in the history (`.github/workflows/release.yml` before #148).
 build, an old preview build) report `disabled` and say to install from the download page.
 
 - **Checking is automatic.** 45 seconds after start and every four hours, the app reads
-  `https://github.com/itscool2b/o7/releases/latest/download/latest.json`: at most 64 KiB,
+  `https://github.com/itscool2b/ghost/releases/latest/download/latest.json`: at most 64 KiB,
   HTTPS only. Settings, General, "Check for updates" turns this off; "Check for updates" in
   Settings, About still works then. A check the app made by itself that fails leaves no trace, and
   none runs over a download or an installation.
 - **Redirects are followed only to GitHub's own asset hosts** (`github.com`,
   `objects.githubusercontent.com`, `release-assets.githubusercontent.com`), over HTTPS, five at
   most. A package address in the manifest must be
-  `https://github.com/itscool2b/o7/releases/download/v<version>/<file>` with plain names and
+  `https://github.com/itscool2b/ghost/releases/download/v<version>/<file>` with plain names and
   nothing else: no other repository, no query, no encoded path.
 - **Update shows at the foot of the sidebar** when a newer version is found. Its panel has the
   version, what is new, what the restart does to work under way, and one button, Update and
@@ -142,8 +142,8 @@ build, an old preview build) report `disabled` and say to install from the downl
 ### Trying it without installing anything
 
 A development build never installs an update. Started with both
-`O7_UPDATE_TEST_MANIFEST=http://127.0.0.1:<port>/latest.json` and
-`O7_UPDATE_TEST_PUBLIC_KEY=<a test key>`, it reads that loopback server instead of GitHub,
+`GHOST_UPDATE_TEST_MANIFEST=http://127.0.0.1:<port>/latest.json` and
+`GHOST_UPDATE_TEST_PUBLIC_KEY=<a test key>`, it reads that loopback server instead of GitHub,
 downloads the package it names from the same port, and verifies it against that key; Update and
 restart then says the package was verified and not installed. Any other address, or either
 variable alone, leaves updates off. A released build ignores both variables.
@@ -153,13 +153,13 @@ against a synthetic updater.
 
 ### Staging
 
-A build made with `O7_UPDATER_CHANNEL=staging` reads
+A build made with `GHOST_UPDATER_CHANNEL=staging` reads
 `releases/download/staging/latest.json` and accepts packages only from `staging-v…` releases; a
 stable build accepts only `v…` ones. Nothing publishes to staging today.
 
 ## The release tool
 
-`o7-release` (`crates/o7-release`) is offline and fail-closed: no network, no private key, no
+`ghost-release` (`crates/ghost-release`) is offline and fail-closed: no network, no private key, no
 platform signing. It accepts an explicit plan and a directory containing exactly the seven named
 package roles: a universal DMG, a universal `.app.tar.gz` updater, Windows x64 NSIS, Windows ARM64
 NSIS, and the Linux x64 AppImage, deb and rpm. The six updater packages (all but the DMG) need
@@ -167,12 +167,12 @@ their Tauri `.sig` files. The tool cannot tell whether a file's declared archite
 executable inside it; installing each package remains a separate check.
 
 ```sh
-cargo run --locked -p o7-release -- prepare path/to/release-plan.json path/to/artifacts path/to/new-stage
-cargo run --locked -p o7-release -- verify path/to/new-stage
+cargo run --locked -p ghost-release -- prepare path/to/release-plan.json path/to/artifacts path/to/new-stage
+cargo run --locked -p ghost-release -- verify path/to/new-stage
 ```
 
 `.github/scripts/release-plan.mjs` writes the plan from a directory of packages;
-[the example plan](../crates/o7-release/release-plan.example.json) shows its shape. Never
+[the example plan](../crates/ghost-release/release-plan.example.json) shows its shape. Never
 include a private key in a plan.
 
 Preparation refuses existing output directories. It bounds each artifact at 512 MiB and metadata at
@@ -191,14 +191,14 @@ version. It streams the exact verified bytes into the new stage. Missing or inva
 - `releases/<version>/`, with copied packages and signatures: the files of the GitHub release.
 - `release-plan.json` and `COMPLETE`, local preparation records that are not public release objects.
 
-`verify` needs `O7_UPDATER_PUBLIC_KEY` from the independently trusted release configuration,
+`verify` needs `GHOST_UPDATER_PUBLIC_KEY` from the independently trusted release configuration,
 the same public key embedded in the application, never one read from the stage being checked. It
 reads the staged bytes again and compares every generated manifest and checksum. Artifact opens
 refuse leaf symlinks atomically.
 
-The public catalog types are generated by `cargo run -p o7-release -- export-types`; a Rust
+The public catalog types are generated by `cargo run -p ghost-release -- export-types`; a Rust
 parity test checks the committed TypeScript contract. The website reads the committed
-`app/release-catalog.json`; with `O7_RELEASE_STAGE` set to a stage directory its build
+`app/release-catalog.json`; with `GHOST_RELEASE_STAGE` set to a stage directory its build
 verifies that stage and reads its catalog instead (`apps/web/tests/release.test.mjs`).
 
 ## Final verification commands and evidence
@@ -218,24 +218,24 @@ bash .github/scripts/export-bindings.sh check target/final-bindings
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm --filter @o7/desktop check:chat
-pnpm --filter @o7/desktop check:settings
-pnpm --filter @o7/desktop check:setup
-pnpm --filter @o7/desktop check:fixtures
-pnpm --filter @o7/desktop exec node scripts/check-setup-actions.mjs
-pnpm --filter @o7/desktop exec node scripts/check-profile-status.mjs
-pnpm --filter @o7/desktop exec node scripts/check-chat-auth.mjs
-pnpm --filter @o7/desktop exec node scripts/check-library.mjs
-pnpm --filter @o7/desktop exec node scripts/check-folder-resolution.mjs
-pnpm --filter @o7/desktop exec node scripts/check-repository-publication.mjs
-pnpm --filter @o7/desktop exec node scripts/check-workspace-removal.mjs
-pnpm --filter @o7/desktop exec node scripts/check-agent-installations.mjs
-pnpm --filter @o7/web test:release
-pnpm --filter @o7/web test:browser
-pnpm --filter @o7/desktop tauri build --debug --no-bundle
+pnpm --filter @ghost/desktop check:chat
+pnpm --filter @ghost/desktop check:settings
+pnpm --filter @ghost/desktop check:setup
+pnpm --filter @ghost/desktop check:fixtures
+pnpm --filter @ghost/desktop exec node scripts/check-setup-actions.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-profile-status.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-chat-auth.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-library.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-folder-resolution.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-repository-publication.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-workspace-removal.mjs
+pnpm --filter @ghost/desktop exec node scripts/check-agent-installations.mjs
+pnpm --filter @ghost/web test:release
+pnpm --filter @ghost/web test:browser
+pnpm --filter @ghost/desktop tauri build --debug --no-bundle
 ```
 
-With the frontend embedded, run the synthetic native app smoke on each target. `O7_SMOKE_AGENT`
+With the frontend embedded, run the synthetic native app smoke on each target. `GHOST_SMOKE_AGENT`
 must be unset. The script uses owned temporary profiles and the built-in demo driver, not a paid
 vendor account:
 
@@ -243,7 +243,7 @@ vendor account:
 # macOS
 bash .github/scripts/run-smoke.sh target/debug/auracode all
 # Windows, from the existing Git Bash runner
-bash .github/scripts/run-smoke.sh target/debug/o7.exe all
+bash .github/scripts/run-smoke.sh target/debug/ghost.exe all
 # Linux, on a virtual display when there is no desktop session
 xvfb-run -a -s "-screen 0 1440x900x24" bash .github/scripts/run-smoke.sh target/debug/auracode all
 ```
@@ -305,7 +305,7 @@ capability-qualified extra folder forwarding are implemented and have focused lo
 Readable chat export and portable folder resolution are also implemented with focused
 verification; their final integrated Windows/macOS qualification remains pending. The account
 lifecycle that stood here (recovery, passphrase storage, reset sync, device removal, Keep as Local
-and Local import) was removed with o7's accounts on 16 November 2026.
+and Local import) was removed with Ghost's accounts on 16 November 2026.
 Exact older-message native truncation/fork and Pi steering remain unsupported where the recorded
 protocol cannot safely identify the requested boundary; the visible reviewed handoff keeps the source
 conversation intact.

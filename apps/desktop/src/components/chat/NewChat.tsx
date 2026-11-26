@@ -1,4 +1,4 @@
-import { AgentMark, Logo, PixelLoader } from "@o7/ui/graphite";
+import { AgentMark, Logo, PixelLoader } from "@ghost/ui/graphite";
 import { ArrowUp, Check, ChevronDown, Folder, FolderOpen, RefreshCw, Search } from "lucide-react";
 import {
   useEffect,

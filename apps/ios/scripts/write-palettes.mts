@@ -1,5 +1,5 @@
 /**
- * Writes the iPhone app's palettes, apps/ios/O7Kit/Sources/O7Theme/Palettes.generated.swift, from
+ * Writes the iPhone app's palettes, apps/ios/GhostKit/Sources/GhostTheme/Palettes.generated.swift, from
  * the desktop's themes, never by hand:
  *   - Main (the case `aura`, its saved name) is the base palette itself: GRAPHITE_COLORS and
  *     GRAPHITE_LIGHT_COLORS (tokens.ts), plus the
@@ -22,7 +22,7 @@ import {
 import { emit, finish, repo, swiftHeader, swiftString } from "./lib.mjs";
 
 const SCRIPT = "node apps/ios/scripts/write-palettes.mts";
-const OUTPUT = repo("apps/ios/O7Kit/Sources/O7Theme/Palettes.generated.swift");
+const OUTPUT = repo("apps/ios/GhostKit/Sources/GhostTheme/Palettes.generated.swift");
 
 type Appearance = "dark" | "light";
 type Tokens = Map<string, string>;
@@ -350,7 +350,7 @@ const swift = `${swiftHeader(
   "packages/ui/src/graphite/themes.ts, tokens.ts and tokens.css, and apps/desktop/src/ui-tokens.css",
   `${SCRIPT} --check`,
 )}
-/// The desktop's themes, Main first (its case is aura, the saved name): o7's own, then one per
+/// The desktop's themes, Main first (its case is aura, the saved name): Ghost's own, then one per
 /// supported agent.
 public enum ThemeID: String, CaseIterable, Sendable {
 ${themeCases.join("\n")}
@@ -362,7 +362,7 @@ ${names.join("\n")}
         }
     }
 
-    /// The agent whose mark Settings shows beside the theme; Main shows o7's own wing.
+    /// The agent whose mark Settings shows beside the theme; Main shows Ghost's own wing.
     public var agent: String? {
         switch self {
 ${agents.join("\n")}

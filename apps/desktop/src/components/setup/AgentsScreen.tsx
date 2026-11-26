@@ -11,7 +11,7 @@ import "./agents.css";
 import "./setup.css";
 
 /**
- * What each agent's row shows, kept by the page for the picture of agents joined to o7. A
+ * What each agent's row shows, kept by the page for the picture of agents joined to Ghost. A
  * row that has not reported yet is drawn from detection alone.
  */
 function useConnectAgents(agents: readonly AgentEntry[] | null) {

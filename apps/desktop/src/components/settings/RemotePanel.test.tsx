@@ -30,11 +30,11 @@ describe("a bot link's call-back, as its row says it", () => {
   });
 });
 
-describe("o7 for iPhone, as its row says it", () => {
+describe("Ghost for iPhone, as its row says it", () => {
   const now = 1_000_000_000;
   it("names the app and its version, and nothing for a browser", () => {
-    expect(deviceApp({ kind: "ios", app_version: "1.0" })).toBe(" · o7 for iPhone 1.0");
-    expect(deviceApp({ kind: "ios", app_version: null })).toBe(" · o7 for iPhone");
+    expect(deviceApp({ kind: "ios", app_version: "1.0" })).toBe(" · Ghost for iPhone 1.0");
+    expect(deviceApp({ kind: "ios", app_version: null })).toBe(" · Ghost for iPhone");
     expect(deviceApp({ kind: "browser", app_version: null })).toBe("");
   });
   it("says whether it hears from this computer, and when it last did", () => {

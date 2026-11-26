@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use o7_protocol::SessionStatus;
-use o7_protocol::session::ChatStatusUpdate;
+use ghost_protocol::SessionStatus;
+use ghost_protocol::session::ChatStatusUpdate;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
@@ -115,13 +115,13 @@ fn active(status: SessionStatus) -> bool {
 
 pub fn tooltip(counts: Counts) -> String {
     match (counts.active, counts.attention) {
-        (0, 0) => "o7".into(),
+        (0, 0) => "Ghost".into(),
         (active, 0) => format!(
-            "o7: {active} active {}",
+            "Ghost: {active} active {}",
             if active == 1 { "chat" } else { "chats" }
         ),
         (0, attention) => format!(
-            "o7: {attention} {} attention",
+            "Ghost: {attention} {} attention",
             if attention == 1 {
                 "chat needs"
             } else {
@@ -129,7 +129,7 @@ pub fn tooltip(counts: Counts) -> String {
             }
         ),
         (active, attention) => format!(
-            "o7: {active} active, {attention} {} attention",
+            "Ghost: {active} active, {attention} {} attention",
             if attention == 1 { "needs" } else { "need" }
         ),
     }
@@ -153,11 +153,11 @@ mod tests {
     #[test]
     fn the_tooltip_agrees_in_number() {
         let counts = |active, attention| Counts { active, attention };
-        assert_eq!(tooltip(counts(0, 0)), "o7");
-        assert_eq!(tooltip(counts(1, 0)), "o7: 1 active chat");
-        assert_eq!(tooltip(counts(0, 2)), "o7: 2 chats need attention");
-        assert_eq!(tooltip(counts(1, 1)), "o7: 1 active, 1 needs attention");
-        assert_eq!(tooltip(counts(3, 2)), "o7: 3 active, 2 need attention");
+        assert_eq!(tooltip(counts(0, 0)), "Ghost");
+        assert_eq!(tooltip(counts(1, 0)), "Ghost: 1 active chat");
+        assert_eq!(tooltip(counts(0, 2)), "Ghost: 2 chats need attention");
+        assert_eq!(tooltip(counts(1, 1)), "Ghost: 1 active, 1 needs attention");
+        assert_eq!(tooltip(counts(3, 2)), "Ghost: 3 active, 2 need attention");
     }
 
     #[test]

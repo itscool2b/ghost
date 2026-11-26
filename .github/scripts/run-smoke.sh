@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # Runs the desktop app in smoke mode and fails unless every launch passed. The app (built with its
 # frontend embedded, so no dev server is involved) drives the real UI through the real typed
-# commands and channels, then prints one `O7_SMOKE_RESULT <json>` line and exits 0 on a pass
+# commands and channels, then prints one `GHOST_SMOKE_RESULT <json>` line and exits 0 on a pass
 # or 1 on a failure, through its quit flow (apps/desktop/src-tauri/src/smoke.rs). Its own watchdog
 # reports a failure if the UI never reports, so a hang shorter than the CI step timeout still ends
 # with a verdict.
 #
 # Scenarios:
-# - stream: a demo turn, a cancelled turn and a stress burst (O7_SMOKE=1), in a new data
+# - stream: a demo turn, a cancelled turn and a stress burst (GHOST_SMOKE=1), in a new data
 #   folder.
 # - chat: the chat screens against the demo agent (apps/desktop/src/lib/smokeChat.ts), in a new data
-#   folder and a new chat folder (O7_SMOKE_FOLDER). The first launch (O7_SMOKE=chat)
+#   folder and a new chat folder (GHOST_SMOKE_FOLDER). The first launch (GHOST_SMOKE=chat)
 #   ends with a turn running and quits through the quit flow; this script then checks that the quit
 #   removed the leftover registry file and folded the database's write-ahead log back, and starts a
-#   second launch on the same folders (O7_SMOKE=chat-reopen) that checks the stored history,
-#   the interrupted turn and Resume. With O7_SMOKE_AGENT=<agent id> set, chat is instead one
+#   second launch on the same folders (GHOST_SMOKE=chat-reopen) that checks the stored history,
+#   the interrupted turn and Resume. With GHOST_SMOKE_AGENT=<agent id> set, chat is instead one
 #   minimal chat with that real agent: for local runs only, since a real agent spends its user's
 #   quota, so this script refuses it under CI (and so does the app).
 # - all (the default): stream, then chat. A failure in one does not skip the other.
@@ -40,7 +40,7 @@ stream | chat | all) ;;
 *) die "$usage" ;;
 esac
 if ! { [ -f "$app" ] && [ -x "$app" ]; }; then
-  die "$app is not an executable file; build it first (pnpm --filter @o7/desktop tauri build --debug --no-bundle)"
+  die "$app is not an executable file; build it first (pnpm --filter @ghost/desktop tauri build --debug --no-bundle)"
 fi
 
 # On values as the app reads them (launch.rs): 1, true, yes or on, in any case.
@@ -53,10 +53,10 @@ is_on() {
 
 # The real agent a local chat run may ask for. Each launch gets the smoke switches it needs and no
 # others: the stream check and the reopened launch refuse an agent.
-agent="$(printf '%s' "${O7_SMOKE_AGENT:-}" | tr -d '[:space:]')"
-unset O7_SMOKE O7_SMOKE_EXIT O7_SMOKE_FOLDER O7_SMOKE_AGENT
+agent="$(printf '%s' "${GHOST_SMOKE_AGENT:-}" | tr -d '[:space:]')"
+unset GHOST_SMOKE GHOST_SMOKE_EXIT GHOST_SMOKE_FOLDER GHOST_SMOKE_AGENT
 if [ -n "$agent" ] && { is_on "${CI:-}" || is_on "${GITHUB_ACTIONS:-}"; }; then
-  die "O7_SMOKE_AGENT=$agent runs a real agent, which spends its user's quota: it is for local runs only, and CI must never set it."
+  die "GHOST_SMOKE_AGENT=$agent runs a real agent, which spends its user's quota: it is for local runs only, and CI must never set it."
 fi
 
 scratch="$(to_unix_path "${RUNNER_TEMP:-${TMPDIR:-/tmp}}")"
@@ -72,23 +72,23 @@ launch() {
   local log="$data.$label.stdout" status results count report ok got summary
   printf 'Running %s: the %s launch (data folder %s)\n' "$app" "$label" "$data"
   set +e
-  env "$@" O7_SMOKE_EXIT=1 O7_DATA_DIR="$(to_native_path "$data")" \
+  env "$@" GHOST_SMOKE_EXIT=1 GHOST_DATA_DIR="$(to_native_path "$data")" \
     "$app" </dev/null | tee "$log"
   status=${PIPESTATUS[0]}
   set -e
 
-  results="$(grep -a '^O7_SMOKE_RESULT ' "$log" | tr -d '\r' || true)"
+  results="$(grep -a '^GHOST_SMOKE_RESULT ' "$log" | tr -d '\r' || true)"
   count="$(printf '%s' "$results" | grep -c '' || true)"
   if [ "$count" -eq 0 ]; then
-    error "The $label launch exited with code $status without printing an O7_SMOKE_RESULT line (its log is above)."
+    error "The $label launch exited with code $status without printing a GHOST_SMOKE_RESULT line (its log is above)."
     return 1
   fi
   if [ "$count" -gt 1 ]; then
-    error "The $label launch printed $count O7_SMOKE_RESULT lines; it must report exactly once."
+    error "The $label launch printed $count GHOST_SMOKE_RESULT lines; it must report exactly once."
     return 1
   fi
 
-  report=${results#O7_SMOKE_RESULT }
+  report=${results#GHOST_SMOKE_RESULT }
   # tostring: with -e, a bare false would read as jq failing.
   if ! ok="$(printf '%s\n' "$report" | jq -er 'if type == "object" and (.ok | type) == "boolean" then (.ok | tostring) else error("no boolean ok") end' 2>/dev/null)"; then
     error "The $label smoke result is not a JSON object with a boolean \"ok\": $report"
@@ -146,7 +146,7 @@ quit_left_nothing() {
 run_stream() {
   local data
   data="$(mktemp -d "$scratch/auracode-smoke.XXXXXX")"
-  launch stream stream "$data" O7_SMOKE=1
+  launch stream stream "$data" GHOST_SMOKE=1
 }
 
 run_chat() {
@@ -156,18 +156,18 @@ run_chat() {
   folder="$(mktemp -d "$scratch/auracode smoke chat.XXXXXX")"
   native="$(to_native_path "$folder")"
   if [ -n "$agent" ]; then
-    launch agent agent "$data" O7_SMOKE=chat O7_SMOKE_FOLDER="$native" \
-      O7_SMOKE_AGENT="$agent" || return 1
+    launch agent agent "$data" GHOST_SMOKE=chat GHOST_SMOKE_FOLDER="$native" \
+      GHOST_SMOKE_AGENT="$agent" || return 1
     quit_left_nothing agent "$data"
     return
   fi
-  if ! launch chat chat "$data" O7_SMOKE=chat O7_SMOKE_FOLDER="$native"; then
+  if ! launch chat chat "$data" GHOST_SMOKE=chat GHOST_SMOKE_FOLDER="$native"; then
     warning "Skipped the chat-reopen launch: it starts from what the chat launch leaves."
     return 1
   fi
   quit_left_nothing chat "$data" || return 1
-  launch chat-reopen chat_reopen "$data" O7_SMOKE=chat-reopen \
-    O7_SMOKE_FOLDER="$native" || return 1
+  launch chat-reopen chat_reopen "$data" GHOST_SMOKE=chat-reopen \
+    GHOST_SMOKE_FOLDER="$native" || return 1
   quit_left_nothing chat-reopen "$data"
 }
 

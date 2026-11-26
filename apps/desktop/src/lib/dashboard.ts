@@ -10,7 +10,7 @@ import type { TerminalUse } from "./terminalActivity";
  * Nothing stale stays (owner, 17 November 2026: "if there's a bunch of stale chats that people
  * aren't working on anymore, it should remove those"). A chat whose agent works or waits for an
  * answer always shows, since it holds a live agent. A failed start or a needed sign-in shows until
- * cleared (both belong to this run: they reset when o7 restarts). A lost folder and a
+ * cleared (both belong to this run: they reset when Ghost restarts). A lost folder and a
  * finished chat leave a day after their last activity, or when cleared. Clearing hides a card until
  * its chat's next activity; it never archives or deletes. Older chats stay in the sidebar.
  */

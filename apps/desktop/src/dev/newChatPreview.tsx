@@ -28,7 +28,7 @@ function retainedRecords(): ManagedWorktree[] {
     chat_id: `deleted-chat-${index}`,
     source: FIXTURE_FOLDER,
     path: `C:\\Users\\me\\AppData\\Local\\si.auracode.desktop\\profiles\\local\\worktrees\\${(0x420476c6724f + index * 7919).toString(16)}`,
-    branch: `aura/${(0xebf0f061 + index * 977).toString(16)}`,
+    branch: `ghost/${(0xebf0f061 + index * 977).toString(16)}`,
     base_commit: "abc",
     state: "ready",
     detail: null,
@@ -40,7 +40,7 @@ function retainedRecords(): ManagedWorktree[] {
       ...(records[0] as ManagedWorktree),
       id: "broken",
       chat_id: "deleted-chat-broken",
-      branch: "aura/5c1e0b9d",
+      branch: "ghost/5c1e0b9d",
       state: "recovery_required",
       detail: "The chat could not be saved. Rollback retained changed files.",
       recovery: { type: "create" },
@@ -61,7 +61,7 @@ function installation(
     resolved_path: null,
     version,
     channel,
-    verification: { state: "verified", version, scope: "Verified with o7" },
+    verification: { state: "verified", version, scope: "Verified with Ghost" },
   };
 }
 

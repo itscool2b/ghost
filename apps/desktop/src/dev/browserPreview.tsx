@@ -95,7 +95,7 @@ function resolve(input: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(text)}`;
 }
 
-/** The element as o7's page script describes it. */
+/** The element as Ghost's page script describes it. */
 function describe(element: Element): PickedElement {
   const rect = element.getBoundingClientRect();
   const style = element.ownerDocument.defaultView?.getComputedStyle(element);
@@ -163,7 +163,7 @@ export class FixtureBrowser implements BrowserApi {
     // `?media=off`: Linux without GStreamer's plugins.
     media_notice:
       new URLSearchParams(location.search).get("media") === "off"
-        ? "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart o7."
+        ? "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart Ghost."
         : null,
   };
 

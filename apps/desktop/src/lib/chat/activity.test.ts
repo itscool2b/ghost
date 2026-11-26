@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { O7Event, SessionStatus } from "../../bindings";
+import type { GhostEvent, SessionStatus } from "../../bindings";
 import { chatActivity, lastToolKind, liveReasoning, streamingText } from "./activity";
 import { type ChatState, ChatStore } from "./chatStore";
 import { ev, FakeTransport, numbered, sessionInfo } from "./testing";
 import { applyEntries, emptyTranscript, renderTranscript } from "./transcript";
 
-function state(events: O7Event[], status: SessionStatus = "running"): ChatState {
+function state(events: GhostEvent[], status: SessionStatus = "running"): ChatState {
   return {
     ...new ChatStore("c", new FakeTransport()).getSnapshot(),
     session: sessionInfo({ status }),
@@ -44,7 +44,7 @@ describe("live chat protocol state", () => {
   });
 
   it("keeps informational notifications out of waiting activity before and after an answer", () => {
-    const events: O7Event[] = [
+    const events: GhostEvent[] = [
       ev.turnStarted("t"),
       ev.toolCall("read"),
       {
@@ -78,7 +78,7 @@ describe("live chat protocol state", () => {
   });
 
   it("steps the working line aside only while the newest shown output is streaming text", () => {
-    const shown = (events: O7Event[]) => renderTranscript(state(events).transcript, true).at(-1);
+    const shown = (events: GhostEvent[]) => renderTranscript(state(events).transcript, true).at(-1);
     const answer = [ev.turnStarted("t"), ev.message("a", "Hel")];
     expect(streamingText(shown(answer))).toBe(true);
     expect(streamingText(shown([...answer, ev.messageDone("a")]))).toBe(false);
@@ -91,7 +91,7 @@ describe("live chat protocol state", () => {
   });
 
   it("gives the working line the newest words of the reasoning being thought", () => {
-    const shown = (events: O7Event[]) => renderTranscript(state(events).transcript, true).at(-1);
+    const shown = (events: GhostEvent[]) => renderTranscript(state(events).transcript, true).at(-1);
     const start = [ev.turnStarted("t"), ev.user("u", "Go")];
     expect(liveReasoning(shown(start))).toBeNull();
     const thinking = [...start, ev.thought("th", "Reading the runtimes.\n\n**Both** sort equal")];
@@ -108,7 +108,7 @@ describe("live chat protocol state", () => {
   });
 
   it("leans the working line towards the turn's latest call, across thoughts", () => {
-    const shown = (events: O7Event[]) => renderTranscript(state(events).transcript, true).at(-1);
+    const shown = (events: GhostEvent[]) => renderTranscript(state(events).transcript, true).at(-1);
     expect(lastToolKind(shown([ev.turnStarted("t"), ev.thought("th", "Hmm")]))).toBeNull();
     expect(
       lastToolKind(

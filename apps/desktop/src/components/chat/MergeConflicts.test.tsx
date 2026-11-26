@@ -11,7 +11,7 @@ function preview(conflicts: string[]): WorktreeActionPreview {
       chat_id: "chat",
       source: "C:/projects/orbit",
       path: "C:/auracode/worktrees/owned-one",
-      branch: "aura/release-readiness",
+      branch: "ghost/release-readiness",
       base_commit: "5a4d647",
       state: "ready",
       detail: null,
@@ -40,11 +40,11 @@ describe("a conflicted merge", () => {
     const text = conflictPrompt(preview(["src/orbit.rs", "src/app.ts"]));
     expect(text).toBe(
       [
-        "Merging aura/release-readiness into main has conflicts in 2 files:",
+        "Merging ghost/release-readiness into main has conflicts in 2 files:",
         "- src/orbit.rs",
         "- src/app.ts",
         "",
-        "Please resolve them on aura/release-readiness in C:/auracode/worktrees/owned-one: merge main into aura/release-readiness, fix the conflicts in the files above while keeping the intent of both sides, run the relevant tests, and commit the merge. Do not push and do not change main. I will review the merge in o7 afterwards.",
+        "Please resolve them on ghost/release-readiness in C:/auracode/worktrees/owned-one: merge main into ghost/release-readiness, fix the conflicts in the files above while keeping the intent of both sides, run the relevant tests, and commit the merge. Do not push and do not change main. I will review the merge in Ghost afterwards.",
       ].join("\n"),
     );
     expect(conflictPrompt(preview(["one.rs"]))).toContain("conflicts in 1 file:");
@@ -71,7 +71,7 @@ describe("a conflicted merge", () => {
     );
     expect(html).toContain("Conflicts to resolve first");
     expect(html).toContain("Message to Claude Code");
-    expect(html).toContain("Merging aura/release-readiness into main has conflicts in 1 file:");
+    expect(html).toContain("Merging ghost/release-readiness into main has conflicts in 1 file:");
     expect(html).toContain("Ask Claude Code to resolve");
     expect(html).toContain("Nothing has changed yet.");
   });

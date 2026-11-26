@@ -5,7 +5,7 @@ import {
   orbPosterBackground,
   springs,
   usePrefersReducedMotion,
-} from "@o7/ui";
+} from "@ghost/ui";
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion, type TargetAndTransition, type Transition } from "motion/react";
 import {
@@ -123,7 +123,7 @@ const STATUS_ORB: Readonly<Record<ChatStatus, OrbState>> = {
 };
 
 /**
- * The CSS stand-in for an orb (the poster @o7/ui draws before WebGL), for places too small
+ * The CSS stand-in for an orb (the poster @ghost/ui draws before WebGL), for places too small
  * for a live one: sidebar rows, the dock, turn headers. Status adds a ring: a turning arc while
  * running, a breathing amber halo while it needs approval, a lit rim when done and unseen.
  */

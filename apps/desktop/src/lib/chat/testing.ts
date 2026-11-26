@@ -13,9 +13,9 @@ import type {
   ConfigValue,
   EnvStatus,
   EventBatch,
+  GhostEvent,
   HistoryItem,
   HistoryPage,
-  O7Event,
   PromptAck,
   QueuedPrompt,
   SessionControlChange,
@@ -34,7 +34,7 @@ import type { Transport } from "./transport";
 
 /**
  * Test support for the chat stores and the transcript: a scripted shell, builders for the protocol
- * values, and the compaction rules of the M1a spec (6.3.1) as o7-core's `compact.rs` applies
+ * values, and the compaction rules of the M1a spec (6.3.1) as ghost-core's `compact.rs` applies
  * them, so compacted history can be checked against the live stream before the real chat store
  * exists in this package. Imported by tests only.
  */
@@ -135,7 +135,7 @@ export function attachResult(
   };
 }
 
-export function frame(chatId: string, seqStart: number, events: readonly O7Event[]): EventBatch {
+export function frame(chatId: string, seqStart: number, events: readonly GhostEvent[]): EventBatch {
   return { chat_id: chatId, seq_start: seqStart, events: [...events] };
 }
 
@@ -203,16 +203,16 @@ export function backgroundTask(
 }
 
 export const ev = {
-  turnStarted: (turnId: string, promptId: string | null = null): O7Event => ({
+  turnStarted: (turnId: string, promptId: string | null = null): GhostEvent => ({
     type: "turn_started",
     turn_id: turnId,
     prompt_id: promptId,
   }),
   turnEnded: (
     turnId: string,
-    stopReason: Extract<O7Event, { type: "turn_ended" }>["stop_reason"] = "end_turn",
+    stopReason: Extract<GhostEvent, { type: "turn_ended" }>["stop_reason"] = "end_turn",
     extra: { recovered?: boolean; durationMs?: number | null } = {},
-  ): O7Event => ({
+  ): GhostEvent => ({
     type: "turn_ended",
     turn_id: turnId,
     stop_reason: stopReason,
@@ -220,31 +220,31 @@ export const ev = {
     duration_ms: extra.durationMs ?? null,
     recovered: extra.recovered ?? false,
   }),
-  user: (messageId: string, text: string): O7Event => ({
+  user: (messageId: string, text: string): GhostEvent => ({
     type: "user_message_delta",
     message_id: messageId,
     text,
   }),
-  message: (messageId: string, text: string): O7Event => ({
+  message: (messageId: string, text: string): GhostEvent => ({
     type: "message_delta",
     message_id: messageId,
     text,
   }),
-  messageDone: (messageId: string): O7Event => ({
+  messageDone: (messageId: string): GhostEvent => ({
     type: "message_completed",
     message_id: messageId,
   }),
-  thought: (thoughtId: string, text: string): O7Event => ({
+  thought: (thoughtId: string, text: string): GhostEvent => ({
     type: "thought_delta",
     thought_id: thoughtId,
     text,
   }),
-  thoughtDone: (thoughtId: string, durationMs: number | null): O7Event => ({
+  thoughtDone: (thoughtId: string, durationMs: number | null): GhostEvent => ({
     type: "thought_completed",
     thought_id: thoughtId,
     duration_ms: durationMs,
   }),
-  toolCall: (id: string, overrides: Partial<ToolCall> = {}): O7Event => ({
+  toolCall: (id: string, overrides: Partial<ToolCall> = {}): GhostEvent => ({
     type: "tool_call",
     tool_call_id: id,
     kind: "read",
@@ -257,11 +257,11 @@ export const ev = {
     truncated: null,
     ...overrides,
   }),
-  task: (id: string, overrides: Partial<BackgroundTask> = {}): O7Event => ({
+  task: (id: string, overrides: Partial<BackgroundTask> = {}): GhostEvent => ({
     type: "task_updated",
     ...backgroundTask(id, overrides),
   }),
-  taskStep: (taskId: string, stepId: string, overrides: Partial<TaskStep> = {}): O7Event => ({
+  taskStep: (taskId: string, stepId: string, overrides: Partial<TaskStep> = {}): GhostEvent => ({
     type: "task_step",
     task_id: taskId,
     step: {
@@ -275,7 +275,7 @@ export const ev = {
       ...overrides,
     },
   }),
-  toolUpdate: (id: string, overrides: Partial<ToolUpdate> = {}): O7Event => ({
+  toolUpdate: (id: string, overrides: Partial<ToolUpdate> = {}): GhostEvent => ({
     type: "tool_update",
     tool_call_id: id,
     status: null,
@@ -290,11 +290,11 @@ export const ev = {
   }),
   permission: (
     requestId: string,
-    options: Extract<O7Event, { type: "permission_requested" }>["options"] = [
+    options: Extract<GhostEvent, { type: "permission_requested" }>["options"] = [
       { option_id: "allow", kind: "allow_once", label: "Allow once" },
       { option_id: "reject", kind: "reject_once", label: "Reject" },
     ],
-  ): O7Event => ({
+  ): GhostEvent => ({
     type: "permission_requested",
     request_id: requestId,
     tool_call_id: null,
@@ -309,10 +309,10 @@ export const ev = {
   permissionResolved: (
     requestId: string,
     optionId: string | null,
-    by: Extract<O7Event, { type: "permission_resolved" }>["by"] = "user",
+    by: Extract<GhostEvent, { type: "permission_resolved" }>["by"] = "user",
     /** The plan as the person edited it, on a plan accepted with edits. */
     plan?: string,
-  ): O7Event => ({
+  ): GhostEvent => ({
     type: "permission_resolved",
     request_id: requestId,
     decision:
@@ -323,7 +323,7 @@ export const ev = {
           : { type: "selected", option_id: optionId, plan },
     by,
   }),
-  question: (requestId: string): O7Event => ({
+  question: (requestId: string): GhostEvent => ({
     type: "ui_request",
     request_id: requestId,
     prompt: { type: "select", message: "Which color?", options: ["Red", "Green", "Blue"] },
@@ -331,9 +331,9 @@ export const ev = {
   questionResolved: (
     requestId: string,
     answer: UiAnswer | null,
-    by: Extract<O7Event, { type: "ui_resolved" }>["by"] = "user",
-  ): O7Event => ({ type: "ui_resolved", request_id: requestId, answer, by }),
-  plan: (...contents: string[]): O7Event => ({
+    by: Extract<GhostEvent, { type: "ui_resolved" }>["by"] = "user",
+  ): GhostEvent => ({ type: "ui_resolved", request_id: requestId, answer, by }),
+  plan: (...contents: string[]): GhostEvent => ({
     type: "plan_updated",
     entries: contents.map((content, index) => ({
       content,
@@ -341,34 +341,34 @@ export const ev = {
       priority: null,
     })),
   }),
-  usage: (amount: number): O7Event => ({
+  usage: (amount: number): GhostEvent => ({
     type: "usage_updated",
     context_used: 1000,
     context_size: 200_000,
     cost: { amount, currency: "USD" },
   }),
-  limits: (): O7Event => ({ type: "limits_updated", windows: [] }),
-  session: (overrides: Partial<SessionInfo> = {}): O7Event => ({
+  limits: (): GhostEvent => ({ type: "limits_updated", windows: [] }),
+  session: (overrides: Partial<SessionInfo> = {}): GhostEvent => ({
     type: "session_updated",
     ...sessionInfo(overrides),
   }),
   lifecycle: (
     promptId: string,
-    state: Extract<O7Event, { type: "prompt_lifecycle" }>["state"],
+    state: Extract<GhostEvent, { type: "prompt_lifecycle" }>["state"],
     preview: string | null = null,
     held: boolean | null = null,
-  ): O7Event => ({ type: "prompt_lifecycle", prompt_id: promptId, state, preview, held }),
-  notice: (message: string): O7Event => ({ type: "notice", level: "info", message }),
+  ): GhostEvent => ({ type: "prompt_lifecycle", prompt_id: promptId, state, preview, held }),
+  notice: (message: string): GhostEvent => ({ type: "notice", level: "info", message }),
   error: (
-    kind: Extract<O7Event, { type: "error" }>["kind"],
+    kind: Extract<GhostEvent, { type: "error" }>["kind"],
     message: string,
     detail: string | null = null,
-  ): O7Event => ({ type: "error", kind, message, detail, recoverable: false }),
+  ): GhostEvent => ({ type: "error", kind, message, detail, recoverable: false }),
 } as const;
 
 /** Entries numbered from `first`: `[turn tag, event]` pairs as a driver tags them. */
 export function numbered(
-  tagged: readonly (readonly [string | null, O7Event])[],
+  tagged: readonly (readonly [string | null, GhostEvent])[],
   first = 0,
 ): EventEntry[] {
   return tagged.map(([turnId, event], index) => ({ seq: first + index, turnId, event }));
@@ -392,7 +392,7 @@ export function isStored(entry: EventEntry): boolean {
 
 /**
  * The call compaction synthesizes for a tool whose turn holds updates but no call: ACP's defaults
- * with the chat store's title (o7-core `compact.rs`, `default_tool`).
+ * with the chat store's title (ghost-core `compact.rs`, `default_tool`).
  */
 function bareCall(id: string): ToolCall {
   return {
@@ -439,7 +439,7 @@ function mergeUpdates(first: ToolUpdate, next: ToolUpdate): ToolUpdate {
 const UTF8 = new TextEncoder();
 
 /**
- * One turn's rows as o7-core's `compact.rs` keeps them: each message, thought and user text
+ * One turn's rows as ghost-core's `compact.rs` keeps them: each message, thought and user text
  * concatenated into pieces of at most `maxPiece` bytes at the seqs of their pieces' first deltas;
  * each tool minted in the turn (`<turn id>.` prefix) or called in it as one call with its final
  * state, at its call's seq (the call anchors it even after an update that came first) or, with no
@@ -448,7 +448,7 @@ const UTF8 = new TextEncoder();
  */
 function compactTurn(turnId: string, rows: readonly EventEntry[], maxPiece: number): EventEntry[] {
   /** A kept row; a text piece grows while the turn's deltas are read. */
-  type Row = { seq: number; turnId: string | null; event: O7Event };
+  type Row = { seq: number; turnId: string | null; event: GhostEvent };
   const called = new Set(
     rows.flatMap((row) => (row.event.type === "tool_call" ? [row.event.tool_call_id] : [])),
   );
@@ -569,7 +569,7 @@ function compactTurn(turnId: string, rows: readonly EventEntry[], maxPiece: numb
   return kept.sort((a, b) => a.seq - b.seq);
 }
 
-function deltaText(event: O7Event): string {
+function deltaText(event: GhostEvent): string {
   return event.type === "user_message_delta" ||
     event.type === "message_delta" ||
     event.type === "thought_delta"
@@ -577,7 +577,7 @@ function deltaText(event: O7Event): string {
     : "";
 }
 
-function withText(event: O7Event, text: string): O7Event {
+function withText(event: GhostEvent, text: string): GhostEvent {
   return event.type === "user_message_delta" ||
     event.type === "message_delta" ||
     event.type === "thought_delta"

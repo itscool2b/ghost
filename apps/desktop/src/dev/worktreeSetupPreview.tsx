@@ -83,7 +83,7 @@ export function mountWorktreeSetupPreview(container: HTMLElement) {
           <WorktreeSetupPanel
             chatId="fixture-chat"
             worktreeId="fixture-tree"
-            branch="aura/orbit"
+            branch="ghost/orbit"
             api={api}
             onBack={() => {}}
           />

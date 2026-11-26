@@ -1,8 +1,8 @@
 # External Windows desktop smoke
 
-Build the frontend into `target/debug/o7.exe` with the existing native smoke build. This
+Build the frontend into `target/debug/ghost.exe` with the existing native smoke build. This
 gate opens that actual executable through tauri-driver 2.1.0 and Microsoft EdgeDriver. It does
-not use a Vite browser, frontend fake transport, `O7_SMOKE`, or an embedded pass report.
+not use a Vite browser, frontend fake transport, `GHOST_SMOKE`, or an embedded pass report.
 
 Provision EdgeDriver matching the installed WebView2 runtime, then run:
 

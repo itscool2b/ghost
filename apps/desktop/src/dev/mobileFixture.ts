@@ -182,7 +182,7 @@ export class FakeMobile implements MobileApi {
   }
   async attach(chatId: string, deviceId: string | null): Promise<void> {
     this.calls.push(`attach:${deviceId ?? "any"}`);
-    // "ios" asks for any of o7's iPhones, as `o7_devices::manager::ANY_IPHONE` does.
+    // "ios" asks for any of Ghost's iPhones, as `ghost_devices::manager::ANY_IPHONE` does.
     const kind = deviceId === "ios" ? "simulator" : "emulator";
     const device =
       this.#status.devices.find((entry) => entry.id === deviceId) ??
@@ -268,7 +268,7 @@ export class FakeMobile implements MobileApi {
   }
   async screenshot(): Promise<string> {
     this.calls.push("screenshot");
-    return "C:\\Users\\sam\\Pictures\\o7-device-1795300000.png";
+    return "C:\\Users\\sam\\Pictures\\ghost-device-1795300000.png";
   }
   listen(listener: (status: MobileStatus) => void): () => void {
     this.#listeners.add(listener);

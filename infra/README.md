@@ -385,3 +385,65 @@ Cloudflare and GitHub, each checked live afterwards:
 - **Deleted**: the R2 bucket `auracode-releases`, empty and unused (releases are published to
   GitHub). **Unchanged**: the zones and their DNS, TLS, rate-limit and analytics rules, the
   account and its ids.
+
+## Everything is Ghost (2026-11-26)
+
+The owner bought onghost.dev and asked for the product to become Ghost ADE everywhere, and for
+everything to move to that domain. The zone (`99e9603f5a9e6ffd580a383a065b29a3`) is on the same
+account and was active the same day. What changed in Cloudflare and GitHub, each checked live
+afterwards, and what could not be changed yet.
+
+Done with the access at hand (Wrangler's own sign-in: Workers, routes and custom domains, no DNS,
+rules or build settings):
+
+- **The site** answers at `onghost.dev` and the preview at `preview.onghost.dev`, each as a
+  custom domain of its Worker (`custom_domain = true` in `apps/web-worker/wrangler.toml`), so
+  Cloudflare keeps their DNS records and certificates itself. `.dev` is on the browsers' own list
+  of HTTPS-only domains, so no page there loads without TLS.
+- **The relay** answers at `onghost.dev/api/remote/*` and `preview.onghost.dev/api/remote/*`
+  (routes in `apps/relay/wrangler.toml`). A route on a custom domain's own hostname runs in front
+  of it: the relay's answer comes back for those paths and the site's for every other, which was
+  checked on the preview before production moved.
+- **The addresses before** keep doing the one job auracode.si has done since the last move, and
+  o7.codes now does it too: their `/api/remote/*` routes still reach the relay, which lets a
+  browser in from either origin (`FORMER_ORIGINS`), and their `/*` routes still reach the site's
+  Worker, which serves only `/remote` and the files it loads there and answers every other page
+  with a 308 to onghost.dev (`FORMER_HOSTS`). One more thing is answered there: `/api/count`,
+  because a copy from before the move counts itself at the address it knew, and would otherwise
+  go uncounted until it updated. `preview.o7.codes` has no route any more (its route was deleted
+  by hand: a deploy whose config lists only a custom domain leaves old routes in place).
+- **The repository** is `itscool2b/ghost` (`gh repo rename`). GitHub redirects both earlier
+  addresses, so the update feed that copies from before read still resolves, and the release
+  feed keeps naming `itscool2b/auracode`, the one path every copy accepts (docs/name.md).
+- **The updater's key** did not change. The repository variable that holds its public half was
+  copied to `GHOST_UPDATER_PUBLIC_KEY`, which the workflows now read; the two earlier variables
+  stay until no workflow run from before could need them.
+
+Not done, because each takes access the rename did not have (the Cloudflare API with zone rules,
+DNS and Workers Builds). Until then the site works, with these differences from o7.codes:
+
+- **Injected analytics are not turned off for the new zone.** Cloudflare adds its analytics
+  script to every page there. The page's security policy refuses it, so nothing is collected and
+  the browser's console records the refusal. Make the same rule o7.codes has (ruleset phase
+  `http_config_settings`, `set_config` with `disable_rum: true` for `onghost.dev` and
+  `preview.onghost.dev`), then change the privacy page's sentence to name the new address: it
+  still says the analytics are off for o7.codes, which is the zone it is true of.
+- **The relay has no rate limit at the new address.** Make the rule o7.codes has (phase
+  `http_ratelimit`: a path starting `/api/remote/` gets at most 60 requests in 10 seconds from
+  one address and Cloudflare location, then is refused for 10 seconds).
+- **The domain does not yet say that it sends no mail.** Add `_dmarc` as `v=DMARC1; p=reject;`
+  and the apex SPF `v=spf1 -all`, as o7.codes has.
+- **The Workers keep their o7 names** (`o7-web`, `o7-web-preview`, `o7-relay`,
+  `o7-relay-preview`), and the site's build triggers still build the site as `@o7/web`: a
+  trigger belongs to a Worker by name and keeps its build command in Cloudflare.
+  `apps/web-builds-alias` is a package of that name whose one script builds `@ghost/web`, so the
+  triggers work as they are. To finish: rename the Workers (or move their routes and triggers to
+  new ones, as on 19 November), change the triggers' build command to `@ghost/web`, change the
+  names in the three `wrangler.toml` files, and delete `apps/web-builds-alias`.
+
+**Do not let o7.codes or auracode.si lapse while any copy from before a move is still in use**,
+for the reasons given above for auracode.si: whoever registers the domain next would answer that
+copy's relay socket and serve whatever page they like at `/remote`.
+
+The app's data folder is not moved by a rename (docs/name.md): a copy updated from o7 keeps
+`codes.o7.desktop`, and one from the auracode days keeps `si.auracode.desktop`.

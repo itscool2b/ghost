@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use o7_core::device::DeviceIdentity;
-use o7_core::profile::ProfileMeta;
-use o7_core::session::{SessionError, SessionManager};
+use ghost_core::device::DeviceIdentity;
+use ghost_core::profile::ProfileMeta;
+use ghost_core::session::{SessionError, SessionManager};
 use serde::Serialize;
 
 use crate::boot::{Booted, DbInfo, Recovery};
@@ -25,7 +25,7 @@ use crate::window::ShowOnce;
 /// Everything the UI needs to know about this launch, from `app_info`.
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 pub struct AppInfo {
-    /// o7's version (the Cargo workspace version).
+    /// Ghost's version (the Cargo workspace version).
     pub app_version: String,
     pub tauri_version: String,
     /// `"macos"`, `"windows"`, `"linux"`, or Rust's name for another OS.
@@ -85,7 +85,7 @@ pub struct AppState {
     /// Reading aloud: the one voice that may be speaking.
     pub speech: Arc<crate::speech::Speech>,
     /// Unlogged terminal sessions, owned by the window that explicitly opened them.
-    pub terminals: o7_core::terminal::Terminals,
+    pub terminals: ghost_core::terminal::Terminals,
     /// Which chat each terminal chat's terminal holds, so a page that goes ends its own.
     pub terminal_chats: crate::terminal::TerminalChats,
     /// Lazily loaded setup preferences, available only while this process owns the profile.
@@ -237,7 +237,7 @@ impl AppState {
         let mut info = runtime.info.clone();
         if let Some(root) = &self.data_dir {
             info.notices
-                .extend(o7_config::instructions::recovery_notices(
+                .extend(ghost_config::instructions::recovery_notices(
                     &root.join("instructions"),
                 ));
         }
@@ -357,7 +357,7 @@ impl AppState {
     }
     pub(crate) async fn wait_profile_commands(
         &self,
-    ) -> Option<o7_core::session::PluginRefreshPause> {
+    ) -> Option<ghost_core::session::PluginRefreshPause> {
         let library_pause = lock(&self.runtime)
             .chats
             .as_ref()
@@ -391,7 +391,7 @@ impl AppState {
         *lock(&self.recovery) = booted.recovery;
     }
 
-    /// Dismisses the repair notice for good: o7-core removes the repair's record (keeping the
+    /// Dismisses the repair notice for good: ghost-core removes the repair's record (keeping the
     /// damaged copy), so no later launch reports it. It acknowledges exactly the repair startup
     /// reported; nothing can name another path. With no notice (there was none, or it was already
     /// dismissed) this does nothing, so calling it twice is harmless. On failure the notice stays,
@@ -413,7 +413,7 @@ impl AppState {
         {
             Ok(removed) => {
                 if !removed {
-                    // Another o7 process (the CLI) acknowledged it, or its record was
+                    // Another Ghost process (the CLI) acknowledged it, or its record was
                     // removed by hand: either way there is nothing left to report.
                     tracing::info!(quarantined = %pending.quarantined, "the database repair was already acknowledged");
                 }
@@ -458,8 +458,8 @@ mod tests {
     use super::*;
     use crate::boot::{boot, boot_next};
     use crate::launch::{NO_GLASS_ENV, STRESS_ENV};
-    use o7_core::paths::DataRoot;
-    use o7_core::store::OpenOutcome;
+    use ghost_core::paths::DataRoot;
+    use ghost_core::store::OpenOutcome;
 
     fn os() -> OsInfo {
         OsInfo {
@@ -509,7 +509,7 @@ mod tests {
         quarantined
     }
 
-    /// `<quarantined>.json`, o7-core's record of the repair: removing it is what acknowledging
+    /// `<quarantined>.json`, ghost-core's record of the repair: removing it is what acknowledging
     /// does.
     fn record(quarantined: &str) -> PathBuf {
         PathBuf::from(format!("{quarantined}.json"))
@@ -531,8 +531,8 @@ mod tests {
 
     #[tokio::test]
     async fn checkpoint_policy_is_initialized_before_publishing_each_profile() {
-        use o7_core::onboarding::{OnboardingStore, SetupAction};
-        use o7_core::profile::Profiles;
+        use ghost_core::onboarding::{OnboardingStore, SetupAction};
+        use ghost_core::profile::Profiles;
 
         let dir = tempfile::tempdir().unwrap();
         let root = DataRoot::at(dir.path().join("data"));
@@ -600,10 +600,10 @@ mod tests {
         assert!(info.device.is_some() && info.profile.is_some());
         assert_eq!(
             info.db.as_ref().map(|db| db.schema_version),
-            Some(o7_core::store::SCHEMA_VERSION)
+            Some(ghost_core::store::SCHEMA_VERSION)
         );
         assert_eq!(info.notices.len(), 2, "{:?}", info.notices);
-        assert!(info.notices[0].starts_with("O7_STRESS was ignored"));
+        assert!(info.notices[0].starts_with("GHOST_STRESS was ignored"));
         assert!(state.sessions().is_ok());
 
         let data = dir.path().join("data");
@@ -696,8 +696,8 @@ mod tests {
         let state = state(boot(Ok(DataRoot::at(dir.path().join("data")))));
         assert!(state.app_info().notices.is_empty());
         let chats = state.chats().expect("chats");
-        lock(&chats.late_notices).push("o7 stopped 1 agent process.".into());
-        assert_eq!(state.app_info().notices, ["o7 stopped 1 agent process."]);
+        lock(&chats.late_notices).push("Ghost stopped 1 agent process.".into());
+        assert_eq!(state.app_info().notices, ["Ghost stopped 1 agent process."]);
         state.at_exit();
     }
 
@@ -723,7 +723,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failed_startup_still_answers_app_info() {
-        let booted = boot(Err(o7_core::CoreError::NoDataDir));
+        let booted = boot(Err(ghost_core::CoreError::NoDataDir));
         let launch = LaunchOptions::from_lookup(|_| None);
         let state = AppState::new(
             booted,

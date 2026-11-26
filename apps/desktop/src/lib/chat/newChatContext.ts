@@ -19,7 +19,7 @@ export interface NewChatContext {
 
 type Retained = readonly Pick<ManagedWorktree, "path" | "source">[];
 
-/** Where a worktree o7 made came from: Rust says so on the folder; a retained record also
+/** Where a worktree Ghost made came from: Rust says so on the folder; a retained record also
  * does, for a worktree the registry still lists. */
 function worktreeSource(folder: ProjectFolder, retained: Retained): string | null {
   if (folder.worktree_of) return folder.worktree_of;

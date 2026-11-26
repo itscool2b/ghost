@@ -1,4 +1,4 @@
-import { Keycap, PixelLoader } from "@o7/ui/graphite";
+import { Keycap, PixelLoader } from "@ghost/ui/graphite";
 import { ArrowUpRight, Check, FolderOpen, GitBranch } from "lucide-react";
 import {
   Children,

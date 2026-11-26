@@ -26,21 +26,21 @@ export interface DictationApi {
 
 /**
  * The larger speech model (docs/local-dictation.md, "The larger model"): fetched once from its
- * pinned address, by o7 itself shortly after it starts or when the person asks. The page supplies
+ * pinned address, by Ghost itself shortly after it starts or when the person asks. The page supplies
  * nothing but the wish.
  */
 export interface LargerApi {
   /**
    * Starts the download; `event` hears it arrive and how it ended. It also takes back an earlier
-   * Cancel or Remove, so o7 finishes the download by itself should this attempt not.
+   * Cancel or Remove, so Ghost finishes the download by itself should this attempt not.
    */
   download(event: (event: LargerEvent) => void): Promise<void>;
   /**
-   * Stops it, or says no before o7 started it. What arrived is kept, and the next download
-   * continues from it; o7 does not start one by itself again.
+   * Stops it, or says no before Ghost started it. What arrived is kept, and the next download
+   * continues from it; Ghost does not start one by itself again.
    */
   cancel(): Promise<void>;
-  /** Deletes it. o7 does not fetch it by itself again. */
+  /** Deletes it. Ghost does not fetch it by itself again. */
   remove(): Promise<void>;
 }
 
@@ -85,22 +85,22 @@ export function largerDetail(model: DictationModel, phase: LargerPhase): string 
   if (phase.state === "removing") return `Removing ${name}.`;
   if (state === "ready")
     return `${name} is downloaded and in use. Removing it returns dictation to the built-in model and frees ${size}.`;
-  // A download this page did not start, o7's own included: the core says how far it has come.
+  // A download this page did not start, Ghost's own included: the core says how far it has come.
   if (state === "downloading")
     return `Downloading ${name}: ${megabytes(model.larger.received)} of ${megabytes(bytes)} MB.`;
   const what = `${name} makes about 40% fewer mistakes, gets programming words right and hears 24 more European languages.`;
-  // o7 fetches it by itself unless the person said no: the row says so before it starts.
+  // Ghost fetches it by itself unless the person said no: the row says so before it starts.
   if (model.larger.automatic && phase.state === "idle" && !phase.kept)
-    return `${what} o7 downloads it by itself, once: ${size} from Hugging Face. It runs on this device.`;
+    return `${what} Ghost downloads it by itself, once: ${size} from Hugging Face. It runs on this device.`;
   const offer = `${what} A one-time ${size} download from Hugging Face; it runs on this device.`;
   return phase.state === "idle" && phase.kept ? `${offer} What arrived so far is kept.` : offer;
 }
 
 /** What Rust reports for a processor without AVX2; the bar says it before any command runs. */
 export const UNSUPPORTED_MESSAGE =
-  "Dictation needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of o7 works as usual.";
+  "Dictation needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of Ghost works as usual.";
 export const MISSING_MESSAGE =
-  "This build of o7 is missing its dictation models. Reinstall o7 to restore them.";
+  "This build of Ghost is missing its dictation models. Reinstall Ghost to restore them.";
 /** Said after a failure when the words heard before it were kept in the draft. */
 export const KEPT_MESSAGE = "What it heard so far is in your draft.";
 

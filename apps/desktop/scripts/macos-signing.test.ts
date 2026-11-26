@@ -38,7 +38,7 @@ function listing(lines: readonly string[], valid: readonly string[] = []): strin
   ].join("\n");
 }
 
-const UNTRUSTED = `${HASH} "o7 Local Signing" (CSSMERR_TP_NOT_TRUSTED)`;
+const UNTRUSTED = `${HASH} "Ghost Local Signing" (CSSMERR_TP_NOT_TRUSTED)`;
 
 let dir: string;
 let bin: string;
@@ -82,7 +82,7 @@ function runScript(args: readonly string[], env: Record<string, string> = {}) {
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-/** A program named `name` (the app is `o7`) that prints its arguments and exits `code`. */
+/** A program named `name` (the app is `Ghost`) that prints its arguments and exits `code`. */
 function program(name: string, code = 0): string {
   const path = join(dir, name);
   writeFileSync(path, `#!/bin/sh\nprintf 'ran:%s\\n' "$@"\nexit ${code}\n`);
@@ -106,7 +106,7 @@ describe("macos-signing.sh's pointers into the README", () => {
 
 describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "o7-signing-test-"));
+    dir = mkdtempSync(join(tmpdir(), "ghost-signing-test-"));
     bin = join(dir, "bin");
     mkdirSync(bin);
     log = join(dir, "calls.log");
@@ -126,7 +126,7 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
 
     it("counts an identity once even when it is also listed as valid", () => {
       // A certificate someone marked as trusted appears in both parts of the listing.
-      const trusted = `${HASH} "o7 Local Signing"`;
+      const trusted = `${HASH} "Ghost Local Signing"`;
       keychainWith(listing([trusted], [trusted]));
       const result = runScript(["identity"]);
       expect(result.status).toBe(0);
@@ -142,13 +142,13 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
 
     it("ignores identities whose names only contain the name", () => {
       keychainWith(
-        listing([`${OTHER} "my o7 Local Signing"`, `${OTHER} "o7 Local Signing (old)"`]),
+        listing([`${OTHER} "my Ghost Local Signing"`, `${OTHER} "Ghost Local Signing (old)"`]),
       );
       expect(runScript(["identity"]).status).toBe(1);
     });
 
     it("refuses to choose between two identities with the same name", () => {
-      keychainWith(listing([UNTRUSTED, `${OTHER} "o7 Local Signing"`]));
+      keychainWith(listing([UNTRUSTED, `${OTHER} "Ghost Local Signing"`]));
       const result = runScript(["identity"]);
       expect(result.status).toBe(2);
       expect(result.stdout).toBe("");
@@ -165,9 +165,9 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
       expect(calls()).toEqual([]);
     });
 
-    it("looks only in O7_SIGNING_KEYCHAIN when it is set", () => {
+    it("looks only in GHOST_SIGNING_KEYCHAIN when it is set", () => {
       keychainWith(listing([UNTRUSTED]));
-      runScript(["identity"], { O7_SIGNING_KEYCHAIN: "/tmp/signing.keychain-db" });
+      runScript(["identity"], { GHOST_SIGNING_KEYCHAIN: "/tmp/signing.keychain-db" });
       expect(calls()).toEqual(["security find-identity -p codesigning /tmp/signing.keychain-db"]);
     });
   });
@@ -176,12 +176,12 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
     it("signs the app with the identity and the bundle identifier, then runs it", () => {
       keychainWith(listing([UNTRUSTED]));
       recordingTool("codesign");
-      const app = program("o7");
+      const app = program("ghost");
       const result = runScript(["run", app, "an arg", "second"]);
       expect(result.status).toBe(0);
       expect(result.stdout).toBe("ran:an arg\nran:second\n");
       expect(calls()).toContain(
-        `codesign --force --sign ${HASH} --identifier codes.o7.desktop --entitlements ${ENTITLEMENTS} ${app}`,
+        `codesign --force --sign ${HASH} --identifier dev.onghost.desktop --entitlements ${ENTITLEMENTS} ${app}`,
       );
     });
 
@@ -189,27 +189,27 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
       keychainWith(listing([UNTRUSTED]));
       recordingTool("codesign");
       tool("plutil", "exit 1");
-      const app = program("o7");
+      const app = program("ghost");
       runScript(["run", app]);
       expect(calls()).toContain(
-        `codesign --force --sign ${HASH} --identifier codes.o7.desktop --entitlements ${ENTITLEMENTS} ${app}`,
+        `codesign --force --sign ${HASH} --identifier dev.onghost.desktop --entitlements ${ENTITLEMENTS} ${app}`,
       );
     });
 
     it("passes the keychain to codesign when one is configured", () => {
       keychainWith(listing([UNTRUSTED]));
       recordingTool("codesign");
-      const app = program("o7");
-      runScript(["run", app], { O7_SIGNING_KEYCHAIN: "/tmp/signing.keychain-db" });
+      const app = program("ghost");
+      runScript(["run", app], { GHOST_SIGNING_KEYCHAIN: "/tmp/signing.keychain-db" });
       expect(calls()).toContain(
-        `codesign --force --sign ${HASH} --identifier codes.o7.desktop --keychain /tmp/signing.keychain-db --entitlements ${ENTITLEMENTS} ${app}`,
+        `codesign --force --sign ${HASH} --identifier dev.onghost.desktop --keychain /tmp/signing.keychain-db --entitlements ${ENTITLEMENTS} ${app}`,
       );
     });
 
     it("runs the app unsigned, with a warning, when there is no identity", () => {
       keychainWith(listing([]));
       recordingTool("codesign");
-      const app = program("o7");
+      const app = program("ghost");
       const result = runScript(["run", app]);
       expect(result.status).toBe(0);
       expect(result.stdout).toBe("ran:\n"); // it ran, with no arguments
@@ -218,9 +218,9 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
     });
 
     it("runs the app unsigned when the identity is ambiguous", () => {
-      keychainWith(listing([UNTRUSTED, `${OTHER} "o7 Local Signing"`]));
+      keychainWith(listing([UNTRUSTED, `${OTHER} "Ghost Local Signing"`]));
       recordingTool("codesign");
-      const app = program("o7", 3);
+      const app = program("ghost", 3);
       const result = runScript(["run", app]);
       expect(result.status).toBe(3);
       expect(result.stderr).toContain("without the local signature");
@@ -230,7 +230,7 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
     it("still runs the app when codesign fails", () => {
       keychainWith(listing([UNTRUSTED]));
       recordingTool("codesign", "echo 'errSecInternalComponent' >&2; exit 1");
-      const app = program("o7");
+      const app = program("ghost");
       const result = runScript(["run", app, "x"]);
       expect(result.status).toBe(0);
       expect(result.stdout).toBe("ran:x\n");
@@ -240,7 +240,7 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
     it("leaves test binaries alone", () => {
       keychainWith(listing([UNTRUSTED]));
       recordingTool("codesign");
-      const tests = program("o7_desktop-49ec438ee61aacc9");
+      const tests = program("ghost_desktop-49ec438ee61aacc9");
       const result = runScript(["run", tests, "--nocapture"]);
       expect(result.stdout).toBe("ran:--nocapture\n");
       expect(calls()).toEqual([]);
@@ -249,7 +249,7 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
     it("passes the program's exit status through", () => {
       keychainWith(listing([UNTRUSTED]));
       recordingTool("codesign");
-      expect(runScript(["run", program("o7", 7)]).status).toBe(7);
+      expect(runScript(["run", program("ghost", 7)]).status).toBe(7);
     });
 
     it("needs a program", () => {
@@ -312,12 +312,12 @@ describe.skipIf(process.platform === "win32")("macos-signing.sh", () => {
           input: pem.slice(pem.indexOf("-----BEGIN CERTIFICATE-----")),
           encoding: "utf8",
         });
-        expect(certificate.stdout).toContain("o7 Local Signing");
+        expect(certificate.stdout).toContain("Ghost Local Signing");
         expect(certificate.stdout).toContain("Code Signing");
         expect(certificate.stdout).toContain("CA:FALSE");
 
         // The work directory with the private key is gone.
-        const left = spawnSync("sh", ["-c", `ls -d "${dir}"/o7-signing.* 2>/dev/null`], {
+        const left = spawnSync("sh", ["-c", `ls -d "${dir}"/ghost-signing.* 2>/dev/null`], {
           encoding: "utf8",
         });
         expect(left.stdout).toBe("");

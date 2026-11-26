@@ -350,7 +350,7 @@ const retained: ManagedWorktree = {
   chat_id: "chat-gone",
   source: "C:/fixture/code/orbit",
   path: "C:/fixture/worktrees/orbit-sidebar",
-  branch: "o7/sidebar-scan",
+  branch: "ghost/sidebar-scan",
   base_commit: "0000000000000000000000000000000000000000",
   state: "recovery_required",
   detail: "A merge into main stopped before it finished.",

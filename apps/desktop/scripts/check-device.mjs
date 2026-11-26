@@ -245,7 +245,7 @@ export async function checkDevice(browser, url, out, engine) {
       await panel.getByTestId("device-saved").waitFor();
       assert.match(
         await panel.getByTestId("device-saved").textContent(),
-        /Saved to .*o7-device-\d+\.png/,
+        /Saved to .*ghost-device-\d+\.png/,
       );
       await unmoved("with a notice");
       // What the agent is doing shows in the header while it does it, with no word of what it
@@ -368,7 +368,7 @@ export async function checkDevice(browser, url, out, engine) {
       await open("iphone-starting");
       assert.match(
         await panel.getByTestId("device-tool").textContent(),
-        /Downloading AXe, which o7 drives the simulator with: 4 MB of 16 MB\./,
+        /Downloading AXe, which Ghost drives the simulator with: 4 MB of 16 MB\./,
       );
       await axe(page, `${label} iPhone starting`);
       await shot("iphone-starting");
@@ -469,7 +469,7 @@ export async function checkDevice(browser, url, out, engine) {
         `${label}: sixteen tools`,
       );
       assert.match(await settings.getByTestId("mobile-android").textContent(), /^Set up\./);
-      // It comes with o7: nothing to add or remove, only the switch.
+      // It comes with Ghost: nothing to add or remove, only the switch.
       assert.equal(
         await settings.getByRole("button", { name: /^(Add|Remove|Install|Uninstall)/ }).count(),
         0,

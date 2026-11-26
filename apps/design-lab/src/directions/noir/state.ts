@@ -1,4 +1,4 @@
-import type { AgentBrandId } from "@o7/ui";
+import type { AgentBrandId } from "@ghost/ui";
 import type { Autonomy } from "../../kit";
 
 /** A message typed while it cannot go yet: during a turn, or here in the lab, where nothing runs. */

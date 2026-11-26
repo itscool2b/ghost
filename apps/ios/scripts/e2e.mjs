@@ -1,11 +1,11 @@
 /**
  * The iPhone app's client end to end, on this machine: the relay in the Workers runtime, the
- * desktop's real connection task in front of a scripted agent (`crates/o7-remote/examples/
- * demo_host.rs`), and the app's Swift client (`O7Client`) speaking to them through the relay's
+ * desktop's real connection task in front of a scripted agent (`crates/ghost-remote/examples/
+ * demo_host.rs`), and the app's Swift client (`GhostClient`) speaking to them through the relay's
  * app path, as a phone does.
  *
- *   pnpm --filter @o7/relay worker:build
- *   cargo build -p o7-remote --example demo_host
+ *   pnpm --filter @ghost/relay worker:build
+ *   cargo build -p ghost-remote --example demo_host
  *   node apps/ios/scripts/e2e.mjs [--host <demo_host executable>]
  *
  * Nothing leaves the machine: every address is localhost. A small control server lets the Swift
@@ -64,7 +64,7 @@ const relay = new Miniflare(
     },
     bindings: {
       APP_ORIGIN: SITE,
-      APNS_TOPIC: "codes.o7.mobile",
+      APNS_TOPIC: "dev.onghost.mobile",
       APNS_KEY_ID: "E2ETESTKEY",
       APNS_TEAM_ID: "E2ETEAM123",
       APNS_KEY,
@@ -87,7 +87,7 @@ const relay = new Miniflare(
 );
 await relay.ready;
 
-const folder = await mkdtemp(join(tmpdir(), "o7-ios-e2e-"));
+const folder = await mkdtemp(join(tmpdir(), "ghost-ios-e2e-"));
 const host = spawn(hostBinary, [`ws://127.0.0.1:${RELAY_PORT}`, SITE, folder, "Studio"], {
   stdio: ["pipe", "pipe", "inherit"],
 });
@@ -144,9 +144,9 @@ try {
     [
       "test",
       "--package-path",
-      resolve(root, "apps/ios/O7Kit"),
+      resolve(root, "apps/ios/GhostKit"),
       "--scratch-path",
-      join(tmpdir(), "o7kit-e2e"),
+      join(tmpdir(), "ghostkit-e2e"),
       "--filter",
       "EndToEnd",
     ],
@@ -155,9 +155,9 @@ try {
       env: {
         ...process.env,
         DEVELOPER_DIR: process.env.DEVELOPER_DIR ?? "/Applications/Xcode.app/Contents/Developer",
-        O7_E2E_RELAY: `ws://127.0.0.1:${RELAY_PORT}`,
-        O7_E2E_CONTROL: `http://127.0.0.1:${CONTROL_PORT}`,
-        O7_E2E_FIRST: first,
+        GHOST_E2E_RELAY: `ws://127.0.0.1:${RELAY_PORT}`,
+        GHOST_E2E_CONTROL: `http://127.0.0.1:${CONTROL_PORT}`,
+        GHOST_E2E_FIRST: first,
       },
     },
   );

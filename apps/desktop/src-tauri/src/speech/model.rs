@@ -1,4 +1,4 @@
-//! The voice model o7 bundles for reading aloud (docs/read-aloud.md): Gradium's Phonon 31M,
+//! The voice model Ghost bundles for reading aloud (docs/read-aloud.md): Gradium's Phonon 31M,
 //! English, Apache 2.0, with its tokenizer, its own voice and a catalogue of voices. They ship in
 //! the app's resources, so reading aloud needs no download. A release bundle refuses to build
 //! without the pinned files (apps/desktop/scripts/dictation-models.mjs verifies their SHA-256);
@@ -142,7 +142,7 @@ pub fn status(folder: Option<&Path>) -> SpeechStatus {
 pub(super) fn engine(folder: &Path) -> Result<Arc<Engine>, Failure> {
     if !present(folder) {
         return Err(Failure::model(
-            "This build of o7 is missing its voice model. Reinstall o7 to restore it.",
+            "This build of Ghost is missing its voice model. Reinstall Ghost to restore it.",
         ));
     }
     Engine::shared(folder)

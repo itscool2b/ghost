@@ -1,4 +1,4 @@
-import { AgentMark, CopyButton } from "@o7/ui/graphite";
+import { AgentMark, CopyButton } from "@ghost/ui/graphite";
 import { Check, Circle, FileText, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import type {

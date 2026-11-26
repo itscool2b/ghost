@@ -1,5 +1,5 @@
-import type { OrbState } from "@o7/ui";
-import { OrbitSvg } from "@o7/ui/orbit";
+import type { OrbState } from "@ghost/ui";
+import { OrbitSvg } from "@ghost/ui/orbit";
 import { memo } from "react";
 import { type Player, usePlayhead } from "../../kit";
 import { type MarkTimeline, markFrame, signatureOf } from "./geometry";

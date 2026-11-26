@@ -2,10 +2,10 @@
 //! Instructions' worktree copies and Project memory's agent edits go to the session manager, the
 //! notification, keep-awake and close-to-tray switches to the native shell, and the automatic
 //! update check to the updater. The values live in the profile's setup preferences
-//! (`o7_core::onboarding`).
+//! (`ghost_core::onboarding`).
 
-use o7_core::onboarding::GeneralPreferences;
-use o7_core::session::NewChatDefaults;
+use ghost_core::onboarding::GeneralPreferences;
+use ghost_core::session::NewChatDefaults;
 use tauri::{AppHandle, Manager};
 
 use crate::state::AppState;
@@ -24,7 +24,7 @@ pub fn apply(app: &AppHandle, general: &GeneralPreferences) {
 }
 
 pub(crate) fn apply_to_manager(
-    manager: &o7_core::session::SessionManager,
+    manager: &ghost_core::session::SessionManager,
     general: &GeneralPreferences,
 ) {
     manager.set_new_chat_defaults(defaults(general));
@@ -38,7 +38,7 @@ pub(crate) fn apply_to_manager(
 
 /// Initialize before publishing a runtime, so its first actor sees the saved profile policy.
 pub(crate) fn initialize(
-    manager: &o7_core::session::SessionManager,
+    manager: &ghost_core::session::SessionManager,
     service: &crate::onboarding::SetupService,
 ) {
     let general = match service.preferences() {
@@ -83,7 +83,7 @@ fn defaults(general: &GeneralPreferences) -> NewChatDefaults {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use o7_protocol::Autonomy;
+    use ghost_protocol::Autonomy;
 
     #[test]
     fn full_auto_stays_the_default_and_a_model_keeps_its_agent() {
@@ -109,7 +109,7 @@ mod tests {
     async fn project_memory_switch_reaches_running_sessions_through_the_manager() {
         let dir = tempfile::tempdir().unwrap();
         let mut booted =
-            crate::boot::boot(Ok(o7_core::paths::DataRoot::at(dir.path().join("data"))));
+            crate::boot::boot(Ok(ghost_core::paths::DataRoot::at(dir.path().join("data"))));
         let chats = crate::sessions::testing::start(&mut booted).unwrap();
         assert!(chats.manager.agent_memory_writes(), "on by default");
         apply_to_manager(

@@ -6,7 +6,7 @@
  * chat is doing and opens it; a Context file is edited, refuses a save over an agent's newer
  * write, restores an earlier version, and is created and deleted; decisions are recorded and
  * taken back; routines are added, switched off and removed; Pause and Resume say what they do; a
- * project without a coordinator starts one from a brief; prompts o7 sent read as events;
+ * project without a coordinator starts one from a brief; prompts Ghost sent read as events;
  * and the page is accessible in both appearances and does not overflow a narrow window.
  *
  * Usage: node scripts/check-coordinator.mjs [--engines chromium,webkit]
@@ -384,7 +384,7 @@ try {
         await pause.click();
         await page.locator('[data-testid="project-summary"]:not([data-paused])').waitFor();
 
-        // Opening an agent's chat leaves the page; what o7 sent reads as events, folded,
+        // Opening an agent's chat leaves the page; what Ghost sent reads as events, folded,
         // with no Edit, and the person's own message stays a message.
         await tab("agents");
         await page.getByRole("button", { name: "Open Coordinator's chat" }).click();
@@ -409,12 +409,12 @@ try {
         await axe(page, `${engine} ${scheme}: events in a chat`);
         await page.screenshot({ path: resolve(out, `${engine}-${scheme}-events.png`) });
 
-        // A project o7 paused by itself says why.
+        // A project Ghost paused by itself says why.
         await open("&case=paused");
         await page.getByTestId("project-board").waitFor();
         assert.match(
           await page.getByTestId("project-summary").textContent(),
-          /o7 paused this project: its coordinator was sent 60 reports/,
+          /Ghost paused this project: its coordinator was sent 60 reports/,
         );
 
         // No coordinator yet: the page asks what the project is for, and starts one.

@@ -180,7 +180,7 @@ describe("parseInline", () => {
   it("reads code, strong, emphasis and links", () => {
     expect(
       parseInline(
-        "Parse **thousands of deltas**, re-render the _last_ block; see [notes](https://o7.codes/docs).",
+        "Parse **thousands of deltas**, re-render the _last_ block; see [notes](https://onghost.dev/docs).",
       ),
     ).toEqual([
       { kind: "text", text: "Parse " },
@@ -190,7 +190,7 @@ describe("parseInline", () => {
       { kind: "text", text: " block; see " },
       {
         kind: "link",
-        href: "https://o7.codes/docs",
+        href: "https://onghost.dev/docs",
         children: [{ kind: "text", text: "notes" }],
       },
       { kind: "text", text: "." },

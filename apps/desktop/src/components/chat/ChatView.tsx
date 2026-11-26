@@ -1,4 +1,4 @@
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import {
   type CSSProperties,
   useCallback,
@@ -245,7 +245,7 @@ export function ChatView({
     () => terminals?.runningTab(chatId) ?? null,
     () => null,
   );
-  // What this chat's terminal panel had open when o7 last closed, offered back once.
+  // What this chat's terminal panel had open when Ghost last closed, offered back once.
   useEffect(() => {
     terminals?.restore(chatId);
   }, [terminals, chatId]);

@@ -292,7 +292,11 @@ mod tests {
     #[test]
     fn the_list_searches_every_word_newest_first_and_pages() {
         let mut history = History::default();
-        history.visit("https://github.com/itscool2b/o7", "o7 repo", NOW - 3.0);
+        history.visit(
+            "https://github.com/itscool2b/ghost",
+            "Ghost repo",
+            NOW - 3.0,
+        );
         history.visit("http://localhost:5173/", "Vite App", NOW - 2.0);
         history.visit("https://docs.rs/wry", "wry - Rust", NOW - 1.0);
         let all: Vec<String> = history
@@ -305,7 +309,7 @@ mod tests {
             [
                 "https://docs.rs/wry",
                 "http://localhost:5173/",
-                "https://github.com/itscool2b/o7"
+                "https://github.com/itscool2b/ghost"
             ]
         );
         assert_eq!(history.list("rust WRY", 10, None).len(), 1);

@@ -32,7 +32,7 @@ const VIEWS = {
   permission: (page) => page.getByRole("button", { name: /Allow/ }).first().waitFor(),
   // New chat's stage: the message box first, the agent, folder and Chat or Terminal chips under it.
   new: (page) => page.getByRole("textbox", { name: "First message" }).waitFor(),
-  // Settings > Agents: the agents joining o7, above their rows.
+  // Settings > Agents: the agents joining Ghost, above their rows.
   "settings&page=agents": (page) => page.getByTestId("agent-connect").first().waitFor(),
 };
 

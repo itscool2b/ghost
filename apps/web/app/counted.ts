@@ -5,7 +5,7 @@
  */
 export function counted(url: string): string {
   const match =
-    /^https:\/\/github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download\/([^/]+)\/([^/]+)$/.exec(
+    /^https:\/\/github\.com\/itscool2b\/(?:ghost|o7|auracode)\/releases\/download\/([^/]+)\/([^/]+)$/.exec(
       url,
     );
   return match ? `/get/${match[1]}/${match[2]}` : url;

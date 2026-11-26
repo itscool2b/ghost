@@ -62,7 +62,7 @@ threads.
 What it costs: installers grow by about 60 MB (measured on the first release with it, 0.1.1728:
 58 MB on Windows, 62 MB for the AppImage, 65 MB for the macOS image; the model is 64.5 MB and the
 37 catalogue voices 256 KB each, before the installer's compression); it speaks English only; and once something has been read the model stays loaded
-until o7 quits, about 230 MB of memory.
+until Ghost quits, about 230 MB of memory.
 
 ## Privacy and what may ask
 
@@ -146,14 +146,14 @@ KleidiAI kernels.
 
 ## Verification
 
-- `cargo test -p o7-desktop --lib speech`: the request registry, the refusals, the model's pins,
+- `cargo test -p ghost-desktop --lib speech`: the request registry, the refusals, the model's pins,
   the catalogue, the thread choice, and the resampler (a tone keeps its length, pitch and level at
   16, 44.1, 48 and 96 kHz).
 - With the model fetched, `-- --ignored --nocapture` also runs
   `the_bundled_model_speaks_faster_than_real_time` (every catalogued voice loads; real samples,
-  faster than they play) and, with `O7_SPEECH_WAV_DIR`, writes one sentence in four voices as
+  faster than they play) and, with `GHOST_SPEECH_WAV_DIR`, writes one sentence in four voices as
   16 kHz WAVs. Dictation's own model then transcribes them
-  (`O7_DICTATION_FIXTURE_DIR=<that folder>`, `bundled_models_transcribe`). On 22 November 2026 all
+  (`GHOST_DICTATION_FIXTURE_DIR=<that folder>`, `bundled_models_transcribe`). On 22 November 2026 all
   four came back word for word, "42" as "forty two": "I fixed the login flow, and all forty two
   tests pass. Nothing else changed."
 - `vitest run src/lib/speech.test.ts`: what is said for Markdown, the cut at a sentence, and the

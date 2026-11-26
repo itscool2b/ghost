@@ -1,9 +1,9 @@
 {
-  "name": "@o7/desktop",
+  "name": "@ghost/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The o7 desktop app: React UI for the Tauri shell in src-tauri.",
+  "description": "The Ghost desktop app: React UI for the Tauri shell in src-tauri.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p . && vite build",
@@ -24,7 +24,7 @@
     "icons": "node scripts/app-icons.mjs"
   },
   "dependencies": {
-    "@o7/ui": "workspace:*",
+    "@ghost/ui": "workspace:*",
     "@tanstack/react-virtual": "3.14.22",
     "@tauri-apps/api": "2.12.4",
     "@xterm/addon-fit": "0.11.0",

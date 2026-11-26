@@ -1,4 +1,4 @@
-import { StatusDot } from "@o7/ui/graphite";
+import { StatusDot } from "@ghost/ui/graphite";
 import { ArrowLeft, X } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { TaskStatus, TaskStep, ToolStatus } from "../../bindings";

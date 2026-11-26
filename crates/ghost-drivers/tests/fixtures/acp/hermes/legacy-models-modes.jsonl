@@ -1,0 +1,15 @@
+{"d":"note","note":{"text":"Hermes offers legacy models and modes only: synthesized options, the untyped session/set_model and session/set_mode."}}
+{"d":"note","note":{"start":{"agent_id":"hermes","dialect":"hermes","resume":null,"autonomy":"ask","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"ghost","title":"Ghost ADE","version":"0.0.0-replay"}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true},"sessionCapabilities":{"fork":{},"list":{},"resume":{}}},"authMethods":[{"id":"openrouter","name":"openrouter runtime credentials","description":"Authenticate Hermes using the currently configured openrouter runtime credentials."},{"id":"hermes-setup","name":"Configure Hermes provider","type":"terminal","args":["--setup"],"description":"Open Hermes' interactive model/provider setup in a terminal. Use this when Hermes has not been configured on this machine yet."}],"agentInfo":{"name":"hermes-agent","version":"0.22.5"}}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"<CWD>","mcpServers":[]}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":2,"result":{"sessionId":"<SESSION_1>","models":{"availableModels":[{"modelId":"openrouter:anthropic/claude-sonnet-4.5","name":"anthropic/claude-sonnet-4.5"},{"modelId":"openrouter:openai/gpt-5-mini","name":"openai/gpt-5-mini"}],"currentModelId":"openrouter:anthropic/claude-sonnet-4.5"},"modes":{"currentModeId":"default","availableModes":[{"id":"default","name":"Default","description":"Ask before edits."},{"id":"accept_edits","name":"Accept Edits","description":"Auto-allow workspace and temp-dir edits; still asks for sensitive paths."},{"id":"dont_ask","name":"Don't Ask","description":"Auto-allow file edits for this session except sensitive paths."}]}}}}
+{"d":"cmd","cmd":{"type":"set_option","option_id":"model","value":{"type":"choice","value":"openrouter:openai/gpt-5-mini"}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":3,"method":"session/set_model","params":{"sessionId":"<SESSION_1>","modelId":"openrouter:openai/gpt-5-mini"}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":3,"result":{}}}
+{"d":"cmd","cmd":{"type":"set_option","option_id":"mode","value":{"type":"choice","value":"accept_edits"}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":4,"method":"session/set_mode","params":{"sessionId":"<SESSION_1>","modeId":"accept_edits"}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":4,"result":{}}}
+{"d":"cmd","cmd":{"type":"set_autonomy","autonomy":"ask"}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":5,"method":"session/set_mode","params":{"sessionId":"<SESSION_1>","modeId":"default"}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":5,"result":{}}}

@@ -25,7 +25,7 @@ export function fakeUpdates(kind: string): UpdatesApi {
     notes:
       kind === "current"
         ? null
-        : "The Update button. o7 now looks for a newer version by itself and installs it when you choose.",
+        : "The Update button. Ghost now looks for a newer version by itself and installs it when you choose.",
     downloaded_bytes: 0,
     total_bytes: null,
     message: null,

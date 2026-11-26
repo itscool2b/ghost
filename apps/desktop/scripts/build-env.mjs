@@ -1,10 +1,10 @@
 // Build tooling only. Keep private build-machine paths out of distributed Rust binaries.
 export function releaseBuildEnv(env, roots) {
   if (
-    env.O7_UPDATER_CHANNEL !== undefined &&
-    !["stable", "staging"].includes(env.O7_UPDATER_CHANNEL)
+    env.GHOST_UPDATER_CHANNEL !== undefined &&
+    !["stable", "staging"].includes(env.GHOST_UPDATER_CHANNEL)
   ) {
-    throw new Error("O7_UPDATER_CHANNEL must be stable or staging.");
+    throw new Error("GHOST_UPDATER_CHANNEL must be stable or staging.");
   }
   const flags = env.CARGO_ENCODED_RUSTFLAGS
     ? env.CARGO_ENCODED_RUSTFLAGS.split("\x1f")
@@ -35,9 +35,9 @@ export function appVersion(value) {
 }
 
 export function requireUpdaterSigning(env) {
-  if (!env.O7_UPDATER_PUBLIC_KEY?.trim() || !env.TAURI_SIGNING_PRIVATE_KEY?.trim()) {
+  if (!env.GHOST_UPDATER_PUBLIC_KEY?.trim() || !env.TAURI_SIGNING_PRIVATE_KEY?.trim()) {
     throw new Error(
-      "Signed updater builds require O7_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY from the release secret store.",
+      "Signed updater builds require GHOST_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY from the release secret store.",
     );
   }
 }

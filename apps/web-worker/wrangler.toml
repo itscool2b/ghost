@@ -8,7 +8,7 @@ workers_dev = false
 preview_urls = false
 
 [build]
-command = "corepack pnpm --filter @o7/web build && worker-build --release"
+command = "corepack pnpm --filter @ghost/web build && worker-build --release"
 
 [observability]
 enabled = false
@@ -22,10 +22,13 @@ database_id = "00000000-0000-0000-0000-000000000000"
 [env.production]
 name = "o7-web"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
-# The second route is the address the site had until 19 November 2026: there the Worker serves
-# only the remote page and sends every other page to o7.codes (FORMER_HOSTS in src/lib.rs). It
-# goes once installed copies from before the move have updated.
+# onghost.dev is a custom domain: Cloudflare keeps its DNS record and certificate. The two routes
+# are the addresses the site had before (o7.codes until 26 November 2026, auracode.si until
+# 19 November): there the Worker serves only the remote page and sends every other page to
+# onghost.dev (FORMER_HOSTS in src/lib.rs). They go once installed copies from before the moves
+# have updated.
 routes = [
+  { pattern = "onghost.dev", custom_domain = true },
   { pattern = "o7.codes/*", zone_name = "o7.codes" },
   { pattern = "auracode.si/*", zone_name = "auracode.si" },
 ]
@@ -39,10 +42,7 @@ database_id = "beaf6cff-cda8-4e44-aaa8-5d46b0188fbb"
 name = "o7-web-preview"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
 # preview.onghost.dev is a custom domain: Cloudflare keeps its DNS record and certificate.
-routes = [
-  { pattern = "preview.o7.codes/*", zone_name = "o7.codes" },
-  { pattern = "preview.onghost.dev", custom_domain = true },
-]
+routes = [{ pattern = "preview.onghost.dev", custom_domain = true }]
 
 [[env.preview.d1_databases]]
 binding = "COUNTS"

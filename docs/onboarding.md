@@ -6,7 +6,7 @@ revision checked and acknowledged after an atomic write. Invalid data is preserv
 future formats are left unchanged. A failed save remains visible and can be retried or bypassed
 without claiming success. Re-running setup preserves the user's motion and project selection.
 
-The desktop loads cached detection while presenting the intro: the o7 logo and wordmark,
+The desktop loads cached detection while presenting the intro: the Ghost logo and wordmark,
 1.8 seconds on a cold start and 240 ms on a warm boot. Escape, Enter or Skip intro ends it early;
 reduced motion shows the formed mark at once, and notification chat navigation bypasses it.
 Smoke/stress launches do not enter setup. No vendor login, install, update or model prompt is
@@ -18,21 +18,21 @@ separately explicit, and the sign-in is checked again when the sheet closes.
 Setup is five pages (Welcome, Your agents, Your assistant, Your phone, First project) on one
 centred card (docs/design/visual-language.md). Where the window has room (1100 by 640 or more) the card has two
 panes: the steps' column, and one picture that is the same on every page and fills in as setup
-goes (`SetupMap.tsx`): the four assistants above o7's logo, the coding agents on this computer
+goes (`SetupMap.tsx`): the four assistants above Ghost's logo, the coding agents on this computer
 below it, the phone to its left and the first project to its right. An agent that is found, a bot
 that is linked, a phone that is ready and the project that is chosen each gain a settled line;
-the open page's lines run toward o7. Narrower, the card is the column alone. Every page is
+the open page's lines run toward Ghost. Narrower, the card is the column alone. Every page is
 skippable: Continue never requires anything, the progress bars visit any step and Skip setup
 finishes from anywhere. The step is saved on every move, so quitting halfway resumes there. Motion is not a
 step: Full already follows the system's reduced motion and Settings changes it; a setup saved at
 the retired motion step resumes at First project. So does one saved at the sign-in step setup
-had while o7 had accounts (removed on 16 November 2026). Keyboard focus moves to each step's heading.
+had while Ghost had accounts (removed on 16 November 2026). Keyboard focus moves to each step's heading.
 Enter advances except inside controls, editable content, menus and dialogs. Motion preferences
 also stop the shared frame clock, rather than merely hiding its animation with CSS.
 
 Welcome says it plainly: the agents on this computer run side by side and can be steered from a
-phone or the person's own assistant, o7 itself needs no account, and each agent keeps its own
-sign-in. Setup offers no account and no sign-in of o7's own.
+phone or the person's own assistant, Ghost itself needs no account, and each agent keeps its own
+sign-in. Setup offers no account and no sign-in of Ghost's own.
 
 Your assistant (owner, 21 November 2026) names Grok Bot, Muse, Hermes and OpenClaw with their
 marks. Picking one opens Settings' own link dialog for it (docs/remote-sessions.md), which is
@@ -59,7 +59,7 @@ behind.", with Git's stage, the whole clone's percentage on a 2px bar, what has 
 clone (Escape). A finished clone becomes the first project at once. A failure says why in one
 sentence and keeps Git's own last lines, with Try again (Enter) and Edit (Escape). New project
 offers the same clone in a dialog beside Choose folder. The rules (addresses accepted and refused,
-the person's own Git and credential helpers, the one folder o7 owns and removes) are in
+the person's own Git and credential helpers, the one folder Ghost owns and removes) are in
 docs/setup-actions.md.
 
 Reopening the clone form after a restart lists its saved prior attempts. It shows each retained

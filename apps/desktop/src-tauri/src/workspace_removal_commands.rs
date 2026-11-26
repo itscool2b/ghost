@@ -1,6 +1,6 @@
 //! Reviewed parent tombstones. The owned task retains the active profile lease until commit.
 use crate::{error::AppError, state::AppState};
-use o7_protocol::workspace_removal::{
+use ghost_protocol::workspace_removal::{
     RemovedWorkspace, WorkspaceRemovalAction, WorkspaceRemovalPreview, WorkspaceRemovalTarget,
 };
 use tauri::State;
@@ -39,7 +39,7 @@ pub async fn workspace_removal_apply(
     // The removed chats' browsers close with them.
     if let Ok(sessions) = state.sessions()
         && let Ok(snapshot) = sessions
-            .workspace_snapshot(o7_protocol::workspace::WorkspaceFilter {
+            .workspace_snapshot(ghost_protocol::workspace::WorkspaceFilter {
                 include_archived: true,
                 project_id: None,
             })

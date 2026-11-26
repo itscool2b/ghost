@@ -1,4 +1,4 @@
-import { type AgentBrandId, Orb, springs } from "@o7/ui";
+import { type AgentBrandId, Orb, springs } from "@ghost/ui";
 import { ArrowUp, Check } from "lucide-react";
 import { motion } from "motion/react";
 import {

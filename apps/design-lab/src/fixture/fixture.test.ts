@@ -1,4 +1,4 @@
-import { AGENT_BRAND_IDS } from "@o7/ui";
+import { AGENT_BRAND_IDS } from "@ghost/ui";
 import { describe, expect, it } from "vitest";
 import { stripAnsi } from "../model/ansi";
 import { diffFile } from "../model/diff";
@@ -170,7 +170,7 @@ describe("the golden turn", () => {
       ["search", 'grep "performance.now" packages/ui/src'],
       ["edit", "Edit packages/ui/src/orb/pacing.ts"],
       ["edit", "Edit packages/ui/src/orb/pacing.test.ts"],
-      ["execute", "pnpm --filter @o7/ui test pacing"],
+      ["execute", "pnpm --filter @ghost/ui test pacing"],
     ]);
   });
 
@@ -284,7 +284,7 @@ describe("the workspace", () => {
       PROJECTS.map((project) => [project.name, project.expanded, project.chats.length]),
     ).toEqual([
       ["auracode", true, 4],
-      ["o7.codes", false, 2],
+      ["onghost.dev", false, 2],
       ["dotfiles", false, 1],
     ]);
     expect(PROJECTS[0]?.chats.map((chat) => [chat.title, chat.agent, chat.status])).toEqual([

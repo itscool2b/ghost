@@ -1,5 +1,5 @@
-import { springs, usePrefersReducedMotion } from "@o7/ui";
-import { AgentMark, PixelLoader, StatusDot } from "@o7/ui/graphite";
+import { springs, usePrefersReducedMotion } from "@ghost/ui";
+import { AgentMark, PixelLoader, StatusDot } from "@ghost/ui/graphite";
 import { ArrowLeft, Check, ChevronRight, Square, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";

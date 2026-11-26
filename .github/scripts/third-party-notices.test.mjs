@@ -139,7 +139,7 @@ test("both outputs say the agent marks are their owners' trademarks and point at
 
 test("the desktop output says where the start screen's aircraft pictures come from; the website, which has none, does not", () => {
   const desktop = renderText(verifiedCatalogue(), "desktop");
-  assert.match(desktop, /Start screen aircraft: .*supplied by o7's owner/);
+  assert.match(desktop, /Start screen aircraft: .*supplied by Ghost's owner/);
   assert.doesNotMatch(desktop, /Wikimedia|public-domain/);
   assert.match(desktop, /third-party\/ascii-art\.md/);
   assert.doesNotMatch(renderText(verifiedCatalogue(), "web"), /Start screen aircraft/);

@@ -1,21 +1,21 @@
-//! Sending a bot link's call-back (`o7_remote::callback`): the message that tells a linked
+//! Sending a bot link's call-back (`ghost_remote::callback`): the message that tells a linked
 //! assistant a chat it acted on has finished, failed or asks for an answer.
 //!
-//! `o7-remote` decides when and what; this sends it, in the form the assistant's own way of
+//! `ghost-remote` decides when and what; this sends it, in the form the assistant's own way of
 //! being woken takes, with the key that address needs. The key is kept in the computer's secure
 //! storage, one entry per bot link, and is read only here, at the moment of sending. Neither the
 //! key nor the address is ever written to a log: an address's path is itself a secret for some
 //! assistants.
 //!
 //! Who may do what: only the window sets, tests or clears a link's address (the commands in
-//! `remote.rs`); a bot has no tool that reads or changes it. o7 sends only to the address its
-//! owner typed, follows no redirect from it, and sends the text `o7-remote` wrote and nothing
+//! `remote.rs`); a bot has no tool that reads or changes it. Ghost sends only to the address its
+//! owner typed, follows no redirect from it, and sends the text `ghost-remote` wrote and nothing
 //! else from the computer.
 
 use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use o7_remote::{CallbackKind, Delivery};
+use ghost_remote::{CallbackKind, Delivery};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
@@ -107,7 +107,7 @@ fn hex(bytes: &[u8]) -> String {
 pub fn request(delivery: &Delivery, key: &[u8], now: i64) -> Outgoing {
     let callback = &delivery.callback;
     let event = serde_json::json!({
-        "source": "o7",
+        "source": "ghost",
         "event": delivery.event.word(),
         "id": delivery.id,
         "chat": delivery.chat_id,
@@ -144,7 +144,7 @@ pub fn request(delivery: &Delivery, key: &[u8], now: i64) -> Outgoing {
         CallbackKind::Openclaw => {
             let mut body = serde_json::json!({
                 "message": delivery.text,
-                "name": "o7",
+                "name": "Ghost",
                 "deliver": true,
             });
             if let (Some(channel), Some(to)) = (&callback.channel, &callback.to) {
@@ -198,7 +198,7 @@ fn client() -> Option<reqwest::Client> {
         // The key goes to the address its owner typed and nowhere that address points on to.
         .redirect(reqwest::redirect::Policy::none())
         .timeout(ATTEMPT)
-        .user_agent("o7")
+        .user_agent("ghost")
         .build()
         .ok()
 }
@@ -223,7 +223,7 @@ async fn attempt(client: &reqwest::Client, outgoing: &Outgoing) -> Told {
                         .into(),
                     429 => "The assistant is taking no more for now.".into(),
                     300..=399 => {
-                        "The address answered with a redirect, which o7 does not follow.".into()
+                        "The address answered with a redirect, which Ghost does not follow.".into()
                     }
                     code => format!("The assistant answered {code}."),
                 },
@@ -235,7 +235,7 @@ async fn attempt(client: &reqwest::Client, outgoing: &Outgoing) -> Told {
         },
         Err(error) if error.is_connect() => Told {
             ok: false,
-            detail: "o7 could not connect to that address.".into(),
+            detail: "Ghost could not connect to that address.".into(),
         },
         Err(_) => Told {
             ok: false,
@@ -308,7 +308,7 @@ pub fn remove_keys(bot_ids: &[String]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use o7_remote::{Callback, CallbackEvent};
+    use ghost_remote::{Callback, CallbackEvent};
 
     use super::*;
 
@@ -326,7 +326,7 @@ mod tests {
             id: "evt_1".into(),
             chat_id: "c7".into(),
             title: "Fix the login form".into(),
-            text: "o7: chat c7 \"Fix the login form\" (web, Claude Code) has finished.".into(),
+            text: "Ghost: chat c7 \"Fix the login form\" (web, Claude Code) has finished.".into(),
             at: 1_700_000_000_000,
         }
     }
@@ -366,14 +366,14 @@ mod tests {
         assert_eq!(grok.url, "https://assistant.example/hook/abc");
         assert_eq!(header(&grok, "Authorization"), "Bearer s3cret-key");
         let body: serde_json::Value = serde_json::from_str(&grok.body).expect("json");
-        assert_eq!(body["source"], "o7");
+        assert_eq!(body["source"], "ghost");
         assert_eq!(body["event"], "finished");
         assert_eq!(body["chat"], "c7");
         assert!(
             body["message"]
                 .as_str()
                 .expect("message")
-                .starts_with("o7: chat c7")
+                .starts_with("Ghost: chat c7")
         );
         assert!(!grok.body.contains("s3cret"), "the key is never in a body");
 
@@ -391,7 +391,7 @@ mod tests {
         let mut to_chat = delivery(CallbackKind::Openclaw);
         let plain = request(&to_chat, key, 1);
         let body: serde_json::Value = serde_json::from_str(&plain.body).expect("json");
-        assert_eq!(body["name"], "o7");
+        assert_eq!(body["name"], "Ghost");
         assert_eq!(body["deliver"], true);
         assert!(body.get("channel").is_none() && body.get("to").is_none());
         assert_eq!(header(&plain, "Idempotency-Key"), "evt_1");
@@ -440,7 +440,7 @@ mod tests {
             "The assistant has nothing at that address (or refused the signature)."
         )));
         assert!(!worth_retrying(&told(
-            "The address answered with a redirect, which o7 does not follow."
+            "The address answered with a redirect, which Ghost does not follow."
         )));
         assert!(worth_retrying(&told("The assistant answered 503.")));
         assert!(worth_retrying(&told(

@@ -5,7 +5,7 @@ import type { Preferences } from "../settings/preferences";
 import { Switch } from "../settings/SettingsRow";
 import "../library/plugin-library.css";
 
-/** What an agent can do on the chat's device, in a person's words. The tool names are o7's. */
+/** What an agent can do on the chat's device, in a person's words. The tool names are Ghost's. */
 const AGENT_TOOLS: readonly (readonly [string, string])[] = [
   ["mobile_devices", "See the devices"],
   ["mobile_start", "Start a phone"],
@@ -26,9 +26,9 @@ const AGENT_TOOLS: readonly (readonly [string, string])[] = [
 ];
 
 /**
- * Mobile, the universal plugin (docs/superpowers/plans/2026-11-21-mobile.md): o7's own, for every
- * agent, like Browser use. It comes with o7 and cannot be added or removed, only turned off,
- * which stops every device o7 started and takes the Device pane out of the app.
+ * Mobile, the universal plugin (docs/superpowers/plans/2026-11-21-mobile.md): Ghost's own, for every
+ * agent, like Browser use. It comes with Ghost and cannot be added or removed, only turned off,
+ * which stops every device Ghost started and takes the Device pane out of the app.
  */
 export function MobileSettings({
   prefs,
@@ -67,7 +67,7 @@ export function MobileSettings({
             <p>
               {on
                 ? "A phone beside each chat, for building phone apps: an Android emulator of the chat's own, an iPhone simulator of its own on a Mac, or your phone on a cable. You and the agent use the same device."
-                : "Off for every agent: chats show no device, agents' device tools stop working, and every phone o7 started is stopped."}
+                : "Off for every agent: chats show no device, agents' device tools stop working, and every phone Ghost started is stopped."}
             </p>
           </div>
           <Switch
@@ -89,7 +89,7 @@ export function MobileSettings({
               <div>
                 <strong>Device tools for agents</strong>
                 <span>
-                  Every agent you chat with gets these from o7, on its own chat's device only. An
+                  Every agent you chat with gets these from Ghost, on its own chat's device only. An
                   agent cannot use your phone until you allow it in the Device pane, and it cannot
                   set Android up or accept Google's licence for you. Terminal chats and agents on
                   another computer do not get them.
@@ -117,7 +117,7 @@ export function MobileSettings({
                           : "Set up. Open the Device pane in a chat to start a phone."
                       : setup.adb
                         ? "Phones on a cable work. The emulator is not downloaded yet: open the Device pane in a chat to set it up."
-                        : "Not set up. Open the Device pane in a chat (the phone button in its header) and o7 downloads Android's emulator from Google."}
+                        : "Not set up. Open the Device pane in a chat (the phone button in its header) and Ghost downloads Android's emulator from Google."}
                 </span>
               </div>
             </div>

@@ -1,5 +1,5 @@
 /**
- * A browser page is a native view drawn above the window's HTML, so nothing o7 shows can
+ * A browser page is a native view drawn above the window's HTML, so nothing Ghost shows can
  * sit on top of it. While something opens over the page's area (a menu, a dialog, the command
  * palette, a toast, the address bar's suggestions), the panel swaps the live page for its picture
  * until it closes. This finds what opens over it.

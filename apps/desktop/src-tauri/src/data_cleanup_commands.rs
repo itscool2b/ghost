@@ -1,7 +1,7 @@
-//! Settings' "Delete all o7 data": a review of exactly what would go, then a cleanup that
-//! runs after o7 quits.
+//! Settings' "Delete all Ghost data": a review of exactly what would go, then a cleanup that
+//! runs after Ghost quits.
 //!
-//! The data cannot be deleted while o7 runs (its database, locks and webview profile are
+//! The data cannot be deleted while Ghost runs (its database, locks and webview profile are
 //! open), so applying starts this same executable in its cleanup mode ([`crate::uninstall`]) with
 //! the review's choices, detached, and quits. The cleanup waits for this process to exit, deletes
 //! what the review showed (minus worktrees the person kept), and says only if something could not
@@ -12,7 +12,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use o7_core::uninstall::{self, GitTool, ItemKind, Os, PlatformDirs, Targets};
+use ghost_core::uninstall::{self, GitTool, ItemKind, Os, PlatformDirs, Targets};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -23,9 +23,9 @@ use crate::state::AppState;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum DataCleanupScope {
-    /// Everything o7 keeps on this device.
+    /// Everything Ghost keeps on this device.
     Machine,
-    /// Only this launch's own data folder (`O7_DATA_DIR`).
+    /// Only this launch's own data folder (`GHOST_DATA_DIR`).
     DataFolder,
 }
 
@@ -36,7 +36,7 @@ pub enum DataCleanupItemKind {
     Data,
     /// Window position, web caches, preferences.
     App,
-    /// An entry o7 made in a data folder it does not own by name.
+    /// An entry Ghost made in a data folder it does not own by name.
     Entry,
     /// Update downloads and other leftovers in the temporary folder.
     Temporary,
@@ -63,7 +63,7 @@ pub struct DataCleanupWorktree {
     pub unsaved: bool,
 }
 
-/// What "Delete all o7 data" would remove, for the review.
+/// What "Delete all Ghost data" would remove, for the review.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 pub struct DataCleanupReview {
     /// One use, for [`data_cleanup_apply`], within ten minutes.
@@ -74,7 +74,7 @@ pub struct DataCleanupReview {
     /// Where the sign-in tokens of added agent accounts are: "Windows Credential Manager", "the
     /// macOS keychain" or "the desktop keyring" (the Secret Service on Linux).
     pub secure_store: Option<String>,
-    /// macOS: the app bundle "move o7 to the Trash" would move; `None` where it cannot.
+    /// macOS: the app bundle "move Ghost to the Trash" would move; `None` where it cannot.
     pub app_bundle: Option<String>,
 }
 
@@ -110,7 +110,7 @@ fn targets(state: &AppState) -> Result<(DataCleanupScope, Targets), AppError> {
         let root = state.data_dir().ok_or_else(|| {
             AppError::new(
                 AppErrorCode::DataDirUnknown,
-                "o7 does not know where its data folder is.",
+                "Ghost does not know where its data folder is.",
             )
         })?;
         Ok((
@@ -125,8 +125,8 @@ fn targets(state: &AppState) -> Result<(DataCleanupScope, Targets), AppError> {
     }
 }
 
-/// Reviews what deleting all of o7's data would remove. Changes nothing; checks
-/// o7's worktrees with read-only Git commands.
+/// Reviews what deleting all of Ghost's data would remove. Changes nothing; checks
+/// Ghost's worktrees with read-only Git commands.
 #[tauri::command]
 #[specta::specta]
 pub async fn data_cleanup_review(
@@ -153,7 +153,7 @@ pub async fn data_cleanup_review(
         .collect();
     let app_bundle = crate::uninstall::app_bundle();
     let review = DataCleanupReview {
-        token: o7_core::ids::new_id(),
+        token: ghost_core::ids::new_id(),
         scope,
         items: plan
             .items
@@ -202,8 +202,8 @@ pub async fn data_cleanup_review(
     Ok(review)
 }
 
-/// Starts the reviewed cleanup and quits o7. Running agents and terminals stop without a
-/// second question: the review said so. Nothing is deleted until o7 has exited.
+/// Starts the reviewed cleanup and quits Ghost. Running agents and terminals stop without a
+/// second question: the review said so. Nothing is deleted until Ghost has exited.
 #[tauri::command]
 #[specta::specta]
 pub async fn data_cleanup_apply(
@@ -221,7 +221,7 @@ pub async fn data_cleanup_apply(
         })?;
     let arguments = cleanup_arguments(&pending, &choice, std::process::id())?;
     let exe = std::env::current_exe()
-        .map_err(|error| failed(format!("o7 could not find its own program: {error}")))?;
+        .map_err(|error| failed(format!("Ghost could not find its own program: {error}")))?;
     let exe = appimage_file(
         &exe,
         std::env::var_os("APPIMAGE"),
@@ -230,7 +230,7 @@ pub async fn data_cleanup_apply(
     .unwrap_or(exe);
     spawn_detached(&exe, &arguments)
         .map_err(|error| failed(format!("The cleanup could not start: {error}")))?;
-    tracing::info!(scope = ?pending.scope, "deleting all o7 data after quitting");
+    tracing::info!(scope = ?pending.scope, "deleting all Ghost data after quitting");
     if let Some(state) = app.try_state::<AppState>() {
         state.quit.confirm_ahead();
     }
@@ -255,7 +255,7 @@ fn cleanup_arguments(
         let root = pending
             .root
             .as_ref()
-            .ok_or_else(|| failed("o7 does not know where its data folder is."))?;
+            .ok_or_else(|| failed("Ghost does not know where its data folder is."))?;
         arguments.extend(["--data-dir".into(), root.clone().into_os_string()]);
     }
     for path in &choice.remove_worktrees {
@@ -271,15 +271,15 @@ fn cleanup_arguments(
     }
     if choice.move_app_to_trash {
         let bundle = pending.app_bundle.as_ref().ok_or_else(|| {
-            AppError::invalid_argument("o7 cannot move itself to the Trash from here.")
+            AppError::invalid_argument("Ghost cannot move itself to the Trash from here.")
         })?;
         arguments.extend(["--trash-app".into(), bundle.clone().into_os_string()]);
     }
     Ok(arguments)
 }
 
-/// An AppImage runs o7 from a mount that goes away with it, so the cleanup, which must
-/// outlive o7, starts the AppImage file again (`APPIMAGE`). Only when this program is the one
+/// An AppImage runs Ghost from a mount that goes away with it, so the cleanup, which must
+/// outlive Ghost, starts the AppImage file again (`APPIMAGE`). Only when this program is the one
 /// inside that mount (`APPDIR`): the variables also reach programs an AppImage merely started.
 fn appimage_file(
     exe: &Path,
@@ -297,17 +297,19 @@ fn appimage_file(
 }
 
 /// Starts the cleanup so it outlives this process: its own process group, no console, out of
-/// any job object that would end it with o7.
+/// any job object that would end it with Ghost.
 fn spawn_detached(exe: &Path, arguments: &[std::ffi::OsString]) -> std::io::Result<()> {
     let build = || {
         let mut command = Command::new(exe);
         command
             .args(arguments)
-            .env_remove(o7_core::paths::DATA_DIR_ENV)
-            .env_remove(o7_core::paths::LEGACY_DATA_DIR_ENV)
+            .env_remove(ghost_core::paths::DATA_DIR_ENV)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        for name in ghost_core::paths::LEGACY_DATA_DIR_ENVS {
+            command.env_remove(name);
+        }
         command
     };
     #[cfg(windows)]
@@ -318,15 +320,17 @@ fn spawn_detached(exe: &Path, arguments: &[std::ffi::OsString]) -> std::io::Resu
         const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
         let flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
         // A job that forbids breaking away refuses the flag; then start inside it.
-        match o7_process::spawn_command(build().creation_flags(flags | CREATE_BREAKAWAY_FROM_JOB)) {
+        match ghost_process::spawn_command(
+            build().creation_flags(flags | CREATE_BREAKAWAY_FROM_JOB),
+        ) {
             Ok(_) => Ok(()),
-            Err(_) => o7_process::spawn_command(build().creation_flags(flags)).map(drop),
+            Err(_) => ghost_process::spawn_command(build().creation_flags(flags)).map(drop),
         }
     }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        o7_process::spawn_command(build().process_group(0)).map(drop)
+        ghost_process::spawn_command(build().process_group(0)).map(drop)
     }
 }
 

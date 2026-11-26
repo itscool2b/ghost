@@ -7,7 +7,7 @@
 //! | Windows 11 22H2 and later (build 22523+) | Acrylic, the system backdrop (following the window's appearance) | transparent |
 //! | Windows 11 (builds 22000 to 22522) | Mica (following system appearance) | transparent |
 //! | Windows 10, Linux, anything else | none: the UI paints its opaque frame | opaque |
-//! | `O7_NO_GLASS=1` | none (the power spike's baseline) | opaque |
+//! | `GHOST_NO_GLASS=1` | none (the power spike's baseline) | opaque |
 //!
 //! Opaque is the fallback because a transparent window with no material behind it shows whatever
 //! is on the desktop, and on Windows 10 Tauri drops Mica's "unsupported" error silently.

@@ -33,7 +33,7 @@ if (versioned >= 0) {
   try {
     version = appVersion(args[versioned + 1]);
   } catch (error) {
-    console.error(`o7: ${error.message}`);
+    console.error(`Ghost: ${error.message}`);
     process.exit(1);
   }
   args.splice(versioned, 2, "--config", JSON.stringify({ version }));
@@ -49,7 +49,7 @@ if (signed >= 0) {
     // committed config leaves empty: the app itself embeds the key at compile time (updater.rs).
     "--config",
     JSON.stringify({
-      plugins: { updater: { pubkey: process.env.O7_UPDATER_PUBLIC_KEY.trim() } },
+      plugins: { updater: { pubkey: process.env.GHOST_UPDATER_PUBLIC_KEY.trim() } },
     }),
   );
 }
@@ -59,7 +59,7 @@ const sysroot = spawnSync(process.env.RUSTC ?? "rustc", ["--print", "sysroot"], 
   stdio: ["ignore", "pipe", "inherit"],
 });
 if (sysroot.status !== 0) {
-  console.error("o7: could not determine the Rust sysroot for build-path remapping.");
+  console.error("Ghost: could not determine the Rust sysroot for build-path remapping.");
   process.exit(1);
 }
 const home = homedir();
@@ -68,7 +68,7 @@ const env = releaseBuildEnv(process.env, [
   [home, "/build-home"],
   [process.env.CARGO_HOME ?? join(home, ".cargo"), "/cargo"],
   [sysroot.stdout.trim(), "/rust-toolchain"],
-  [repoRoot, "/o7/"],
+  [repoRoot, "/ghost/"],
 ]);
 if (process.platform === "darwin" && !env.APPLE_SIGNING_IDENTITY) {
   const lookup = spawnSync("sh", [signingScript, "identity"], {
@@ -80,7 +80,7 @@ if (process.platform === "darwin" && !env.APPLE_SIGNING_IDENTITY) {
   } else if (lookup.status === 1) {
     env.APPLE_SIGNING_IDENTITY = "-";
     console.warn(
-      'o7: no "o7 Local Signing" identity on this Mac, so the bundle is signed ad hoc and macOS will treat it as a new app. Create the identity once with: pnpm signing create',
+      'Ghost: no "Ghost Local Signing" identity on this Mac, so the bundle is signed ad hoc and macOS will treat it as a new app. Create the identity once with: pnpm signing create',
     );
   } else {
     // Ambiguous: the script has said which identities clash. Signing with either would be a guess.
@@ -102,7 +102,7 @@ try {
 } catch (error) {
   media.cleanup();
   console.error(
-    `o7: the dictation and voice models are not ready, so the bundle would lack them: ${error.message}`,
+    `Ghost: the dictation and voice models are not ready, so the bundle would lack them: ${error.message}`,
   );
   process.exit(1);
 }
@@ -114,26 +114,26 @@ const build = spawnSync(process.execPath, [tauriCli, "build", ...media.args], {
 });
 media.cleanup();
 if (build.error) {
-  console.error(`o7: could not run tauri build: ${build.error.message}`);
+  console.error(`Ghost: could not run tauri build: ${build.error.message}`);
   process.exit(1);
 }
 if (build.status === 0 && media.appimage) {
   const images = builtImages(imageDir(media.args, media.env, repoRoot), startedAt);
   if (images.length === 0) {
-    console.error("o7: the build made no AppImage to check.");
+    console.error("Ghost: the build made no AppImage to check.");
     process.exit(1);
   }
   for (const image of images) {
     try {
       checkImage(image, media.withMedia);
     } catch (error) {
-      console.error(`o7: ${image}: ${error.message}`);
+      console.error(`Ghost: ${image}: ${error.message}`);
       process.exit(1);
     }
     console.log(
       media.withMedia
-        ? `o7: ${image} carries GStreamer's plugins.`
-        : `o7: ${image} carries no GStreamer plugins: it plays sound and video only with the system's.`,
+        ? `Ghost: ${image} carries GStreamer's plugins.`
+        : `Ghost: ${image} carries no GStreamer plugins: it plays sound and video only with the system's.`,
     );
   }
 }

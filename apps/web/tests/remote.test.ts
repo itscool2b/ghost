@@ -15,7 +15,10 @@ interface Vectors {
 }
 
 const vectors: Vectors = JSON.parse(
-  await readFile(new URL("../../../crates/o7-remote/tests/vectors.json", import.meta.url), "utf8"),
+  await readFile(
+    new URL("../../../crates/ghost-remote/tests/vectors.json", import.meta.url),
+    "utf8",
+  ),
 );
 
 async function channels(context = vectors.context, secret = vectors.secret) {
@@ -103,7 +106,7 @@ function addressOf(href: string) {
 
 test("a pairing link leaves the address the moment it is taken, keeping the router's entry", () => {
   const { address, replaced } = addressOf(
-    "https://o7.codes/remote?relay=ws://127.0.0.1:8799#aaaa.bbbb.cccc",
+    "https://onghost.dev/remote?relay=ws://127.0.0.1:8799#aaaa.bbbb.cccc",
   );
   assert.equal(takePairingLink(address), "#aaaa.bbbb.cccc");
   assert.deepEqual(replaced, [
@@ -118,7 +121,7 @@ test("a pairing link leaves the address the moment it is taken, keeping the rout
 });
 
 test("every link is taken, not only the one the page loaded with", () => {
-  const { address } = addressOf("https://o7.codes/remote");
+  const { address } = addressOf("https://onghost.dev/remote");
   assert.equal(takePairingLink(address), "");
   // A second computer's code scanned while the page is open changes only the part after `#`.
   address.location.hash = "#second.link.key";

@@ -1,5 +1,5 @@
-import { AGENT_BRANDS, type AgentBrandId } from "@o7/ui";
-import { Logo } from "@o7/ui/graphite";
+import { AGENT_BRANDS, type AgentBrandId } from "@ghost/ui";
+import { Logo } from "@ghost/ui/graphite";
 import { type RefObject, useEffect, useState } from "react";
 import { useInView, usePageVisible, useReducedMotion } from "../motion";
 import {
@@ -324,7 +324,7 @@ export function HeroWindow({ state }: { state: HandoffState }) {
           <p className="m-section">Projects</p>
           <p className="m-row m-project-name">
             <Icon name="folder" size={14} />
-            o7
+            Ghost
           </p>
           <p className="m-row m-chat is-open">
             <span className="m-row-title">Ship the frame pacing fix</span>
@@ -352,7 +352,7 @@ export function HeroWindow({ state }: { state: HandoffState }) {
           </div>
         </div>
         <div className="hw-main">
-          <Header title="Ship the frame pacing fix" project="o7" working={working} />
+          <Header title="Ship the frame pacing fix" project="Ghost" working={working} />
           <div className="handoff-stage">
             <div className="handoff-prior hw-transcript">
               {shown.map((turn) => (

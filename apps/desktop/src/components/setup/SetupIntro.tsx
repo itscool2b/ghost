@@ -1,4 +1,4 @@
-import { Wing, Wordmark } from "@o7/ui/graphite";
+import { Wing, Wordmark } from "@ghost/ui/graphite";
 import "../tour/wing.css";
 
 export type IntroMode = "pending" | "live" | "still";

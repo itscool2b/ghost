@@ -5,8 +5,8 @@ use crate::{
     sessions::PageToken,
     state::{AppState, ProfileGeneration},
 };
-use o7_core::{session::PreparedVendor, terminal::TerminalError};
-use o7_protocol::config_vendor::{VendorRequest, VendorReview};
+use ghost_core::{session::PreparedVendor, terminal::TerminalError};
+use ghost_protocol::config_vendor::{VendorRequest, VendorReview};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -166,7 +166,7 @@ pub async fn config_vendor_start(
     {
         return Err(stale());
     }
-    let size = o7_process::pty::PtySize { rows, cols }
+    let size = ghost_process::pty::PtySize { rows, cols }
         .validate()
         .map_err(|_| TerminalError::Resize)?;
     // Claim before waiting on filesystem admission. Close/reload can cancel a queued start.
@@ -181,7 +181,7 @@ pub async fn config_vendor_start(
         return Err(TerminalError::Closed.into());
     }
     let chats = state.chats().ok_or(TerminalError::Closed)?;
-    let spawner = o7_process::Spawner::new(
+    let spawner = ghost_process::Spawner::new(
         chats.registry.clone(),
         tauri::async_runtime::handle().inner().clone(),
     );

@@ -1,4 +1,4 @@
-//! The o7 executable. Everything lives in the library (`o7_desktop`), where tests and
+//! The Ghost executable. Everything lives in the library (`ghost_desktop`), where tests and
 //! the bindings export can reach it.
 
 // No console window behind the app in Windows release builds.
@@ -9,62 +9,70 @@ fn main() {
     // profile's writer lock. It talks to the already-running app through a scoped grant.
     if std::env::args_os()
         .nth(1)
-        .is_some_and(|arg| arg == "--o7-memory-helper" || arg == "--aura-memory-helper")
+        .is_some_and(|arg| helper(&arg, "memory"))
     {
-        o7_core::memory_service::run_helper();
+        ghost_core::memory_service::run_helper();
         return;
     }
     // The browser's MCP helper (the Browser plugin's tools), started by an agent the same way.
     if std::env::args_os()
         .nth(1)
-        .is_some_and(|arg| arg == "--o7-browser-helper" || arg == "--aura-browser-helper")
+        .is_some_and(|arg| helper(&arg, "browser"))
     {
-        o7_core::browser_service::run_helper();
+        ghost_core::browser_service::run_helper();
         return;
     }
     // The devices' MCP helper (the Mobile plugin's tools), started by an agent the same way.
     if std::env::args_os()
         .nth(1)
-        .is_some_and(|arg| arg == "--o7-mobile-helper")
+        .is_some_and(|arg| helper(&arg, "mobile"))
     {
-        o7_core::mobile_service::run_helper();
+        ghost_core::mobile_service::run_helper();
         return;
     }
-    // o7's bot tools for an assistant on this computer (Hermes, OpenClaw): through the running
+    // Ghost's bot tools for an assistant on this computer (Hermes, OpenClaw): through the running
     // app's door on loopback, never the relay (bot_helper.rs).
     if std::env::args_os()
         .nth(1)
-        .is_some_and(|arg| arg == "--o7-bot-helper")
+        .is_some_and(|arg| helper(&arg, "bot"))
     {
-        o7_desktop::bot_helper::run();
+        ghost_desktop::bot_helper::run();
         return;
     }
     // A coordinated project's MCP helper, started by its coordinator's or a worker's agent.
     if std::env::args_os()
         .nth(1)
-        .is_some_and(|arg| arg == "--o7-project-helper" || arg == "--aura-project-helper")
+        .is_some_and(|arg| helper(&arg, "project"))
     {
-        o7_core::coordinator_service::run_helper();
+        ghost_core::coordinator_service::run_helper();
         return;
     }
-    // `auracode --uninstall-cleanup` deletes o7's data and exits; nothing else starts.
-    if let Some(code) = o7_desktop::uninstall::run_from_args() {
+    // `ghost --uninstall-cleanup` deletes Ghost's data and exits; nothing else starts.
+    if let Some(code) = ghost_desktop::uninstall::run_from_args() {
         std::process::exit(code);
     }
     #[cfg(target_os = "linux")]
     relaunch_with_launch_env();
-    o7_desktop::run();
+    ghost_desktop::run();
+}
+
+/// Whether `arg` asks for the helper mode `name`: `--ghost-<name>-helper`, or the same under the
+/// app's earlier names (`--o7-`, `--aura-`), which an agent's saved configuration may still pass.
+fn helper(arg: &std::ffi::OsStr, name: &str) -> bool {
+    ["ghost", "o7", "aura"]
+        .iter()
+        .any(|app| arg == std::ffi::OsStr::new(&format!("--{app}-{name}-helper")))
 }
 
 /// The NVIDIA driver's own switch for its explicit sync under Wayland.
 #[cfg(target_os = "linux")]
 const NVIDIA_SWITCH: &str = "__NV_DISABLE_EXPLICIT_SYNC";
 
-/// What o7 sets for itself on Linux before anything starts, which only a new process can
+/// What Ghost sets for itself on Linux before anything starts, which only a new process can
 /// take (changing its own env is unsafe once anything could read it). The program runs itself
-/// again with them (same process, same arguments), once: `O7_LAUNCH_SET` names them, so the
+/// again with them (same process, same arguments), once: `GHOST_LAUNCH_SET` names them, so the
 /// new process does not run again and agents do not inherit them
-/// (`o7_process::strip_launch_context`). When the restart fails, the app goes on without them.
+/// (`ghost_process::strip_launch_context`). When the restart fails, the app goes on without them.
 ///
 /// - **NVIDIA under Wayland.** The window closes as soon as it opens ("Error 71 (Protocol error)
 ///   dispatching to Wayland display"). The driver's EGL layer puts the window's surface under
@@ -76,8 +84,8 @@ const NVIDIA_SWITCH: &str = "__NV_DISABLE_EXPLICIT_SYNC";
 ///   frame: on a 4K screen at 2x a chat scrolled at 21 frames a second against 60, and the stress
 ///   view drew 12 to 25 against 60. So the app sets the driver's switch, unless the person set
 ///   either variable themselves.
-/// - **GStreamer in an AppImage** (`o7_desktop::browser::media::launch_env`): a registry of
-///   o7's own, and an image without plugins of its own uses the system's.
+/// - **GStreamer in an AppImage** (`ghost_desktop::browser::media::launch_env`): a registry of
+///   Ghost's own, and an image without plugins of its own uses the system's.
 #[cfg(target_os = "linux")]
 fn relaunch_with_launch_env() {
     use std::os::unix::process::CommandExt;
@@ -101,13 +109,16 @@ fn relaunch_with_launch_env() {
     let error = command
         .args(args)
         .envs(set.iter().map(|(name, value)| (*name, value)))
-        .env(o7_process::LAUNCH_SET_ENV, names.join(":"))
+        .env(ghost_process::LAUNCH_SET_ENV, names.join(":"))
         .exec();
-    eprintln!("o7: could not restart with {}: {error}", names.join(", "));
+    eprintln!(
+        "Ghost: could not restart with {}: {error}",
+        names.join(", ")
+    );
 }
 
 /// What [`relaunch_with_launch_env`] sets: nothing when this process is already the re-run (or
-/// something set `O7_LAUNCH_SET` for it). `nvidia` says whether NVIDIA's driver is loaded;
+/// something set `GHOST_LAUNCH_SET` for it). `nvidia` says whether NVIDIA's driver is loaded;
 /// `root` is where the system's folders are.
 #[cfg(target_os = "linux")]
 fn launch_changes(
@@ -115,7 +126,7 @@ fn launch_changes(
     nvidia: bool,
     root: &std::path::Path,
 ) -> Vec<(&'static str, std::ffi::OsString)> {
-    if var(o7_process::LAUNCH_SET_ENV).is_some() {
+    if var(ghost_process::LAUNCH_SET_ENV).is_some() {
         return Vec::new();
     }
     let mut set = Vec::new();
@@ -126,7 +137,7 @@ fn launch_changes(
     {
         set.push((NVIDIA_SWITCH, "1".into()));
     }
-    set.extend(o7_desktop::browser::media::launch_env(var, root));
+    set.extend(ghost_desktop::browser::media::launch_env(var, root));
     set
 }
 
@@ -206,7 +217,7 @@ mod tests {
             ("APPDIR", &appdir),
             ("WAYLAND_DISPLAY", "wayland-1"),
             (
-                o7_process::LAUNCH_SET_ENV,
+                ghost_process::LAUNCH_SET_ENV,
                 "__NV_DISABLE_EXPLICIT_SYNC:GST_REGISTRY_1_0",
             ),
         ]);

@@ -98,11 +98,11 @@ export function UpdatePanel({ api }: { readonly api: UpdatesApi }) {
               <>
                 You have <span className="settings-mono">{status.current_version}</span>.{" "}
                 {status.automatic
-                  ? "o7 looks for a newer version a few times a day."
-                  : "o7 looks for a newer version only when you ask."}
+                  ? "Ghost looks for a newer version a few times a day."
+                  : "Ghost looks for a newer version only when you ask."}
               </>
             ) : (
-              "o7 looks for a newer version a few times a day."
+              "Ghost looks for a newer version a few times a day."
             )}
           </p>
         </div>
@@ -166,7 +166,7 @@ export function UpdatePanel({ api }: { readonly api: UpdatesApi }) {
       ) : null}
       {confirm ? (
         <div className="settings-confirm settings-span">
-          <strong>Install and restart o7?</strong>
+          <strong>Install and restart Ghost?</strong>
           <p>
             Installing stops every chat's agent and closes terminals, then restarts. Chats pick up
             where they were, and drafts are saved first. It waits if a Git change is still running.

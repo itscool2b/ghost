@@ -126,7 +126,7 @@ describe("tools as label plus literal", () => {
     expect(editPacing && toolParts(editPacing).verb).toBe("Edited");
     expect(run && toolParts(run)).toEqual({
       verb: "Ran",
-      object: "pnpm --filter @o7/ui test pacing",
+      object: "pnpm --filter @ghost/ui test pacing",
       result: "19 passed",
     });
   });
@@ -146,9 +146,9 @@ describe("tools as label plus literal", () => {
     expect(languageLabel("constructor")).toBe("constructor");
     expect(languageOfPath("crates/aura-drivers/src/acp.rs")).toBe("rs");
     expect(languageOfPath("Makefile")).toBe("");
-    expect(commandParts("pnpm --filter @o7/ui test")).toEqual({
+    expect(commandParts("pnpm --filter @ghost/ui test")).toEqual({
       binary: "pnpm",
-      args: "--filter @o7/ui test",
+      args: "--filter @ghost/ui test",
     });
     expect(commandParts("ls")).toEqual({ binary: "ls", args: "" });
   });

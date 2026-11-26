@@ -9,7 +9,7 @@ use crate::{
     state::{AppInfo, AppState},
     sync::lock,
 };
-use o7_core::{
+use ghost_core::{
     paths::DataRoot,
     profile::{Profile, ProfileMeta, Profiles},
 };
@@ -97,7 +97,7 @@ async fn run(app: tauri::AppHandle, profile_id: String) -> Result<AppInfo, AppEr
         {
             instructions.reset_profile();
         }
-        if let Some(clones) = app.try_state::<Arc<o7_core::cloning::Clones>>() {
+        if let Some(clones) = app.try_state::<Arc<ghost_core::cloning::Clones>>() {
             clones.cancel_all();
         }
         crate::native_shell::profile_changed(&app);
@@ -108,12 +108,14 @@ async fn run(app: tauri::AppHandle, profile_id: String) -> Result<AppInfo, AppEr
         Ok(result)
     })
     .await
-    .map_err(|_| unavailable("The profile switch could not finish. Restart o7 before retrying."))?
+    .map_err(|_| {
+        unavailable("The profile switch could not finish. Restart Ghost before retrying.")
+    })?
 }
 
 type OutsideFactory = fn(
-    &Arc<o7_process::LeftoverRegistry>,
-    &Arc<o7_process::Redactor>,
+    &Arc<ghost_process::LeftoverRegistry>,
+    &Arc<ghost_process::Redactor>,
     &std::path::Path,
     &tokio::runtime::Handle,
 ) -> Outside;
@@ -145,7 +147,10 @@ async fn activate_serial(
         ),
     };
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is closing."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is closing.",
+        ));
     }
     {
         let mut runtime = lock(&state.runtime);
@@ -183,12 +188,12 @@ async fn activate_serial(
     if let Some(chats) = state.chats() {
         let report = chats
             .manager
-            .stop_all(o7_core::session::StopScope::All, Duration::from_secs(30))
+            .stop_all(ghost_core::session::StopScope::All, Duration::from_secs(30))
             .await;
         // A chat still on its way out is named, not mistaken for a Git change or an update.
         if !report.stopping.is_empty() {
             let names = chats.manager.chat_names(report.stopping).await;
-            return Err(unavailable(&o7_core::session::still_stopping(
+            return Err(unavailable(&ghost_core::session::still_stopping(
                 &names,
                 "Switch profiles again in a moment.",
             )));
@@ -219,7 +224,7 @@ async fn activate_one(
     if let Some(old) = &old {
         if !matches!(
             old.manager.storage_status().state,
-            o7_protocol::session::StorageState::Ok
+            ghost_protocol::session::StorageState::Ok
         ) {
             return Err(unavailable(
                 "Resolve the current profile's storage error before switching.",
@@ -264,7 +269,7 @@ async fn activate_one(
     {
         discard(&next).await;
         return Err(unavailable(
-            "The selected profile could not confirm its storage, or o7 is closing. Nothing was switched.",
+            "The selected profile could not confirm its storage, or Ghost is closing. Nothing was switched.",
         ));
     }
     let profiles = Profiles::new(root(state)?);

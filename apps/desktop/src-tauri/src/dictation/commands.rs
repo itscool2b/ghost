@@ -107,8 +107,9 @@ pub fn dictation_larger_download(
     if !audio::cpu_supported() {
         return Err(error(Failure::unsupported().message));
     }
-    let folder = downloads(&state)
-        .ok_or_else(|| error("This copy of o7 has nowhere to keep a downloaded model.".into()))?;
+    let folder = downloads(&state).ok_or_else(|| {
+        error("This copy of Ghost has nowhere to keep a downloaded model.".into())
+    })?;
     if model::larger(Some(&folder)).is_some() {
         return Err(error("The larger model is already here.".into()));
     }
@@ -119,8 +120,8 @@ pub fn dictation_larger_download(
     .map_err(error)
 }
 
-/// Stops the download, or says no to one o7 has not started yet. What arrived is kept, and the
-/// next download continues from it; o7 does not start one by itself again.
+/// Stops the download, or says no to one Ghost has not started yet. What arrived is kept, and the
+/// next download continues from it; Ghost does not start one by itself again.
 #[tauri::command]
 #[specta::specta]
 pub fn dictation_larger_cancel(
@@ -137,7 +138,7 @@ pub fn dictation_larger_cancel(
     saved.map_err(error)
 }
 
-/// Deletes the larger model; dictation returns to the built-in one, and o7 does not fetch the
+/// Deletes the larger model; dictation returns to the built-in one, and Ghost does not fetch the
 /// model by itself again.
 #[tauri::command]
 #[specta::specta]
@@ -176,7 +177,7 @@ pub fn dictation_start(
                 return Err(Failure::unsupported());
             }
             let folder = folder.ok_or_else(|| {
-                Failure::model("o7 could not find its dictation models. Reinstall o7.")
+                Failure::model("Ghost could not find its dictation models. Reinstall Ghost.")
             })?;
             if !operation.emit(DictationEvent::Preparing) {
                 return Err(Failure::cancelled());

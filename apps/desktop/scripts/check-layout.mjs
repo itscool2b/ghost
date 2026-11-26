@@ -188,7 +188,7 @@ export const MODES = [
   "instructions-drift",
   "instructions-large",
   "instructions-review",
-  // Settings' "Delete all o7 data": the review, worktrees with unsaved work, and macOS
+  // Settings' "Delete all Ghost data": the review, worktrees with unsaved work, and macOS
   // with the Trash.
   "delete-data",
   "delete-data-worktrees",

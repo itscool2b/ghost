@@ -2,30 +2,31 @@
   "version": 1,
   "scope": "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources, the bundled dictation models and the bundled scrcpy server are explicitly included. Linker-level and installer SDK qualification is separate.",
   "inputs": {
-    "Cargo.lock": "fbe8f17999fe81a8683cd9e8bcd4ef8bc595b0ca3fec45a997dd74dfa5722fe3",
-    "Cargo.toml": "20e394aba5f7bec4572ae68cbc8e4c26f6e8dc70444e3145b7176f642a96c9a0",
-    "apps/design-lab/package.json": "de7f4c743231878aa792ffc1d5211d60aff122e3dd43aa0c77c0c506f499835b",
-    "apps/desktop/package.json": "d0473371f85f67ab78e5bad27dc0b94c55a4d26ec9b07f5a5987e7554a9dbc2d",
-    "apps/desktop/scripts/dictation-models.mjs": "478873906f650952e60c93a59972784130913c23de83332613cdae895014c714",
-    "apps/desktop/src-tauri/Cargo.toml": "dbc0818510df4a0c098ea9d481e718c433e80a53d8d240acf1d38c2e3850c0b9",
-    "apps/ios/package.json": "aa33168d1c278d84c4431d75734a9245c4a7d74cdca7b9f891d3485157ade697",
-    "apps/relay/package.json": "b1d300dc154b9cd2cb6dce7b0374eec38c88bb8530edca4ca22f44515fe7ceaf",
-    "apps/web-worker/Cargo.toml": "0b2cbbdf3101daa5ab29f1cfe32bfb28f9e6165290f22f94abbc5ff101db12fb",
-    "apps/web-worker/package.json": "bd69d164d4a1cfeef2ea458ecb74bd9956a78d9998f58746107b4855a54a730d",
-    "apps/web/package.json": "7804d1b092d0f81ce3b436ba33dff254ecf3004dae377f4705f62f2a855c707b",
-    "crates/o7-agents/Cargo.toml": "3566601b1730348b82bcba7cbaa78595e47eb166303641e7484a545497ad1b76",
-    "crates/o7-cli/Cargo.toml": "4cd63bebcc6628a18f65530a53a26d8192e14658c5739555a64b2b5198d9630b",
-    "crates/o7-config/Cargo.toml": "4d7763297b41d5353b1d272792ef93af4e0be11fb288734238dfca39e76deb51",
-    "crates/o7-core/Cargo.toml": "678a940ab4c2441d9df719488448c118556dbb6cd679283458ddf2ad633ac79d",
-    "crates/o7-devices/Cargo.toml": "cd20ee8bbd66b3ce142b9dff264318ffba074fe93d34ae27a3babba5ae5b9a92",
-    "crates/o7-drivers/Cargo.toml": "538da181e6ab1b1301f30a66b194f070b14e0991d6661a3134b9d56f9d210a4a",
-    "crates/o7-process/Cargo.toml": "a26ac18a85988786b21b8a662466094d65af0b9079e468b92bf4d6e61e002845",
-    "crates/o7-protocol/Cargo.toml": "3720ac6f79dd101b8a27fac38958fa4ff9a0449760e7ff61a5674c6f6c20c57e",
-    "crates/o7-release/Cargo.toml": "9baf0d5a93fd7a3cf66c587421c1d2fcedb532f76655a00be723aad1334aab90",
-    "crates/o7-remote/Cargo.toml": "66c3d60389b24aaf3877109956d8811c3ad49132bf53e2377208df56130c4f1a",
-    "packages/ui/package.json": "a476ae07074377a1724a14569a3432823388d063ab08d1cfde63e5cb1cb493c2",
-    "pnpm-lock.yaml": "94743a07ce95296d0a9fba8dbbf75a41c089ee7b78bbdbe097076994dd34a2dd",
-    "third-party/models.json": "b947dabe6328cbe3787b60da7cbca0b4796fd113989316aaf91a27a5842a7b79",
+    "Cargo.lock": "5c37f722ac3b7e8428e452f9db76ce2d41f7c9f9e676d7371c218e1f4739f90c",
+    "Cargo.toml": "1a7d9979d11ec20f869484a1c2145d0bf9152168878e56eea47fb4df4cbe0596",
+    "apps/design-lab/package.json": "ea8a3eb1316e5e98b806d9c834b4971bb40253fb96ff0955b4235b92eeb40150",
+    "apps/desktop/package.json": "95c59cf02a19f6e01e7cbbd02df8f1f1d5f942edd1bc0e6eb9ac8d809223f93b",
+    "apps/desktop/scripts/dictation-models.mjs": "8aff636d42cecc93aea323bb5fe8c1bf25e70e5fe6ddad52dd6f28f4e808218c",
+    "apps/desktop/src-tauri/Cargo.toml": "20be9b046c5081c3f12e0f2b2a95b31027d7612d10cb7862c4410d42e1d18618",
+    "apps/ios/package.json": "39e6b92528ee30d092e968cc4b87061fa65900095311d3cc56a535325366b718",
+    "apps/relay/package.json": "d245a1f42e59210498075c6a9c9fa52f0eec0f3042b6ed7b20266decd88a0942",
+    "apps/web-builds-alias/package.json": "6625df3428043493bab8b7efc40e8da7b21cbb6209e8681d66f5e5230edc5eec",
+    "apps/web-worker/Cargo.toml": "f4a92d1fc5b3e0fa46b93bd89d344a70be14aef04bb79f353b4f487d369a51e9",
+    "apps/web-worker/package.json": "2b97017469da6496c45488ae695d7550fc9629e5fd6f3860856f61a77fb14462",
+    "apps/web/package.json": "7b3ea7fd48a08975cec5282264447e7149d87e89eaa04b757ec0e4f735805df5",
+    "crates/ghost-agents/Cargo.toml": "096095716ea5778a513dbe81959ad79f0183dd4f1857ed057978c3e5bc11972c",
+    "crates/ghost-cli/Cargo.toml": "bf5834a8f258cf3f9c6595d8ad2e8093b088593eee24d734bae58d3b8681d1e1",
+    "crates/ghost-config/Cargo.toml": "a551c96df5d40f941a4ffa7b3249cc236fd0708b3b60d82f271714302a89bb7d",
+    "crates/ghost-core/Cargo.toml": "b54b36b833bc92614598b7861a388baeddf2c007ca4379e83f34df05eb6b6403",
+    "crates/ghost-devices/Cargo.toml": "56a2f4a3411ebbcfb98f843635ff023803e2e1bc11d42aeca1100fb375801e61",
+    "crates/ghost-drivers/Cargo.toml": "716cd0cf5d1001fbcadb3df9849112809a4e431b1942ce1a4da7c73ba1d27fce",
+    "crates/ghost-process/Cargo.toml": "c648c7f0ec67fabc3d44f0184b60648ed74600b19eaf59c7ee5aabebd91566fb",
+    "crates/ghost-protocol/Cargo.toml": "9cf1c79a4528ea1cafc73ae3c6f8ab7c738304df0d72bfd2cbec1a843dc2c857",
+    "crates/ghost-release/Cargo.toml": "69b34e328e5928bc8da2457025b05c846bba4fd70019f8b55fce5ef891251769",
+    "crates/ghost-remote/Cargo.toml": "a585579fc41901f7a8dfda8d2f7108099133cf314f25dc1ea17f9b73897427e3",
+    "packages/ui/package.json": "01dc29689b64582c647c9696a20f94bdcc810ddeac6671442dba7b101da7f31b",
+    "pnpm-lock.yaml": "efce6b82528ff6aea44606fc2fe7b6fe32b713ebc523313556196eade75cd932",
+    "third-party/models.json": "86823e00ae9b863c74eee067e833792869e50d0359709ee381bd24d0a8108eda",
     "third-party/overrides.json": "2d4bae7744b98a2d1fb5c2d465867d0d4a5c78321fc7c5a048ab116ff168c948"
   },
   "records": [
@@ -12297,7 +12298,7 @@
       ],
       "files": [
         {
-          "sha256": "cfd4c317b67c8069d71893f93ccb9f0e1995de688aef043f64f7a2020a2484de",
+          "sha256": "cc867e668a2e2c1ac3b48f4827bc363bc13c469c2755f5c615d20b2e6789a515",
           "source": "https://huggingface.co/handy-computer/parakeet-tdt_ctc-110m-gguf/tree/1c3f0d5378fdd358905cc410a93ed9e64f52d170#attribution"
         },
         {
@@ -12326,7 +12327,7 @@
       ],
       "files": [
         {
-          "sha256": "1a9c2706dff2fa2507d1a28116cc91e8d45f306943a4ce00c6e46bc728af30ef",
+          "sha256": "d7dc3cbcef72aa50d0ab07c57d751028f7c546b365f15c1f1bb6329858e2c9d8",
           "source": "https://huggingface.co/handy-computer/parakeet-ultra-gguf/tree/a1539be1b849ea7463b88343e5277b373d0c4ea9#attribution"
         },
         {
@@ -12355,7 +12356,7 @@
       ],
       "files": [
         {
-          "sha256": "de17d36b1308e48ff75795ad49af2894952afdaf993a474b0b7d947497614617",
+          "sha256": "794c88a21b1bb34a7c1758c946247436b3de55a8245cf1990cad29ae9f0651d1",
           "source": "https://huggingface.co/gradium/phonon-31m-en/tree/8f7a37c94a4c58b04c8287300c53f11d2e208eae#attribution"
         },
         {
@@ -12380,7 +12381,7 @@
       ],
       "files": [
         {
-          "sha256": "11d1b8d310014ae6cf9c748262f92a15a2c3bfe3547f751541f054749cb49b14",
+          "sha256": "904c18fbda50108631298d645fcb018b4e35f0206fe0596d4f38af0c7ec6128b",
           "source": "https://huggingface.co/gradium/phonon-voices/tree/0ee17205f254b5abc43b266c8a0f215565c352f7#attribution"
         },
         {
@@ -12405,7 +12406,7 @@
       ],
       "files": [
         {
-          "sha256": "2ca3fa1890d0edee9ec04cc129dca45cc9aa6aeea517cf3465f437812d2f4bb7",
+          "sha256": "7cd2085479bc9d7fa49401c58b871a5abb867bc13eeaa0076b677f2ef0fff993",
           "source": "https://huggingface.co/handy-computer/silero-vad-v6.2-gguf/tree/a9b2d61c20ae4ddf3644edb34969e8185a485448#attribution"
         },
         {

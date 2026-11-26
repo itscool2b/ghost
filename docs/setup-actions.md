@@ -55,16 +55,16 @@ The other catalog agents keep their official guides, for these reasons:
 - **Antigravity**: Google distributes a desktop app and an `agy` install script; neither offers a
   pinned version or checksum in the vendor's documentation.
 
-### Discovering an installation added while o7 is open
+### Discovering an installation added while Ghost is open
 
 The installation observer refreshes the resolved environment before its 30-second metadata
 check. Newly created known tool directories and changes to the Windows registry PATH or Unix
-login-shell PATH can therefore become available without restarting o7. Executable probes run
+login-shell PATH can therefore become available without restarting Ghost. Executable probes run
 only when installation metadata or saved choices change; running sessions keep their original
 environment and executable. The agent list picks up background results on its regular refresh.
 
 Cursor's official Windows installer places `cursor-agent.cmd` beside `versions/<build>/node.exe`
-and `index.js` under `%LOCALAPPDATA%/cursor-agent`. That directory is a known tool location. o7
+and `index.js` under `%LOCALAPPDATA%/cursor-agent`. That directory is a known tool location. Ghost
 qualifies the `@anysphere/agent-cli-runtime` manifest and runs the bundled Node with its entry
 directly. It does not execute the shell launcher. Version discovery is bounded, supports dated
 and timestamped builds, ignores incomplete distributions, and confines runtime files to their
@@ -75,7 +75,7 @@ also documents the shorter `agent` alias. This adds discovery support, not autom
 ### Sign in
 
 Sign in runs the agent's own documented login command for the detected executable, in the
-owned terminal sheet, after its separate Start. o7 never opens credential files, and the
+owned terminal sheet, after its separate Start. Ghost never opens credential files, and the
 vendor's flow (a browser, a device code or a key prompt) happens in that visible terminal:
 
 - Claude Code `claude auth login`, Codex `codex login`;
@@ -86,7 +86,7 @@ vendor's flow (a browser, a device code or a key prompt) happens in that visible
 - Hermes `hermes auth` (its interactive provider sign-in; `hermes login` was removed).
 
 Pi, oh-my-pi and Antigravity sign in inside their own interface (`/login`, or the first run), so
-o7 offers no Sign in for them and says nothing it cannot run. Status checks (Check sign-in)
+Ghost offers no Sign in for them and says nothing it cannot run. Status checks (Check sign-in)
 stay limited to Claude Code and Codex, whose status commands report a coarse state without
 account data.
 
@@ -119,13 +119,13 @@ dropped and their reviews released; each window keeps at most eight. No folder i
 Git does not run until Clone.
 
 **The person's own Git.** Git runs with the person's own configuration, credential helpers, SSH
-keys and agent, exactly as in their terminal. o7 never reads, stores or passes credentials.
+keys and agent, exactly as in their terminal. Ghost never reads, stores or passes credentials.
 It removes only the variables that would point Git at another repository (`GIT_DIR`,
 `GIT_WORK_TREE` and the like) and sets `GIT_TERMINAL_PROMPT=0`, because no terminal is attached:
 a helper with its own window (Git Credential Manager, the macOS keychain) still answers, and a
 missing sign-in fails with a reason instead of waiting forever.
 
-**The one folder o7 owns.** Start creates the destination itself, atomically, so an
+**The one folder Ghost owns.** Start creates the destination itself, atomically, so an
 existing folder of that name, even an empty one, is refused and never reused. Git clones into
 it. Progress streams from Git's `--progress` lines (stage, the whole clone's percentage and what
 has arrived) through a long poll that answers at each change. Cancel, closing the form, the page
@@ -135,7 +135,7 @@ still holds the folder created at start. A failed clone is removed the same way,
 last eight lines (never logged) under a plain reason: sign-in, not found, untrusted SSH host,
 unreachable server, full disk, path too long or unwritable folder. A finished clone is checked
 to hold `.git` and becomes the project: at once in setup, through Create project in New project.
-A clone still running after two hours is stopped. If o7 itself ends mid-clone, the
+A clone still running after two hours is stopped. If Ghost itself ends mid-clone, the
 unfinished folder stays. The clone form in onboarding and New project lists previous attempts
 after restart, with the destination, Open folder when its identity is known, Retry in another
 folder, and Dismiss notice. Dismiss removes only the recovery record. A missing, replaced,

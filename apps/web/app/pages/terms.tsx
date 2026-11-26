@@ -3,8 +3,11 @@ import source from "../legal/terms.md?raw";
 import { Arrow, Page } from "../ui";
 
 export const meta = () => [
-  { title: "Terms of Service · o7" },
-  { name: "description", content: "The terms for using o7, its website and its hosted services." },
+  { title: "Terms of Service · Ghost" },
+  {
+    name: "description",
+    content: "The terms for using Ghost, its website and its hosted services.",
+  },
 ];
 
 export default function Terms() {

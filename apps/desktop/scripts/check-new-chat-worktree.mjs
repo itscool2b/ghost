@@ -115,11 +115,11 @@ async function inspect(engine, launcher) {
     await open(page, "new-worktree");
     const chip = await chipReady(page, "worktree");
     assert.equal(await chip.getAttribute("data-test-start"), "main");
-    assert.equal(await chip.getAttribute("data-test-branch"), "aura/7f3a9c2e");
+    assert.equal(await chip.getAttribute("data-test-branch"), "ghost/7f3a9c2e");
     await page.getByText("Starts in a separate worktree", { exact: true }).waitFor();
     assert.equal(
       await chip.locator("summary").getAttribute("aria-label"),
-      "Worktree from main on aura/7f3a9c2e. Where this chat works",
+      "Worktree from main on ghost/7f3a9c2e. Where this chat works",
     );
     await audit(page, "worktree-chip", engine, scans);
     await page.getByTestId("new-chat-create").click();
@@ -143,7 +143,7 @@ async function inspect(engine, launcher) {
       .locator('[data-testid="new-chat-worktree"][data-test-start="release/1.4"]')
       .waitFor();
     await reviewed(page);
-    assert.equal(await chip.getAttribute("data-test-branch"), "aura/7f3a9c2e");
+    assert.equal(await chip.getAttribute("data-test-branch"), "ghost/7f3a9c2e");
     assert.equal(
       await page.getByRole("switch", { name: /Bring uncommitted changes/ }).isDisabled(),
       true,
@@ -157,7 +157,7 @@ async function inspect(engine, launcher) {
       "Escape returns focus to the chip",
     );
     assert.deepEqual((await calls(page)).slice(-1), [
-      "review:release/1.4:aura/7f3a9c2e:false:true",
+      "review:release/1.4:ghost/7f3a9c2e:false:true",
     ]);
 
     // An existing branch name is refused beside its field; Create stops and shows it again.
@@ -167,7 +167,7 @@ async function inspect(engine, launcher) {
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "already exists" }).waitFor();
     assert.equal(await name.getAttribute("aria-invalid"), "true");
-    assert.equal(await chip.getAttribute("data-test-branch"), "aura/7f3a9c2e");
+    assert.equal(await chip.getAttribute("data-test-branch"), "ghost/7f3a9c2e");
     await audit(page, "branch-error", engine, scans);
     await page.keyboard.press("Escape");
     await page.getByTestId("new-chat-create").click();
@@ -177,10 +177,10 @@ async function inspect(engine, launcher) {
       false,
     );
     // Enter names the branch and never submits New chat around the field.
-    await name.fill("aura/sidebar-scan");
+    await name.fill("ghost/sidebar-scan");
     await name.press("Enter");
     await page
-      .locator('[data-testid="new-chat-worktree"][data-test-branch="aura/sidebar-scan"]')
+      .locator('[data-testid="new-chat-worktree"][data-test-branch="ghost/sidebar-scan"]')
       .waitFor();
     await reviewed(page);
     assert.equal(
@@ -267,7 +267,7 @@ async function inspect(engine, launcher) {
     await page.locator('[data-testid="new-chat-create"]:not([disabled])').waitFor();
 
     // Worktrees kept from chats that are gone: one quiet line, closed, that opens to their names
-    // (each start of o7 used to list every worktree as a box of two full paths).
+    // (each start of Ghost used to list every worktree as a box of two full paths).
     await open(page, "new-worktree&retained=6");
     await chipReady(page, "worktree");
     const retained = page.getByTestId("new-chat-retained");

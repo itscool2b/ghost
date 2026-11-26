@@ -138,7 +138,7 @@ export function ItemDetail({
   );
   const managed =
     (item.item.kind === "plugin" || item.item.kind === "package") && item.provider !== "shared";
-  // Shared MCP reaches every agent o7 runs, where a copy reaches one agent's files.
+  // Shared MCP reaches every agent Ghost runs, where a copy reaches one agent's files.
   const shareable = item.item.kind === "mcp_server" && item.provider !== "shared";
   const share = async () => {
     setBusy(true);
@@ -281,8 +281,8 @@ export function ItemDetail({
             <strong>{item.label}</strong> from{" "}
             <strong>{sourceName(sources, item.item.source_id)}</strong> becomes a shared MCP server
             in every project for Claude Code, Codex, Pi, OpenCode, Cursor, Grok Build and Hermes.
-            Antigravity and oh-my-pi, whose own servers o7 cannot check, start without it and say so
-            in their chats.
+            Antigravity and oh-my-pi, whose own servers Ghost cannot check, start without it and say
+            so in their chats.
           </p>
           <p className="library-detail-note">
             The shared definition keeps its command and arguments, or its address, and the names of

@@ -1,10 +1,10 @@
-import { BotMark } from "@o7/ui/bot-mark";
-import { AgentMark, BOTS, type BotId, Logo } from "@o7/ui/graphite";
+import { BotMark } from "@ghost/ui/bot-mark";
+import { AgentMark, BOTS, type BotId, Logo } from "@ghost/ui/graphite";
 import { Check, Folder, Smartphone } from "lucide-react";
 import type { AgentEntry } from "../../bindings";
 import "./setup-map.css";
 
-/** The part of the picture a step is about: its lines run toward o7 while the step is open. */
+/** The part of the picture a step is about: its lines run toward Ghost while the step is open. */
 export type MapFocus = "all" | "agents" | "bots" | "phone" | "project";
 
 const WIDTH = 440;
@@ -34,12 +34,12 @@ function curve(from: { x: number; y: number }, above: boolean): string {
 }
 
 /**
- * Setup's picture: the assistants that can hand o7 work above its logo, the coding agents on
+ * Setup's picture: the assistants that can hand Ghost work above its logo, the coding agents on
  * this computer below it, the phone the agents test on to its left and the first project to its
  * right. It is the same picture on every step and fills in as setup goes: an agent that is found,
  * a bot that is linked, a phone that is ready and the project that is chosen each gain a settled
  * line and a check, and the step that is open has its lines running
- * toward o7. Whole tiles move; nothing is drawn over a mark or changes it
+ * toward Ghost. Whole tiles move; nothing is drawn over a mark or changes it
  * (third-party/brand-marks.md). Reduced motion shows the picture still.
  */
 export function SetupMap({

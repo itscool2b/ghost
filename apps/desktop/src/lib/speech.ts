@@ -127,14 +127,14 @@ export function clipSpoken(
 
 /** What Rust reports for a processor without AVX2. */
 export const UNSUPPORTED_MESSAGE =
-  "Reading aloud needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of o7 works as usual.";
+  "Reading aloud needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of Ghost works as usual.";
 export const MISSING_MESSAGE =
-  "This build of o7 is missing its voice model. Reinstall o7 to restore it.";
+  "This build of Ghost is missing its voice model. Reinstall Ghost to restore it.";
 
 /** What the Voice page says about reading aloud on this device. */
 export function speechDetail(status: SpeechStatus | null | "failed"): string {
   if (status === null) return "Checking the built-in voice model.";
-  if (status === "failed") return "o7 could not read the voice model's status.";
+  if (status === "failed") return "Ghost could not read the voice model's status.";
   if (!status.supported) return UNSUPPORTED_MESSAGE;
   if (!status.installed) return MISSING_MESSAGE;
   return `${status.name}, built in and ready: English, spoken on this device.`;

@@ -1,4 +1,4 @@
-import { AgentMark, StatusDot } from "@o7/ui/graphite";
+import { AgentMark, StatusDot } from "@ghost/ui/graphite";
 import { ArrowLeft, Plus, RefreshCw, Search } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {

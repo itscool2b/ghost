@@ -1,7 +1,7 @@
 /** Owned image fixture. Uses generated PNGs and an in-memory transport, never native files. */
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { ChatImageSource, ComposerInput, EventBatch, O7Event } from "../bindings";
+import type { ChatImageSource, ComposerInput, EventBatch, GhostEvent } from "../bindings";
 import { ChatView } from "../components/chat/ChatView";
 import {
   attachResult,
@@ -36,7 +36,7 @@ function Preview() {
     context.fillRect(244, 112, 320, 9);
     const png = canvas.toDataURL("image/png").split(",")[1] ?? "";
     const chat = chatSummary("images-chat", { status: "ready" });
-    const events: O7Event[] = [
+    const events: GhostEvent[] = [
       ev.turnStarted("saved"),
       ev.user("saved.u", "Review the attached screen.\n\n[Image: screen.png]"),
       ev.message(

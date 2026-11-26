@@ -1,4 +1,4 @@
-import { Keycap } from "@o7/ui/graphite";
+import { Keycap } from "@ghost/ui/graphite";
 
 /** The platform's command key as a keycap shows it: ⌘ on macOS, Ctrl on Windows. */
 export function commandKey(): string {

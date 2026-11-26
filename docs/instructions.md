@@ -4,11 +4,11 @@ The Instructions page in Settings manages the markdown files coding agents read 
 instructions (`AGENTS.md`, `CLAUDE.md` and the rest). It replaces the Library's instruction items:
 the Library's user-level instruction copy (Library copies of `CLAUDE.md`, `AGENTS.md` and
 `AGENTS.override.md`) is superseded by this page, and the planned per-agent Library rework can drop
-its instruction items. The Rust logic (`crates/o7-config/src/instructions/`) has no dependency on
+its instruction items. The Rust logic (`crates/ghost-config/src/instructions/`) has no dependency on
 the Library interface.
 
-Implementation: `o7-config::instructions` (reading, classification, plans, the transaction),
-`o7-core` (`session/instructions.rs`, `gitworkspaces/instructions.rs`: targets, Git facts,
+Implementation: `ghost-config::instructions` (reading, classification, plans, the transaction),
+`ghost-core` (`session/instructions.rs`, `gitworkspaces/instructions.rs`: targets, Git facts,
 worktree setup, worktree copies, the single-file commit, owned applies), `apps/desktop/src-tauri/src/instructions_commands.rs`
 (typed commands), and `apps/desktop/src/components/settings/InstructionsPanel.tsx` with its review
 dialog.
@@ -33,8 +33,8 @@ same environment agents run in (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AG
 
 The mode is read from the files, not stored: if every agent that reads something reads the same text,
 the scope is **one file**; if agents read different text it is **per agent**; with no text anywhere it
-is **none**. A local record (`<data>/instructions/managed.json`) remembers which files o7 keeps
-as managed copies, so a hand edit can be told from a stale copy. It lives in o7's data folder,
+is **none**. A local record (`<data>/instructions/managed.json`) remembers which files Ghost keeps
+as managed copies, so a hand edit can be told from a stale copy. It lives in Ghost's data folder,
 never in a project or an agent folder.
 
 ### One file for every agent
@@ -48,7 +48,7 @@ agent is reached by the least invasive official mechanism:
    `.claude/CLAUDE.md` or `CLAUDE.local.md` is in the folder or a parent folder.
 2. **Official import** otherwise: `CLAUDE.md` containing `@AGENTS.md`. A `CLAUDE.md` that holds only
    imports of the shared file, or is a link to it, is detected as one-file already.
-3. **Managed copy** only where neither works: a byte-identical copy o7 keeps in sync and
+3. **Managed copy** only where neither works: a byte-identical copy Ghost keeps in sync and
    labels as such. In practice this happens only at user scope, where agents' files live in
    different folders.
 
@@ -103,7 +103,7 @@ keep what they started with and new sessions read the new files.
 
 A worktree checks out only what Git tracks, so a project's instruction files that Git ignores (a
 local `AGENTS.md` or `CLAUDE.md`, say) would be missing from every new worktree chat. By default
-o7 copies them in, from the source folder into the new worktree, before the chat's agent
+Ghost copies them in, from the source folder into the new worktree, before the chat's agent
 starts. This happens for a new worktree chat (after its worktree setup, so a setup copy of the same
 file is kept), for a chat isolated into a worktree, and for a recreated worktree.
 
@@ -136,8 +136,8 @@ behaviour is not modelled.
 | OpenCode (`opencode`, `opencode-v2`) | First of `AGENTS.md`, `CLAUDE.md` [N1] | `~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md` [N1] | None ("doesn't automatically parse file references") [N1] | None |
 | Hermes (`hermes`) | First of `.hermes.md`, `HERMES.md`, `AGENTS.override.md`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules` [H1][H2] | None (`SOUL.md` sets identity) [H1] | None | Head and tail cut over the character cap, at least 20,000 [H1] |
 | Cursor (`cursor`) | `AGENTS.md` and `CLAUDE.md` both apply [U1][U2] | None (user rules live in settings and `~/.cursor/rules`) [U3] | None | Suggests under 500 lines [U2] |
-| Grok Build (`grok`, `grok-stream`) | Every one of `AGENTS.md`, `AGENT.md`, `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, `.claude/CLAUDE.local.md`; files Git ignores are skipped [G1][G2] | Every `*.md` in `$GROK_HOME/rules`, default `~/.grok/rules`; o7 uses `rules/AGENTS.md` [G1][G2][G3] | None documented | None ("loaded in full") [G1] |
-| Antigravity (`antigravity`, `agy-stream`) | `AGENTS.md`, `GEMINI.md`, `.agents/AGENTS.md`, `.agents/GEMINI.md`, cumulative [A1] | `~/.gemini/AGENTS.md`, `~/.gemini/GEMINI.md` [A1] | `@[label](path)` (not used by o7) [A1] | Cuts a file at 24,000 bytes [A1] |
+| Grok Build (`grok`, `grok-stream`) | Every one of `AGENTS.md`, `AGENT.md`, `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, `.claude/CLAUDE.local.md`; files Git ignores are skipped [G1][G2] | Every `*.md` in `$GROK_HOME/rules`, default `~/.grok/rules`; Ghost uses `rules/AGENTS.md` [G1][G2][G3] | None documented | None ("loaded in full") [G1] |
+| Antigravity (`antigravity`, `agy-stream`) | `AGENTS.md`, `GEMINI.md`, `.agents/AGENTS.md`, `.agents/GEMINI.md`, cumulative [A1] | `~/.gemini/AGENTS.md`, `~/.gemini/GEMINI.md` [A1] | `@[label](path)` (not used by Ghost) [A1] | Cuts a file at 24,000 bytes [A1] |
 
 All of them walk up to parent folders in some form; the page lists instruction files in parent folders
 and in subfolders read-only (with which agents read them and when), and edits only the scope's own
@@ -175,7 +175,7 @@ the page then shows only the import line there, which is harmless).
 
 ## Edge cases
 
-Each case has defined behaviour and a test (`o7-config` unless named otherwise).
+Each case has defined behaviour and a test (`ghost-config` unless named otherwise).
 
 | Case | Behaviour | Test |
 |---|---|---|
@@ -183,15 +183,15 @@ Each case has defined behaviour and a test (`o7-config` unless named otherwise).
 | `CLAUDE.md` that imports `AGENTS.md`, or links to it | Detected as one file; saving through a link writes its target | `a_claude_md_that_imports_or_links_to_agents_md_is_already_universal` (link part needs symlink privileges) |
 | Case variants (`agents.md`) on Windows and macOS | Found, read, saved under the existing spelling; renamed only on request | `a_case_variant_is_read_kept_on_save_and_renamed_only_on_request` |
 | Two names differing only by case side by side (case-sensitive file systems) | Read-only with a note | Not tested: Windows and macOS (the release targets) cannot hold both names in one folder |
-| Edit outside o7 between review and apply | Refused before any write; review again | `an_edit_outside_auracode_after_the_review_is_refused_before_any_write`, `apply::tests::*refuses*` |
+| Edit outside Ghost between review and apply | Refused before any write; review again | `an_edit_outside_auracode_after_the_review_is_refused_before_any_write`, `apply::tests::*refuses*` |
 | A managed copy edited by hand | "Edited copy" row; restore the source's text or adopt the edit everywhere; saving the source leaves it alone | `a_hand_edited_managed_copy_shows_drift_and_can_be_restored_or_adopted`; browser: drift flow |
 | Read-only files | Shown with their text, not writable, with the reason | `read_only_files_are_shown_and_never_written` |
 | Locked files and permission errors | The failing write stops, every changed file is put back, the message says the file may be locked or read-only | `a_failure_part_way_puts_back_every_file`, `apply::tests::a_failure_part_way_puts_every_changed_file_back` |
 | Not UTF-8, BOM, CRLF, mixed endings | Non-UTF-8 is read-only (copies stay byte-identical); BOM and line endings are kept; mixed endings use the majority and say so | `bom_crlf_non_utf8_and_empty_files_keep_their_bytes`, `text::tests::*` |
 | Empty files | Shown as empty; agents that skip empty files read nothing; saving empty text is allowed and says agents skip it | same |
 | Large files | Per-agent warnings beside the text (Codex 32 KiB or the configured limit, Antigravity 24,000 bytes, Hermes 20,000 characters, Claude 200 and Cursor 500 lines); over 1 MiB is read-only | `large_files_warn_per_agent_and_oversized_ones_are_not_editable`, `a_configured_codex_limit_is_read_and_a_bad_config_falls_back_to_the_default` |
-| Ignored files | Copied into new worktree chats by default (see [Worktree chats](#worktree-chats)) and noted so ("New worktree chats get a copy"); with the switch off, noted ("new worktree chats won't have it") with the offer to copy it through the folder's worktree setup; Grok Build skips ignored files | `untracked_and_ignored_files_are_flagged_for_worktrees_and_grok_skips_ignored`; o7-core `ignored_instruction_files_reach_a_new_worktree_without_changing_it`, `new_worktree_chats_get_ignored_instruction_files_unless_turned_off`; desktop `copies ignored files into new worktree chats while the switch is on` |
-| Untracked files | Noted ("new worktree chats won't have it"); offer to copy it through the folder's worktree setup or to commit it alone. Never copied automatically: in a worktree it would be a new change an agent could commit on the chat's branch | `untracked_and_ignored_files_are_flagged_for_worktrees_and_grok_skips_ignored`; o7-core `facts_are_read_only_and_a_commit_takes_exactly_one_new_file`, `setup_settings_are_shared_by_folder...` |
+| Ignored files | Copied into new worktree chats by default (see [Worktree chats](#worktree-chats)) and noted so ("New worktree chats get a copy"); with the switch off, noted ("new worktree chats won't have it") with the offer to copy it through the folder's worktree setup; Grok Build skips ignored files | `untracked_and_ignored_files_are_flagged_for_worktrees_and_grok_skips_ignored`; ghost-core `ignored_instruction_files_reach_a_new_worktree_without_changing_it`, `new_worktree_chats_get_ignored_instruction_files_unless_turned_off`; desktop `copies ignored files into new worktree chats while the switch is on` |
+| Untracked files | Noted ("new worktree chats won't have it"); offer to copy it through the folder's worktree setup or to commit it alone. Never copied automatically: in a worktree it would be a new change an agent could commit on the chat's branch | `untracked_and_ignored_files_are_flagged_for_worktrees_and_grok_skips_ignored`; ghost-core `facts_are_read_only_and_a_commit_takes_exactly_one_new_file`, `setup_settings_are_shared_by_folder...` |
 | Nested files in subfolders, files in parent folders | Listed read-only with their readers; a parent `CLAUDE.md` changes what Claude Code reads and one-file mode adds the import it needs | `nested_and_parent_files_are_listed_and_a_parent_claude_md_changes_what_claude_reads` |
 | Path traversal, unknown keys | Only known file keys are accepted | `unknown_keys_traversal_and_links_outside_the_folder_are_refused` |
 | Links outside the folder, linked folders, dangling links | Classified by the OS's own resolution against the canonical folder; outside and dangling links are never followed or written | `link_classification_follows_the_resolved_target_never_the_link_text`, `a_relative_link_through_a_linked_folder_is_classified_by_where_the_os_resolves_it`, `a_dangling_link_reads_as_nothing_and_is_never_written`, `a_linked_agent_folder_pointing_outside_is_never_followed` |

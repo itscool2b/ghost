@@ -1,10 +1,10 @@
 /**
  * Bundles highlight.js for the iPhone app exactly as the desktop uses it, and writes the tests'
  * expectations from Node running that same bundle:
- *   - apps/ios/O7Kit/Sources/O7Highlight/Resources/highlight.js: one IIFE built by esbuild from
+ *   - apps/ios/GhostKit/Sources/GhostHighlight/Resources/highlight.js: one IIFE built by esbuild from
  *     the desktop's own apps/desktop/src/lib/highlight.ts (its languages, aliases and limit, never
- *     copied), exposing `globalThis.O7Highlight`.
- *   - apps/ios/O7Kit/Tests/O7HighlightTests/HighlightGoldens.generated.swift: sample code in seven
+ *     copied), exposing `globalThis.GhostHighlight`.
+ *   - apps/ios/GhostKit/Tests/GhostHighlightTests/HighlightGoldens.generated.swift: sample code in seven
  *     languages, the HTML the bundle writes for each and the runs a strict span parser reads from it.
  *
  *   node apps/ios/scripts/write-highlighter.mjs          write both files
@@ -18,8 +18,10 @@ import { emit, finish, loadEsbuild, repo, swiftHeader, swiftRawString } from "./
 
 const SCRIPT = "node apps/ios/scripts/write-highlighter.mjs";
 const SOURCE = "apps/desktop/src/lib/highlight.ts";
-const BUNDLE = repo("apps/ios/O7Kit/Sources/O7Highlight/Resources/highlight.js");
-const GOLDENS = repo("apps/ios/O7Kit/Tests/O7HighlightTests/HighlightGoldens.generated.swift");
+const BUNDLE = repo("apps/ios/GhostKit/Sources/GhostHighlight/Resources/highlight.js");
+const GOLDENS = repo(
+  "apps/ios/GhostKit/Tests/GhostHighlightTests/HighlightGoldens.generated.swift",
+);
 const VERSION = "11.12.0";
 
 const desktop = createRequire(repo("apps/desktop/package.json"));
@@ -42,7 +44,7 @@ const built = esbuild.buildSync({
   stdin: {
     contents: [
       'import { highlightCode, languageOf } from "./highlight.ts";',
-      "globalThis.O7Highlight = Object.freeze({",
+      "globalThis.GhostHighlight = Object.freeze({",
       `  version: ${JSON.stringify(version)},`,
       `  maxChars: ${maxChars},`,
       "  languageOf,",
@@ -50,7 +52,7 @@ const built = esbuild.buildSync({
       "});",
     ].join("\n"),
     resolveDir: repo("apps/desktop/src/lib"),
-    sourcefile: "o7-highlight-entry.js",
+    sourcefile: "ghost-highlight-entry.js",
     loader: "js",
   },
   bundle: true,
@@ -212,7 +214,7 @@ echo "built \${count} files & done" > build/log.txt
   {
     fence: "json",
     code: `{
-  "name": "o7",
+  "name": "Ghost",
   "version": "0.5.1",
   "private": true,
   "tags": ["café", "<remote>", "a & b"],
@@ -314,9 +316,9 @@ function parse(html) {
 
 const sandbox = { console: { log() {}, warn() {}, error() {}, info() {}, debug() {} } };
 vm.runInNewContext(bundle, sandbox, { filename: "highlight.js" });
-const api = sandbox.O7Highlight;
+const api = sandbox.GhostHighlight;
 if (!api || api.version !== version || api.maxChars !== maxChars) {
-  throw new Error("the bundle does not expose O7Highlight as expected");
+  throw new Error("the bundle does not expose GhostHighlight as expected");
 }
 
 const samples = SAMPLES.map(({ fence, code: sample, flat = false }) => {

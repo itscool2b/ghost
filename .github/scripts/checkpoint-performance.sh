@@ -19,8 +19,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo="$(cd "$here/../.." && pwd -P)"
 cd "$repo"
 
-counts=${O7_CHECKPOINT_BENCH_COUNTS:-1000,10000,20000}
-warm=${O7_CHECKPOINT_BENCH_WARM:-1}
+counts=${GHOST_CHECKPOINT_BENCH_COUNTS:-1000,10000,20000}
+warm=${GHOST_CHECKPOINT_BENCH_WARM:-1}
 baseline_ref=${CHECKPOINT_BASELINE_REF:-af499cd05684df8d2f08e48af21d268b522862f7}
 [[ $counts =~ ^[1-9][0-9]*(,[1-9][0-9]*){0,2}$ ]] ||
   die 'fixture sizes must be one to three comma-separated positive integers'
@@ -54,8 +54,8 @@ evidence="$temp_root/checkpoint-performance-evidence"
 mkdir "$evidence"
 git worktree add --detach "$baseline_dir" "$baseline_commit"
 
-core=crates/o7-core/src/checkpoints
-session=crates/o7-core/src/session/tests
+core=crates/ghost-core/src/checkpoints
+session=crates/ghost-core/src/session/tests
 [[ -f "$baseline_dir/$core/mod.rs" && -f "$baseline_dir/$session/checkpoints.rs" ]] ||
   die 'the baseline does not support these checkpoint benchmark fixtures'
 cp "$repo/$core/benchmarks.rs" "$baseline_dir/$core/benchmarks.rs"
@@ -77,10 +77,10 @@ baseline_target=$(native_path "$run_dir/baseline-target")
 current_target=$(native_path "$repo/target")
 [[ $baseline_target != "$current_target" ]] || die 'comparison revisions must not share build artifacts'
 export CARGO_TARGET_DIR
-export O7_CHECKPOINT_BENCH_WORKSPACE
-O7_CHECKPOINT_BENCH_WORKSPACE=$(native_path "$repo")
-export O7_CHECKPOINT_BENCH_COUNTS=$counts
-export O7_CHECKPOINT_BENCH_WARM=$warm
+export GHOST_CHECKPOINT_BENCH_WORKSPACE
+GHOST_CHECKPOINT_BENCH_WORKSPACE=$(native_path "$repo")
+export GHOST_CHECKPOINT_BENCH_COUNTS=$counts
+export GHOST_CHECKPOINT_BENCH_WARM=$warm
 
 {
   printf 'baseline_commit=%s\ncurrent_commit=%s\n' "$baseline_commit" "$current_commit"
@@ -108,7 +108,7 @@ verify_binary() {
   fi
   (
     cd "$directory"
-    cargo test -p o7-core --lib --locked -- --list
+    cargo test -p ghost-core --lib --locked -- --list
   ) 2>&1 | tee "$log"
   tr -d '\r' < "$log" > "$list"
   for fixture in \
@@ -129,7 +129,7 @@ measure() {
   local log="$evidence/$revision-$fixture.log"
   (
     cd "$directory"
-    cargo test -p o7-core --lib --locked "$fixture" -- \
+    cargo test -p ghost-core --lib --locked "$fixture" -- \
       --ignored --nocapture --test-threads=1
   ) 2>&1 | tee "$log"
   grep -Eq 'test result: ok[.] 1 passed; 0 failed;' "$log" ||

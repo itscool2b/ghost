@@ -1,6 +1,6 @@
 import type { ReactNode, SVGProps } from "react";
 
-/** Line icons drawn for o7 at 16 px, stroked in the current text colour. Decorative only. */
+/** Line icons drawn for Ghost at 16 px, stroked in the current text colour. Decorative only. */
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "children">;
 

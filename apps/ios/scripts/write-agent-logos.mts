@@ -1,14 +1,14 @@
 /**
- * Writes the agents' marks and o7's wing for the iPhone app from the desktop's own sources, so
+ * Writes the agents' marks and Ghost's wing for the iPhone app from the desktop's own sources, so
  * nothing is copied by hand:
- *   - Sources/O7Marks/AgentLogos.generated.swift: every stored mark (agentLogos.ts and the SVG
+ *   - Sources/GhostMarks/AgentLogos.generated.swift: every stored mark (agentLogos.ts and the SVG
  *     files it imports) as its viewBox, the square AgentLogo.tsx draws it in, its shapes with their
  *     fills, fill rule and opacity, its optical scale and the Hermes turn.
- *   - Sources/O7Marks/AgentBrands.generated.swift: brand ids and names and their aliases
+ *   - Sources/GhostMarks/AgentBrands.generated.swift: brand ids and names and their aliases
  *     (brand.ts), two-letter codes (AgentMark.tsx), the agents whose white marks sit on the brand
  *     plate (graphite.css), and the state labels screen readers hear (orb/states.ts).
- *   - Sources/O7Marks/O7LogoPaths.generated.swift: the wing (logoPaths.ts).
- *   - Tests/O7MarksTests/MarkGoldens.generated.swift: agentCode, getBrand and logoSide on samples,
+ *   - Sources/GhostMarks/GhostLogoPaths.generated.swift: the wing (logoPaths.ts).
+ *   - Tests/GhostMarksTests/MarkGoldens.generated.swift: agentCode, getBrand and logoSide on samples,
  *     for the Swift ports to match.
  *
  *   node apps/ios/scripts/write-agent-logos.mts          write the files
@@ -185,10 +185,10 @@ const logos = Object.values(AGENT_LOGOS as Record<string, Logo>).map((logo) => {
 });
 
 emit(
-  repo("apps/ios/O7Kit/Sources/O7Marks/AgentLogos.generated.swift"),
+  repo("apps/ios/GhostKit/Sources/GhostMarks/AgentLogos.generated.swift"),
   `${swiftHeader(SCRIPT, "packages/ui/src/graphite/agentLogos.ts, agent-logos/*.svg and AgentLogo.tsx", CHECK)}
 import CoreGraphics
-import O7Theme
+import GhostTheme
 
 extension AgentLogo {
     /// Every agent with a published mark, by brand id, as the vendor publishes it
@@ -244,7 +244,7 @@ const labels = (ORB_STATES as readonly string[]).map(
 );
 
 emit(
-  repo("apps/ios/O7Kit/Sources/O7Marks/AgentBrands.generated.swift"),
+  repo("apps/ios/GhostKit/Sources/GhostMarks/AgentBrands.generated.swift"),
   `${swiftHeader(SCRIPT, "packages/ui/src/brand.ts, graphite/AgentMark.tsx, graphite/graphite.css and orb/states.ts", CHECK)}
 extension AgentBrand {
     /// Every designed brand in display order, the generic one last.
@@ -278,13 +278,13 @@ if (paths.LOGO_PATH !== paths.LOGO_OUTLINE_PATH + paths.LOGO_EYE_PATHS.join(""))
   throw new Error("logoPaths.ts: LOGO_PATH is no longer the outline and the eyes");
 }
 emit(
-  repo("apps/ios/O7Kit/Sources/O7Marks/O7LogoPaths.generated.swift"),
+  repo("apps/ios/GhostKit/Sources/GhostMarks/GhostLogoPaths.generated.swift"),
   `${swiftHeader(SCRIPT, "packages/ui/src/graphite/logoPaths.ts", CHECK)}
 import CoreGraphics
 
-/// The o7 wing: a flying wing seen from above, with two eyes. One even-odd shape whose holes are
+/// The Ghost wing: a flying wing seen from above, with two eyes. One even-odd shape whose holes are
 /// the eyes.
-enum O7LogoPaths {
+enum GhostLogoPaths {
     /// The wing's coordinate space; it fills the width and sits centred in the height.
     static let viewBox = CGSize(width: ${swiftNumber(width)}, height: ${swiftNumber(height)})
 
@@ -344,7 +344,7 @@ const SAMPLES = [
 
 const sides = Array.from({ length: 256 - 12 + 1 }, (_, i) => logoSide(12 + i));
 emit(
-  repo("apps/ios/O7Kit/Tests/O7MarksTests/MarkGoldens.generated.swift"),
+  repo("apps/ios/GhostKit/Tests/GhostMarksTests/MarkGoldens.generated.swift"),
   `${swiftHeader(SCRIPT, "packages/ui/src/brand.ts and graphite/AgentMark.tsx", CHECK)}
 /// What the desktop's getBrand, agentCode and logoSide return, for the Swift ports to match.
 enum MarkGoldens {

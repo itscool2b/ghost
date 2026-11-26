@@ -36,10 +36,10 @@ export async function checkAgentUpdates(browser, url, out, engine) {
       await page.goto(`${url}/?preview=agent-updates&theme=${theme}&legal=new`);
       const legal = page.getByTestId("legal-banner");
       await legal.waitFor();
-      assert.match(await legal.textContent(), /o7 has Terms of Service and a Privacy Policy/);
+      assert.match(await legal.textContent(), /Ghost has Terms of Service and a Privacy Policy/);
       assert.equal(
         await legal.getByRole("link", { name: "Privacy Policy" }).getAttribute("href"),
-        "https://o7.codes/privacy",
+        "https://onghost.dev/privacy",
       );
       await page.screenshot({ path: resolve(out, `${engine}-${theme}-legal.png`) });
       await legal.getByRole("button", { name: "OK" }).click();
@@ -111,7 +111,7 @@ export async function checkAgentUpdates(browser, url, out, engine) {
       assert.ok(box.y >= 0 && box.x >= 0 && box.x + box.width <= 1280, "the panel fits the window");
       await page.screenshot({ path: resolve(out, `${engine}-${theme}-notices.png`) });
 
-      // X hides a notice for this run of o7 only.
+      // X hides a notice for this run of Ghost only.
       await notice("cursor")
         .getByRole("button", { name: "Dismiss the Cursor update notice" })
         .click();
@@ -124,7 +124,7 @@ export async function checkAgentUpdates(browser, url, out, engine) {
       await open();
       await notice("cursor").waitFor();
 
-      // A failed update says why and offers its command in o7's terminal, where its
+      // A failed update says why and offers its command in Ghost's terminal, where its
       // output shows; once that passes and the sheet closes, the notice goes.
       await open("&case=fail");
       await notice("claude").getByRole("button", { name: "Update", exact: true }).click();
@@ -139,7 +139,7 @@ export async function checkAgentUpdates(browser, url, out, engine) {
       const sheet = page.getByRole("dialog", { name: "Update Claude Code" });
       await sheet.waitFor();
       await sheet
-        .getByText("The update finished. o7 checks the new version when you close this.")
+        .getByText("The update finished. Ghost checks the new version when you close this.")
         .waitFor();
       assert.equal(await notice("claude").count(), 1, "the notice waits while the output is read");
       await sheet.getByRole("button", { name: "Close update terminal" }).click();

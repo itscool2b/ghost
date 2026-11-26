@@ -1,10 +1,10 @@
 //! The background database check after a session that did not close the database.
 //!
 //! Opening the store only probes the schema: `PRAGMA quick_check` reads every page (about 2 ms per
-//! MB), far too slow for startup (see o7-core's store docs). So when the last session crashed,
-//! was killed, or lost power ([`StoreInfo::unclean_shutdown`]), the shell runs o7-core's
+//! MB), far too slow for startup (see ghost-core's store docs). So when the last session crashed,
+//! was killed, or lost power ([`StoreInfo::unclean_shutdown`]), the shell runs ghost-core's
 //! [`check_integrity`] once the window has been shown, on a thread of its own: never on the main
-//! thread, never in the way of startup or the first paint. o7-core records any damage it finds
+//! thread, never in the way of startup or the first paint. ghost-core records any damage it finds
 //! next to the database, and the next launch repairs it and tells the user; here the outcome is
 //! only logged.
 //!
@@ -17,15 +17,15 @@
 //! though, the store's close cannot fold the write-ahead log back into the file, so the next launch
 //! sees an unclean shutdown again and checks once more.
 //!
-//! [`StoreInfo::unclean_shutdown`]: o7_core::store::StoreInfo::unclean_shutdown
-//! [`check_integrity`]: o7_core::store::check_integrity
-//! [`Store`]: o7_core::store::Store
+//! [`StoreInfo::unclean_shutdown`]: ghost_core::store::StoreInfo::unclean_shutdown
+//! [`check_integrity`]: ghost_core::store::check_integrity
+//! [`Store`]: ghost_core::store::Store
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use o7_core::store::Integrity;
+use ghost_core::store::Integrity;
 
 use crate::sync::lock;
 
@@ -74,7 +74,7 @@ impl IntegrityCheck {
         let Some(job) = self.release() else {
             return false;
         };
-        match spawn(job, o7_core::store::check_integrity) {
+        match spawn(job, ghost_core::store::check_integrity) {
             Ok(_detached) => true,
             Err(error) => {
                 tracing::warn!(%error, "could not start the integrity check");
@@ -131,8 +131,8 @@ impl Job {
     /// or `None` when the check did not run.
     fn run(
         self,
-        check: impl FnOnce(&Path) -> o7_core::Result<Integrity>,
-    ) -> Option<o7_core::Result<Integrity>> {
+        check: impl FnOnce(&Path) -> ghost_core::Result<Integrity>,
+    ) -> Option<ghost_core::Result<Integrity>> {
         {
             let mut phase = lock(&self.phase);
             if *phase != Phase::Released {
@@ -160,7 +160,7 @@ impl Drop for MarkOver<'_> {
 /// tests can stand in for the real one.
 fn spawn(
     job: Job,
-    check: impl FnOnce(&Path) -> o7_core::Result<Integrity> + Send + 'static,
+    check: impl FnOnce(&Path) -> ghost_core::Result<Integrity> + Send + 'static,
 ) -> std::io::Result<JoinHandle<()>> {
     std::thread::Builder::new()
         .name(THREAD_NAME.to_string())
@@ -179,10 +179,10 @@ fn spawn(
         })
 }
 
-/// Logs what the check found. Damage is a warning rather than an error, since o7-core recorded
+/// Logs what the check found. Damage is a warning rather than an error, since ghost-core recorded
 /// it and the next launch repairs it; a check that could not run is an error, since nothing was
 /// checked.
-fn log_outcome(db: &Path, outcome: &o7_core::Result<Integrity>) {
+fn log_outcome(db: &Path, outcome: &ghost_core::Result<Integrity>) {
     match outcome {
         Ok(Integrity::Ok) => {
             tracing::info!(db = %db.display(), "the integrity check found no damage");
@@ -206,8 +206,8 @@ mod tests {
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    use o7_core::paths::DataRoot;
-    use o7_core::store::OpenOutcome;
+    use ghost_core::paths::DataRoot;
+    use ghost_core::store::OpenOutcome;
 
     use crate::boot::{Booted, boot, boot_next};
 
@@ -387,9 +387,9 @@ mod tests {
         );
         assert!(damaged.contains(&db.display().to_string()), "{damaged}");
 
-        let failed = logs(|| log_outcome(&db, &Err(o7_core::CoreError::NoDataDir)));
+        let failed = logs(|| log_outcome(&db, &Err(ghost_core::CoreError::NoDataDir)));
         assert!(
-            failed.contains("ERROR") && failed.contains("O7_DATA_DIR"),
+            failed.contains("ERROR") && failed.contains("GHOST_DATA_DIR"),
             "{failed}"
         );
     }
@@ -457,7 +457,7 @@ mod tests {
         let (seen_tx, seen_rx) = mpsc::channel();
         spawn(job, move |path| {
             let thread = std::thread::current();
-            let outcome = o7_core::store::check_integrity(path);
+            let outcome = ghost_core::store::check_integrity(path);
             let damaged = matches!(outcome, Ok(Integrity::Damaged { .. }));
             seen_tx
                 .send((thread.id(), thread.name().map(str::to_string), damaged))

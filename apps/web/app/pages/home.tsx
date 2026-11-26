@@ -11,7 +11,7 @@ import { Workspace } from "../home/Workspace";
 import { Yours } from "../home/Yours";
 
 export const meta = () => [
-  { title: "o7 · One window for every coding agent" },
+  { title: "Ghost ADE · One window for every coding agent" },
   {
     name: "description",
     content:
@@ -22,7 +22,7 @@ export const meta = () => [
 /**
  * The page in Main's order (docs/design/visual-language.md, "Website composition"): the name over
  * the live app on its stage; every agent in one table; what the app does, one part in view at a
- * time; the rest of the workspace as tiles; o7 from a phone or an assistant; what stays yours;
+ * time; the rest of the workspace as tiles; Ghost from a phone or an assistant; what stays yours;
  * what shipped as a timeline; where to get it; answers; and the last call over the mark drawn
  * large. Every part after the opening starts on one hairline.
  */

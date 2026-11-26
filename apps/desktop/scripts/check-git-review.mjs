@@ -187,7 +187,7 @@ export async function checkMissingWorktreeStart(page, url, out, engine) {
   await page.screenshot({ path: resolve(out, `${engine}-missing-worktree-start.png`) });
   await recreate.click();
   const dialog = page.getByRole("dialog", { name: "Recreate the deleted folder?" });
-  await dialog.getByText("aura/sidebar-scan", { exact: true }).waitFor();
+  await dialog.getByText("ghost/sidebar-scan", { exact: true }).waitFor();
   await dialog.getByText("C:\\auracode\\worktrees\\sidebar-scan", { exact: true }).waitFor();
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await dialog.waitFor({ state: "detached" });
@@ -200,7 +200,7 @@ export async function checkMissingWorktreeStart(page, url, out, engine) {
   await page
     .getByTestId("recreate-note")
     .getByText(
-      "The folder is back on aura/sidebar-scan at its last commit. Uncommitted files from the deleted folder could not be restored. Retry to start Claude Code.",
+      "The folder is back on ghost/sidebar-scan at its last commit. Uncommitted files from the deleted folder could not be restored. Retry to start Claude Code.",
       { exact: true },
     )
     .waitFor();
@@ -231,7 +231,7 @@ export async function checkMergeConflicts(page, url, out, engine) {
   assert.equal(await merge.isDisabled(), true);
   const prompt = page.getByTestId("git-conflict-prompt");
   const text = await prompt.textContent();
-  assert.match(text, /^Merging aura\/release-readiness into main has conflicts in 2 files:\n/);
+  assert.match(text, /^Merging ghost\/release-readiness into main has conflicts in 2 files:\n/);
   assert.match(text, /\n- src\/orbit\.rs\n- apps\/desktop\/src\/components\/chat\/Sidebar\.tsx\n/);
   assert.match(text, /in C:\/auracode\/worktrees\/owned-one: merge main into/);
   await page.getByRole("button", { name: "Open in Cursor", exact: true }).waitFor();
@@ -293,7 +293,7 @@ export async function checkWorktreeRecreate(page, url, out, engine) {
       { exact: true },
     )
     .waitFor();
-  await dialog.getByText("aura/release-readiness", { exact: true }).waitFor();
+  await dialog.getByText("ghost/release-readiness", { exact: true }).waitFor();
   await dialog.getByText("9c41e07d2b8a", { exact: true }).waitFor();
   await dialog.getByText("C:/auracode/worktrees/owned-one", { exact: true }).waitFor();
   await settled(page);
@@ -314,7 +314,7 @@ export async function checkWorktreeRecreate(page, url, out, engine) {
   await page.getByRole("heading", { name: "Workspace updated", exact: true }).waitFor();
   await page
     .getByText(
-      "The folder is back on aura/release-readiness at its last commit. Uncommitted files from the deleted folder could not be restored.",
+      "The folder is back on ghost/release-readiness at its last commit. Uncommitted files from the deleted folder could not be restored.",
       { exact: true },
     )
     .waitFor();

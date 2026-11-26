@@ -158,7 +158,7 @@ export function agentVersion(name: string, version: string): string {
     : version;
 }
 
-/** Where an agent runs from. The demo agent runs inside o7, which Rust reports as "built in". */
+/** Where an agent runs from. The demo agent runs inside Ghost, which Rust reports as "built in". */
 export function builtInPath(path: string): string {
   return path === "built in" ? "Built in" : path;
 }

@@ -1,4 +1,4 @@
-import { Keycap, Logo } from "@o7/ui/graphite";
+import { Keycap, Logo } from "@ghost/ui/graphite";
 import {
   ArrowLeft,
   BookOpen,
@@ -206,7 +206,7 @@ export function SettingsScreen({
   readonly services?: CustomizeServices;
   /** The agents' store and transport for the Agents page; without them it is not offered. */
   readonly agents?: { readonly app: AppStore; readonly transport: Transport };
-  /** "Delete all o7 data"; previews pass a synthetic one. */
+  /** "Delete all Ghost data"; previews pass a synthetic one. */
   readonly dataCleanup?: DataCleanupApi;
   /** Development previews only: Data & privacy opens with the review already showing. */
   readonly deleteDataOpenOnLoad?: boolean;
@@ -455,7 +455,7 @@ export function SettingsScreen({
               <Logo size={64} />
               <div>
                 <h1 ref={heading} tabIndex={-1}>
-                  <span className="sr-only">About </span>o7
+                  <span className="sr-only">About </span>Ghost ADE
                 </h1>
                 <p>Version {info.app_version}</p>
               </div>
@@ -520,8 +520,8 @@ export function SettingsScreen({
             "browser",
             <>
               <p className="settings-lead">
-                The browser beside your chats is part of o7, and so are the tools agents get to use
-                it. It is on unless you turn it off here.
+                The browser beside your chats is part of Ghost, and so are the tools agents get to
+                use it. It is on unless you turn it off here.
               </p>
               <UniversalPlugins prefs={prefs} os={info.os} browser={services?.browser} />
             </>,
@@ -530,7 +530,7 @@ export function SettingsScreen({
             "mobile",
             <>
               <p className="settings-lead">
-                The phone beside your chats is part of o7, and so are the tools agents get to use
+                The phone beside your chats is part of Ghost, and so are the tools agents get to use
                 it. It is on unless you turn it off here.
               </p>
               <MobileSettings prefs={prefs} mobile={services?.mobile} />
@@ -597,8 +597,8 @@ export function SettingsScreen({
                   detail="Chats, drafts and attachments stay in the data folder. Dictation's audio is never saved or uploaded. Your agents talk to their own services as they always do."
                 />
                 <Row
-                  title="Delete all o7 data"
-                  detail="As if o7 was never installed. Your agents and repositories stay."
+                  title="Delete all Ghost data"
+                  detail="As if Ghost was never installed. Your agents and repositories stay."
                 >
                   <button
                     className="g-button g-button-outline g-button-28"
@@ -630,7 +630,7 @@ export function SettingsScreen({
                 </Row>
                 <Row
                   title="Third-party notices"
-                  detail="Licenses for the open source software inside o7."
+                  detail="Licenses for the open source software inside Ghost."
                 >
                   <button
                     className="g-button g-button-outline g-button-28"
@@ -640,7 +640,7 @@ export function SettingsScreen({
                     View
                   </button>
                 </Row>
-                <Row title="Terms of Service" detail="The terms for using o7, on o7.codes.">
+                <Row title="Terms of Service" detail="The terms for using Ghost, on onghost.dev.">
                   <a
                     className="g-button g-button-outline g-button-28"
                     href={TERMS_URL}
@@ -652,7 +652,7 @@ export function SettingsScreen({
                 </Row>
                 <Row
                   title="Privacy Policy"
-                  detail="What o7 keeps on your computer and what goes online."
+                  detail="What Ghost keeps on your computer and what goes online."
                 >
                   <a
                     className="g-button g-button-outline g-button-28"
@@ -681,8 +681,8 @@ export function SettingsScreen({
                 </div>
               </section>
               <p className="settings-lead settings-legal" data-testid="settings-copyright">
-                {COPYRIGHT} o7 is a product of {OPERATOR}. Its source code is available under the
-                MIT License.
+                {COPYRIGHT} Ghost ADE is a product of {OPERATOR}. Its source code is available under
+                the MIT License.
               </p>
             </>,
           )}

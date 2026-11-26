@@ -1,6 +1,6 @@
 use crate::{error::AppError, state::AppState};
-use o7_protocol::activity::LineEdits;
-use o7_protocol::search::SearchResults;
+use ghost_protocol::activity::LineEdits;
+use ghost_protocol::search::SearchResults;
 use tauri::State;
 
 #[tauri::command]
@@ -18,7 +18,7 @@ pub async fn workspace_search(
 #[specta::specta]
 pub async fn dashboard_line_edits(
     state: State<'_, AppState>,
-    since: o7_protocol::Millis,
+    since: ghost_protocol::Millis,
 ) -> Result<LineEdits, AppError> {
     Ok(state.sessions()?.line_edits(since).await?)
 }

@@ -1,0 +1,13 @@
+{"d":"note","note":{"text":"Lines over the 64 MiB cap: a notification becomes a notice and the next line is intact, a request is answered -32603, a reply fails its request."}}
+{"d":"note","note":{"start":{"agent_id":"acp-agent","dialect":"generic","resume":null,"autonomy":"full_auto","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"ghost","title":"Ghost ADE","version":"0.0.0-replay"}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"acp-agent","title":"ACP Agent","version":"1.0.0"}}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"<CWD>","mcpServers":[]}}}
+{"d":"in","msg":{"jsonrpc":"2.0","id":2,"result":{"sessionId":"<SESSION_1>"}}}
+{"d":"agent","agent":{"oversized":{"bytes":70000000,"keys":{"method":"session/update"}}}}
+{"d":"in","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"<SESSION_1>","update":{"sessionUpdate":"session_info_update","title":"After the big one"}}}}
+{"d":"cmd","cmd":{"type":"prompt","turn_id":"019a0000-0001-7000-8000-000000000001","parts":[{"type":"text","text":"go"}]}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"<SESSION_1>","prompt":[{"type":"text","text":"go"}]}}}
+{"d":"agent","agent":{"oversized":{"bytes":80000000,"keys":{"id":11,"method":"session/request_permission"}}}}
+{"d":"out","msg":{"jsonrpc":"2.0","id":11,"error":{"code":-32603,"message":"auracode can't accept a request of 77 MB; the limit is 64 MiB."}}}
+{"d":"agent","agent":{"oversized":{"bytes":90000000,"keys":{"id":3}}}}

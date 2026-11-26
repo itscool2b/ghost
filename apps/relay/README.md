@@ -1,8 +1,8 @@
-# o7 relay
+# Ghost relay
 
 The Worker behind remote sessions: one Durable Object per computer holds its outbound host socket
-and the sockets of paired browsers and o7 for iPhone (`/app/`, with no Origin), forwards between
-them, sends the computer's notifications for o7 for iPhone to Apple, and serves MCP to linked
+and the sockets of paired browsers and Ghost for iPhone (`/app/`, with no Origin), forwards between
+them, sends the computer's notifications for Ghost for iPhone to Apple, and serves MCP to linked
 bots. It stores only the hash of a computer's key, the hashes of its bot tokens and when its recent
 notifications went out. How it fits together, who is trusted with what and how to test it are in
 [docs/remote-sessions.md](../../docs/remote-sessions.md).
@@ -11,16 +11,16 @@ It is TypeScript where the other Workers are Rust: Durable Object WebSocket hibe
 there, and this Worker only forwards. Every decision about who may do what is made on the computer.
 
 ```powershell
-corepack pnpm --filter @o7/relay worker:test    # the relay in the Workers runtime
-corepack pnpm --filter @o7/relay worker:e2e     # relay, service, remote page and a bot
-corepack pnpm --filter @o7/relay exec wrangler deploy --env production
+corepack pnpm --filter @ghost/relay worker:test    # the relay in the Workers runtime
+corepack pnpm --filter @ghost/relay worker:e2e     # relay, service, remote page and a bot
+corepack pnpm --filter @ghost/relay exec wrangler deploy --env production
 ```
 
 ## Notifications
 
 The computer seals what a notification says for the phone, then asks the relay to send it with a
 `p` frame on its socket: the phone's address at Apple, the device it sealed for, and the sealed
-blob. The relay sends it to Apple inside fixed outer words, "o7" and "Something changed on your
+blob. The relay sends it to Apple inside fixed outer words, "Ghost" and "Something changed on your
 computer.", and never with a category. A computer's key is self-made, so no computer may put
 words of its own on a phone; the phone adds its buttons only once it has opened the sealed words.
 
@@ -38,7 +38,7 @@ off: no computer is told the relay sends (`f`), and health says `push: false`. F
 environment the owner gives wrangler the key file from Apple, which keeps its line breaks:
 
 ```sh
-corepack pnpm --filter @o7/relay exec wrangler secret put APNS_KEY --env preview < AuthKey_<key id>.p8
+corepack pnpm --filter @ghost/relay exec wrangler secret put APNS_KEY --env preview < AuthKey_<key id>.p8
 ```
 
 then sets `APNS_KEY_ID` and `APNS_TEAM_ID` for that environment in `wrangler.toml` and deploys it.

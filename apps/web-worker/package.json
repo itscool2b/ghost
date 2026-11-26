@@ -1,8 +1,8 @@
 {
-  "name": "@o7/web-worker",
+  "name": "@ghost/web-worker",
   "private": true,
   "scripts": {
-    "worker:build": "pnpm --filter @o7/web build && worker-build --release",
+    "worker:build": "pnpm --filter @ghost/web build && worker-build --release",
     "worker:test": "node --test tests/runtime.test.mjs",
     "worker:check": "wrangler deploy --dry-run --env preview --outdir ../../target/web-worker-dry-run"
   },

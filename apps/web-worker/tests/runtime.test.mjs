@@ -230,11 +230,11 @@ test("encoded traversal, encoded separators and noncanonical public paths are re
   }
 });
 
-test("the former address keeps the remote page and sends every other page to the site", async () => {
-  // auracode.si was the site's address until 19 November 2026. Nothing here leaves the machine:
-  // the request is dispatched to the Worker under that name.
+test("a former address keeps the remote page and sends every other page to the site", async () => {
+  // o7.codes was the site's address until 26 November 2026, as auracode.si was before it.
+  // Nothing here leaves the machine: the request is dispatched to the Worker under that name.
   const former = (path, init = {}) =>
-    runtime.dispatchFetch(`https://auracode.si${path}`, {
+    runtime.dispatchFetch(`https://o7.codes${path}`, {
       redirect: "manual",
       ...init,
       headers: { "Accept-Encoding": "identity", ...init.headers },
@@ -242,7 +242,7 @@ test("the former address keeps the remote page and sends every other page to the
   for (const path of ["/", "/download", "/changelog/", "/privacy/index.html", "/missing"]) {
     const response = await former(`${path}?source=synthetic`);
     assert.equal(response.status, 308, path);
-    assert.equal(response.headers.get("location"), `https://o7.codes${path}`);
+    assert.equal(response.headers.get("location"), `https://onghost.dev${path}`);
     assert.equal(await response.text(), "");
     security(response);
   }
@@ -262,6 +262,23 @@ test("the former address keeps the remote page and sends every other page to the
   assert.equal((await former(asset)).status, 200);
   // The relay's path is never a page, there or anywhere.
   assert.equal((await former("/api/remote/v1/health")).status, 404);
+  // A copy from before the move still counts itself there, and is counted.
+  const before = await totals();
+  const ran = await former("/api/count?os=windows&arch=x86_64&version=0.6.0&first=0", {
+    headers: { "User-Agent": "o7/0.6.0" },
+  });
+  assert.equal(ran.status, 200);
+  assert.deepEqual(
+    (await totals()).filter((row) => !before.includes(row)),
+    ["ran windows-x64 0.6.0 1"],
+  );
+  // A download asked for there goes to the site like any page, to be counted once, there.
+  const download = await former("/get/v0.6.0/o7_0.6.0_x64-setup.exe");
+  assert.equal(download.status, 308);
+  assert.equal(
+    download.headers.get("location"),
+    "https://onghost.dev/get/v0.6.0/o7_0.6.0_x64-setup.exe",
+  );
 });
 
 test("a download is counted once a browser asks, and always sent on to its file", async () => {
@@ -272,30 +289,33 @@ test("a download is counted once a browser asks, and always sent on to its file"
       ...init,
       headers: { "User-Agent": browser, ...init.headers },
     });
-  const response = await get("/get/v0.1.1748/o7_0.1.1748_x64-setup.exe");
+  const response = await get("/get/v0.1.1748/Ghost_0.1.1748_x64-setup.exe");
   assert.equal(response.status, 302);
   assert.equal(
     response.headers.get("location"),
-    "https://github.com/itscool2b/o7/releases/download/v0.1.1748/o7_0.1.1748_x64-setup.exe",
+    "https://github.com/itscool2b/ghost/releases/download/v0.1.1748/Ghost_0.1.1748_x64-setup.exe",
   );
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("set-cookie"), null);
-  await get("/get/v0.1.1748/o7_0.1.1748_x64-setup.exe");
+  await get("/get/v0.1.1748/Ghost_0.1.1748_x64-setup.exe");
   // Robots and HEAD are sent on, not counted.
   assert.equal(
     (
-      await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", {
+      await get("/get/v0.1.1748/Ghost_0.1.1748_amd64.deb", {
         headers: { "User-Agent": "Googlebot/2.1" },
       })
     ).status,
     302,
   );
-  assert.equal((await get("/get/v0.1.1748/o7_0.1.1748_amd64.deb", { method: "HEAD" })).status, 302);
+  assert.equal(
+    (await get("/get/v0.1.1748/Ghost_0.1.1748_amd64.deb", { method: "HEAD" })).status,
+    302,
+  );
   // Anything that is not one of the installers: nothing counted, nowhere to go.
   for (const path of [
     "/get/v0.1.1748/latest.json",
-    "/get/v0.1.1747/o7_0.1.1748_x64-setup.exe",
-    "/get/v0.1.1748/o7_0.1.1748_x64-setup.exe%2F..",
+    "/get/v0.1.1747/Ghost_0.1.1748_x64-setup.exe",
+    "/get/v0.1.1748/Ghost_0.1.1748_x64-setup.exe%2F..",
   ]) {
     const refused = await get(path);
     assert.ok(refused.status === 404 || refused.status === 400, path);
@@ -310,7 +330,7 @@ test("a download is counted once a browser asks, and always sent on to its file"
 
 test("a copy counts itself with no identifier and is told when the next day starts", async () => {
   const ran = (query) =>
-    request(`/api/count?${query}`, { headers: { "User-Agent": "o7/0.1.1748" } });
+    request(`/api/count?${query}`, { headers: { "User-Agent": "ghost/0.1.1748" } });
   const first = await ran("os=linux&arch=x86_64&version=0.1.1748&first=1");
   assert.equal(first.status, 200);
   assert.equal(first.headers.get("cache-control"), "no-store");

@@ -1,7 +1,7 @@
 name: iPhone simulator
 
 # Started by hand only, like every workflow here. It checks the Device pane's iPhone side on a real
-# Mac (docs/mobile.md, "Checking it"): o7-devices' tests, then tests/ios.rs driving a real
+# Mac (docs/mobile.md, "Checking it"): ghost-devices' tests, then tests/ios.rs driving a real
 # simulator through the device manager and every agent tool. What it saw is kept as the run's
 # artifact: a transcript of every call, screenshots, and the pane's pictures.
 on:
@@ -61,30 +61,30 @@ jobs:
           ls -d /Applications/Xcode*.app
           xcrun simctl list runtimes
       - name: Build the test app for the simulator
-        run: bash crates/o7-devices/tests/ios-app/build.sh "$RUNNER_TEMP/ios-app"
-      - name: Test o7-devices
+        run: bash crates/ghost-devices/tests/ios-app/build.sh "$RUNNER_TEMP/ios-app"
+      - name: Test ghost-devices
         env:
           # Debug builds give async tests large frames; the default 2 MiB is tight.
           RUST_MIN_STACK: "33554432"
-        run: cargo test --locked -p o7-devices
+        run: cargo test --locked -p ghost-devices
       - name: Drive a real iPhone simulator
         env:
           RUST_MIN_STACK: "33554432"
-          O7_IOS_E2E: "1"
-          O7_IOS_E2E_APP: ${{ runner.temp }}/ios-app/HelloO7.app
-          O7_IOS_E2E_OUT: ${{ runner.temp }}/ios-e2e
-        run: cargo test --locked -p o7-devices --test ios -- --nocapture
+          GHOST_IOS_E2E: "1"
+          GHOST_IOS_E2E_APP: ${{ runner.temp }}/ios-app/HelloGhost.app
+          GHOST_IOS_E2E_OUT: ${{ runner.temp }}/ios-e2e
+        run: cargo test --locked -p ghost-devices --test ios -- --nocapture
       # The crate's lint on the commit the simulator ran, without waiting for the whole CI.
-      - name: Lint o7-devices on a Mac
+      - name: Lint ghost-devices on a Mac
         if: ${{ !cancelled() }}
-        run: cargo clippy --locked -p o7-devices --all-targets -- -D warnings
+        run: cargo clippy --locked -p ghost-devices --all-targets -- -D warnings
       - name: Show the simulators and AXe afterwards
         if: always()
         run: |
           xcrun simctl list devices booted
           axe="$RUNNER_TEMP/ios-e2e/data/ios/axe/2.0.4/axe"
-          udid=$(xcrun simctl list devices | sed -n 's/.*o7 iPhone [0-9] (\([0-9A-F-]*\)) (Booted).*/\1/p' | head -1)
-          echo "o7's booted simulator: ${udid:-none}"
+          udid=$(xcrun simctl list devices | sed -n 's/.*Ghost iPhone [0-9] (\([0-9A-F-]*\)) (Booted).*/\1/p' | head -1)
+          echo "Ghost's booted simulator: ${udid:-none}"
           if [ -z "$udid" ] || [ ! -x "$axe" ]; then exit 0; fi
           probe() {
             echo "== axe $*"

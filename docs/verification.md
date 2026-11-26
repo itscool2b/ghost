@@ -5,7 +5,7 @@ the final run for a coherent source checkpoint, then rerun affected gates when f
 Linux runs the same Rust, binding and smoke checks on Ubuntu 22.04, the release packages' build
 system, with Xvfb as its display. WSL agent hosts stay unavailable.
 
-There is no separate encrypted-storage run any more: o7's accounts, their SQLCipher store
+There is no separate encrypted-storage run any more: Ghost's accounts, their SQLCipher store
 and the vendored OpenSSL build were removed on 16 November 2026, so the default workspace build is
 the whole product and Windows needs no Perl.
 

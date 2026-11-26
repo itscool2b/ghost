@@ -51,7 +51,7 @@ export async function checkSetupRecovery(browser, url) {
 
     // Recovery is reachable by a registry ID with no saved chat, and remains listed afterward.
     const retained = page.getByRole("region", { name: "Retained worktrees" });
-    await retained.getByText("aura/retained", { exact: true }).waitFor();
+    await retained.getByText("ghost/retained", { exact: true }).waitFor();
     await retained.getByRole("button", { name: "Open folder" }).click();
     await retained.getByRole("button", { name: "Review recovery" }).click();
     await retained.getByRole("button", { name: "Apply reviewed recovery" }).click();

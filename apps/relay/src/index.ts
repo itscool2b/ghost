@@ -1,13 +1,13 @@
 /**
  * The remote-sessions relay. A desktop keeps one outbound WebSocket here (its "host" socket);
- * paired browsers, o7 for iPhone and bots reach it through this Worker, so the desktop opens no
+ * paired browsers, Ghost for iPhone and bots reach it through this Worker, so the desktop opens no
  * port.
  *
  * - A browser's traffic, and the iPhone app's, is sealed end to end between it and the desktop
  *   (docs/remote-sessions.md). The relay forwards opaque text and cannot read or forge it.
  * - A bot speaks MCP over HTTPS, so its calls are readable here in passing. The relay turns each
  *   tool call into one request to the desktop, which checks the bot's token itself.
- * - A desktop's notifications for o7 for iPhone go to Apple from here. The desktop seals what
+ * - A desktop's notifications for Ghost for iPhone go to Apple from here. The desktop seals what
  *   they say; the relay wraps that in fixed outer words and signs for Apple with its one secret,
  *   Apple's push key (`APNS_KEY`), which the owner sets. Without it the relay sends none.
  *
@@ -69,15 +69,15 @@ const FIRST = {
   chat: listed(FIRST_TOOLS as unknown as readonly Tool[], false),
   full: listed(FIRST_TOOLS as unknown as readonly Tool[], true),
   instructions:
-    "o7 runs coding agents (Claude Code, Codex and others) on a person's computer. These tools reach the chats on that computer while o7 is open there with remote access on. Start with list_chats. After send_message or start_chat, call wait_for_chat until the agent finishes or asks for something, and answer waiting requests with respond_to_request. Agents there can edit files and run commands, so send only what the person asked for.",
+    "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer. These tools reach the chats on that computer while Ghost is open there with remote access on. Start with list_chats. After send_message or start_chat, call wait_for_chat until the agent finishes or asks for something, and answer waiting requests with respond_to_request. Agents there can edit files and run commands, so send only what the person asked for.",
 };
 /** What each set's bot is told first, by the set's number. */
 const INSTRUCTIONS: Record<number, string> = {
-  2: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, so do not read a chat you just heard from, and do not ask more often than wait does. Agents edit files and run commands, so send only what the person asked for.",
-  3: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while o7 is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
-  4: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so hand over only what the person asked for.",
-  5: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
-  6: "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. Work that can wait goes to task with when tonight. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
+  2: "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while Ghost is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, so do not read a chat you just heard from, and do not ask more often than wait does. Agents edit files and run commands, so send only what the person asked for.",
+  3: "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer; these tools reach its chats while Ghost is open there. Hand the agent a whole task in one send and let it work: it plans, edits and tests by itself. send and wait already return the turn's result, with the commands that ran and what still fails, so do not read a chat you just heard from, and do not ask more often than wait does. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so send only what the person asked for.",
+  4: "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while Ghost is open there. For new work, call task once: Ghost starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Agents edit files and run commands, so hand over only what the person asked for.",
+  5: "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while Ghost is open there. For new work, call task once: Ghost starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
+  6: "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while Ghost is open there. For new work, call task once: Ghost starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. Work that can wait goes to task with when tonight. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.",
 };
 /** The newest set this relay knows. */
 const NEWEST_TOOLS = 6;
@@ -112,7 +112,7 @@ function readOnly(tools: readonly Listed[]): Listed[] {
   );
 }
 const READ_INSTRUCTIONS =
-  "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; this link reads its chats while o7 is open there, and cannot send, answer or change anything. inbox says what needs the person in one call; read and wait return what a chat did.";
+  "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer; this link reads its chats while Ghost is open there, and cannot send, answer or change anything. inbox says what needs the person in one call; read and wait return what a chat did.";
 
 /** The numbers links from before `versions` were kept are known by. */
 const CURRENT_TOOLS = 2;
@@ -125,11 +125,11 @@ export interface Env {
   /** The website's origin: the origin a browser socket comes from. */
   readonly APP_ORIGIN: string;
   /**
-   * An origin the website had before, still let in while the remote page is served there for
-   * browsers paired before the move. Unset once that page is gone.
+   * The origins the website had before, separated by spaces, still let in while the remote page
+   * is served there for browsers paired before a move. Unset once those pages are gone.
    */
-  readonly FORMER_ORIGIN?: string;
-  /** What Apple delivers notifications to: the iPhone app's bundle id, `codes.o7.mobile`. */
+  readonly FORMER_ORIGINS?: string;
+  /** What Apple delivers notifications to: the iPhone app's bundle id, `dev.onghost.mobile`. */
   readonly APNS_TOPIC?: string;
   /** Apple's push key, a PKCS#8 PEM: the relay's one secret, set by the owner. */
   readonly APNS_KEY?: string;
@@ -193,7 +193,7 @@ const HOST_SILENT_MS = 75_000;
 const HEARD_NOTE_MS = 5_000;
 /**
  * How long the desktop has to answer one tool call. A call may wait for an agent's turn, for up
- * to 200 seconds when the bot asks (`WAIT_MAX` in crates/o7-remote/src/bot/lean.rs), so that a
+ * to 200 seconds when the bot asks (`WAIT_MAX` in crates/ghost-remote/src/bot/lean.rs), so that a
  * long turn costs a bot a few calls and not one every half minute.
  */
 const BOT_CALL_MS = 250_000;
@@ -207,7 +207,7 @@ const APPLE = {
   production: "https://api.push.apple.com",
   sandbox: "https://api.sandbox.push.apple.com",
 } as const;
-const OUTER_WORDS = { title: "o7", body: "Something changed on your computer." };
+const OUTER_WORDS = { title: "Ghost", body: "Something changed on your computer." };
 /** A `p` frame's largest size: each of its parts at its longest, with room to spare. */
 const PUSH_FRAME_BYTES = 8 * 1024;
 const PUSH_ID_LENGTH = 64;
@@ -258,7 +258,7 @@ function ago(ms: number): string {
 /** A call that found no computer to go to: nothing happened. `seen` is when it was last there. */
 function offline(seen: number | undefined): string {
   const when = seen === undefined ? "" : ` It was last connected ${ago(Date.now() - seen)}.`;
-  return `Nothing was done: the computer is not reachable. It is asleep or offline, o7 is closed there, or remote access is off.${when} Tell your person; it answers again once o7 runs there with remote access on.`;
+  return `Nothing was done: the computer is not reachable. It is asleep or offline, Ghost is closed there, or remote access is off.${when} Tell your person; it answers again once Ghost runs there with remote access on.`;
 }
 
 /** The computer went away while a call was with it, so whether it happened is not known. */
@@ -357,11 +357,12 @@ export default {
       if (own === null || !same(own, hostId)) return json(401, { error: "unauthorized" });
     } else if (kind === "client") {
       if (!isUpgrade(request)) return json(400, { error: "invalid_request" });
-      // An exact match against the one or two origins this deployment names, never a pattern.
-      const known = !!origin && (origin === env.APP_ORIGIN || origin === env.FORMER_ORIGIN);
+      // An exact match against the few origins this deployment names, never a pattern.
+      const former = (env.FORMER_ORIGINS ?? "").split(" ").filter(Boolean);
+      const known = !!origin && (origin === env.APP_ORIGIN || former.includes(origin));
       if (!known) return json(403, { error: "forbidden" });
     } else if (kind === "app") {
-      // o7 for iPhone, which sends no Origin. A page always sends one (its own, or "null"), so
+      // Ghost for iPhone, which sends no Origin. A page always sends one (its own, or "null"), so
       // any Origin at all is refused: no page can open this path. An empty one never gets here:
       // the runtime drops a header with no value, and no page can send one.
       if (!isUpgrade(request)) return json(400, { error: "invalid_request" });
@@ -945,7 +946,7 @@ export class Room extends DurableObject<Env> {
           protocolVersion:
             typeof asked === "string" && MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0],
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "o7", title: "o7", version: "2.0.0" },
+          serverInfo: { name: "ghost", title: "Ghost ADE", version: "2.0.0" },
           instructions,
         });
       }
@@ -1212,7 +1213,7 @@ function forApple(push: Push, topic: string, now: number) {
           ...(push.sound ? { sound: "default" } : {}),
           "mutable-content": 1,
         },
-        o7: { v: 1, d: push.d, b: push.b },
+        ghost: { v: 1, d: push.d, b: push.b },
       }
     : {
         aps: {

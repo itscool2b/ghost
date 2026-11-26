@@ -8,12 +8,12 @@ import { changelogPlugin } from "./scripts/changelog.ts";
 import { siteImagesPlugin } from "./scripts/site-images.ts";
 
 const app = fileURLToPath(new URL(".", import.meta.url));
-const stage = process.env.O7_RELEASE_STAGE;
+const stage = process.env.GHOST_RELEASE_STAGE;
 if (stage) {
   // Release logic stays in Rust. Build tooling only selects an already prepared local artifact set.
   const verified = spawnSync(
     process.env.CARGO ?? "cargo",
-    ["run", "--locked", "-p", "o7-release", "--", "verify", resolve(stage)],
+    ["run", "--locked", "-p", "ghost-release", "--", "verify", resolve(stage)],
     { cwd: resolve(app, "../.."), stdio: "inherit", windowsHide: true },
   );
   if (verified.error || verified.status !== 0) {

@@ -1,8 +1,8 @@
 import type {
   BackgroundTask,
   ErrorKind,
+  GhostEvent,
   NoticeLevel,
-  O7Event,
   PermissionDecision,
   PermissionRequest,
   PlanEntry,
@@ -46,7 +46,7 @@ export interface EventEntry {
   readonly seq: number;
   /** The stored row's turn tag; live frames carry none. Grouping never reads it. */
   readonly turnId: string | null;
-  readonly event: O7Event;
+  readonly event: GhostEvent;
 }
 
 /** Where saving paused: rows from `seq` up to the attach point are not saved yet, so not shown. */
@@ -62,7 +62,7 @@ export interface UserItem {
   readonly key: string;
   /** What the person sent. Project memory attached after it is in `memory`, not here. */
   readonly text: string;
-  /** Project memory o7 attached to this message as reference context, when it attached any. */
+  /** Project memory Ghost attached to this message as reference context, when it attached any. */
   readonly memory?: MemoryContext;
   /** The handoff this message carried to a new agent, before the person's words. */
   readonly handoff?: string;
@@ -170,7 +170,7 @@ export interface TurnEnd {
   readonly stopReason: StopReason;
   readonly usage: TokenUsage | null;
   readonly durationMs: number | null;
-  /** Ended by recovery at startup: o7 quit or crashed while the turn ran. */
+  /** Ended by recovery at startup: Ghost quit or crashed while the turn ran. */
   readonly recovered: boolean;
 }
 
@@ -263,7 +263,7 @@ export function compactToolUpdates(entries: readonly Entry[]): Entry[] {
     for (const [field, value] of Object.entries(event)) {
       if (value !== null && value !== undefined) merged[field] = value;
     }
-    folded[at] = { ...first, event: merged as O7Event };
+    folded[at] = { ...first, event: merged as GhostEvent };
   }
   return folded;
 }
@@ -273,7 +273,7 @@ export function reduce(
   model: Transcript,
   seq: number,
   turnId: string | null,
-  event: O7Event,
+  event: GhostEvent,
 ): Transcript {
   return applyEntries(model, [{ seq, turnId, event }]);
 }
@@ -713,7 +713,7 @@ export function stopReasonLabel(end: TurnEnd): string {
     case "cancelled":
       return "Stopped";
     case "interrupted":
-      return end.recovered ? "Interrupted when o7 closed" : "Interrupted";
+      return end.recovered ? "Interrupted when Ghost closed" : "Interrupted";
     case "error":
       return "Failed";
     case "other":

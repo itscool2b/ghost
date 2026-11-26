@@ -25,7 +25,7 @@ test("a branch that changes the app raises the version", () => {
   assert.equal(inApp("docs/releases.md"), false);
   assert.equal(inApp("Cargo.toml.bak"), false);
 
-  const unraised = checkVersion("0.2.4", "0.2.4", ["crates/o7-core/src/lib.rs"]);
+  const unraised = checkVersion("0.2.4", "0.2.4", ["crates/ghost-core/src/lib.rs"]);
   assert.equal(unraised.length, 1);
   assert.match(unraised[0], /0\.2\.5 for a small change or a fix, 0\.3\.0 for a big feature/);
   assert.equal(checkVersion("0.2.3", "0.2.4", ["crates/a.rs"]).length, 1, "lower is refused too");

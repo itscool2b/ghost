@@ -35,12 +35,12 @@ import {
 } from "./smokePage";
 
 /**
- * The chat scenarios of smoke mode (`O7_SMOKE=chat`, then `chat-reopen` on the same data
+ * The chat scenarios of smoke mode (`GHOST_SMOKE=chat`, then `chat-reopen` on the same data
  * folder; `.github/scripts/run-smoke.sh chat` runs both), driving the real chat screens against the
  * real session manager and the demo agent, as the manual pass of the bare UI (spec 10.4) would:
  *
  * - **chat**: New chat with the demo agent in the run's folder; a turn of every kind the demo agent
- *   plays (its magic prompts, `crates/o7-drivers/src/mock_driver.rs`), answering its permission
+ *   plays (its magic prompts, `crates/ghost-drivers/src/mock_driver.rs`), answering its permission
  *   cards and its question; Stop, Force stop, and prompts queued during turns, held or sent as
  *   decision 11 says; its error, crash and sign-in cards; the whole transcript against the script.
  *   It ends with a turn running and a prompt queued behind it, then reports, and the shell quits
@@ -48,7 +48,7 @@ import {
  * - **chat_reopen**: the same data folder again. The chat is listed, opening it starts nothing,
  *   its stored history renders the same script, the turn the quit interrupted reads Interrupted,
  *   the prompt reads held, Resume starts the agent, and Send it now sends the prompt.
- * - **agent** (`O7_SMOKE_AGENT`, local runs only): one minimal chat with a real agent.
+ * - **agent** (`GHOST_SMOKE_AGENT`, local runs only): one minimal chat with a real agent.
  *
  * Each scenario reports every check its list defines (`SMOKE_*_CHECKS`, which the shell holds the
  * report to). The first failing check stops the run: the checks after it report that they did not
@@ -205,7 +205,7 @@ export const PROMPTS = {
   auth: "/auth",
   ignoreCancel: "/ignore-cancel",
   restart: `${RESTART_INPUT}\n\n[Image: Pasted image.png]`,
-  atQuit: "/ignore-cancel until o7 quits",
+  atQuit: "/ignore-cancel until Ghost quits",
   heldAtQuit: "/echo held at quit",
 } as const;
 
@@ -1666,7 +1666,7 @@ async function agentScenario(
           );
           (reject ?? one("permission-dismiss", card))?.click();
           throw new StepError(
-            `the agent asked to act ("${text(one("permission-title", card))}"); o7 declined`,
+            `the agent asked to act ("${text(one("permission-title", card))}"); Ghost declined`,
           );
         }
         return found !== null && found.stopReason !== "" ? found : null;

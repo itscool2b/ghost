@@ -1,17 +1,17 @@
-//! `auracode --uninstall-cleanup`: deleting all of o7's data from this device, run before
+//! `ghost --uninstall-cleanup`: deleting all of Ghost's data from this device, run before
 //! anything else starts (no window, no Tauri, no data folder opened).
 //!
 //! Three callers share it, so the decisions stay in one tested piece of Rust
-//! (`o7_core::uninstall`):
+//! (`ghost_core::uninstall`):
 //!
 //! - the Windows uninstaller's hook (`windows/hooks.nsh`), with `--interactive` unless it runs
 //!   quietly: it asks about worktrees with unsaved work and says what could not be deleted;
-//! - Settings' "Delete all o7 data" ([`crate::data_cleanup_commands`]), which starts this
+//! - Settings' "Delete all Ghost data" ([`crate::data_cleanup_commands`]), which starts this
 //!   mode with `--after-pid` and the choices made in its review, then quits;
 //! - a person in a terminal, following `docs/uninstall.md` (macOS has no uninstaller).
 //!
-//! Before deleting anything it waits for o7 to be gone: a running copy is asked to quit
-//! through the single-instance hand-over ([`QUIT_FLAG`]), which stops only o7's own agents
+//! Before deleting anything it waits for Ghost to be gone: a running copy is asked to quit
+//! through the single-instance hand-over ([`QUIT_FLAG`]), which stops only Ghost's own agents
 //! and terminals. If it is still running after that, nothing is deleted and the exit code says so.
 
 use std::ffi::{OsStr, OsString};
@@ -19,13 +19,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use o7_core::uninstall::{
+use ghost_core::uninstall::{
     self, GitTool, Os, Plan, PlatformDirs, Report, Retry, Targets, WorktreeChoice,
 };
 
 /// The first argument that selects this mode.
 pub const CLEANUP_FLAG: &str = "--uninstall-cleanup";
-/// The argument a cleanup launches o7 with to ask a running copy to quit. The running copy
+/// The argument a cleanup launches Ghost with to ask a running copy to quit. The running copy
 /// receives it through the single-instance plugin; a copy that finds none exits at once.
 pub const QUIT_FLAG: &str = "--quit-for-uninstall";
 
@@ -35,24 +35,24 @@ pub mod exit {
     pub const DONE: i32 = 0;
     /// The arguments were not understood; nothing was deleted.
     pub const USAGE: i32 = 2;
-    /// o7 is still running; nothing was deleted.
+    /// Ghost is still running; nothing was deleted.
     pub const RUNNING: i32 = 3;
     /// Some paths could not be deleted; they are listed.
     pub const INCOMPLETE: i32 = 4;
 }
 
 const USAGE: &str =
-    "Usage: auracode --uninstall-cleanup [--dry-run] [--interactive | --report-failures]
+    "Usage: ghost --uninstall-cleanup [--dry-run] [--interactive | --report-failures]
        [--data-dir <folder>] [--remove-unsaved-worktrees | --remove-worktree <folder>...]
-       [--after-pid <pid>] [--trash-app <o7.app>]
+       [--after-pid <pid>] [--trash-app <Ghost.app>]
 
-Deletes everything o7 keeps on this device. Your agents, their settings and your
+Deletes everything Ghost keeps on this device. Your agents, their settings and your
 repositories are not touched. Worktrees with unsaved work are kept unless you choose otherwise.";
 
 /// What the command line asked for.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Options {
-    /// Only this data folder (one chosen with `O7_DATA_DIR`), nothing of the installed app's.
+    /// Only this data folder (one chosen with `GHOST_DATA_DIR`), nothing of the installed app's.
     pub data_dir: Option<PathBuf>,
     /// Wait for this process (the app that started the cleanup) to exit first.
     pub after_pid: Option<u32>,
@@ -121,8 +121,8 @@ pub fn run_from_args() -> Option<i32> {
     attach_console();
     let rest: Vec<OsString> = args.collect();
     let options = parse(&rest).and_then(|options| {
-        scoped_for_build(options, o7_core::paths::DEVELOPMENT_BUILD, || {
-            o7_core::paths::DataRoot::resolve()
+        scoped_for_build(options, ghost_core::paths::DEVELOPMENT_BUILD, || {
+            ghost_core::paths::DataRoot::resolve()
                 .map(|root| root.root().to_path_buf())
                 .map_err(|error| error.to_string())
         })
@@ -137,7 +137,7 @@ pub fn run_from_args() -> Option<i32> {
 }
 
 /// A development build cleans up only its own data folder, as if `--data-dir` named it
-/// (`resolve`: the development folder, or `O7_DATA_DIR`'s). The machine scope is the
+/// (`resolve`: the development folder, or `GHOST_DATA_DIR`'s). The machine scope is the
 /// installed app's: it deletes the installed app's data folder, and asks the installed app to quit
 /// first, which ends every chat it runs.
 fn scoped_for_build(
@@ -201,7 +201,7 @@ fn execute_cleanup(options: &Options, targets: &Targets) -> i32 {
     // Only the installed app answers the hand-over; a data folder of its own runs alone.
     let ask = options.after_pid.is_none() && options.data_dir.is_none();
     if !wait_until_free(targets, ask) {
-        let message = "o7 is still running, so nothing was deleted. Quit o7 and try again.";
+        let message = "Ghost is still running, so nothing was deleted. Quit Ghost and try again.";
         println!("{message}");
         if options.interactive || options.report_failures {
             dialog::alert(message);
@@ -247,7 +247,7 @@ fn execute_cleanup(options: &Options, targets: &Targets) -> i32 {
     }
 }
 
-/// A data folder from `O7_DATA_DIR`, by the rule o7-core resolves it with.
+/// A data folder from `GHOST_DATA_DIR`, by the rule ghost-core resolves it with.
 /// Removes each account's token from secure storage; answers how many stayed. With no secure
 /// storage there were never any tokens to remove.
 fn remove_agent_tokens(ids: &[String]) -> usize {
@@ -293,9 +293,11 @@ fn environment_root() -> Option<PathBuf> {
             !value.is_empty() && !value.to_str().is_some_and(|text| text.trim().is_empty())
         })
     };
-    // The override under the app's earlier name counts too, as o7_core::paths reads it.
-    named(o7_core::paths::DATA_DIR_ENV).or_else(|| named(o7_core::paths::LEGACY_DATA_DIR_ENV))?;
-    o7_core::paths::DataRoot::resolve()
+    // The override under the app's earlier names counts too, as ghost_core::paths reads it.
+    std::iter::once(ghost_core::paths::DATA_DIR_ENV)
+        .chain(ghost_core::paths::LEGACY_DATA_DIR_ENVS)
+        .find_map(named)?;
+    ghost_core::paths::DataRoot::resolve()
         .ok()
         .map(|root| root.root().to_path_buf())
 }
@@ -328,7 +330,7 @@ const LISTED: usize = 6;
 pub fn worktree_question(plan: &Plan) -> String {
     let unsaved: Vec<_> = plan.unsaved().collect();
     let mut text = String::from(
-        "o7 is deleting its data. These worktrees have work that is not saved anywhere else:\n\n",
+        "Ghost is deleting its data. These worktrees have work that is not saved anywhere else:\n\n",
     );
     for worktree in unsaved.iter().take(LISTED) {
         let name = worktree
@@ -355,7 +357,7 @@ pub fn worktree_question(plan: &Plan) -> String {
 
 /// What could not be deleted, for the dialog.
 pub fn failure_text(report: &Report, trash: Option<&str>) -> String {
-    let mut text = String::from("o7 could not delete everything. Still on this computer:\n\n");
+    let mut text = String::from("Ghost could not delete everything. Still on this computer:\n\n");
     for failure in report.failed.iter().take(LISTED) {
         text.push_str(&format!("{}: {}\n", failure.path.display(), failure.error));
     }
@@ -376,7 +378,7 @@ pub fn failure_text(report: &Report, trash: Option<&str>) -> String {
 fn describe_plan(plan: &Plan) -> String {
     let mut text = String::new();
     if plan.is_empty() {
-        text.push_str("Nothing of o7's is on this device.\n");
+        text.push_str("Nothing of Ghost's is on this device.\n");
     }
     for item in &plan.items {
         text.push_str(&format!("Would remove {}\n", item.path.display()));
@@ -422,7 +424,7 @@ fn describe_report(report: &Report) -> String {
     text
 }
 
-/// Waits until no o7 process holds a profile in the data folders. When `ask`, a running
+/// Waits until no Ghost process holds a profile in the data folders. When `ask`, a running
 /// copy is first asked to quit the way a second launch would ask it to show its window.
 fn wait_until_free(targets: &Targets, ask: bool) -> bool {
     let busy = || !uninstall::in_use(&targets.data_roots).is_empty();
@@ -444,7 +446,7 @@ fn wait_until_free(targets: &Targets, ask: bool) -> bool {
     false
 }
 
-/// Launches o7 with [`QUIT_FLAG`]: the single-instance plugin hands it to the running copy
+/// Launches Ghost with [`QUIT_FLAG`]: the single-instance plugin hands it to the running copy
 /// and exits; with no running copy it exits before opening anything.
 fn request_quit() {
     let Ok(exe) = std::env::current_exe() else {
@@ -454,11 +456,13 @@ fn request_quit() {
     command
         .arg(QUIT_FLAG)
         // The hand-over only reaches the installed app's instance.
-        .env_remove(o7_core::paths::DATA_DIR_ENV)
-        .env_remove(o7_core::paths::LEGACY_DATA_DIR_ENV)
+        .env_remove(ghost_core::paths::DATA_DIR_ENV)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    for name in ghost_core::paths::LEGACY_DATA_DIR_ENVS {
+        command.env_remove(name);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -526,7 +530,7 @@ fn move_to_trash(bundle: &Path) -> Result<(), String> {
 #[cfg(not(target_os = "macos"))]
 fn move_to_trash(_bundle: &Path) -> Result<(), String> {
     Err(
-        "Only macOS apps are moved to the Trash; on Windows, uninstall o7 from Settings."
+        "Only macOS apps are moved to the Trash; on Windows, uninstall Ghost from Settings."
             .to_owned(),
     )
 }
@@ -596,7 +600,7 @@ mod macos {
         let answer = osascript(
             &[
                 "on run argv",
-                "display dialog (item 1 of argv) with title \"auracode\" buttons {\"Delete them\", \"Keep them\"} default button \"Keep them\" with icon caution",
+                "display dialog (item 1 of argv) with title \"Ghost\" buttons {\"Delete them\", \"Keep them\"} default button \"Keep them\" with icon caution",
                 "end run",
             ],
             text,
@@ -608,7 +612,7 @@ mod macos {
         let _ = osascript(
             &[
                 "on run argv",
-                "display alert \"auracode\" message (item 1 of argv) as warning",
+                "display alert \"Ghost\" message (item 1 of argv) as warning",
                 "end run",
             ],
             text,
@@ -643,7 +647,7 @@ mod windows {
 
     fn message(text: &str, style: u32) -> i32 {
         let text = wide(text);
-        let title = wide("o7");
+        let title = wide("Ghost");
         // SAFETY: both strings are NUL-terminated and outlive the call; no owner window.
         unsafe {
             MessageBoxW(
@@ -681,7 +685,7 @@ mod windows {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use o7_core::uninstall::Worktree;
+    use ghost_core::uninstall::Worktree;
 
     fn args(list: &[&str]) -> Vec<OsString> {
         list.iter().map(OsString::from).collect()
@@ -693,7 +697,7 @@ mod tests {
             dry_run: true,
             interactive: true,
             after_pid: Some(123),
-            trash_app: Some("/Applications/o7.app".into()),
+            trash_app: Some("/Applications/Ghost.app".into()),
             remove_unsaved: true,
             ..Options::default()
         };
@@ -726,7 +730,7 @@ mod tests {
             "--after-pid",
             "4242",
             "--trash-app",
-            "/Applications/o7.app",
+            "/Applications/Ghost.app",
             "--dry-run",
         ]))
         .unwrap();
@@ -742,7 +746,7 @@ mod tests {
                     "/data/profiles/local/worktrees/a".into(),
                     "/data/profiles/local/worktrees/b".into()
                 ],
-                trash_app: Some("/Applications/o7.app".into()),
+                trash_app: Some("/Applications/Ghost.app".into()),
                 dry_run: true,
             }
         );
@@ -769,7 +773,7 @@ mod tests {
     /// whole data folder, and its quit request reached the installed app.
     #[test]
     fn a_development_build_cleans_up_only_its_own_folder() {
-        let own = PathBuf::from("/data/codes.o7.desktop.dev");
+        let own = PathBuf::from("/data/dev.onghost.desktop.dev");
         let development = scoped_for_build(Options::default(), true, || Ok(own.clone())).unwrap();
         assert_eq!(development.data_dir.as_deref(), Some(own.as_path()));
 
@@ -791,7 +795,7 @@ mod tests {
 
     #[test]
     fn only_the_exact_quit_argument_asks_a_running_copy_to_quit() {
-        let exe = "C:\\Program Files\\o7\\o7.exe".to_owned();
+        let exe = "C:\\Program Files\\ghost\\ghost.exe".to_owned();
         assert!(is_quit_request(&[exe.clone(), QUIT_FLAG.into()]));
         assert!(!is_quit_request(std::slice::from_ref(&exe)));
         assert!(!is_quit_request(&[
@@ -811,7 +815,7 @@ mod tests {
         worktree.problem = None;
         worktree.changed_files = changed;
         worktree.unique_commits = commits;
-        worktree.branch = Some(format!("aura/{name}"));
+        worktree.branch = Some(format!("ghost/{name}"));
         worktree.repository = Some(PathBuf::from("C:\\code\\shop"));
         worktree
     }
@@ -858,7 +862,7 @@ mod tests {
             .map(|index| worktree(&format!("w{index}"), 1, 0))
             .collect();
         let text = worktree_question(&plan(many));
-        assert!(text.contains("aura/w0 in C:\\code\\shop: 1 uncommitted file"));
+        assert!(text.contains("ghost/w0 in C:\\code\\shop: 1 uncommitted file"));
         assert!(text.contains("and 2 more"));
         assert!(text.contains("Yes leaves these folders where they are"));
         assert!(!text.contains('\u{2014}'), "no em dashes");

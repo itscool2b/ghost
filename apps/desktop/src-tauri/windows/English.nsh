@@ -1,5 +1,5 @@
 ; Tauri's English strings for the NSIS installer (tauri-cli 2.12.4), with one change: the
-; uninstaller's checkbox keeps o7's data instead of deleting it, because deleting is the
+; uninstaller's checkbox keeps Ghost's data instead of deleting it, because deleting is the
 ; default (windows/hooks.nsh). scripts/uninstaller-hooks.test.mjs checks this file still defines
 ; every string the pinned CLI's own English file does.
 LangString addOrReinstall ${LANG_ENGLISH} "Add/Reinstall components"
@@ -28,4 +28,4 @@ LangString webview2DownloadSuccess ${LANG_ENGLISH} "WebView2 bootstrapper downlo
 LangString webview2Downloading ${LANG_ENGLISH} "Downloading WebView2 bootstrapper..."
 LangString webview2InstallError ${LANG_ENGLISH} "Error: Installing WebView2 failed with exit code $1"
 LangString webview2InstallSuccess ${LANG_ENGLISH} "WebView2 installed successfully"
-LangString deleteAppData ${LANG_ENGLISH} "Keep my o7 data (chats, settings and keys)"
+LangString deleteAppData ${LANG_ENGLISH} "Keep my Ghost data (chats, settings and keys)"

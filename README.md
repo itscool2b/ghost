@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/wing-dark.svg">
-    <img src=".github/assets/readme/wing-light.svg" alt="o7" width="132">
+    <img src=".github/assets/readme/wing-light.svg" alt="Ghost ADE" width="132">
   </picture>
 </p>
 
-<h1 align="center">o7</h1>
+<h1 align="center">Ghost ADE</h1>
 
 <p align="center">
   <b>One home for every coding agent you use.</b><br>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://o7.codes/download"><b>Download</b></a>
+  <a href="https://onghost.dev/download"><b>Download</b></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://o7.codes">Website</a>
+  <a href="https://onghost.dev">Website</a>
   &nbsp;&middot;&nbsp;
   <a href="CHANGELOG.md">Changelog</a>
   &nbsp;&middot;&nbsp;
@@ -28,13 +28,13 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/hero-dark.webp">
-    <img src=".github/assets/readme/hero-light.webp" alt="An o7 chat: the agent's reasoning, its tool calls and its answer, with the project's chats on the left" width="100%">
+    <img src=".github/assets/readme/hero-light.webp" alt="A Ghost chat: the agent's reasoning, its tool calls and its answer, with the project's chats on the left" width="100%">
   </picture>
 </p>
 
 ## Your agents, in one window
 
-o7 runs the coding agents already on your computer through their own harnesses, with your own
+Ghost runs the coding agents already on your computer through their own harnesses, with your own
 sign-ins and subscriptions: **Claude Code, Codex, Cursor, Grok Build, OpenCode, Pi, Antigravity,
 Hermes**, and any agent that speaks ACP. It finds them on its own, with their versions, sign-in
 state and updates.
@@ -75,9 +75,9 @@ another agent with the plan carried over.
 
 ## Private by design
 
-- **No o7 account and no sign-in.** Your projects, chats and settings stay on your computer and
+- **No Ghost account and no sign-in.** Your projects, chats and settings stay on your computer and
   never sync anywhere.
-- **Nothing is uploaded.** o7 goes online only to look up new versions of itself and of your
+- **Nothing is uploaded.** Ghost goes online only to look up new versions of itself and of your
   agents, to install what you ask it to, and for remote access when you turn it on. Your agents
   talk to their own providers, as they always do.
 - **Remote access is sealed end to end** for your phone: the relay passes along messages it cannot
@@ -93,10 +93,10 @@ another agent with the plan carried over.
 | macOS (Apple silicon and Intel) | `.dmg` |
 | Linux (x64) | `.AppImage`, `.deb`, `.rpm` |
 
-Get the latest from **[o7.codes/download](https://o7.codes/download)** or the
-[Releases](https://github.com/itscool2b/o7/releases/latest) page, each with its SHA-256 checksum.
+Get the latest from **[onghost.dev/download](https://onghost.dev/download)** or the
+[Releases](https://github.com/itscool2b/ghost/releases/latest) page, each with its SHA-256 checksum.
 The installers are not signed by a publisher yet, so Windows and macOS ask before the first run;
-the download page says what to do. After that, o7 updates itself.
+the download page says what to do. After that, Ghost updates itself.
 
 ## Build from source
 
@@ -108,11 +108,11 @@ pnpm install
 pnpm dev
 ```
 
-A development build keeps its own data folder and runs beside an installed o7, so it never touches
+A development build keeps its own data folder and runs beside an installed Ghost, so it never touches
 your chats. **[docs/development.md](docs/development.md)** covers the layout, the checks, the
 command-line client and every switch.
 
-o7 is Rust and TypeScript: a Rust core and a [Tauri](https://tauri.app) shell with a React
+Ghost is Rust and TypeScript: a Rust core and a [Tauri](https://tauri.app) shell with a React
 interface. The website and the relay behind remote access are Rust Workers on Cloudflare.
 
 ## Contributing
@@ -123,6 +123,6 @@ please do not open a public issue.
 
 ## License
 
-o7 is released under the [MIT License](LICENSE). The software it includes keeps its own terms,
+Ghost is released under the [MIT License](LICENSE). The software it includes keeps its own terms,
 preserved in [third-party/](third-party/README.md) and shown in the app under Settings, About.
-The names and logos of the agents o7 drives belong to their owners.
+The names and logos of the agents Ghost drives belong to their owners.

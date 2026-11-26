@@ -1,4 +1,4 @@
-import { Wordmark } from "@o7/ui/graphite";
+import { Wordmark } from "@ghost/ui/graphite";
 import { REPOSITORY } from "./repo";
 
 const COLUMNS: readonly { heading: string; links: readonly { href: string; text: string }[] }[] = [
@@ -41,14 +41,14 @@ export function SiteFooter() {
       <div className="footer-frame">
         <div className="footer-grid">
           <div className="footer-home">
-            <a href="/" aria-label="o7 home">
+            <a href="/" aria-label="Ghost home">
               <Wordmark size={17} />
             </a>
             <p className="footer-statement">Your agents. Your machine.</p>
             <p className="footer-legal" data-testid="footer-copyright">
               © 2026 BASH.AI LLC. All rights reserved.
               <br />
-              o7 is a product of BASH.AI LLC. Source code is available under the MIT License.
+              Ghost ADE is a product of BASH.AI LLC. Source code is available under the MIT License.
             </p>
           </div>
           <nav className="footer-links" aria-label="Footer">

@@ -1,4 +1,4 @@
-import { getBrand } from "@o7/ui";
+import { getBrand } from "@ghost/ui";
 import type { FileChange, MessageItem, TranscriptModel } from "../../kit";
 
 /**

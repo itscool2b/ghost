@@ -10,8 +10,8 @@ import { Modal } from "./chat/Modal";
 
 /**
  * The quit question in the window's own Graphite dialog (6.19), dark like the rest of the app:
- * "Quit o7?", what quitting stops, then Keep o7 open (focused, so Enter keeps it) and
- * the red explicit choice. Esc, the scrim and the close button keep o7 open too.
+ * "Quit Ghost?", what quitting stops, then Keep Ghost open (focused, so Enter keeps it) and
+ * the red explicit choice. Esc, the scrim and the close button keep Ghost open too.
  */
 export function QuitQuestionDialog({
   question,
@@ -33,7 +33,7 @@ export function QuitQuestionDialog({
   }, []);
   return (
     <Modal
-      title="Quit o7?"
+      title="Quit Ghost?"
       onClose={() => onAnswer(false)}
       closeLabel={question.keep}
       className="quit-question"

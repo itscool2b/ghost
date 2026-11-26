@@ -1,4 +1,4 @@
-import { THEME_IDS } from "@o7/ui/graphite";
+import { THEME_IDS } from "@ghost/ui/graphite";
 import type { AppearancePreference, TextSizePreference, ThemePreference } from "../bindings";
 
 export type ResolvedAppearance = "light" | "dark";

@@ -1,5 +1,5 @@
 //! The larger dictation model (docs/local-dictation.md, "The larger model"): Parakeet Ultra,
-//! fetched once after installation, because it is too large to ride in the installer. o7 fetches
+//! fetched once after installation, because it is too large to ride in the installer. Ghost fetches
 //! it by itself a minute after it starts (owner, 22 November 2026: "Automatically pls"), until
 //! the person says no in Settings > Voice.
 //!
@@ -7,7 +7,7 @@
 //! - The app itself starts the download, or its own page does; only that page cancels or removes
 //!   it. Neither supplies anything: the address, the size and the SHA-256 are constants of this
 //!   build ([`model::LARGER`]).
-//! - Cancel and Remove are remembered as a file beside the model ([`decline`]): o7 never starts
+//! - Cancel and Remove are remembered as a file beside the model ([`decline`]): Ghost never starts
 //!   the download by itself again until the person presses Download. It also leaves it alone
 //!   where the disk would be left short of room ([`HEADROOM`]).
 //! - The connection is HTTPS only and follows a redirect only to Hugging Face's own hosts.
@@ -48,7 +48,7 @@ const INTERRUPTED: &str =
 const OFFLINE: &str = "The download could not start. Check your connection, then try again.";
 const UNAVAILABLE: &str = "Hugging Face did not send the model. Try again later.";
 const NOT_PINNED: &str =
-    "The download is not the file o7 expects, so it was discarded. Nothing was installed.";
+    "The download is not the file Ghost expects, so it was discarded. Nothing was installed.";
 const DISK: &str =
     "The model could not be saved. Check that this disk has 500 MB free, then try again.";
 
@@ -63,22 +63,22 @@ struct Run {
 /// The download in flight, if any: one at a time, whoever asked.
 static ACTIVE: Mutex<Option<Arc<Run>>> = Mutex::new(None);
 
-/// How long after launch o7 first looks at fetching the model by itself, and how long it waits
+/// How long after launch Ghost first looks at fetching the model by itself, and how long it waits
 /// before it looks again (it was offline, the disk was short, a download was already running).
 pub const FIRST: Duration = Duration::from_secs(60);
 pub const AGAIN: Duration = Duration::from_secs(15 * 60);
-/// What the disk must still have free once the model is on it, for o7's own data and everything
-/// else on the computer, before o7 fetches the model unasked.
+/// What the disk must still have free once the model is on it, for Ghost's own data and everything
+/// else on the computer, before Ghost fetches the model unasked.
 const HEADROOM: u64 = 2 << 30;
 /// Its presence in the models folder says the person does not want the model fetched for them.
 const DECLINED: &str = "larger-model.declined";
 
 /// Whether this copy fetches the model by itself at all. A development build does not, since
-/// each scratch data folder would fetch its own 486 MB; `O7_DICTATION_AUTOMATIC=1` turns it on
+/// each scratch data folder would fetch its own 486 MB; `GHOST_DICTATION_AUTOMATIC=1` turns it on
 /// there to test it, and `=0` turns it off anywhere.
 pub fn enabled() -> bool {
     enabled_for(
-        std::env::var("O7_DICTATION_AUTOMATIC").ok().as_deref(),
+        std::env::var("GHOST_DICTATION_AUTOMATIC").ok().as_deref(),
         cfg!(debug_assertions),
     )
 }
@@ -101,17 +101,19 @@ pub fn decline(folder: &Path) -> Result<(), String> {
     std::fs::create_dir_all(folder)
         .and_then(|()| File::create(folder.join(DECLINED)))
         .map(|_| ())
-        .map_err(|_| "o7 could not save that choice. Check that this disk is not full.".to_string())
+        .map_err(|_| {
+            "Ghost could not save that choice. Check that this disk is not full.".to_string()
+        })
 }
 
-/// The person asked for the model: o7 may fetch it by itself again, should this attempt not
+/// The person asked for the model: Ghost may fetch it by itself again, should this attempt not
 /// finish.
 pub fn accept(folder: &Path) -> Result<(), String> {
     let path = folder.join(DECLINED);
     match std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir(&path)) {
         Ok(()) => Ok(()),
         Err(_) if !declined(folder) => Ok(()),
-        Err(_) => Err("o7 could not save that choice.".into()),
+        Err(_) => Err("Ghost could not save that choice.".into()),
     }
 }
 
@@ -140,7 +142,7 @@ fn open_to(folder: &Path, free: Option<u64>) -> bool {
         )
 }
 
-/// Whether o7 will fetch the model by itself. What Settings says and what the launch does both
+/// Whether Ghost will fetch the model by itself. What Settings says and what the launch does both
 /// ask here.
 pub fn wanted(folder: &Path) -> bool {
     enabled() && super::audio::cpu_supported() && open_to(folder, free_space(folder))
@@ -421,7 +423,7 @@ async fn fetch(
         }))
         .connect_timeout(Duration::from_secs(20))
         .read_timeout(Duration::from_secs(60))
-        .user_agent(concat!("o7/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("ghost/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|_| "The download could not be set up.")?;
     let mut request = client.get(url);
@@ -530,7 +532,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn o7_fetches_the_model_by_itself_only_until_the_person_says_no() {
+    fn ghost_fetches_the_model_by_itself_only_until_the_person_says_no() {
         let root = tempfile::tempdir().unwrap();
         // The folder need not exist to be asked about, or to have the no written in it.
         let folder = root.path().join("models").join("dictation");

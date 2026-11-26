@@ -1,10 +1,10 @@
-// Writes the o7-release plan for the packages a release build left in one directory: each file's
+// Writes the ghost-release plan for the packages a release build left in one directory: each file's
 // role from its name, the app version from the workspace Cargo.toml, and the channel, notes and
-// trusted public key from the environment. o7-release then verifies every byte and signature;
+// trusted public key from the environment. ghost-release then verifies every byte and signature;
 // this only names what is there and refuses anything missing, doubled or unexpected.
 //
 // Usage: node .github/scripts/release-plan.mjs <artifact-directory> <plan.json>
-// Environment: RELEASE_CHANNEL (staging or stable), RELEASE_NOTES, O7_UPDATER_PUBLIC_KEY,
+// Environment: RELEASE_CHANNEL (staging or stable), RELEASE_NOTES, GHOST_UPDATER_PUBLIC_KEY,
 // and optionally RELEASE_VERSION (the version the packages were built as, when the build was
 // given one; the workspace's by default), RELEASE_PUBLISHER_SIGNED (`true` only when a publisher
 // signed the packages for the operating systems) and RELEASE_DATE (RFC 3339; now by default).
@@ -76,7 +76,7 @@ export function plan({
     throw new Error(`The channel must be staging or stable, not ${JSON.stringify(channel)}`);
   }
   if (!notes?.trim()) throw new Error("Release notes are required");
-  if (!publicKey?.trim()) throw new Error("O7_UPDATER_PUBLIC_KEY is required");
+  if (!publicKey?.trim()) throw new Error("GHOST_UPDATER_PUBLIC_KEY is required");
   const built = version?.trim() || workspaceVersion(cargoToml);
   if (!/^\d+\.\d+\.\d+$/u.test(built)) {
     throw new Error(`The version must be three plain numbers, not ${JSON.stringify(built)}`);
@@ -112,7 +112,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     cargoToml: readFileSync(resolve(root, "Cargo.toml"), "utf8"),
     channel: process.env.RELEASE_CHANNEL,
     notes: process.env.RELEASE_NOTES,
-    publicKey: process.env.O7_UPDATER_PUBLIC_KEY,
+    publicKey: process.env.GHOST_UPDATER_PUBLIC_KEY,
     version: process.env.RELEASE_VERSION,
     publisherSigned: process.env.RELEASE_PUBLISHER_SIGNED === "true",
     date: process.env.RELEASE_DATE || new Date().toISOString().replace(/\.\d+Z$/u, "Z"),

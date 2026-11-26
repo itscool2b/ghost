@@ -5,12 +5,12 @@
 pub mod count;
 
 /// The site's address.
-pub const SITE: &str = "https://o7.codes";
-/// The address the site had until 19 November 2026. A copy of the app from before the move still
-/// makes pairing links to its `/remote`, and a phone paired there keeps its key under that
-/// origin, so that page and the files it loads keep answering there until those copies have
-/// updated. Every other page is sent to [`SITE`].
-const FORMER_HOSTS: &[&str] = &["auracode.si"];
+pub const SITE: &str = "https://onghost.dev";
+/// The addresses the site had before: o7.codes until 26 November 2026, auracode.si until
+/// 19 November. A copy of the app from before a move still makes pairing links to its `/remote`,
+/// and a phone paired there keeps its key under that origin, so that page and the files it loads
+/// keep answering there until those copies have updated. Every other page is sent to [`SITE`].
+const FORMER_HOSTS: &[&str] = &["o7.codes", "auracode.si"];
 
 pub struct Asset {
     pub path: &'static str,
@@ -58,11 +58,11 @@ fn error(status: u16, body: &'static [u8], head: bool, common: &[(&str, &str)]) 
     }
 }
 
-/// The Apple app site association: the file that lets o7 for iPhone open the site's pairing
+/// The Apple app site association: the file that lets Ghost for iPhone open the site's pairing
 /// links (Universal Links). None until the app's Apple Developer Team ID is known; then it is
 ///
 /// ```text
-/// {"applinks":{"details":[{"appIDs":["TEAMID.codes.o7.mobile"],"components":[{"/":"/remote","#":"?*.?*.?*"}]}]}}
+/// {"applinks":{"details":[{"appIDs":["TEAMID.dev.onghost.mobile"],"components":[{"/":"/remote","#":"?*.?*.?*"}]}]}}
 /// ```
 ///
 /// with `TEAMID` the Team ID. Only `/remote` with a pairing link's fragment (three parts joined
@@ -319,7 +319,12 @@ mod edge {
         let former = crate::FORMER_HOSTS
             .iter()
             .any(|former| host.eq_ignore_ascii_case(former));
-        if !former && let Some(plan) = count::plan(request.method().as_ref(), &path, url.query()) {
+        // A copy of the app from before a move counts itself at the address it knew, so that
+        // count is taken at a former address too. A download asked for there is sent on like any
+        // other page, and counted once, at the site's own address.
+        if (!former || path == "/api/count")
+            && let Some(plan) = count::plan(request.method().as_ref(), &path, url.query())
+        {
             return counting(plan, &request, &env, COMMON).await;
         }
         let conditional = request.headers().get("If-None-Match")?;
@@ -380,7 +385,7 @@ mod tests {
         },
     ];
     fn get(method: &str, path: &str, tag: Option<&str>) -> ResponsePlan {
-        at("o7.codes", method, path, tag)
+        at("onghost.dev", method, path, tag)
     }
     fn at(host: &str, method: &str, path: &str, tag: Option<&str>) -> ResponsePlan {
         respond(
@@ -414,8 +419,8 @@ mod tests {
     }
 
     #[test]
-    fn the_former_address_keeps_the_remote_page_and_sends_every_other_page_on() {
-        for host in ["auracode.si", "AuraCode.SI"] {
+    fn a_former_address_keeps_the_remote_page_and_sends_every_other_page_on() {
+        for host in ["o7.codes", "O7.Codes", "auracode.si", "AuraCode.SI"] {
             // Pages, their aliases and anything unknown move, path kept.
             for path in [
                 "/",
@@ -428,7 +433,7 @@ mod tests {
                 assert_eq!(response.status, 308, "{host}{path}");
                 assert_eq!(
                     value(&response, "location"),
-                    Some(format!("https://o7.codes{path}").as_str())
+                    Some(format!("https://onghost.dev{path}").as_str())
                 );
                 assert!(response.body.is_empty());
                 assert_eq!(value(&response, "x-content-type-options"), Some("nosniff"));
@@ -445,12 +450,15 @@ mod tests {
             // Nothing else changes there: no page for an API path, no other method, no odd path.
             assert_eq!(at(host, "GET", "/api/remote/v1/health", None).status, 404);
             assert_eq!(at(host, "POST", "/download", None).status, 405);
-            assert_eq!(at(host, "GET", "//o7.codes.example", None).status, 400);
+            assert_eq!(at(host, "GET", "//onghost.dev.example", None).status, 400);
         }
-        // Only the exact former address: a name that merely contains it is not one.
+        // Only an exact former address: a name that merely contains one is not one.
         for host in [
-            "o7.codes",
+            "onghost.dev",
+            "preview.onghost.dev",
             "preview.o7.codes",
+            "o7.codes.example",
+            "noto7.codes",
             "auracode.si.example",
             "notauracode.si",
         ] {
@@ -460,7 +468,7 @@ mod tests {
     }
 
     /// The association as it will be once the Team ID is known.
-    const SAMPLE: &str = r##"{"applinks":{"details":[{"appIDs":["TEAMID.codes.o7.mobile"],"components":[{"/":"/remote","#":"?*.?*.?*"}]}]}}"##;
+    const SAMPLE: &str = r##"{"applinks":{"details":[{"appIDs":["TEAMID.dev.onghost.mobile"],"components":[{"/":"/remote","#":"?*.?*.?*"}]}]}}"##;
 
     fn with(
         association: Option<&'static str>,
@@ -485,7 +493,7 @@ mod tests {
         // address, and nothing is sent elsewhere.
         assert_eq!(ASSOCIATION, None);
         for path in ASSOCIATION_PATHS {
-            for host in ["o7.codes", "auracode.si"] {
+            for host in ["onghost.dev", "o7.codes", "auracode.si"] {
                 for method in ["GET", "HEAD"] {
                     let response = at(host, method, path, None);
                     assert_eq!(response.status, 404, "{host}{path}");
@@ -496,7 +504,7 @@ mod tests {
         }
         for path in ASSOCIATION_PATHS {
             // Once there is one: JSON, kept an hour, the same bytes at both addresses.
-            let response = with(Some(SAMPLE), "o7.codes", "GET", path);
+            let response = with(Some(SAMPLE), "onghost.dev", "GET", path);
             assert_eq!(response.status, 200, "{path}");
             assert_eq!(response.body, SAMPLE.as_bytes());
             assert_eq!(value(&response, "content-type"), Some("application/json"));
@@ -511,17 +519,17 @@ mod tests {
             assert_eq!(value(&response, "x-content-type-options"), Some("nosniff"));
             assert_eq!(value(&response, "location"), None);
             // HEAD: the same answer with no body.
-            let head = with(Some(SAMPLE), "o7.codes", "HEAD", path);
+            let head = with(Some(SAMPLE), "onghost.dev", "HEAD", path);
             assert_eq!(head.status, 200);
             assert!(head.body.is_empty());
             assert_eq!(head.headers, response.headers);
             // Nothing but reading it.
-            let post = with(Some(SAMPLE), "o7.codes", "POST", path);
+            let post = with(Some(SAMPLE), "onghost.dev", "POST", path);
             assert_eq!(post.status, 405);
             assert_eq!(value(&post, "allow"), Some("GET, HEAD"));
-            // The former address answers 404 rather than sending Apple on: it follows no
+            // A former address answers 404 rather than sending Apple on: it follows no
             // redirect, and the app's links are at the site's address.
-            for host in ["auracode.si", "AuraCode.SI"] {
+            for host in ["o7.codes", "auracode.si", "AuraCode.SI"] {
                 let former = with(Some(SAMPLE), host, "GET", path);
                 assert_eq!(former.status, 404, "{host}{path}");
                 assert_eq!(value(&former, "location"), None);
@@ -537,13 +545,13 @@ mod tests {
             "/Apple-App-Site-Association",
         ] {
             assert_eq!(
-                with(Some(SAMPLE), "o7.codes", "GET", path).status,
+                with(Some(SAMPLE), "onghost.dev", "GET", path).status,
                 404,
                 "{path}"
             );
         }
         // Everything else is answered as before.
-        assert_eq!(with(Some(SAMPLE), "o7.codes", "GET", "/").body, b"home");
+        assert_eq!(with(Some(SAMPLE), "onghost.dev", "GET", "/").body, b"home");
         assert_eq!(with(Some(SAMPLE), "auracode.si", "GET", "/").status, 308);
     }
 
