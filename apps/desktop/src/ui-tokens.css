@@ -50,6 +50,12 @@
   --ui-composer-shadow-focus: inset 0 0 0 1px var(--g-glass-rim-strong), var(--g-shadow-inline);
 
   /*
+   * The tray tucked behind the message box's top edge (background tasks, queued messages): a
+   * sheet one step off the pane and quieter than the box that stands on it.
+   */
+  --ui-tray-fill: var(--g-surface-1);
+
+  /*
    * Paper and the ink on it, for the sent message: in dark a soft step of the theme's ink over the
    * pane (10%, quieter than the Grok Bot app's 18, so a long thread is not striped with grey
    * blocks), with the ink itself for the words. Set here, on the root, because the block redefines
@@ -101,6 +107,8 @@
 :root[data-theme="light"] {
   --ui-paper: color-mix(in srgb, var(--g-fg-1) 7%, var(--g-glass-layer));
   --ui-paper-ink: var(--g-fg-1);
+  /* On white panes the first surface is white too; the tray takes the next step. */
+  --ui-tray-fill: var(--g-surface-2);
 }
 
 /*

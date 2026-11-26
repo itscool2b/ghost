@@ -25,10 +25,10 @@ import { WorktreeRecoveryList, worktreesToReview } from "./WorktreeRecoveryList"
  * (--g-project-*). The stored values are data and must not change.
  */
 const COLORS = [
-  { value: "#8a98a6", tone: "slate" },
-  { value: "#a59e92", tone: "sand" },
-  { value: "#8c9c88", tone: "sage" },
-  { value: "#a88e80", tone: "clay" },
+  { value: "#8a98a6", tone: "slate", name: "Slate" },
+  { value: "#a59e92", tone: "sand", name: "Sand" },
+  { value: "#8c9c88", tone: "sage", name: "Sage" },
+  { value: "#a88e80", tone: "clay", name: "Clay" },
 ] as const;
 export function ProjectDialog({
   project,
@@ -140,7 +140,12 @@ export function ProjectDialog({
     );
   }
   return (
-    <Modal title={project ? "Project settings" : "New project"} size="md" onClose={onClose}>
+    <Modal
+      title={project ? "Project settings" : "New project"}
+      size="md"
+      className="project-dialog"
+      onClose={onClose}
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -168,168 +173,202 @@ export function ProjectDialog({
             });
         }}
       >
-        <label className="ui-field">
-          Project name
-          <input
-            className="g-input"
-            value={name}
-            maxLength={128}
-            required
-            onChange={(event) => setName(event.currentTarget.value)}
-          />
-        </label>
-        <fieldset className="chat-color-choices">
-          <legend>Project color</legend>
-          {COLORS.map(({ value, tone }) => (
-            <label key={value} data-tone={tone}>
-              <input
-                type="radio"
-                name="project-color"
-                aria-label={value}
-                checked={color === value}
-                onChange={() => setColor(value)}
-              />
-              <span />
-            </label>
-          ))}
-        </fieldset>
+        {/* The name and its colour share the first line. */}
+        <div className="project-identity">
+          <label className="ui-field">
+            Project name
+            <input
+              className="g-input"
+              // The dialog opens on the name (Modal's showDialog).
+              data-autofocus
+              value={name}
+              maxLength={128}
+              required
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </label>
+          <fieldset className="chat-color-choices">
+            <legend>Project color</legend>
+            <div>
+              {COLORS.map(({ value, tone, name: label }) => (
+                <label key={value} data-tone={tone} title={label}>
+                  <input
+                    type="radio"
+                    name="project-color"
+                    aria-label={label}
+                    checked={color === value}
+                    onChange={() => setColor(value)}
+                  />
+                  <span aria-hidden="true" />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
         <section className="chat-project-folders" aria-label="Project folders">
           <h3>Folders</h3>
-          {current?.folders.map((item) => (
-            <div key={item.id}>
-              <FolderOpen size={16} />
-              <span>
-                <strong>{item.display_name}</strong>
-                <small>{item.path ?? "Not mapped on this device"}</small>
-                {item.unavailable_reason ? (
-                  <small className="ui-error">{item.unavailable_reason}</small>
-                ) : null}
-              </span>
-              <button
-                type="button"
-                className="g-button"
-                onClick={() => setRemoval({ target: { kind: "folder", id: item.id } })}
-              >
-                Remove…
-              </button>
-              {inTauri() ? (
-                <button type="button" className="g-button" onClick={() => setResolving(item.id)}>
-                  {item.path && !item.unavailable_reason
-                    ? "Change location"
-                    : "Find on this device"}
-                </button>
-              ) : null}
-              {onInstructions && item.path && !item.unavailable_reason ? (
-                <button
-                  type="button"
-                  className="g-button"
-                  aria-label={`Instructions for ${item.display_name}`}
-                  onClick={() => onInstructions(item.id)}
-                >
-                  Instructions
-                </button>
-              ) : null}
-            </div>
-          ))}
-          {folder ? <p className="ui-mono">{folder}</p> : null}
-          <button
-            type="button"
-            className="g-button"
-            disabled={picking || saving}
-            onClick={() => void chooseFolder()}
-          >
-            <Plus size={14} />
-            {picking
-              ? "Choosing…"
-              : current
-                ? "Add folder"
-                : folder
-                  ? "Change folder"
-                  : "Choose folder"}
-          </button>
-          {current ? null : (
-            // A new project can start from a repository: Git clones it into a new folder,
-            // which becomes this project's folder.
-            <CloneProject
-              className="g-button chat-project-clone"
-              api={cloneApi}
+          {current?.folders.length ? (
+            <ul className="project-folder-list">
+              {current.folders.map((item) => (
+                <li key={item.id}>
+                  <FolderOpen size={16} aria-hidden="true" />
+                  <strong>{item.display_name}</strong>
+                  <span className="project-folder-actions">
+                    {onInstructions && item.path && !item.unavailable_reason ? (
+                      <button
+                        type="button"
+                        className="g-button g-button-ghost g-button-24"
+                        aria-label={`Instructions for ${item.display_name}`}
+                        onClick={() => onInstructions(item.id)}
+                      >
+                        Instructions
+                      </button>
+                    ) : null}
+                    {inTauri() ? (
+                      <button
+                        type="button"
+                        className="g-button g-button-ghost g-button-24"
+                        onClick={() => setResolving(item.id)}
+                      >
+                        {item.path && !item.unavailable_reason
+                          ? "Change location"
+                          : "Find on this device"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="g-button g-button-ghost g-button-24"
+                      onClick={() => setRemoval({ target: { kind: "folder", id: item.id } })}
+                    >
+                      Remove…
+                    </button>
+                  </span>
+                  {item.path ? (
+                    <small className="project-folder-path">{item.path}</small>
+                  ) : (
+                    <small>Not mapped on this device</small>
+                  )}
+                  {item.unavailable_reason ? (
+                    <small className="ui-error">{item.unavailable_reason}</small>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {folder ? (
+            <p className="project-folder-chosen">
+              <FolderOpen size={16} aria-hidden="true" />
+              <span className="ui-mono">{folder}</span>
+            </p>
+          ) : null}
+          <div className="project-folder-add">
+            <button
+              type="button"
+              className="g-button"
               disabled={picking || saving}
-              pickParent={() => transport.pickFolder()}
-              onFolder={(path, cloned) => {
-                setFolder(path);
-                if (!name.trim()) setName(cloned);
-              }}
-            />
-          )}
+              onClick={() => void chooseFolder()}
+            >
+              <Plus size={14} aria-hidden="true" />
+              {picking
+                ? "Choosing…"
+                : current
+                  ? "Add folder"
+                  : folder
+                    ? "Change folder"
+                    : "Choose folder"}
+            </button>
+            {current ? null : (
+              // A new project can start from a repository: Git clones it into a new folder,
+              // which becomes this project's folder.
+              <CloneProject
+                className="g-button chat-project-clone"
+                api={cloneApi}
+                disabled={picking || saving}
+                pickParent={() => transport.pickFolder()}
+                onFolder={(path, cloned) => {
+                  setFolder(path);
+                  if (!name.trim()) setName(cloned);
+                }}
+              />
+            )}
+          </div>
         </section>
-        <label className="ui-field">
-          Default agent
-          <Select
-            className="g-select"
-            value={agent}
-            onChange={(event) => {
-              setAgent(event.currentTarget.value);
-              setModel("");
-            }}
-          >
-            <option value="">Choose when starting a chat</option>
-            {(agents ?? []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="ui-field">
-          Default model ID
-          <input
-            className="g-input"
-            value={model}
-            disabled={!agent}
-            maxLength={256}
-            spellCheck={false}
-            onChange={(event) => setModel(event.currentTarget.value)}
-            aria-describedby="project-default-model-help"
-          />
+        {/* What new chats in this project start with, side by side; the note is the model's. */}
+        <div className="project-defaults">
+          <label className="ui-field">
+            Default agent
+            <Select
+              className="g-select"
+              value={agent}
+              onChange={(event) => {
+                setAgent(event.currentTarget.value);
+                setModel("");
+              }}
+            >
+              <option value="">Choose when starting a chat</option>
+              {(agents ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="ui-field">
+            Default model ID
+            <input
+              className="g-input"
+              value={model}
+              disabled={!agent}
+              maxLength={256}
+              spellCheck={false}
+              onChange={(event) => setModel(event.currentTarget.value)}
+              aria-describedby="project-default-model-help"
+            />
+          </label>
           <small id="project-default-model-help" className="ui-muted">
             Leave blank for the agent's default. A specific model ID is checked when a new chat
             starts.
           </small>
-        </label>
+        </div>
         {(localError ?? state.error) ? (
           <p role="alert" className="ui-error">
             {localError ?? state.error}
           </p>
         ) : null}
-        <section aria-label="Workspace removal">
-          {recoveryError ? (
-            <p role="alert" className="ui-error">
-              Could not load retained worktrees: {recoveryError}
-            </p>
-          ) : null}
-          <WorktreeRecoveryList
-            records={worktreesToReview(
-              worktrees,
-              state.data ? new Set(state.data.chats.map((entry) => entry.chat.id)) : null,
-            )}
-            api={recoveryApi}
-            onChanged={() => setRecoveryRevision((value) => value + 1)}
-          />
-          {project ? (
+        {project ? (
+          <section className="project-removal" aria-label="Workspace removal">
+            {recoveryError ? (
+              <p role="alert" className="ui-error">
+                Could not load retained worktrees: {recoveryError}
+              </p>
+            ) : null}
+            <WorktreeRecoveryList
+              records={worktreesToReview(
+                worktrees,
+                state.data ? new Set(state.data.chats.map((entry) => entry.chat.id)) : null,
+              )}
+              api={recoveryApi}
+              onChanged={() => setRecoveryRevision((value) => value + 1)}
+            />
             <button
-              className="g-button"
+              className="g-button g-button-ghost g-button-28"
               type="button"
               onClick={() => setRemoval({ target: { kind: "project", id: project.id } })}
             >
               Remove project…
             </button>
-          ) : null}
-          <button className="g-button" type="button" onClick={() => setRemoval({ target: null })}>
+          </section>
+        ) : null}
+        <footer className="project-dialog-foot">
+          {/* What was removed before lives beside the way out, apart from the two answers. */}
+          <button
+            className="g-button g-button-ghost g-button-28 project-removed"
+            type="button"
+            onClick={() => setRemoval({ target: null })}
+          >
             Removed projects and folders
           </button>
-        </section>
-        <footer>
-          <button type="button" className="g-button" onClick={onClose}>
+          <button type="button" className="g-button g-button-ghost" onClick={onClose}>
             Cancel
           </button>
           <button

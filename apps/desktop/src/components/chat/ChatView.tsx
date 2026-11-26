@@ -652,6 +652,12 @@ export function ChatView({
   // through chats starts none of them. A chat that must first be asked how to continue waits, and
   // so does every chat while the window is hidden (opened at sign-in): nothing starts unseen.
   const warmed = useRef<string | null>(null);
+  // The agent running here spends the opening too, however it came to run: a chat opened while
+  // its agent worked was never started by this, and stopped an agent the person had just stopped
+  // (Stop, or stopping it to revert files) from staying stopped.
+  useEffect(() => {
+    if (live) warmed.current = chatId;
+  }, [live, chatId]);
   const pageVisible = usePageVisible();
   const warmable =
     pageVisible &&

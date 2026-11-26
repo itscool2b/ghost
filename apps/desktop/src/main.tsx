@@ -202,6 +202,7 @@ void appearanceReady.then((setUp) => {
         mode === "agents" ||
         mode === "agents-installing" ||
         mode === "new-project" ||
+        mode === "project-settings" ||
         mode === "clone" ||
         mode === "clone-running" ||
         mode === "clone-error"

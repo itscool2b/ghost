@@ -1462,12 +1462,16 @@ async function reopenScenario(
       () =>
         attr(one("chat-view"), "chat-id") === chatId && attr(one("chat-view"), "phase") === "live",
     );
-    const deadline = Date.now() + QUIET_MS;
+    // A chat opens stopped. Its agent starts only once the chat has stayed in front for a second
+    // (ChatView's opening start), so nothing may start in the first half of that.
+    const deadline = Date.now() + QUIET_MS / 2;
     while (Date.now() < deadline) {
-      if (status() !== "stopped") throw new StepError(`opening the chat made it ${status()}`);
+      if (status() !== "stopped") {
+        throw new StepError(`opening the chat made it ${status()} at once`);
+      }
       await sleep(50);
     }
-    return "the chat opened and stayed stopped: opening a chat starts no agent";
+    return "the chat opened stopped: opening a chat starts no agent at once";
   });
 
   await checks.run("reopen-history", async () => {
@@ -1511,6 +1515,34 @@ async function reopenScenario(
   });
 
   await checks.run("reopen-resume", async () => {
+    const held = (after: string) => {
+      if (queued(PROMPTS.heldAtQuit)?.held !== true) {
+        throw new StepError(
+          `the held prompt did not stay held after ${after} (${describeQueue()})`,
+        );
+      }
+    };
+    // A stopped chat that stays in front of a person starts its agent by itself, continuing its
+    // session (ChatView's opening start, since 23 November 2026). A window nobody sees starts
+    // nothing, and then Resume session is the only start there is.
+    let opening = "the window is hidden, so nothing started by itself";
+    if (document.visibilityState !== "hidden") {
+      await waitStatus("ready", START_TIMEOUT_MS);
+      await expectNoTurn(PROMPTS.heldAtQuit, "it was held at quit and a start releases nothing");
+      held("the opening start");
+      click(one("chat-stop-session"), "Stop session");
+      await waitStatus("stopped");
+      opening =
+        "the agent started by itself once the chat had stayed in front, and stopped by hand it stayed stopped";
+    }
+    // Stopped, it stays stopped: the opening's one start is spent.
+    const deadline = Date.now() + QUIET_MS * 2;
+    while (Date.now() < deadline) {
+      if (status() !== "stopped") {
+        throw new StepError(`the stopped chat became ${status()} by itself`);
+      }
+      await sleep(50);
+    }
     const start = one("chat-start");
     if (attr(start, "resume") !== "true" || one("chat-start-fresh") === null) {
       throw new StepError("the stopped chat offers no Resume session and Start fresh");
@@ -1518,10 +1550,8 @@ async function reopenScenario(
     click(start, "Resume session");
     await waitStatus("ready", START_TIMEOUT_MS);
     await expectNoTurn(PROMPTS.heldAtQuit, "it was held at quit and Resume releases nothing");
-    if (queued(PROMPTS.heldAtQuit)?.held !== true) {
-      throw new StepError(`the held prompt did not stay held (${describeQueue()})`);
-    }
-    return "the chat offered Resume session and Start fresh; Resume started the agent, and the prompt stayed held";
+    held("Resume session");
+    return `${opening}; the chat offered Resume session and Start fresh, Resume started the agent, and the prompt stayed held`;
   });
 
   await checks.run("reopen-send-queued", async () => {

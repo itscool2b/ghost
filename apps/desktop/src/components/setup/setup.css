@@ -406,15 +406,16 @@
   overflow-wrap: anywhere;
 }
 
+/* A field's label is quiet (shell.css, .ui-field): what the field holds is the brightest thing. */
 .setup-field {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-8);
+  gap: var(--g-space-6);
   margin: 0;
-  color: var(--g-fg-1);
+  color: var(--g-fg-2);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
-  font-weight: var(--g-weight-medium);
+  font-weight: var(--g-weight-regular);
 }
 
 .setup-hint {
@@ -747,7 +748,7 @@
 .clone-fieldset > legend {
   float: left;
   width: 100%;
-  margin: 0 0 var(--g-space-8);
+  margin: 0 0 var(--g-space-6);
   padding: 0;
 }
 
@@ -770,11 +771,11 @@
   gap: var(--g-space-8);
   min-width: 0;
   max-width: 55%;
-  height: 36px;
-  padding: 0 var(--g-space-12);
-  border: 1px solid var(--g-line-strong);
+  height: var(--g-control-lg);
+  padding: 0 var(--g-space-12) 0 var(--g-space-8);
+  border: 1px solid var(--g-glass-rim-strong);
   border-radius: var(--g-radius-10);
-  background-color: var(--g-surface-1);
+  background-color: var(--g-glass-card);
   color: var(--g-fg-1);
   font: inherit;
   font-weight: var(--g-weight-regular);
@@ -786,13 +787,13 @@
 
 @media (hover: hover) {
   .clone-parent:hover:not(:disabled) {
-    border-color: var(--g-fg-4);
-    background-color: var(--g-surface-2);
+    border-color: color-mix(in srgb, var(--g-fg-1) 22%, transparent);
+    background-color: var(--g-glass-control);
   }
 }
 
 .clone-parent:active:not(:disabled) {
-  background-color: var(--g-surface-3);
+  background-color: var(--g-glass-control-hover);
   transition-duration: 0ms;
 }
 

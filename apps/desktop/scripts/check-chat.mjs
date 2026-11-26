@@ -1252,11 +1252,24 @@ async function inspect(engine, launcher) {
     );
     const scrollSurface = page.getByTestId("transcript");
     await scrollSurface.hover();
-    await page.mouse.wheel(0, -250);
-    await page.waitForFunction(
-      (bottom) => document.querySelector('[data-testid="transcript"]').scrollTop < bottom - 100,
-      boundary[0].top,
-    );
+    // WebKit on Linux animates a wheel's scroll, and the prompt returning as the end is left
+    // moves the content under it, which ends that animation early: how far one notch gets
+    // depends on the machine (41px and 102px were both measured). A hand gives another notch.
+    let away = false;
+    for (let notch = 0; notch < 4 && !away; notch++) {
+      await page.mouse.wheel(0, -250);
+      away = await page
+        .waitForFunction(
+          (bottom) => document.querySelector('[data-testid="transcript"]').scrollTop < bottom - 100,
+          boundary[0].top,
+          { timeout: 2_000 },
+        )
+        .then(
+          () => true,
+          () => false,
+        );
+    }
+    assert.ok(away, `${engine}: the wheel did not scroll the transcript up from its end`);
     const boundaryPrompt = page.getByTestId("sticky-prompt");
     await boundaryPrompt.waitFor();
     assert.equal(
@@ -1279,12 +1292,27 @@ async function inspect(engine, launcher) {
       const box = node.getBoundingClientRect();
       return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     });
-    await page.mouse.wheel(0, 2000);
+    // Further notches for the same reason as above: WebKit's animated scroll ends early when the
+    // prompt's header changes on the way, so one notch may stop short of the end.
+    const atEnd = (timeout) =>
+      page.waitForFunction(
+        () => {
+          const node = document.querySelector('[data-testid="transcript"]');
+          return Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) < 2;
+        },
+        undefined,
+        { timeout },
+      );
     try {
-      await page.waitForFunction(() => {
-        const node = document.querySelector('[data-testid="transcript"]');
-        return Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) < 2;
-      });
+      let back = false;
+      for (let notch = 0; notch < 5 && !back; notch++) {
+        await page.mouse.wheel(0, 2000);
+        back = await atEnd(2_000).then(
+          () => true,
+          () => false,
+        );
+      }
+      if (!back) await atEnd(5_000);
     } catch (cause) {
       const geometry = await page.evaluate((pointer) => {
         const node = document.querySelector('[data-testid="transcript"]');

@@ -85,10 +85,10 @@
 .new-chat-message {
   box-sizing: border-box;
   width: 100%;
-  min-height: 72px;
+  min-height: 56px;
   max-height: 240px;
   margin: 0;
-  padding: var(--g-space-16) var(--g-space-16) var(--g-space-8);
+  padding: var(--g-space-12) var(--g-space-16) var(--g-space-6);
   border: 0;
   border-radius: var(--ui-composer-radius) var(--ui-composer-radius) 0 0;
   background: transparent;
@@ -115,7 +115,7 @@
 /* A terminal chat takes its words in the agent's own terminal. */
 .new-chat-terminal-note {
   margin: 0;
-  padding: var(--g-space-16) var(--g-space-16) var(--g-space-8);
+  padding: var(--g-space-12) var(--g-space-16) var(--g-space-6);
   color: var(--g-fg-2);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
@@ -134,7 +134,7 @@
   flex: 1;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--g-space-6);
+  gap: var(--g-space-2);
   min-width: 0;
 }
 
@@ -150,19 +150,32 @@
   min-width: 0;
 }
 
-/* Chips: 28px pills on a faint step of ink, like the chat's pickers; the folder list is one. */
+/*
+ * Chips: 28px pills, bare at rest like the chat's own pickers (Main), a fill under the hand and a
+ * deeper one while open. The folder list is one.
+ */
 .new-chat-agent-picker > summary,
 .new-chat-chips > .new-chat-projects {
-  height: 28px;
-  min-height: 28px;
+  height: var(--g-control);
+  min-height: var(--g-control);
   padding: 0 var(--g-space-8) 0 var(--g-space-8);
   border: 0;
   border-radius: var(--g-radius-pill);
-  background-color: var(--g-glass-control);
+  background-color: transparent;
   box-shadow: none;
   color: var(--g-fg-1);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
+}
+
+@media (hover: hover) {
+  .new-chat-chips > .new-chat-projects:hover:not(:disabled) {
+    background-color: var(--g-glass-control);
+  }
+}
+
+.new-chat-chips > .new-chat-projects:is(:active, [aria-expanded="true"]):not(:disabled) {
+  background-color: var(--g-glass-control-hover);
 }
 
 .new-chat-chips > .new-chat-projects {
@@ -175,22 +188,22 @@
 }
 
 .new-chat-interface > .g-segmented {
-  height: 28px;
+  height: var(--g-control);
   padding: var(--g-space-2);
 }
 
 .new-chat-interface .g-segment {
-  height: 24px;
+  height: var(--g-control-sm);
 }
 
-/* Start: a pill with its words, or the solid 32px disc once there are words to send. */
+/* Start: a pill with its words, or the chat's solid 28px disc once there are words to send. */
 .new-chat-start {
-  --g-button-h: 32px;
+  --g-button-h: var(--g-control);
   border-radius: var(--g-radius-pill);
 }
 
 .new-chat-start[data-with-message] {
-  width: 32px;
+  width: var(--g-control);
   padding: 0;
 }
 
@@ -430,8 +443,8 @@
 .new-chat-below {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-12);
-  margin-top: var(--g-space-16);
+  gap: var(--g-space-8);
+  margin-top: var(--g-space-12);
 }
 
 .new-chat-note,
@@ -670,8 +683,9 @@
 
 /*
  * Where the chat works, directly under the card (Codex's per-thread Local or Worktree, drawn as
- * Grok's composer chip): one 32px ghost pill whose icon sits on the 16px axis and whose words read
- * "Worktree from main on aura/...", the connectives in fg-3 and the branches in mono.
+ * Grok's composer chip): one 28px pill whose icon sits on the 16px axis and whose words read
+ * "Worktree from main on aura/...", the connectives in fg-3 and the branches in mono. Bare at rest
+ * since Main, like the chips in the box above it: a line of the page until the hand is on it.
  */
 .new-chat-worktree {
   display: flex;
@@ -690,11 +704,9 @@
 .new-chat-worktree-popover > summary {
   gap: var(--g-space-8);
   max-width: 100%;
-  height: 32px;
-  padding: 0 var(--g-space-12) 0 var(--g-space-8);
+  height: var(--g-control);
+  padding: 0 var(--g-space-8);
   border-radius: var(--g-radius-pill);
-  background-color: var(--g-glass-control);
-  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
   white-space: nowrap;
 }
 
@@ -751,7 +763,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--g-space-8);
-  min-height: 32px;
+  min-height: var(--g-control);
   margin: 0;
   padding: 0 var(--g-space-8);
   color: var(--g-fg-3);
@@ -779,7 +791,7 @@
 .new-chat-worktree-pending {
   display: inline-flex;
   align-items: center;
-  height: 32px;
+  height: var(--g-control);
 }
 
 /* A reason or a next step on its own line under the chip, on the same 16px axis. */

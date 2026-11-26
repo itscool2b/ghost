@@ -382,9 +382,14 @@
   border-color: color-mix(in srgb, var(--g-fg-1) 32%, transparent);
 }
 
+/*
+ * A focused field is one crisp line in the focus colour, drawn over its own edge: a field takes
+ * focus whenever it is typed in, so a second ring around it would shout on every dialog that opens
+ * on its first field. Buttons keep the offset ring, which only the keyboard shows.
+ */
 :is(.g-input, .g-select, .g-textarea):where(:focus-visible) {
-  outline: 2px solid var(--g-focus);
-  outline-offset: 2px;
+  outline: 1px solid var(--g-focus);
+  outline-offset: -1px;
 }
 
 .g-textarea,

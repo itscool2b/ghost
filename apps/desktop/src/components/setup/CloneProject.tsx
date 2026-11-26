@@ -19,7 +19,7 @@ import {
   folderName,
   progressLine,
 } from "../../lib/setup-actions/clone";
-import { DialogClose, dialogClassName } from "../chat/Modal";
+import { DialogClose, dialogClassName, showDialog } from "../chat/Modal";
 
 /** One clone form for its lifetime: checked by Rust as it changes, stopped when it closes. */
 export function useClone(api: CloneApi, draft?: CloneDraft) {
@@ -268,6 +268,7 @@ export function CloneBody({
           // Setup and the dialogs open on this field: pasting the address is the first step.
           // biome-ignore lint/a11y/noAutofocus: The form opens on the person's request.
           autoFocus={!fixedRemote}
+          data-autofocus={fixedRemote ? undefined : true}
           readOnly={fixedRemote}
           maxLength={2048}
           aria-invalid={remoteProblem ? true : undefined}
@@ -523,7 +524,7 @@ function CloneDialog({
   const { controller, view } = useClone(api, remote === undefined ? undefined : { remote });
   useEffect(() => {
     const element = dialog.current;
-    element?.showModal();
+    if (element) showDialog(element);
     return () => element?.close();
   }, []);
   const running = view.phase === "running";

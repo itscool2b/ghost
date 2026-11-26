@@ -183,7 +183,7 @@
 .changes-file-list {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-4);
+  gap: var(--g-space-2);
   padding: 0 0 var(--g-space-12);
 }
 
@@ -191,7 +191,7 @@
   display: flex;
   align-items: center;
   gap: var(--g-space-8);
-  min-height: 32px;
+  min-height: var(--g-row);
   padding: 0 var(--g-space-4) 0 var(--g-space-8);
   border-radius: var(--g-radius-10);
   transition:
@@ -211,7 +211,7 @@
   align-items: center;
   gap: var(--g-space-8);
   min-width: 0;
-  height: 32px;
+  height: var(--g-row);
   padding: 0 var(--g-space-4);
   border-radius: var(--g-radius-6);
   color: var(--g-fg-2);
