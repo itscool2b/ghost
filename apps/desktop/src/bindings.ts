@@ -4330,11 +4330,13 @@ export type TerminalChunk = {
 export type TextSizePreference = "compact" | "comfortable";
 
 /**
- *  The desktop's theme: Aura's own neutral palette, or one per supported agent (owner,
+ *  The desktop's theme: Main, o7's own neutral palette, or one per supported agent (owner,
  *  3 November 2026). It belongs to the profile on this device, like appearance, and works in both
- *  appearances. Claude Code's is the default (owner, 4 November 2026): a profile that never chose
- *  one, or a file from a newer build that names a theme this build lacks, reads as it
- *  ([`fill_defaults`]). A saved choice, Aura included, is kept.
+ *  appearances. Main is the default (owner, 25 November 2026; Claude Code's was from 4 November):
+ *  a profile that never chose one, or a file from a newer build that names a theme this build
+ *  lacks, reads as it ([`fill_defaults`]). Main is saved as `aura`, the name this palette had
+ *  before it was Main, so files written by earlier builds still read. A saved choice is kept,
+ *  except the one move [`meet_main`] makes.
  */
 export type ThemePreference = "aura" | "claude" | "codex" | "grok" | "pi" | "antigravity" | "cursor" | "opencode" | "oh_my_pi" | "hermes";
 
