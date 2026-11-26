@@ -14,6 +14,7 @@
     "check:customization": "node scripts/check-customization-suite.mjs",
     "check:fixtures": "node scripts/check-fixture-suite.mjs",
     "check:header-labels": "node scripts/check-header-labels.mjs",
+    "check:layout": "node scripts/check-layout.mjs --sizes 1440x900,960x640 --focus-steps 120",
     "check:setup": "node scripts/check-setup.mjs",
     "check:settings": "node scripts/check-settings.mjs",
     "tauri": "tauri",
