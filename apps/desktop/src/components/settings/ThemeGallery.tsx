@@ -21,7 +21,7 @@ function swatch(id: ThemePreference, appearance: "dark" | "light"): CSSPropertie
 }
 
 /**
- * The theme picker: Aura and one theme per supported agent, each a small window painted in its
+ * The theme picker: Main and one theme per supported agent, each a small window painted in its
  * own colours for the appearance in effect, with the agent's mark. A radio group: arrow keys move
  * between themes, and the choice applies at once.
  */
@@ -40,7 +40,7 @@ export function ThemeGallery({
     getResolvedAppearance,
   );
   const choices: readonly { id: ThemePreference; name: string; agent: string | null }[] = [
-    { id: "aura", name: "Aura", agent: null },
+    { id: "aura", name: "Main", agent: null },
     ...THEMES.map((theme) => ({ id: theme.id, name: theme.name, agent: theme.agent })),
   ];
   return (

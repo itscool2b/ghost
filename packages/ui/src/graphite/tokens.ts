@@ -16,7 +16,7 @@ export const GRAPHITE_COLORS = {
   "line-strong": "#6b6b6b",
   "fg-1": "#f5f5f5",
   "fg-2": "#ababab",
-  "fg-3": "#8e8e8e",
+  "fg-3": "#909090",
   "fg-4": "#666666",
   "on-light": "#131313",
   primary: "#f5f5f5",

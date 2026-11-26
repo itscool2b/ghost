@@ -14,7 +14,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 /** What Settings lists, in order: the saved name, then the name a person reads. */
 const THEMES = [
-  ["aura", "Aura"],
+  ["aura", "Main"],
   ["claude", "Claude Code"],
   ["codex", "Codex"],
   ["grok", "Grok Build"],
@@ -96,9 +96,10 @@ export async function checkThemes(browser, url, out, engine) {
       );
       // Each choice is named by its theme alone, never by its mark's "Claude Code, Idle".
       for (const [id, name] of THEMES) assert.equal(await radio(name).getAttribute("value"), id);
-      // A fresh profile starts on the default, Claude Code's (owner, 4 November 2026).
-      await chosen("claude");
-      assert.equal(await page.locator("html").getAttribute("data-palette"), "claude");
+      // A fresh profile starts on the default, Main (owner, 25 November 2026): the base palette,
+      // saved as "aura", which names no palette of its own.
+      await chosen("aura");
+      assert.equal(await page.locator("html").getAttribute("data-palette"), null);
       await gallery.scrollIntoViewIfNeeded();
       await settled(page);
       await gallery.screenshot({ path: resolve(out, `${engine}-${appearance}-gallery.png`) });
@@ -155,7 +156,7 @@ export async function checkThemes(browser, url, out, engine) {
       assert.equal(await saved(), "cursor");
       await page.evaluate(() => sessionStorage.removeItem("settings-fail-save"));
 
-      // Back to Aura clears the palette and the error.
+      // Back to Main clears the palette and the error.
       await gallery.getByTestId("theme-aura").click();
       await page.waitForFunction(() => document.documentElement.dataset.palette === undefined);
       await chosen("aura");

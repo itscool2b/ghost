@@ -33,7 +33,7 @@ describe("appearance preferences", () => {
     const appearance = await import("./appearance");
     appearance.initializeAppearance();
     expect(root).toEqual({
-      dataset: { theme: "dark", palette: "claude" },
+      dataset: { theme: "dark" },
       style: { colorScheme: "dark" },
     });
     appearance.applySetupAppearance({ revision: 4, appearance: "light" });
@@ -52,14 +52,15 @@ describe("appearance preferences", () => {
     const appearance = await import("./appearance");
     appearance.initializeAppearance();
     expect(appearance.getAppearancePreference()).toBe("system");
-    // The first frame wears the default theme, Claude Code's, before the profile answers.
-    expect(root.dataset).toEqual({ theme: "light", palette: "claude" });
+    // The first frame wears the default theme, Main, before the profile answers: Main is the
+    // base palette, so it names none.
+    expect(root.dataset).toEqual({ theme: "light" });
     appearance.applySetupAppearance({ revision: 0, appearance: "dark" });
-    expect(root.dataset).toEqual({ theme: "dark", palette: "claude" });
+    expect(root.dataset).toEqual({ theme: "dark" });
     expect(localStorage.getItem).not.toHaveBeenCalled();
     expect(localStorage.setItem).not.toHaveBeenCalled();
   });
-  it("applies the saved theme as a palette beside the appearance, Aura as none, and ignores stale snapshots", async () => {
+  it("applies the saved theme as a palette beside the appearance, Main as none, and ignores stale snapshots", async () => {
     vi.resetModules();
     const os = system(true);
     const localStorage = { getItem: vi.fn(() => "claude"), setItem: vi.fn() };
@@ -69,9 +70,9 @@ describe("appearance preferences", () => {
     const appearance = await import("./appearance");
     const seen: string[] = [];
     appearance.subscribeTheme(() => seen.push(appearance.getThemePreference()));
-    // Production starts on the default, Claude Code's, and never reads a theme from storage.
-    expect(appearance.getThemePreference()).toBe("claude");
-    expect(root.dataset).toEqual({ theme: "dark", palette: "claude" });
+    // Production starts on the default, Main, and never reads a theme from storage.
+    expect(appearance.getThemePreference()).toBe("aura");
+    expect(root.dataset).toEqual({ theme: "dark" });
     appearance.applySetupAppearance({ revision: 2, appearance: "light", theme: "grok" });
     expect(root.dataset).toEqual({ theme: "light", palette: "grok" });
     appearance.applySetupAppearance({ revision: 1, appearance: "dark", theme: "codex" });
@@ -82,15 +83,15 @@ describe("appearance preferences", () => {
       appearance: "light",
       theme: "future_agent" as never,
     });
-    expect(root.dataset).toEqual({ theme: "light", palette: "claude" });
+    expect(root.dataset).toEqual({ theme: "light" });
     appearance.setThemePreference("oh_my_pi");
     expect(root.dataset.palette).toBe("oh_my_pi");
     appearance.applySetupAppearance({ revision: 4, appearance: "system" });
-    expect(root.dataset).toEqual({ theme: "dark", palette: "claude" });
-    // A saved Aura is kept, and is the base palette: no attribute at all.
-    appearance.applySetupAppearance({ revision: 5, appearance: "system", theme: "aura" });
     expect(root.dataset).toEqual({ theme: "dark" });
-    expect(seen).toEqual(["grok", "claude", "oh_my_pi", "claude", "aura"]);
+    // A saved agent theme is kept, and names its palette.
+    appearance.applySetupAppearance({ revision: 5, appearance: "system", theme: "claude" });
+    expect(root.dataset).toEqual({ theme: "dark", palette: "claude" });
+    expect(seen).toEqual(["grok", "aura", "oh_my_pi", "aura", "claude"]);
     expect(appearance.getResolvedAppearance()).toBe("dark");
     expect(localStorage.getItem).not.toHaveBeenCalled();
     expect(localStorage.setItem).not.toHaveBeenCalled();

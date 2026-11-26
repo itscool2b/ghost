@@ -11,14 +11,15 @@ export function isTheme(value: unknown): value is ThemePreference {
 
 /**
  * The theme a profile has until it chooses one, and what a missing or unknown saved theme reads
- * as (owner, 4 November 2026: Claude Code's). A saved choice, Aura included, is kept.
+ * as: Main (owner, 25 November 2026), which is saved as "aura", the name its palette had before.
+ * A saved choice is kept.
  */
-export const DEFAULT_THEME: ThemePreference = "claude";
+export const DEFAULT_THEME: ThemePreference = "aura";
 
 let theme: ThemePreference = DEFAULT_THEME;
 const themeListeners = new Set<() => void>();
 
-/** Aura is the base palette itself and sets no attribute; every other theme names its own. */
+/** Main is the base palette itself and sets no attribute; every other theme names its own. */
 function paintPalette(next: ThemePreference): void {
   if (typeof document === "undefined") return;
   if (next === "aura") delete document.documentElement.dataset.palette;

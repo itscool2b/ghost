@@ -417,7 +417,7 @@ export function AppearancePage({ prefs }: { readonly prefs: Preferences }) {
         </Row>
         <Row
           title="Theme"
-          detail="Aura is o7's own. Each agent's theme carries its colours through the whole app, in light and dark."
+          detail="Main is o7's own. Each agent's theme carries its colours through the whole app, in light and dark."
         >
           <ThemeGallery
             value={shown?.theme ?? getThemePreference()}

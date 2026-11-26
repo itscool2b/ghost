@@ -56,8 +56,8 @@ function relayOrigin(): string {
   return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
 }
 
-/** o7's own default, until the computer says otherwise. */
-const DEFAULT_LOOK: Look = { theme: "claude", appearance: "system" };
+/** o7's own default, Main (saved as "aura"), until the computer says otherwise. */
+const DEFAULT_LOOK: Look = { theme: "aura", appearance: "system" };
 
 /**
  * Puts the computer's theme on the page: its palette, its appearance (the system's when it follows
