@@ -90,7 +90,7 @@ impl Failure {
     pub fn unsupported() -> Self {
         Self::new(
             DictationFailure::Unsupported,
-            "Dictation needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of o7 works as usual.",
+            "Dictation needs a processor with AVX2 (Intel from 2013 or AMD from 2015 onward). The rest of Ghost works as usual.",
         )
     }
     pub fn cancelled() -> Self {
@@ -123,7 +123,7 @@ pub struct LargerModel {
     /// Bytes of it here so far, while it downloads: a page that did not start the download
     /// shows how far it has come from this.
     pub received: u32,
-    /// o7 will fetch it by itself: nobody said no and the disk has the room (`larger::wanted`).
+    /// Ghost will fetch it by itself: nobody said no and the disk has the room (`larger::wanted`).
     pub automatic: bool,
 }
 

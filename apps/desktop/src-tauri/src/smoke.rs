@@ -1,8 +1,8 @@
-//! Smoke mode (`O7_SMOKE`): the UI runs a scripted check against the real shell and reports
-//! here; this side prints one machine-readable line and, with `O7_SMOKE_EXIT=1`, exits with
+//! Smoke mode (`GHOST_SMOKE`): the UI runs a scripted check against the real shell and reports
+//! here; this side prints one machine-readable line and, with `GHOST_SMOKE_EXIT=1`, exits with
 //! the verdict.
 //!
-//! The line is `O7_SMOKE_RESULT <json>` on stdout. The verdict is re-checked here rather than
+//! The line is `GHOST_SMOKE_RESULT <json>` on stdout. The verdict is re-checked here rather than
 //! taken on trust, and a watchdog reports a failure if the UI never reports at all, so a frontend
 //! that is broken badly enough to never get there still ends the run with a clear result.
 //!
@@ -16,21 +16,21 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 /// Starts the stdout line, so automation can find it among the logs.
-pub const RESULT_PREFIX: &str = "O7_SMOKE_RESULT";
+pub const RESULT_PREFIX: &str = "GHOST_SMOKE_RESULT";
 
 /// Which scripted check a smoke launch runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SmokeScenario {
-    /// A demo stream, a cancelled stream and a stress burst (`O7_SMOKE=1`).
+    /// A demo stream, a cancelled stream and a stress burst (`GHOST_SMOKE=1`).
     Stream,
     /// The chat screens against the demo agent in a new data folder, ending with the quit flow
-    /// while a turn runs (`O7_SMOKE=chat`).
+    /// while a turn runs (`GHOST_SMOKE=chat`).
     Chat,
     /// The same data folder started again after `chat`: the stored history, the turn the quit
-    /// interrupted, the prompt it held, and Resume (`O7_SMOKE=chat-reopen`).
+    /// interrupted, the prompt it held, and Resume (`GHOST_SMOKE=chat-reopen`).
     ChatReopen,
-    /// One minimal chat with `O7_SMOKE_AGENT`'s agent (`O7_SMOKE=chat` with that set).
+    /// One minimal chat with `GHOST_SMOKE_AGENT`'s agent (`GHOST_SMOKE=chat` with that set).
     /// For local runs only: a real agent spends the user's quota.
     Agent,
 }
@@ -280,13 +280,13 @@ pub fn timed_out(scenario: SmokeScenario, after: Duration) -> SmokeReport {
 /// still ends with a result line rather than only an exit code.
 pub fn no_window(scenario: SmokeScenario, reason: &str) -> SmokeReport {
     SmokeReport {
-        errors: vec![format!("o7 could not create its window: {reason}")],
+        errors: vec![format!("Ghost could not create its window: {reason}")],
         ..timed_out(scenario, Duration::ZERO)
     }
 }
 
 /// The report printed when the smoke switches cannot run any scenario (an unknown
-/// `O7_SMOKE` value, a chat run without its folder, ...): the UI never starts one.
+/// `GHOST_SMOKE` value, a chat run without its folder, ...): the UI never starts one.
 pub fn setup_failed(scenario: Option<SmokeScenario>, reason: &str) -> SmokeReport {
     SmokeReport {
         ok: false,
@@ -297,7 +297,7 @@ pub fn setup_failed(scenario: Option<SmokeScenario>, reason: &str) -> SmokeRepor
     }
 }
 
-/// `O7_SMOKE_RESULT {"ok":true,...}`
+/// `GHOST_SMOKE_RESULT {"ok":true,...}`
 pub fn result_line(report: &SmokeReport) -> String {
     let json = serde_json::to_string(report).unwrap_or_else(|error| {
         // Unreachable for this struct (finite numbers, string keys); still a valid failing line.
@@ -453,7 +453,7 @@ mod tests {
     fn the_line_is_the_prefix_and_one_json_object() {
         for report in [passing(), chat_passing(SmokeScenario::Chat)] {
             let line = result_line(&report);
-            let json = line.strip_prefix("O7_SMOKE_RESULT ").expect("prefix");
+            let json = line.strip_prefix("GHOST_SMOKE_RESULT ").expect("prefix");
             assert!(!json.contains('\n'));
             let parsed: SmokeReport = serde_json::from_str(json).expect("json");
             assert_eq!(parsed, report);
@@ -584,7 +584,7 @@ mod tests {
         assert_eq!(exit_code(&report), 1);
         assert_eq!(
             report.errors[0],
-            "o7 could not create its window: WebView2 is not installed"
+            "Ghost could not create its window: WebView2 is not installed"
         );
         assert!(
             !report.errors.iter().any(|e| e.contains("seconds")),
@@ -626,12 +626,12 @@ mod tests {
 
     #[test]
     fn a_setup_failure_reports_why_without_a_scenario() {
-        let report = setup_failed(None, "O7_SMOKE=\"x\" names no smoke run");
+        let report = setup_failed(None, "GHOST_SMOKE=\"x\" names no smoke run");
         assert!(!report.ok);
         assert_eq!(report.scenario, None);
         assert_eq!(
             report.errors,
-            vec!["the smoke run cannot start: O7_SMOKE=\"x\" names no smoke run".to_string()]
+            vec!["the smoke run cannot start: GHOST_SMOKE=\"x\" names no smoke run".to_string()]
         );
         assert!(result_line(&report).contains(r#""scenario":null"#));
     }

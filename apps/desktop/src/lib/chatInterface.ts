@@ -1,13 +1,13 @@
 /**
- * Whether a chat shows as Chat (o7's interface) or Terminal (its agent's own interface in
- * o7's terminal; docs/superpowers/plans/2026-11-06-terminal-chats.md). The choice is this
+ * Whether a chat shows as Chat (Ghost's interface) or Terminal (its agent's own interface in
+ * Ghost's terminal; docs/superpowers/plans/2026-11-06-terminal-chats.md). The choice is this
  * device's: a terminal needs the agent's CLI here, and the chat's saved record stays as it was.
  * New chats take the default saved here.
  */
 export type ChatInterface = "chat" | "terminal";
 
 /**
- * The agents whose own interface a chat can open in, as Rust's `o7_agents::has_terminal` names
+ * The agents whose own interface a chat can open in, as Rust's `ghost_agents::has_terminal` names
  * them: an agent's entry carries it (`AgentEntry.terminal`), and this list answers until the
  * entries load, so a chat open in its terminal keeps that view meanwhile.
  */

@@ -13,7 +13,7 @@ const CHOICES: readonly { key: keyof ClearData; label: string; detail: string }[
   {
     key: "cookies",
     label: "Cookies and site data",
-    detail: "Signs you out of sites in o7's browser. Your own browser is not touched.",
+    detail: "Signs you out of sites in Ghost's browser. Your own browser is not touched.",
   },
   { key: "cache", label: "Cached images and files", detail: "Pages load again from the network." },
   { key: "passwords", label: "Saved passwords", detail: "Sign-ins the browser offered to save." },
@@ -65,7 +65,7 @@ export function ClearDataDialog({
         }}
       >
         <p className="browser-clear-lead">
-          Everything o7's browser keeps, for every chat. Your own browser is not touched.
+          Everything Ghost's browser keeps, for every chat. Your own browser is not touched.
         </p>
         <fieldset className="browser-clear-choices">
           <legend className="sr-only">What to clear</legend>

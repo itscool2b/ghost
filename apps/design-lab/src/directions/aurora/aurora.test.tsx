@@ -65,14 +65,14 @@ describe("Aurora renders every lab state", () => {
 
   it("folds a passing command to its command line once the turn moves on", () => {
     const shown = text(render("settled"));
-    expect(shown).toContain("pnpm --filter @o7/ui test pacing");
+    expect(shown).toContain("pnpm --filter @ghost/ui test pacing");
     expect(shown).toContain("Exit 0");
     expect(shown).not.toContain("19 passed");
   });
 
   it("keeps a running command open, with its output", () => {
     const shown = text(render("streaming", 24_000));
-    expect(shown).toContain("pnpm --filter @o7/ui test pacing");
+    expect(shown).toContain("pnpm --filter @ghost/ui test pacing");
     expect(shown).toContain("Running");
     expect(shown).toContain("vitest run pacing");
   });
@@ -307,7 +307,7 @@ describe("tokenizeLine", () => {
       "export function shouldDrawFrame(now: number, lastDrawAt: number, fps: number): boolean {",
       "  return elapsed >= interval - slackMs(interval); // 0x1f, 16.7ms",
       "let line = serde_json::to_vec(&frame)?; line.push(b'\\n'); fn x<'a>(s: &'a str) {}",
-      "pnpm --filter @o7/ui test pacing # comment",
+      "pnpm --filter @ghost/ui test pacing # comment",
       // A template literal with a placeholder, built so the source has no "${" in a plain string.
       `\`template $${"{"}literal}\` + 'single' + "double`,
     ];

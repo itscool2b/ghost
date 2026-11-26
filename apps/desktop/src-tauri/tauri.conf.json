@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "o7",
-  "mainBinaryName": "o7",
-  "identifier": "codes.o7.desktop",
+  "productName": "Ghost",
+  "mainBinaryName": "ghost",
+  "identifier": "dev.onghost.desktop",
   "build": {
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist",
-    "beforeDevCommand": "pnpm --filter @o7/desktop dev",
-    "beforeBuildCommand": "pnpm --filter @o7/desktop build"
+    "beforeDevCommand": "pnpm --filter @ghost/desktop dev",
+    "beforeBuildCommand": "pnpm --filter @ghost/desktop build"
   },
   "app": {
     "withGlobalTauri": false,
@@ -15,7 +15,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "o7",
+        "title": "Ghost ADE",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
@@ -84,8 +84,8 @@
           "gstreamer1.0-pulseaudio | gstreamer1.0-alsa"
         ],
         "section": "devel",
-        "conflicts": ["auracode"],
-        "replaces": ["auracode"]
+        "conflicts": ["o7", "auracode"],
+        "replaces": ["o7", "auracode"]
       },
       "rpm": {
         "depends": [
@@ -96,8 +96,8 @@
           "gstreamer1-plugins-base",
           "gstreamer1-plugins-good"
         ],
-        "conflicts": ["auracode"],
-        "obsoletes": ["auracode"]
+        "conflicts": ["o7", "auracode"],
+        "obsoletes": ["o7", "auracode"]
       },
       "appimage": {
         "bundleMediaFramework": true
@@ -105,8 +105,8 @@
     },
     "category": "DeveloperTool",
     "shortDescription": "One home for all your coding agents.",
-    "longDescription": "o7 runs your coding agents through their own harnesses, with local chats and reviewed Git workspaces in one desktop app. Everything stays on your computer.",
-    "homepage": "https://o7.codes",
+    "longDescription": "Ghost runs your coding agents through their own harnesses, with local chats and reviewed Git workspaces in one desktop app. Everything stays on your computer.",
+    "homepage": "https://onghost.dev",
     "copyright": "Copyright 2026 BASH.AI LLC",
     "macOS": {
       "minimumSystemVersion": "13.3",
@@ -125,6 +125,6 @@
         }
       }
     },
-    "publisher": "o7"
+    "publisher": "Ghost"
   }
 }

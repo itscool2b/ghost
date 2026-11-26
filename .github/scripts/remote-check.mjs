@@ -31,7 +31,7 @@ const BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/u;
 
 /** The run's settings from the command line. Throws on anything it does not know. */
 export function parseOptions(argv) {
-  // An option's value may itself start with "-" (--tests "-p o7-core"): join it to its option,
+  // An option's value may itself start with "-" (--tests "-p ghost-core"): join it to its option,
   // which parseArgs would otherwise read as a second option.
   const joined = [];
   for (let index = 0; index < argv.length; index += 1) {

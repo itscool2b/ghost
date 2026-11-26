@@ -602,28 +602,28 @@ mod tests {
     }
 
     /// Opt-in engine acceptance with the real bundled models, separate from microphone hardware
-    /// verification: streams every 16 kHz mono `*.wav` in `O7_DICTATION_FIXTURE_DIR`
+    /// verification: streams every 16 kHz mono `*.wav` in `GHOST_DICTATION_FIXTURE_DIR`
     /// through voice detection and live text in 80 ms ticks, as a recording does, and prints the
     /// text, the passes' time and the share of real time they took. `jfk.wav` must come out as
     /// its famous line. The models come from `resources/dictation` (run
     /// `node apps/desktop/scripts/dictation-models.mjs` once).
     ///
-    /// It is also the bench a model is chosen with: `O7_DICTATION_MODELS` names another folder,
-    /// `O7_DICTATION_ASR` another speech model in it, and `O7_DICTATION_THREADS` another thread
+    /// It is also the bench a model is chosen with: `GHOST_DICTATION_MODELS` names another folder,
+    /// `GHOST_DICTATION_ASR` another speech model in it, and `GHOST_DICTATION_THREADS` another thread
     /// count. Each file prints one tab-separated `RESULT` line (name, seconds of audio, seconds
     /// of passes, live updates, the slowest pass and the audio it covered, text) for a script to
     /// score against the reference beside the WAV.
     #[test]
-    #[ignore = "requires the bundled models and O7_DICTATION_FIXTURE_DIR with WAVs"]
+    #[ignore = "requires the bundled models and GHOST_DICTATION_FIXTURE_DIR with WAVs"]
     fn bundled_models_transcribe_fixture_audio_live() {
         let fixtures = std::path::PathBuf::from(
-            std::env::var_os("O7_DICTATION_FIXTURE_DIR").expect("fixture directory"),
+            std::env::var_os("GHOST_DICTATION_FIXTURE_DIR").expect("fixture directory"),
         );
-        let models = std::env::var_os("O7_DICTATION_MODELS").map_or_else(
+        let models = std::env::var_os("GHOST_DICTATION_MODELS").map_or_else(
             || std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/dictation"),
             std::path::PathBuf::from,
         );
-        let asr = std::env::var("O7_DICTATION_ASR")
+        let asr = std::env::var("GHOST_DICTATION_ASR")
             .unwrap_or_else(|_| super::super::model::ASR.file.to_owned());
         let began = Instant::now();
         let engine = Engine::shared(

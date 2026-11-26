@@ -32,7 +32,7 @@ fn voice_name(voice: &Option<String>) -> Result<(), AppError> {
     match voice.as_deref() {
         None | Some(model::OWN_VOICE_ID) => Ok(()),
         Some(id) if model::voice_id(id) => Ok(()),
-        Some(_) => Err(error("That is not one of o7's voices.".into())),
+        Some(_) => Err(error("That is not one of Ghost's voices.".into())),
     }
 }
 
@@ -102,7 +102,7 @@ pub fn speech_speak(
                 return Err(Failure::unsupported());
             }
             let folder = folder.ok_or_else(|| {
-                Failure::model("o7 could not find its voice model. Reinstall o7.")
+                Failure::model("Ghost could not find its voice model. Reinstall Ghost.")
             })?;
             if !operation.emit(SpeechEvent::Preparing) {
                 return Ok(());

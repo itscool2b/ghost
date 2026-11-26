@@ -1,14 +1,14 @@
 /**
  * Aura's shared foundation retains the Graphite import path for compatibility. Production
  * styling follows docs/design/visual-language.md. Import the stylesheet once at the app root:
- *   import "@o7/ui/graphite.css"; // or graphite-tokens.css for the variables alone
+ *   import "@ghost/ui/graphite.css"; // or graphite-tokens.css for the variables alone
  */
 
 export { createFrameClock, type FrameClock, type FrameHost, frameClock } from "../frameClock";
 export { AgentLogo, type AgentLogoProps, LogoSymbol, logoViewBox } from "./AgentLogo";
 export { AgentMark, type AgentMarkProps, agentCode, logoSide } from "./AgentMark";
 export { AGENT_LOGOS, type AgentLogo as AgentLogoData, agentLogo } from "./agentLogos";
-// BotMark has an entry of its own, @o7/ui/bot-mark: its app icons are files, and the website,
+// BotMark has an entry of its own, @ghost/ui/bot-mark: its app icons are files, and the website,
 // which imports this one, must not carry them.
 export { BOTS, type BotId, type BotKind, botNamed } from "./bots";
 export { CopyButton, type CopyButtonProps } from "./CopyButton";

@@ -1,4 +1,4 @@
-import { GRAPHITE_THEMES, THEME_IDS, THEMES, themeTokens } from "@o7/ui/graphite";
+import { GRAPHITE_THEMES, THEME_IDS, THEMES, themeTokens } from "@ghost/ui/graphite";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ThemeGallery } from "./ThemeGallery";

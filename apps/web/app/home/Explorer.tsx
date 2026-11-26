@@ -32,7 +32,7 @@ const FEATURES: readonly { id: string; title: string; text: string; view: ReactN
   {
     id: "terminal",
     title: "Chat or terminal",
-    text: "Open any chat in its agent's own interface, right inside o7. Back in Chat, the turns are already there.",
+    text: "Open any chat in its agent's own interface, right inside Ghost. Back in Chat, the turns are already there.",
     view: <TerminalView />,
   },
   {
@@ -53,7 +53,7 @@ const FEATURES: readonly { id: string; title: string; text: string; view: ReactN
 const HOLD = 7000;
 
 /**
- * What o7 does, one part at a time: the list at the left names six parts of the app, each in two
+ * What Ghost does, one part at a time: the list at the left names six parts of the app, each in two
  * lines, and the stage beside it shows the chosen one. In view the list moves on by itself, a
  * hairline under the chosen row filling as its time runs; a press, the keyboard or a pointer
  * resting on the list holds it. The rows are plain toggle buttons whose words are always shown,
@@ -83,14 +83,15 @@ export function Explorer() {
             One window. <span className="tone">Everything an agent does, in view.</span>
           </h2>
           <p className="lead">
-            Long turns are where agents earn their keep, and where you lose track of them. o7 keeps
-            the work in front of you: who is doing what, what changed, and what is waiting on you.
+            Long turns are where agents earn their keep, and where you lose track of them. Ghost
+            keeps the work in front of you: who is doing what, what changed, and what is waiting on
+            you.
           </p>
         </div>
         <div className="explorer-grid" ref={grid} data-auto={auto ? "" : undefined} data-zone="">
           <ul
             className="explorer-list"
-            aria-label="What o7 does"
+            aria-label="What Ghost does"
             onPointerEnter={() => setHeld(true)}
             onPointerLeave={() => setHeld(false)}
             onFocus={() => setHeld(true)}

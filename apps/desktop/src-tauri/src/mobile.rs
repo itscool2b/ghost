@@ -1,5 +1,5 @@
-//! The Device pane (docs/superpowers/plans/2026-11-21-mobile.md): o7's own window's commands for
-//! the devices `o7-devices` runs, the video they send to the pane, and the agents' bridge to them.
+//! The Device pane (docs/superpowers/plans/2026-11-21-mobile.md): Ghost's own window's commands for
+//! the devices `ghost-devices` runs, the video they send to the pane, and the agents' bridge to them.
 //!
 //! Everything here is by chat id. The pane's commands are the person's: setting Android up and
 //! accepting Google's licence, choosing a phone, and letting an agent use it exist only here, never
@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine;
-use o7_devices::manager::{Config, DEFAULT_RUNNING, DeviceKind, Manager, MobileStatus};
-use o7_devices::scrcpy::{Touch, key};
+use ghost_devices::manager::{Config, DEFAULT_RUNNING, DeviceKind, Manager, MobileStatus};
+use ghost_devices::scrcpy::{Touch, key};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse};
 use tauri::{AppHandle, Emitter, Manager as _, State};
@@ -20,12 +20,12 @@ use tokio::task::AbortHandle;
 use crate::error::{AppError, AppErrorCode};
 
 /// The event that carries every change: its payload is the whole [`MobileStatus`].
-pub const EVENT: &str = "o7-mobile";
+pub const EVENT: &str = "ghost-mobile";
 
-impl From<o7_devices::Error> for AppError {
-    fn from(error: o7_devices::Error) -> Self {
+impl From<ghost_devices::Error> for AppError {
+    fn from(error: ghost_devices::Error) -> Self {
         let code = match error {
-            o7_devices::Error::Refused(_) => AppErrorCode::InvalidArgument,
+            ghost_devices::Error::Refused(_) => AppErrorCode::InvalidArgument,
             _ => AppErrorCode::Internal,
         };
         AppError::new(code, error.to_string())
@@ -73,7 +73,7 @@ impl Watches {
 }
 
 /// One packet of a device's video, sent to the page as raw bytes (the page reads an
-/// `ArrayBuffer`): a byte of kind, then the payload (`o7_devices::manager::Viewer`).
+/// `ArrayBuffer`): a byte of kind, then the payload (`ghost_devices::manager::Viewer`).
 #[derive(Debug, Clone, specta::Type)]
 pub struct VideoPacket(Vec<u8>);
 
@@ -136,7 +136,7 @@ pub(crate) async fn picture(app: &AppHandle, chat_id: &str) -> Result<Vec<u8>, S
     };
     if device.kind == DeviceKind::Phone {
         return Err(
-            "This chat's device is a phone or another program's emulator. o7 sends pictures of its own emulators and simulators only."
+            "This chat's device is a phone or another program's emulator. Ghost sends pictures of its own emulators and simulators only."
                 .into(),
         );
     }
@@ -149,20 +149,20 @@ pub(crate) async fn picture(app: &AppHandle, chat_id: &str) -> Result<Vec<u8>, S
         .map_err(|error| error.to_string())
 }
 
-/// Agents' calls from o7-core's mobile grants, run on the chat's device.
+/// Agents' calls from ghost-core's mobile grants, run on the chat's device.
 struct AgentBridge(Manager);
 
-impl o7_core::mobile_service::MobileBridge for AgentBridge {
+impl ghost_core::mobile_service::MobileBridge for AgentBridge {
     fn call(
         &self,
         chat_id: String,
         tool: String,
         arguments: serde_json::Value,
-    ) -> o7_core::mobile_service::MobileFuture {
+    ) -> ghost_core::mobile_service::MobileFuture {
         let manager = self.0.clone();
         Box::pin(async move {
             let reply = manager.tool(&chat_id, &tool, &arguments).await;
-            o7_core::mobile_service::MobileToolReply {
+            ghost_core::mobile_service::MobileToolReply {
                 text: reply.text,
                 image: reply.image.map(|png| {
                     (
@@ -189,8 +189,8 @@ pub fn setup(app: &AppHandle) {
     let manager = Manager::new(
         Config {
             root,
-            places: o7_devices::sdk::Places::current(),
-            adb: o7_devices::adb::Adb::from_env(),
+            places: ghost_devices::sdk::Places::current(),
+            adb: ghost_devices::adb::Adb::from_env(),
             max_running: DEFAULT_RUNNING,
         },
         move || {
@@ -223,8 +223,8 @@ pub fn sync(app: &AppHandle) {
     }
 }
 
-/// Settings' switch for Mobile. Off stops every device o7 started.
-pub fn apply_preferences(app: &AppHandle, general: &o7_core::onboarding::GeneralPreferences) {
+/// Settings' switch for Mobile. Off stops every device Ghost started.
+pub fn apply_preferences(app: &AppHandle, general: &ghost_core::onboarding::GeneralPreferences) {
     sync(app);
     let Some(manager) = app
         .try_state::<Manager>()
@@ -244,7 +244,7 @@ pub fn apply_preferences(app: &AppHandle, general: &o7_core::onboarding::General
     tauri::async_runtime::spawn(async move { manager.set_enabled(enabled).await });
 }
 
-/// o7 is quitting: its emulators save their state and stop before the app is gone.
+/// Ghost is quitting: its emulators save their state and stop before the app is gone.
 pub fn shutdown(app: &AppHandle) {
     if let Some(watches) = app.try_state::<Watches>() {
         watches.clear();
@@ -296,7 +296,7 @@ pub async fn mobile_fetch_cancel(devices: Devices<'_>) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Gives the chat a device and starts it: the one named, or one of o7's emulators.
+/// Gives the chat a device and starts it: the one named, or one of Ghost's emulators.
 #[tauri::command]
 #[specta::specta]
 pub async fn mobile_attach(
@@ -319,7 +319,7 @@ pub async fn mobile_detach(
     Ok(())
 }
 
-/// Stops one of o7's emulators.
+/// Stops one of Ghost's emulators.
 #[tauri::command]
 #[specta::specta]
 pub async fn mobile_stop_device(devices: Devices<'_>, device_id: String) -> Result<(), AppError> {
@@ -507,7 +507,7 @@ pub async fn mobile_screenshot(
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
-    let path = folder.join(format!("o7-device-{seconds}.png"));
+    let path = folder.join(format!("ghost-device-{seconds}.png"));
     tokio::fs::create_dir_all(&folder)
         .await
         .and(tokio::fs::write(&path, png).await)

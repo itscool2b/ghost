@@ -1,6 +1,6 @@
 # Publish: when the owner approves a build, main becomes a version people can install, and the
 # one every installed copy offers as an update. It builds each target with its updater signature,
-# checks every byte and signature with o7-release, publishes them as a GitHub release, and points
+# checks every byte and signature with ghost-release, publishes them as a GitHub release, and points
 # the download page at it. docs/releases.md has the whole design and the one-time setup.
 #
 # Who can run it: a manual run (only people who can write to the repository), on main only.
@@ -49,14 +49,14 @@ jobs:
       - name: Require main and the updater key
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          O7_UPDATER_PUBLIC_KEY: ${{ vars.O7_UPDATER_PUBLIC_KEY }}
+          GHOST_UPDATER_PUBLIC_KEY: ${{ vars.GHOST_UPDATER_PUBLIC_KEY }}
         run: |
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::Builds are published from main only, not $GITHUB_REF."
             exit 1
           fi
           missing=()
-          for name in TAURI_SIGNING_PRIVATE_KEY O7_UPDATER_PUBLIC_KEY; do
+          for name in TAURI_SIGNING_PRIVATE_KEY GHOST_UPDATER_PUBLIC_KEY; do
             if [ -z "${!name}" ]; then missing+=("$name"); fi
           done
           if [ "${#missing[@]}" -gt 0 ]; then
@@ -69,7 +69,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The version is VERSION's, chosen by the pull request that changed the app: the minor
-          # number up for a big feature, the patch for a small change (docs/developing-in-o7.md,
+          # number up for a big feature, the patch for a small change (docs/developing-in-ghost.md,
           # "Version"). It must be newer than every published one, or installed copies would never
           # be offered it.
           version="$(tr -d '[:space:]' <VERSION)"
@@ -99,9 +99,9 @@ jobs:
           echo "publish=true" >>"$GITHUB_OUTPUT"
           previous=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || true)
           {
-            echo "notes<<O7_NOTES_END"
+            echo "notes<<GHOST_NOTES_END"
             node .github/scripts/release-notes.mjs "$previous"
-            echo "O7_NOTES_END"
+            echo "GHOST_NOTES_END"
           } >>"$GITHUB_OUTPUT"
           echo "Publishing v$version (after ${previous:-nothing})."
 
@@ -136,8 +136,8 @@ jobs:
       BUNDLE_TARGET: ${{ matrix.target }}
       BUNDLE_FORMATS: ${{ matrix.bundles }}
       BUILD_VERSION: ${{ needs.plan.outputs.version }}
-      O7_UPDATER_CHANNEL: stable
-      O7_UPDATER_PUBLIC_KEY: ${{ vars.O7_UPDATER_PUBLIC_KEY }}
+      GHOST_UPDATER_CHANNEL: stable
+      GHOST_UPDATER_PUBLIC_KEY: ${{ vars.GHOST_UPDATER_PUBLIC_KEY }}
     steps:
       - name: Keep LF line endings (Windows)
         if: runner.os == 'Windows'
@@ -209,7 +209,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # The AppImage tools run from their own extraction instead of needing FUSE.
           APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: pnpm --filter @o7/desktop bundle --signed-updater --app-version "$BUILD_VERSION" --target "$BUNDLE_TARGET" --bundles "$BUNDLE_FORMATS"
+        run: pnpm --filter @ghost/desktop bundle --signed-updater --app-version "$BUILD_VERSION" --target "$BUNDLE_TARGET" --bundles "$BUNDLE_FORMATS"
 
       - name: Upload the packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -244,7 +244,7 @@ jobs:
       # Creating the release and committing the download page's catalog.
       contents: write
     env:
-      O7_UPDATER_PUBLIC_KEY: ${{ vars.O7_UPDATER_PUBLIC_KEY }}
+      GHOST_UPDATER_PUBLIC_KEY: ${{ vars.GHOST_UPDATER_PUBLIC_KEY }}
       VERSION: ${{ needs.plan.outputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -281,8 +281,8 @@ jobs:
           node .github/scripts/release-plan.mjs "$RUNNER_TEMP/artifacts" "$RUNNER_TEMP/plan.json"
       - name: Prepare and verify the release
         run: |
-          cargo run --locked -p o7-release -- prepare "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/artifacts" "$RUNNER_TEMP/stage"
-          cargo run --locked -p o7-release -- verify "$RUNNER_TEMP/stage"
+          cargo run --locked -p ghost-release -- prepare "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/artifacts" "$RUNNER_TEMP/stage"
+          cargo run --locked -p ghost-release -- verify "$RUNNER_TEMP/stage"
       - name: Publish the release
         env:
           RELEASE_NOTES: ${{ needs.plan.outputs.notes }}
@@ -290,9 +290,9 @@ jobs:
           payload="$RUNNER_TEMP/stage/releases/$VERSION"
           {
             printf '%s\n\n' "$RELEASE_NOTES"
-            echo "Installed copies show **Update** for this version by themselves. To install from scratch, use [o7.codes/download](https://o7.codes/download)."
+            echo "Installed copies show **Update** for this version by themselves. To install from scratch, use [onghost.dev/download](https://onghost.dev/download)."
             echo
-            echo "No publisher has signed these installers yet, so Windows and macOS warn before one runs; the download page says how to open it. Every package carries an updater signature, which o7 checks before it installs an update."
+            echo "No publisher has signed these installers yet, so Windows and macOS warn before one runs; the download page says how to open it. Every package carries an updater signature, which Ghost checks before it installs an update."
             echo
             echo '```'
             cat "$payload/SHA256SUMS"
@@ -301,7 +301,7 @@ jobs:
           # latest.json goes up with the packages: once this release is the newest, it is the
           # manifest every installed copy reads.
           gh release create "v$VERSION" "$payload"/* "$RUNNER_TEMP/stage/latest.json" \
-            --target "$GITHUB_SHA" --title "o7 $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
+            --target "$GITHUB_SHA" --title "Ghost $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
       - name: Check what installed copies will read
         run: |
           # The address is the one compiled into the app. It must answer with this version's

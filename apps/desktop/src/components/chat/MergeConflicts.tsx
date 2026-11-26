@@ -21,7 +21,7 @@ export function conflictPrompt(preview: WorktreeActionPreview): string {
     `Merging ${branch} into ${target} has conflicts in ${files.length === 1 ? "1 file" : `${files.length} files`}:`,
     ...listed,
     "",
-    `Please resolve them on ${branch} in ${preview.worktree.path}: merge ${target} into ${branch}, fix the conflicts in the files above while keeping the intent of both sides, run the relevant tests, and commit the merge. Do not push and do not change ${target}. I will review the merge in o7 afterwards.`,
+    `Please resolve them on ${branch} in ${preview.worktree.path}: merge ${target} into ${branch}, fix the conflicts in the files above while keeping the intent of both sides, run the relevant tests, and commit the merge. Do not push and do not change ${target}. I will review the merge in Ghost afterwards.`,
   ].join("\n");
 }
 

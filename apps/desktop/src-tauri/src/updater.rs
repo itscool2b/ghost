@@ -39,11 +39,13 @@ const CHECK_EVERY: Duration = Duration::from_secs(4 * 60 * 60);
 const MAX_REDIRECTS: usize = 5;
 /// The repository's release assets, and the only hosts GitHub redirects an asset request to.
 ///
-/// The repository was `itscool2b/auracode` until 19 November 2026, and copies from before accept
-/// packages under that path alone. So the release feed still names it (GitHub redirects it to
-/// `itscool2b/o7`, a redirect within github.com), and this build accepts both. Only the owner can
-/// make a repository under `itscool2b`, and every package's signature is checked anyway.
-const RELEASES: [&str; 2] = [
+/// The repository was `itscool2b/auracode` until 19 November 2026 and `itscool2b/o7` until
+/// 26 November, and copies from the first of those accept packages under that path alone. So the
+/// release feed still names it (GitHub redirects it to `itscool2b/ghost`, a redirect within
+/// github.com), and this build accepts all three. Only the owner can make a repository under
+/// `itscool2b`, and every package's signature is checked anyway.
+const RELEASES: [&str; 3] = [
+    "/itscool2b/ghost/releases/download/",
     "/itscool2b/o7/releases/download/",
     "/itscool2b/auracode/releases/download/",
 ];
@@ -54,7 +56,7 @@ const ASSET_HOSTS: [&str; 3] = [
 ];
 
 pub(crate) fn staging() -> bool {
-    matches!(option_env!("O7_UPDATER_CHANNEL"), Some("staging"))
+    matches!(option_env!("GHOST_UPDATER_CHANNEL"), Some("staging"))
 }
 fn channel() -> &'static str {
     if staging() { "staging" } else { "stable" }
@@ -62,9 +64,9 @@ fn channel() -> &'static str {
 /// The newest stable release's manifest, or the one the rolling `staging` release carries.
 fn manifest(staging: bool) -> &'static str {
     if staging {
-        "https://github.com/itscool2b/o7/releases/download/staging/latest.json"
+        "https://github.com/itscool2b/ghost/releases/download/staging/latest.json"
     } else {
-        "https://github.com/itscool2b/o7/releases/latest/download/latest.json"
+        "https://github.com/itscool2b/ghost/releases/latest/download/latest.json"
     }
 }
 
@@ -81,10 +83,10 @@ struct Source {
 /// unless both test variables name a loopback manifest and a key: then it can check, download and
 /// verify against a server on this machine, and never installs.
 fn source() -> Option<Source> {
-    if o7_core::paths::DEVELOPMENT_BUILD {
+    if ghost_core::paths::DEVELOPMENT_BUILD {
         return test_source(
-            std::env::var("O7_UPDATE_TEST_MANIFEST").ok(),
-            std::env::var("O7_UPDATE_TEST_PUBLIC_KEY").ok(),
+            std::env::var("GHOST_UPDATE_TEST_MANIFEST").ok(),
+            std::env::var("GHOST_UPDATE_TEST_PUBLIC_KEY").ok(),
         );
     }
     public_key().map(|key| Source {
@@ -137,7 +139,7 @@ pub struct UpdateStatus {
     pub phase: UpdatePhase,
     /// The version running now.
     pub current_version: String,
-    /// Whether o7 looks for a newer version by itself (Settings, General).
+    /// Whether Ghost looks for a newer version by itself (Settings, General).
     pub automatic: bool,
     /// The newer version, once a check has found one.
     pub version: Option<String>,
@@ -159,7 +161,7 @@ fn error(message: impl Into<String>) -> UpdateError {
     }
 }
 fn public_key() -> Option<&'static str> {
-    option_env!("O7_UPDATER_PUBLIC_KEY")
+    option_env!("GHOST_UPDATER_PUBLIC_KEY")
         .map(str::trim)
         .filter(|key| !key.is_empty())
 }
@@ -193,7 +195,7 @@ impl Updates {
         let enabled = source.is_some();
         let message = if enabled {
             None
-        } else if o7_core::paths::DEVELOPMENT_BUILD {
+        } else if ghost_core::paths::DEVELOPMENT_BUILD {
             Some("A development build does not update itself.".into())
         } else {
             Some(
@@ -274,7 +276,7 @@ impl Updates {
 
 fn available(state: &AppState, updates: &Updates) -> Result<Source, UpdateError> {
     if state.quit.is_quitting() {
-        return Err(error("o7 is already closing."));
+        return Err(error("Ghost is already closing."));
     }
     if !cfg!(any(windows, target_os = "macos", target_os = "linux")) || state.launch.is_smoke() {
         return Err(error(
@@ -284,7 +286,7 @@ fn available(state: &AppState, updates: &Updates) -> Result<Source, UpdateError>
     // A development build has a source only for the loopback test server, and never installs:
     // an update would replace the installed app, which may be running the session that built it.
     updates.source.clone().ok_or_else(|| {
-        error(if o7_core::paths::DEVELOPMENT_BUILD {
+        error(if ghost_core::paths::DEVELOPMENT_BUILD {
             "Application updates are unavailable for a development build."
         } else {
             "This build has no configured update signing key."
@@ -309,7 +311,7 @@ pub async fn app_update_check(
 }
 
 /// Reads the manifest and records whether it offers a newer version. A check the person asked for
-/// shows its failure; one o7 made by itself leaves no trace when it fails (being offline is
+/// shows its failure; one Ghost made by itself leaves no trace when it fails (being offline is
 /// not news), and never disturbs a download or an installation.
 async fn check(
     app: &tauri::AppHandle,
@@ -547,7 +549,7 @@ fn validate_download_url(url: &reqwest::Url, source: &Source) -> Result<(), Upda
 }
 
 /// A package the manifest names must be a file of one of this repository's releases on its
-/// channel: `/itscool2b/o7/releases/download/<tag>/<file>` (or the repository's earlier path,
+/// channel: `/itscool2b/ghost/releases/download/<tag>/<file>` (or the repository's earlier path,
 /// [`RELEASES`]), the tag starting `v` (stable) or
 /// `staging-v`, both parts plain names. Nothing else on GitHub, and nothing anywhere else.
 fn validate_channel_url(url: &reqwest::Url, staging: bool) -> Result<(), UpdateError> {
@@ -664,13 +666,13 @@ impl<H: QuitHost> QuitHost for UpdateQuit<H> {
     fn show_window(&self) {
         self.0.show_window();
     }
-    fn storage(&self) -> o7_protocol::session::StorageStatus {
+    fn storage(&self) -> ghost_protocol::session::StorageStatus {
         self.0.storage()
     }
     async fn ask_to_quit_unsaved(&self, _question: QuitQuestion) -> bool {
         false
     }
-    async fn stop_sessions(&self, deadline: Duration) -> o7_core::session::ShutdownSummary {
+    async fn stop_sessions(&self, deadline: Duration) -> ghost_core::session::ShutdownSummary {
         self.0.stop_sessions(deadline).await
     }
     async fn close_store(&self, deadline: Duration) -> bool {
@@ -696,7 +698,7 @@ pub async fn app_update_install(app: tauri::AppHandle) -> Result<UpdateStatus, U
             let updates = app.state::<Updates>();
             updates.phase(
                 UpdatePhase::RestartRequired,
-                Some("The update task failed. Restart o7 before retrying.".into()),
+                Some("The update task failed. Restart Ghost before retrying.".into()),
             );
             Ok(updates.report(&app))
         }
@@ -723,12 +725,12 @@ async fn install(app: tauri::AppHandle) -> Result<UpdateStatus, UpdateError> {
         // installed, no chat is stopped and the app keeps running.
         return Ok(rehearse(&app, &updates).await);
     }
-    let chats = state
-        .chats()
-        .ok_or_else(|| error("The current profile is unavailable. Restart o7 before updating."))?;
+    let chats = state.chats().ok_or_else(|| {
+        error("The current profile is unavailable. Restart Ghost before updating.")
+    })?;
     if !matches!(
         chats.manager.storage_status().state,
-        o7_protocol::session::StorageState::Ok
+        ghost_protocol::session::StorageState::Ok
     ) {
         updates.phase(
             UpdatePhase::WaitingForIdle,
@@ -744,7 +746,7 @@ async fn install(app: tauri::AppHandle) -> Result<UpdateStatus, UpdateError> {
     state.terminals.close_all();
     let report = chats
         .manager
-        .stop_all(o7_core::session::StopScope::All, Duration::from_secs(30))
+        .stop_all(ghost_core::session::StopScope::All, Duration::from_secs(30))
         .await;
     let _ = chats
         .manager
@@ -755,7 +757,7 @@ async fn install(app: tauri::AppHandle) -> Result<UpdateStatus, UpdateError> {
             "Wait for Git changes and agent updates to finish, then retry installation.".to_owned()
         } else {
             let names = chats.manager.chat_names(report.stopping).await;
-            o7_core::session::still_stopping(&names, "Retry installation in a moment.")
+            ghost_core::session::still_stopping(&names, "Retry installation in a moment.")
         };
         updates.phase(UpdatePhase::WaitingForIdle, Some(reason));
         return Ok(updates.report(&app));
@@ -768,7 +770,7 @@ async fn install(app: tauri::AppHandle) -> Result<UpdateStatus, UpdateError> {
         return Ok(updates.report(&app));
     };
     if state.quit.on_exit_requested() != ExitRequest::StartQuit {
-        return Err(error("o7 is already closing."));
+        return Err(error("Ghost is already closing."));
     }
     updates.phase(UpdatePhase::Installing, None);
     let outcome = sessions::run_quit(
@@ -793,7 +795,7 @@ async fn install(app: tauri::AppHandle) -> Result<UpdateStatus, UpdateError> {
             summary: Some(summary),
         } if summary.forced == 0 => {}
         _ => {
-            updates.phase(UpdatePhase::RestartRequired, Some("Cleanup could not be confirmed. The update was not installed. Restart o7 before retrying.".into()));
+            updates.phase(UpdatePhase::RestartRequired, Some("Cleanup could not be confirmed. The update was not installed. Restart Ghost before retrying.".into()));
             return Ok(updates.report(&app));
         }
     }
@@ -816,7 +818,7 @@ async fn install(app: tauri::AppHandle) -> Result<UpdateStatus, UpdateError> {
             updates.phase(
                 UpdatePhase::RestartRequired,
                 Some(
-                    "The installer failed after storage closed. Restart o7 and retry the update."
+                    "The installer failed after storage closed. Restart Ghost and retry the update."
                         .into(),
                 ),
             );
@@ -879,9 +881,9 @@ mod tests {
         fn show_window(&self) {
             lock(&self.calls).push("show");
         }
-        fn storage(&self) -> o7_protocol::session::StorageStatus {
-            o7_protocol::session::StorageStatus {
-                state: o7_protocol::session::StorageState::Ok,
+        fn storage(&self) -> ghost_protocol::session::StorageStatus {
+            ghost_protocol::session::StorageStatus {
+                state: ghost_protocol::session::StorageState::Ok,
                 unsaved_bytes: 0,
             }
         }
@@ -889,9 +891,9 @@ mod tests {
             lock(&self.calls).push("discard");
             true
         }
-        async fn stop_sessions(&self, _: Duration) -> o7_core::session::ShutdownSummary {
+        async fn stop_sessions(&self, _: Duration) -> ghost_core::session::ShutdownSummary {
             lock(&self.calls).push("stop");
-            o7_core::session::ShutdownSummary {
+            ghost_core::session::ShutdownSummary {
                 sessions: 0,
                 graceful: 0,
                 forced: 0,
@@ -942,39 +944,46 @@ mod tests {
         }
     }
 
-    const RELEASE: &str = "https://github.com/itscool2b/o7/releases/download";
+    const RELEASE: &str = "https://github.com/itscool2b/ghost/releases/download";
 
     #[test]
     fn update_artifacts_are_files_of_this_repositorys_releases_and_nothing_else() {
-        let ok = format!("{RELEASE}/v0.1.1570/o7_0.1.1570_x64-setup.exe");
+        let ok = format!("{RELEASE}/v0.1.1570/Ghost_0.1.1570_x64-setup.exe");
         assert!(validate_channel_url(&ok.parse().unwrap(), false).is_ok());
-        // The repository's earlier path, which the release feed names for copies from before.
-        let earlier = "https://github.com/itscool2b/auracode/releases/download/v0.1.1630/o7_0.1.1630_x64-setup.exe";
-        assert!(validate_channel_url(&earlier.parse().unwrap(), false).is_ok());
+        // The repository's earlier paths: the release feed names the oldest for copies from then.
+        for earlier in [
+            "https://github.com/itscool2b/auracode/releases/download/v0.8.0/Ghost_0.8.0_x64-setup.exe",
+            "https://github.com/itscool2b/o7/releases/download/v0.8.0/Ghost_0.8.0_x64-setup.exe",
+        ] {
+            assert!(
+                validate_channel_url(&earlier.parse().unwrap(), false).is_ok(),
+                "{earlier}"
+            );
+        }
         for url in [
             // Another scheme, host, port or a credential.
-            "http://github.com/itscool2b/o7/releases/download/v0.1.1/app.exe",
-            "https://github.com.evil.example/itscool2b/o7/releases/download/v0.1.1/app.exe",
-            "https://evil.example/itscool2b/o7/releases/download/v0.1.1/app.exe",
-            "https://github.com:8443/itscool2b/o7/releases/download/v0.1.1/app.exe",
-            "https://user@github.com/itscool2b/o7/releases/download/v0.1.1/app.exe",
+            "http://github.com/itscool2b/ghost/releases/download/v0.1.1/app.exe",
+            "https://github.com.evil.example/itscool2b/ghost/releases/download/v0.1.1/app.exe",
+            "https://evil.example/itscool2b/ghost/releases/download/v0.1.1/app.exe",
+            "https://github.com:8443/itscool2b/ghost/releases/download/v0.1.1/app.exe",
+            "https://user@github.com/itscool2b/ghost/releases/download/v0.1.1/app.exe",
             // Another repository, or another part of this one.
             "https://github.com/someone/auracode/releases/download/v0.1.1/app.exe",
             "https://github.com/itscool2b/other/releases/download/v0.1.1/app.exe",
-            "https://github.com/itscool2b/o7/raw/main/app.exe",
-            "https://github.com/itscool2b/o7/releases/latest/download/app.exe",
+            "https://github.com/itscool2b/ghost/raw/main/app.exe",
+            "https://github.com/itscool2b/ghost/releases/latest/download/app.exe",
             // A query, a fragment, an encoded or a nested path, a hidden file, no file.
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/app.exe?token=anything",
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/app.exe#ignored",
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/%2e%2e/app.exe",
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/a/app.exe",
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/.hidden",
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/",
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/app.exe?token=anything",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/app.exe#ignored",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/%2e%2e/app.exe",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/a/app.exe",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/.hidden",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1",
             // A tag that is not a version: a hand-made release cannot stand in for one.
-            "https://github.com/itscool2b/o7/releases/download/build-2026-11-19/app.exe",
-            "https://github.com/itscool2b/o7/releases/download/vendor/app.exe",
-            "https://github.com/itscool2b/o7/releases/download/latest/app.exe",
+            "https://github.com/itscool2b/ghost/releases/download/build-2026-11-19/app.exe",
+            "https://github.com/itscool2b/ghost/releases/download/vendor/app.exe",
+            "https://github.com/itscool2b/ghost/releases/download/latest/app.exe",
         ] {
             assert!(
                 validate_channel_url(&url.parse().unwrap(), false).is_err(),
@@ -1000,13 +1009,13 @@ mod tests {
             let url: reqwest::Url = address.parse().unwrap();
             assert_eq!(url.scheme(), "https");
             assert_eq!(url.host_str(), Some("github.com"));
-            assert!(url.path().starts_with("/itscool2b/o7/releases/"));
+            assert!(url.path().starts_with("/itscool2b/ghost/releases/"));
         }
     }
     #[test]
     fn a_redirect_is_followed_only_to_githubs_asset_hosts_over_https() {
         for url in [
-            "https://github.com/itscool2b/o7/releases/download/v0.1.1/latest.json",
+            "https://github.com/itscool2b/ghost/releases/download/v0.1.1/latest.json",
             "https://release-assets.githubusercontent.com/github-production-release-asset/1/2?sp=r&sig=x",
             "https://objects.githubusercontent.com/github-production-release-asset/1/2?X-Amz-Signature=x",
         ] {
@@ -1016,7 +1025,7 @@ mod tests {
             "http://release-assets.githubusercontent.com/a",
             "https://release-assets.githubusercontent.com.evil.example/a",
             "https://evil.githubusercontent.com/a",
-            "https://raw.githubusercontent.com/itscool2b/o7/main/latest.json",
+            "https://raw.githubusercontent.com/itscool2b/ghost/main/latest.json",
             "https://release-assets.githubusercontent.com:8443/a",
             "https://user:pass@release-assets.githubusercontent.com/a",
             "https://evil.example/a",
@@ -1057,7 +1066,7 @@ mod tests {
         );
         for url in [
             "http://127.0.0.1:9000/app.exe",
-            "https://github.com/itscool2b/o7/releases/download/v9.9.9/app.exe",
+            "https://github.com/itscool2b/ghost/releases/download/v9.9.9/app.exe",
             "http://127.0.0.1:8123/app.exe?x=1",
             "http://evil.example:8123/app.exe",
         ] {

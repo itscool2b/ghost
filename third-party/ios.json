@@ -12,19 +12,19 @@
     },
     "files": [
       {
-        "file": "apps/ios/O7Kit/Sources/O7Marks/Fonts/Geist[wght].ttf",
+        "file": "apps/ios/GhostKit/Sources/GhostMarks/Fonts/Geist[wght].ttf",
         "from": "geist-font/Geist/variable/Geist[wght].ttf",
         "size": 169056,
         "sha256": "b34955a09f71d9ac4b67e54cedb1825d3d5264c7992dbbafa0802080d617e241"
       },
       {
-        "file": "apps/ios/O7Kit/Sources/O7Marks/Fonts/GeistMono[wght].ttf",
+        "file": "apps/ios/GhostKit/Sources/GhostMarks/Fonts/GeistMono[wght].ttf",
         "from": "geist-font/GeistMono/variable/GeistMono[wght].ttf",
         "size": 171200,
         "sha256": "41d86e19407b1cb271be5d916fed8bb14051402270fb61cc28daf802e1a8ca63"
       },
       {
-        "file": "apps/ios/O7Kit/Sources/O7Marks/Fonts/OFL.txt",
+        "file": "apps/ios/GhostKit/Sources/GhostMarks/Fonts/OFL.txt",
         "from": "geist-font/OFL.txt",
         "size": 4384,
         "sha256": "021caa749f89fecd7c2e40a50499de29e84d2bc19251659b47d499c2fbfffc17"
@@ -37,7 +37,7 @@
     "license": "BSD-3-Clause",
     "license_sha256": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490",
     "source": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.12.0.tgz",
-    "file": "apps/ios/O7Kit/Sources/O7Highlight/Resources/highlight.js",
+    "file": "apps/ios/GhostKit/Sources/GhostHighlight/Resources/highlight.js",
     "built_by": "node apps/ios/scripts/write-highlighter.mjs"
   }
 }

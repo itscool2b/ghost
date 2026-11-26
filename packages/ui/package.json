@@ -1,9 +1,9 @@
 {
-  "name": "@o7/ui",
+  "name": "@ghost/ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "o7 design system shared by the desktop app and o7.codes: Graphite (tokens, primitives, AgentMark, Logo), plus the legacy Aura and Orbit modules.",
+  "description": "Ghost design system shared by the desktop app and onghost.dev: Graphite (tokens, primitives, AgentMark, Logo), plus the legacy Aura and Orbit modules.",
   "sideEffects": [
     "*.css"
   ],

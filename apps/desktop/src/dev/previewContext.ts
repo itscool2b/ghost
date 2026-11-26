@@ -232,7 +232,7 @@ export function withPreviewContext<T extends Transport>(
   };
   let pending: PendingHandoff | null = null;
   let action: ContinuationAction | null = null;
-  // As crates/o7-core/src/conversation.rs writes one: the conversation, the folder, the commands
+  // As crates/ghost-core/src/conversation.rs writes one: the conversation, the folder, the commands
   // and the one still failing, then the changes.
   const handoff = [
     "Visible conversation handoff",
@@ -255,7 +255,7 @@ export function withPreviewContext<T extends Transport>(
     "",
     "Commands run (newest last)",
     "[turn 1] exit 0 | pnpm install --frozen-lockfile",
-    "[turn 1] exit 0 | pnpm --filter @o7/desktop exec tsc --noEmit -p .",
+    "[turn 1] exit 0 | pnpm --filter @ghost/desktop exec tsc --noEmit -p .",
     "[turn 1] exit 0 | pnpm exec vitest run src/components/chat/Sidebar.test.tsx",
     "[turn 2] exit 1 | node scripts/check-layout.mjs --width 960",
     "  in C:\\Users\\dev\\auracode\\apps\\desktop",

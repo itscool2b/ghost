@@ -14,9 +14,9 @@ impl Power {
                 .idle(true)
                 .display(false)
                 .sleep(false)
-                .reason("An o7 agent is working, or remote access keeps the computer reachable")
-                .app_name("o7")
-                .app_reverse_domain("codes.o7.desktop")
+                .reason("A Ghost agent is working, or remote access keeps the computer reachable")
+                .app_name("Ghost")
+                .app_reverse_domain("dev.onghost.desktop")
                 .create()
             {
                 Ok(assertion) => Some(assertion),

@@ -1,5 +1,5 @@
 /**
- * GLSL ES 3.00 sources for the orb. Written for o7; no third-party shader code.
+ * GLSL ES 3.00 sources for the orb. Written for Ghost; no third-party shader code.
  *
  * Look: soft oval light lobes orbit inside a disc, pushed around by a two-stage noise flow warp,
  * with faint ring ripples, mapped through the brand's four-stop colour ramp, fading to a soft

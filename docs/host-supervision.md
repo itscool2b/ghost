@@ -11,7 +11,7 @@ realm. A global host enum must not enable execution before those checks.
 
 ## Linux endpoint
 
-`o7-host-supervisor --stdio <absolute-state-directory>` serves one connection. `--version`
+`ghost-host-supervisor --stdio <absolute-state-directory>` serves one connection. `--version`
 reports the package and protocol versions without resolving an environment or starting an agent.
 The endpoint uses the existing environment resolver, targeted scrub, redactor, log factory,
 process spawner, descendant tracking and leftover registry. The Linux environment remains local.
@@ -66,7 +66,7 @@ ordinary tool descendants die with their owner. See Microsoft's
 
 This checkpoint does not enable either breakaway mode or change vendor processes. Safe Windows
 daemon support still needs qualified vendor behavior, tracked escaped pid/start identities and
-crash recovery. An existing daemon outside o7's job remains outside its kill authority.
+crash recovery. An existing daemon outside Ghost's job remains outside its kill authority.
 
 ## Verification
 
@@ -81,5 +81,5 @@ crash recovery. An existing daemon outside o7's job remains outside its kill aut
 | WSL bridge, packaged helper deployment and distribution qualification | pending |
 | Windows cooperative daemon breakaway and recovery | pending |
 
-Only o7's fake/test children were used. No real vendor agent, paid prompt, credential/config
+Only Ghost's fake/test children were used. No real vendor agent, paid prompt, credential/config
 read, security-policy change or blocked-binary workaround was performed.

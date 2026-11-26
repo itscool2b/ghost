@@ -47,7 +47,7 @@ const info: AppInfo = {
   fatal: null,
   media: !mediaOff,
   media_notice: mediaOff
-    ? "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart o7."
+    ? "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart Ghost."
     : null,
 };
 const calls: string[] = [];
@@ -290,7 +290,7 @@ const dictation: DictationApi = {
       largerLog.push("cancel");
       largerDeclined = true;
       if (largerHears) endLarger({ state: "cancelled" });
-      // One o7 started itself has no page listening: it just stops.
+      // One Ghost started itself has no page listening: it just stops.
       else if (largerState === "downloading") largerState = "absent";
     },
     remove: async () => {
@@ -323,7 +323,7 @@ Object.assign(window, {
   largerFixture: {
     log: () => [...largerLog],
     state: () => largerState,
-    /** o7 starts the download itself, as it does a minute after launch, and has this share of it. */
+    /** Ghost starts the download itself, as it does a minute after launch, and has this share of it. */
     begin: (share: number) => {
       largerState = "downloading";
       largerReceived = Math.round(LARGER_BYTES * share);

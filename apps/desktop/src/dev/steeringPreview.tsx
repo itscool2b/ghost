@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import type {
   Capabilities,
   EventBatch,
-  O7Event,
+  GhostEvent,
   QueuedPrompt,
   SessionStatus,
   SteeringAck,
@@ -36,7 +36,7 @@ function Preview() {
         ? { agent_id: "claude", agent_name: "Claude Code" }
         : { agent_id: "codex", agent_name: "Codex" };
     const chat = chatSummary("steering-chat", { ...agent, status });
-    const events: O7Event[] = [
+    const events: GhostEvent[] = [
       ev.turnStarted("fixture-turn"),
       ev.user("original", "Review this change"),
     ];
@@ -70,7 +70,7 @@ function Preview() {
     const queue: QueuedPrompt[] = [];
     const words = new Map<string, string>();
     const recovery = { starts: 0, previews: [] as string[], applied: 0 };
-    const publish = (updates: O7Event[]) => {
+    const publish = (updates: GhostEvent[]) => {
       const seq = events.length;
       events.push(...updates);
       receive?.(frame(chat.id, seq, updates));

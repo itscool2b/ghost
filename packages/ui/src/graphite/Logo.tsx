@@ -9,7 +9,7 @@ export interface LogoProps {
 }
 
 /**
- * The o7 logo (a flying wing with two eyes) in `currentColor`. It is far wider than tall,
+ * The Ghost logo (a flying wing with two eyes) in `currentColor`. It is far wider than tall,
  * so `size` is its width and the box is as tall as the shape needs. At `LOGO_SMALL_MAX` px and
  * below it draws the small variant, whose larger eyes stay open at that size.
  */
@@ -34,7 +34,7 @@ export function Logo({ size = 20, className, label }: LogoProps) {
 }
 
 export interface WordmarkProps {
-  /** Font size of "o7" in px. Default 16. */
+  /** Font size of "Ghost" in px. Default 16. */
   readonly size?: number;
   /** Show the logo before the word. Default true. */
   readonly mark?: boolean;
@@ -42,7 +42,7 @@ export interface WordmarkProps {
 }
 
 /**
- * "o7" in Geist 600 with tight tracking, after the logo. The word is real text, so a
+ * "Ghost" in Geist 600 with tight tracking, after the logo. The word is real text, so a
  * wordmark inside a link names the link. The logo is not quite twice as wide as the type is
  * tall, which makes the wing about as tall as a lowercase letter, and is centred on the type.
  */
@@ -54,7 +54,7 @@ export function Wordmark({ size = 16, mark = true, className }: WordmarkProps) {
       style={{ fontSize: `${fontSize}px` }}
     >
       {mark ? <Logo size={Math.round(fontSize * 1.9)} /> : null}
-      <span className="g-wordmark-text">o7</span>
+      <span className="g-wordmark-text">Ghost</span>
     </span>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EventBatch, O7Event, ToolContent, ToolUpdate } from "../bindings";
+import type { EventBatch, GhostEvent, ToolContent, ToolUpdate } from "../bindings";
 import {
   activityOf,
   applyBatch,
@@ -13,23 +13,23 @@ import {
 
 const SESSION = "019a0000-0000-7000-8000-000000000001";
 
-function frame(seqStart: number, events: O7Event[], sessionId = SESSION): EventBatch {
+function frame(seqStart: number, events: GhostEvent[], sessionId = SESSION): EventBatch {
   return { chat_id: sessionId, seq_start: seqStart, events };
 }
 
-const delta = (text: string, id = "m1"): O7Event => ({
+const delta = (text: string, id = "m1"): GhostEvent => ({
   type: "message_delta",
   message_id: id,
   text,
 });
-const thought = (text: string, id = "t1"): O7Event => ({
+const thought = (text: string, id = "t1"): GhostEvent => ({
   type: "thought_delta",
   thought_id: id,
   text,
 });
 
 /** A tool update that changes only the fields in `fields`. */
-const update = (id: string, fields: Partial<Omit<ToolUpdate, "tool_call_id">>): O7Event => ({
+const update = (id: string, fields: Partial<Omit<ToolUpdate, "tool_call_id">>): GhostEvent => ({
   type: "tool_update",
   tool_call_id: id,
   status: null,
@@ -43,7 +43,7 @@ const update = (id: string, fields: Partial<Omit<ToolUpdate, "tool_call_id">>): 
   ...fields,
 });
 
-const permission = (id: string, title: string): O7Event => ({
+const permission = (id: string, title: string): GhostEvent => ({
   type: "permission_requested",
   request_id: id,
   tool_call_id: null,
@@ -57,7 +57,7 @@ const permission = (id: string, title: string): O7Event => ({
 });
 
 /** Frames numbered back to back from `start`, like the batcher produces. */
-function numbered(groups: O7Event[][], start = 0): EventBatch[] {
+function numbered(groups: GhostEvent[][], start = 0): EventBatch[] {
   let seq = start;
   return groups.map((events) => {
     const batch = frame(seq, events);
@@ -325,7 +325,7 @@ describe("applyBatch", () => {
   });
 
   it("caps notices and records errors as notices", () => {
-    const notices: O7Event[] = Array.from({ length: MAX_NOTICES + 5 }, (_, i) => ({
+    const notices: GhostEvent[] = Array.from({ length: MAX_NOTICES + 5 }, (_, i) => ({
       type: "notice",
       level: "info",
       message: `n${i}`,

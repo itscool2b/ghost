@@ -1,4 +1,4 @@
-//! The Agents page's added accounts and the chat's account switch, over o7-core's accounts
+//! The Agents page's added accounts and the chat's account switch, over ghost-core's accounts
 //! (docs/agent-accounts.md). A token goes from the page straight into secure storage: no command
 //! returns one, and errors never carry one.
 use crate::agent_tokens::{NativeTokens, TokenEntry, TokenError};
@@ -6,8 +6,8 @@ use crate::{
     error::{AppError, AppErrorCode},
     state::AppState,
 };
-use o7_core::agent_accounts::TokenVault;
-use o7_protocol::agents::{AgentAccounts, AgentUsage};
+use ghost_core::agent_accounts::TokenVault;
+use ghost_protocol::agents::{AgentAccounts, AgentUsage};
 use tauri::{State, Webview};
 
 /// Credential Manager or the keychain: one entry per added account.
@@ -16,10 +16,10 @@ pub struct ProfileTokens {
 }
 
 impl ProfileTokens {
-    /// The reason instead, when this computer has no secure storage o7 can use.
+    /// The reason instead, when this computer has no secure storage Ghost can use.
     pub fn open() -> Result<Self, String> {
         let store = NativeTokens::new().map_err(|_| {
-            "This computer has no secure storage o7 can keep account tokens in.".to_owned()
+            "This computer has no secure storage Ghost can keep account tokens in.".to_owned()
         })?;
         Ok(Self { store })
     }

@@ -236,7 +236,7 @@ export function agentEditAuthor(
 
 /**
  * A memory edit as its toast says it: a short title, then who and where on one line ("Claude
- * Code · Fix the login flow · o7"), so a long chat title shortens instead of swallowing the
+ * Code · Fix the login flow · Ghost"), so a long chat title shortens instead of swallowing the
  * sentence around it. `agentEditText` stays the full sentence, for the toast's tooltip.
  */
 export function agentEditToast(
@@ -284,7 +284,7 @@ export function editedNotes(notice: AgentEditNotice): string {
     .join(", ");
 }
 
-/** "Claude Code in Fix the login flow updated project memory for o7." */
+/** "Claude Code in Fix the login flow updated project memory for Ghost." */
 export function agentEditText(
   notice: AgentEditNotice,
   chats: MemoryChats,

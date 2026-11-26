@@ -11,7 +11,7 @@ export interface CopyButtonProps {
 /**
  * Copies `text` and says so only after the platform accepts the write; a refusal says what to do
  * instead. Styled by the `g-copy*` classes in graphite.css. The `o-copy*` classes are kept so Orbit
- * screens that import this through `@o7/ui/orbit` keep their look until they move to Graphite.
+ * screens that import this through `@ghost/ui/orbit` keep their look until they move to Graphite.
  */
 export function CopyButton({ text, label = "Copy", caption = "Copy" }: CopyButtonProps) {
   const [state, setState] = useState<"ready" | "copying" | "copied" | "failed">("ready");

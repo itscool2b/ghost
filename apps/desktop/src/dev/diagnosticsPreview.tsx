@@ -25,9 +25,9 @@ const info: AppInfo = {
   db: null,
   glass: "none",
   launch: { type: "normal" },
-  notices: ["O7_STRESS was ignored: orbs must be between 1 and 24."],
+  notices: ["GHOST_STRESS was ignored: orbs must be between 1 and 24."],
   recovery_notice:
-    "Your database was damaged, so o7 rebuilt it. Nothing was lost; the damaged copy was kept at C:/fixture/backups/aura.db.corrupt-1.",
+    "Your database was damaged, so Ghost rebuilt it. Nothing was lost; the damaged copy was kept at C:/fixture/backups/aura.db.corrupt-1.",
   fatal: null,
   media: true,
   media_notice: null,
@@ -44,7 +44,7 @@ function Preview() {
   if (view === "error")
     return (
       <ErrorScreen
-        title="o7 couldn't open your data"
+        title="Ghost couldn't open your data"
         message="The database at C:/Users/fixture/AppData/Roaming/si.auracode.desktop/profiles/local/aura.db is locked by another process (os error 33)."
         dataDir={info.data_dir}
         os={info.os}

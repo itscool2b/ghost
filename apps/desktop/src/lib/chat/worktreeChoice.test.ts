@@ -17,7 +17,7 @@ const BRANCHES = ["main", "release/1.4"];
 
 function plan(input: WorktreeChatInput, token: string, overrides: Partial<WorktreeChatPlan> = {}) {
   const start = input.start_branch ?? "main";
-  const branch = input.branch ?? `aura/generated-${token}`;
+  const branch = input.branch ?? `ghost/generated-${token}`;
   const value: WorktreeChatPlan = {
     token,
     source: {
@@ -157,10 +157,10 @@ describe("the new chat's worktree choice", () => {
     expect(view.plan).toBe(reviewed);
     // Create never applies other options while a refusal shows.
     await expect(choice.resolve()).resolves.toEqual({ type: "stop" });
-    choice.propose({ branch: "aura/my-name" }, "branch");
+    choice.propose({ branch: "ghost/my-name" }, "branch");
     await settle();
     expect(choice.getSnapshot().error).toBeNull();
-    expect(choice.getSnapshot().plan?.branch).toBe("aura/my-name");
+    expect(choice.getSnapshot().plan?.branch).toBe("ghost/my-name");
   });
 
   it("names a branch at once, without waiting for the review delay", async () => {
@@ -168,7 +168,7 @@ describe("the new chat's worktree choice", () => {
     const choice = new WorktreeChoice(api);
     choice.target("folder", "claude");
     await settle();
-    choice.propose({ branch: "aura/typed" }, "branch");
+    choice.propose({ branch: "ghost/typed" }, "branch");
     await vi.advanceTimersByTimeAsync(0);
     expect(api.preview).toHaveBeenCalledTimes(2);
   });

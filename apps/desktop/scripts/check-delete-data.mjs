@@ -1,5 +1,5 @@
 /**
- * Settings' "Delete all o7 data" in Chromium and WebKit on synthetic reviews
+ * Settings' "Delete all Ghost data" in Chromium and WebKit on synthetic reviews
  * (dev/deleteDataPreview): the review, the worktree warning, the macOS Trash choice and a failed
  * start. No file, key, worktree or process is touched. Every state passes axe with no violations.
  *
@@ -99,7 +99,7 @@ try {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       const calls = () => page.evaluate(() => window.deleteDataFixture.calls());
-      const dialog = () => page.getByRole("dialog", { name: "Delete all o7 data" });
+      const dialog = () => page.getByRole("dialog", { name: "Delete all Ghost data" });
       const audit = async (state) => {
         await settled(page);
         await page.screenshot({ path: resolve(out, `${engine}-${state}.png`) });
@@ -130,14 +130,14 @@ try {
       await review.getByText("Update downloads", { exact: true }).waitFor();
       await review
         .getByText(
-          "Sign-in tokens of agent accounts you added in o7, kept in Windows Credential Manager.",
+          "Sign-in tokens of agent accounts you added in Ghost, kept in Windows Credential Manager.",
           { exact: true },
         )
         .waitFor();
       assert.equal(await review.getByRole("list", { name: "Secure-store entries" }).count(), 0);
       await review.getByText(/Stays: your agents and their folders/).waitFor();
       assert.equal(await review.getByTestId("delete-data-worktrees").count(), 0);
-      assert.equal(await review.getByText("Also move o7 to the Trash").count(), 0);
+      assert.equal(await review.getByText("Also move Ghost to the Trash").count(), 0);
       assert.equal(await apply().isDisabled(), true);
       assert.equal(await apply().textContent(), "Delete data and quit");
       await audit("review");
@@ -156,7 +156,7 @@ try {
       await apply().click();
       await dialog()
         .getByRole("status")
-        .getByText(/o7 is quitting/)
+        .getByText(/Ghost is quitting/)
         .waitFor();
       assert.equal(await apply().isDisabled(), true);
       assert.ok(
@@ -171,9 +171,11 @@ try {
       await warning
         .getByRole("heading", { name: "2 worktrees have work saved nowhere else" })
         .waitFor();
-      await warning.getByText("aura/fix-login-redirect", { exact: true }).waitFor();
+      await warning.getByText("ghost/fix-login-redirect", { exact: true }).waitFor();
       await warning
-        .getByText("3 uncommitted files, 1 commit only on aura/fix-login-redirect", { exact: true })
+        .getByText("3 uncommitted files, 1 commit only on ghost/fix-login-redirect", {
+          exact: true,
+        })
         .waitFor();
       await warning.getByText("2 commits on no branch", { exact: true }).waitFor();
       await dialog()
@@ -187,7 +189,7 @@ try {
       await page.keyboard.press("Enter");
       await dialog()
         .getByRole("status")
-        .getByText(/o7 is quitting/)
+        .getByText(/Ghost is quitting/)
         .waitFor();
       const applied = (await calls()).find((call) => call.startsWith("apply"));
       assert.match(
@@ -200,11 +202,11 @@ try {
       await open("delete-data-macos");
       await dialog()
         .getByText(
-          "Sign-in tokens of agent accounts you added in o7, kept in the macOS keychain.",
+          "Sign-in tokens of agent accounts you added in Ghost, kept in the macOS keychain.",
           { exact: true },
         )
         .waitFor();
-      const trash = dialog().getByLabel("Also move o7 to the Trash");
+      const trash = dialog().getByLabel("Also move Ghost to the Trash");
       assert.equal(await trash.isChecked(), false);
       await trash.check();
       assert.equal(await apply().textContent(), "Delete data and move to Trash");
@@ -213,7 +215,7 @@ try {
       await apply().click();
       await dialog()
         .getByRole("status")
-        .getByText(/o7 is quitting/)
+        .getByText(/Ghost is quitting/)
         .waitFor();
       assert.ok((await calls()).some((call) => call.includes('"move_app_to_trash":true')));
 

@@ -40,7 +40,7 @@ let worktrees: ManagedWorktree[] = missing
         chat_id: "chat",
         source: workspace.root,
         path: "C:/auracode/worktrees/owned-one",
-        branch: "aura/release-readiness",
+        branch: "ghost/release-readiness",
         base_commit: workspace.head ?? "",
         state: "missing",
         detail:
@@ -57,7 +57,7 @@ if (conflicted)
       chat_id: "chat",
       source: workspace.root,
       path: "C:/auracode/worktrees/owned-one",
-      branch: "aura/release-readiness",
+      branch: "ghost/release-readiness",
       base_commit: workspace.head ?? "",
       state: "ready",
       detail: null,
@@ -75,7 +75,7 @@ const makeWorktree = (): ManagedWorktree => ({
   chat_id: "chat",
   source: workspace.root,
   path: "C:/auracode/worktrees/owned-one",
-  branch: "aura/release-readiness",
+  branch: "ghost/release-readiness",
   base_commit: workspace.head ?? "",
   state: "ready",
   detail: null,
@@ -92,7 +92,7 @@ const api: GitWorkspaceApi = {
       ? {
           ...structuredClone(workspace),
           root: currentFolder,
-          branch: "aura/release-readiness",
+          branch: "ghost/release-readiness",
           is_linked_worktree: true,
         }
       : { ...structuredClone(workspace), root: currentFolder };
@@ -134,7 +134,7 @@ const api: GitWorkspaceApi = {
       message: `${input.message.trim()}\n`,
       diff_stat: `${files.map((file) => ` ${file.path} | 4 ++--`).join("\n")}\n ${files.length} files changed`,
       warnings: [
-        "Git hooks do not run: o7 commits exactly the reviewed files. Run your project's checks yourself if it relies on them.",
+        "Git hooks do not run: Ghost commits exactly the reviewed files. Run your project's checks yourself if it relies on them.",
       ],
       expires_at: Date.now() + 600_000,
     };
@@ -200,7 +200,7 @@ const api: GitWorkspaceApi = {
     return {
       token: `isolation-${++sequence}`,
       source: structuredClone(workspace),
-      branch: `aura/${input.slug}`,
+      branch: `ghost/${input.slug}`,
       path: "C:/auracode/worktrees/owned-one",
       bring_changes: input.bring_changes,
       warnings: ["Uncommitted changes stay in the source folder."],

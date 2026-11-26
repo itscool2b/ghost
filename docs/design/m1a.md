@@ -148,7 +148,7 @@ crates/aura-process/src/
   log/mod.rs          LogFactory, ProtocolLog, LogNote, Direction, LogLimits, RetentionPolicy
   log/redact.rs       Redactor          log/writer.rs  writer task, rotation        log/retention.rs  prune
   testing.rs          feature "testing": FakeSpawner, FakeAgentEnd, FakeLine, FakeControl
-  bin/o7-testbin.rs test child (modes in 9.3)
+  bin/ghost-testbin.rs test child (modes in 9.3)
 
 crates/aura-agents/src/
   lib.rs, catalog.rs, detect.rs, launch.rs, install.rs (npm adapters)
@@ -2887,13 +2887,13 @@ merge.
 
 | Package | Exclusive files | Builds against | Acceptance |
 |---|---|---|---|
-| **A: processes, env, logs, agents** | `crates/aura-process/**` (bodies, private modules, `src/bin/o7-testbin.rs`, `tests/**`), `crates/aura-agents/**` | P0 only | P1 to P5, P12, P14 (framer), P17 to P35, P39 to P41, P43 to P46 (A's parts), P49 to P51, E1 to E15, A29 (redactor); log rotation, retention, drop counting and redaction tests (emails, token shapes, credential and identity keys, token counts kept, secret literals); registry atomicity under concurrent register and unregister, the heartbeat; process-table parsers on captured `ps` and `/proc` text; the spike's ported process tests. Real-process tests run on macOS locally and on Linux and Windows in CI. |
+| **A: processes, env, logs, agents** | `crates/aura-process/**` (bodies, private modules, `src/bin/ghost-testbin.rs`, `tests/**`), `crates/aura-agents/**` | P0 only | P1 to P5, P12, P14 (framer), P17 to P35, P39 to P41, P43 to P46 (A's parts), P49 to P51, E1 to E15, A29 (redactor); log rotation, retention, drop counting and redaction tests (emails, token shapes, credential and identity keys, token counts kept, secret literals); registry atomicity under concurrent register and unregister, the heartbeat; process-table parsers on captured `ps` and `/proc` text; the spike's ported process tests. Real-process tests run on macOS locally and on Linux and Windows in CI. |
 | **B: drivers** | `crates/aura-drivers/src/{jsonrpc.rs,acp/**,mock_driver.rs,factory.rs,replay/**}`, `crates/aura-drivers/tests/**` (synthetic fixtures, goldens) | P0 (`FakeSpawner`, `DirectSpawner`) | P6 to P11, P13 to P16, P33 (hint), P46 (driver), A1 to A8, A10 to A12, A14 to A26, A29 to A33, A35 to A41 (B's parts); one test per mapping row and per reply row; every synthetic fixture replays to its golden; the driver contract (5.1) checked over every fixture, including exactly one `TurnEnded` per `Prompt`, tags, and nothing lost at exit; `MockDriver` behaviours; JSON-RPC parsing (requests, notifications, results, errors, batches, string and numeric ids, missing `jsonrpc`). **Early merge:** `MockDriver` and `StandardDriverFactory` land on `m1a-core-acp` by day 5 (B's files only), so C and D run the demo agent end to end before the final merge. |
 | **C: storage and sessions** | `crates/aura-core/src/{chatstore/**,session/**}`, `crates/aura-core/tests/**` | P0 (`ScriptedDriver`, `FakeSpawner`); B's early `MockDriver` | P1, P6, P10, P36 to P38, P42, P47, P48, A7, A9, A12 to A14, A18, A23, A26 to A28, A33, A34, A36, A37, A40 to A42, S1 to S43 (C's parts), U15 and U16 (C's parts); writer group commit, atomic ops, ordering and shutdown; history pages for a generated 10,000-turn chat under 50 ms each on this Mac; the compaction property test. |
 | **D: desktop and bare UI** | `apps/desktop/src-tauri/src/{commands.rs,sessions.rs,state.rs,lib.rs,error.rs,bindings.rs,boot.rs}`, `apps/desktop/src/**` | P0; a fake transport in Vitest until C merges, B's early `MockDriver` | S9, S24, S25, S35, S36, S41 (D's parts), U1 to U15, A17, A32 and A41 (cards); every `SessionError` maps to one `AppErrorCode`; the bindings test lists every new command and checks the UI-facing protocol types; `ChannelSink` removes itself on a send error; manual: every flow with the demo agent in `pnpm dev`. |
 
-`o7-testbin` modes (A): `json-lines <n>`, `flood-stderr <bytes>`, `ignore-sigterm`, `spawn-group-child <pidfile>`,
-`spawn-setsid-daemon <pidfile>` (a forked child that calls `setsid` and re-executes itself as `o7-testbin daemon
+`ghost-testbin` modes (A): `json-lines <n>`, `flood-stderr <bytes>`, `ignore-sigterm`, `spawn-group-child <pidfile>`,
+`spawn-setsid-daemon <pidfile>` (a forked child that calls `setsid` and re-executes itself as `ghost-testbin daemon
 run`, which the test's `DaemonMatch` spares; macOS has no `setsid` command), `spawn-pty-child <pidfile>` (the same
 without a daemon argv, standing in for a PTY host or a detached Node child), `spawn-job-child <pidfile>`,
 `exit-before-read <code>`, `exit-with-buffered <lines>` (writes and exits at once), `oversized <bytes>

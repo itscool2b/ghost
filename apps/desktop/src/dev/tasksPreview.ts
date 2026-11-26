@@ -1,4 +1,4 @@
-import type { BackgroundTask, O7Event } from "../bindings";
+import type { BackgroundTask, GhostEvent } from "../bindings";
 import { backgroundTask, ev } from "../lib/chat/testing";
 
 /**
@@ -33,7 +33,7 @@ export function taskPreviewRecords(many: boolean): BackgroundTask[] {
       title: "Map account switching code",
       agent_type: "Explore",
       tool_call_id: "toolu-explore",
-      activity: "Reading crates/o7-core/src/session/agent_accounts.rs",
+      activity: "Reading crates/ghost-core/src/session/agent_accounts.rs",
       tokens: 48_210,
       tool_uses: 7,
       started_at: ago(72),
@@ -92,10 +92,10 @@ export function taskPreviewRecords(many: boolean): BackgroundTask[] {
 }
 
 /** The turn that started them, then each task's record and steps. */
-export function taskPreviewEvents(many: boolean): O7Event[] {
+export function taskPreviewEvents(many: boolean): GhostEvent[] {
   const records = taskPreviewRecords(many);
   const record = (id: string) => records.find((task) => task.task_id === id) as BackgroundTask;
-  const started = (id: string): O7Event => ({
+  const started = (id: string): GhostEvent => ({
     type: "task_updated",
     ...record(id),
     status: "running",
@@ -103,7 +103,7 @@ export function taskPreviewEvents(many: boolean): O7Event[] {
     summary: null,
     activity: null,
   });
-  const ended = (id: string): O7Event => ({ type: "task_updated", ...record(id), prompt: null });
+  const ended = (id: string): GhostEvent => ({ type: "task_updated", ...record(id), prompt: null });
   return [
     ev.turnStarted("next"),
     ev.user("u2", "Find where accounts switch, audit the composer, and run the browser suite."),
@@ -171,7 +171,7 @@ export function taskPreviewEvents(many: boolean): O7Event[] {
       tool_name: "Bash",
       status: "completed",
       raw_input: {
-        command: "corepack pnpm --filter @o7/web test:browser",
+        command: "corepack pnpm --filter @ghost/web test:browser",
         description: "Run website browser tests",
         run_in_background: true,
       },
@@ -188,6 +188,6 @@ export function taskPreviewEvents(many: boolean): O7Event[] {
     ended("audit"),
     ...(many
       ? [started("lint"), ended("lint"), started("docs"), ended("docs")]
-      : ([] as O7Event[])),
+      : ([] as GhostEvent[])),
   ];
 }

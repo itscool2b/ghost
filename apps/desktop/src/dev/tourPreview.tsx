@@ -115,7 +115,7 @@ const info: AppInfo = {
   os: "windows",
   os_version: "11",
   arch: "x86_64",
-  data_dir: "C:/fixture/o7",
+  data_dir: "C:/fixture/ghost",
   device: null,
   profile: { id: "local", kind: "local", display_name: "Local", created_at: 1 },
   profile_switching: false,

@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@import "@o7/ui/fonts.css";
-@import "@o7/ui/tokens.css";
+@import "@ghost/ui/fonts.css";
+@import "@ghost/ui/tokens.css";
 
 /*
  * Lab-wide base styles. Shared: directions bring their own CSS from their folders (see the README).
@@ -41,7 +41,7 @@
 
 /*
  * `?motion=reduce` and the OS setting, one selector: the lab keeps <html data-motion> current (see
- * src/lab/reducedMotion.ts). These mirror the reduced-motion block of @o7/ui's tokens.css,
+ * src/lab/reducedMotion.ts). These mirror the reduced-motion block of @ghost/ui's tokens.css,
  * which only a real OS setting can trigger.
  */
 :root[data-motion="reduce"] {

@@ -14,7 +14,7 @@
  * - Live events are folded as they arrive, and drawn at most once a frame.
  */
 
-import { THEME_IDS } from "@o7/ui/graphite";
+import { THEME_IDS } from "@ghost/ui/graphite";
 import type {
   ChatAttach,
   ChatSnapshot,
@@ -78,7 +78,7 @@ export type Phase =
   /** Nothing is paired and no pairing link was opened. */
   | { readonly name: "empty" }
   | { readonly name: "connecting" }
-  /** The relay answers; the computer is off, asleep or has o7 closed. */
+  /** The relay answers; the computer is off, asleep or has Ghost closed. */
   | { readonly name: "away" }
   | { readonly name: "ready" }
   /**
@@ -112,9 +112,9 @@ export interface State {
   readonly opening: string | null;
   readonly chat: OpenChat | null;
   /**
-   * What this computer's o7 offers beyond the first version's requests, as it said when
+   * What this computer's Ghost offers beyond the first version's requests, as it said when
    * the session opened. A control is shown only when its feature is named here: a request an
-   * older o7 does not know ends the session.
+   * older Ghost does not know ends the session.
    */
   readonly features: readonly string[];
   /** How the computer looks: its theme and appearance, as it said, or as it last said. */
@@ -536,14 +536,14 @@ export class RemoteClient {
     const credential = this.#credential;
     if (reason === "busy") return;
     if (reason === "version") {
-      this.#end("This page and the o7 on that computer do not match. Update o7.");
+      this.#end("This page and the Ghost on that computer do not match. Update Ghost.");
       return;
     }
     if (credential?.kind === "device" && reason === "elsewhere") {
       // A pairing reaches the workspace it was made in. The key is still good there.
       const host = credential.host;
       this.#end(
-        `${host.hostName} has another workspace open. This browser is paired with a different one: open that workspace in o7, or pair this browser again from the one that is open.`,
+        `${host.hostName} has another workspace open. This browser is paired with a different one: open that workspace in Ghost, or pair this browser again from the one that is open.`,
         host.hostId,
       );
       return;
@@ -554,7 +554,7 @@ export class RemoteClient {
       void this.#refusedDevice(credential.host);
     } else {
       this.#end(
-        "This pairing link was already used or has expired. Create a new one in o7: Settings, Remote access, Pair.",
+        "This pairing link was already used or has expired. Create a new one in Ghost: Settings, Remote access, Pair.",
       );
     }
   }
@@ -573,7 +573,7 @@ export class RemoteClient {
       return;
     }
     this.#end(
-      `${host.hostName} no longer accepts this browser. If you removed it in o7's Settings, pair again from there.`,
+      `${host.hostName} no longer accepts this browser. If you removed it in Ghost's Settings, pair again from there.`,
       host.hostId,
     );
   }

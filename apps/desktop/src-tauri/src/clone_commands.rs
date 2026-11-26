@@ -3,17 +3,20 @@ use crate::{
     error::{AppError, AppErrorCode},
     state::AppState,
 };
-use o7_core::cloning::Clones;
-use o7_protocol::setup_actions::{CloneCheck, CloneInput, CloneRecord, CloneRecovery};
+use ghost_core::cloning::Clones;
+use ghost_protocol::setup_actions::{CloneCheck, CloneInput, CloneRecord, CloneRecovery};
 use std::sync::Arc;
 use tauri::{State, Webview};
 
-fn error(value: o7_core::cloning::CloneError) -> AppError {
+fn error(value: ghost_core::cloning::CloneError) -> AppError {
     AppError::new(AppErrorCode::InvalidArgument, value.to_string())
 }
 fn current(webview: &Webview, state: &AppState) -> Result<(), AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     if !state.pages.for_view(webview.label()).is_current() {
         return Err(AppError::new(

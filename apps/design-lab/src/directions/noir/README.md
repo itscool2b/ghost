@@ -70,8 +70,8 @@ direction lives entirely inside it.
 ## Run
 
 ```sh
-pnpm --filter @o7/design-lab dev --port 5182        # then #/noir/streaming
-pnpm --filter @o7/design-lab shoot --direction noir --port 5182
+pnpm --filter @ghost/design-lab dev --port 5182        # then #/noir/streaming
+pnpm --filter @ghost/design-lab shoot --direction noir --port 5182
 ```
 
 Rules for this folder: scope CSS under `[data-direction="noir"]`, keep overlays inside the window,

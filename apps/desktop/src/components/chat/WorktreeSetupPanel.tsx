@@ -203,10 +203,10 @@ export function WorktreeSetupPanel({
           </label>
           <p className="git-help">
             Run starts this in the chat's worktree, in its terminal panel, until you stop it. Each
-            worktree keeps ten local ports: the first is in O7_PORT for setup, Run and the
+            worktree keeps ten local ports: the first is in GHOST_PORT for setup, Run and the
             worktree's terminals, and in PORT for Run. A server that reads neither can take it
-            through a shell: cmd.exe with <code>/c</code> and <code>pnpm dev --port %O7_PORT%</code>
-            , say.
+            through a shell: cmd.exe with <code>/c</code> and{" "}
+            <code>pnpm dev --port %GHOST_PORT%</code>, say.
           </p>
           <div className="git-actions">
             <button className="g-button" type="submit" disabled={busy || !dirty}>

@@ -1,0 +1,40 @@
+{
+  "channel": "staging",
+  "version": "0.1.0",
+  "pub_date": "2026-10-26T12:00:00Z",
+  "notes": "Replace with reviewed release notes and known issues.",
+  "public_key": "REPLACE_WITH_THE_TRUSTED_TAURI_PUBLIC_KEY",
+  "artifacts": [
+    { "kind": "macos_universal_dmg", "file": "Ghost_0.1.0_universal.dmg", "signature": null },
+    {
+      "kind": "macos_universal_updater",
+      "file": "Ghost.app.tar.gz",
+      "signature": "Ghost.app.tar.gz.sig"
+    },
+    {
+      "kind": "windows_x64_nsis",
+      "file": "Ghost_0.1.0_x64-setup.exe",
+      "signature": "Ghost_0.1.0_x64-setup.exe.sig"
+    },
+    {
+      "kind": "windows_arm64_nsis",
+      "file": "Ghost_0.1.0_arm64-setup.exe",
+      "signature": "Ghost_0.1.0_arm64-setup.exe.sig"
+    },
+    {
+      "kind": "linux_x64_appimage",
+      "file": "Ghost_0.1.0_amd64.AppImage",
+      "signature": "Ghost_0.1.0_amd64.AppImage.sig"
+    },
+    {
+      "kind": "linux_x64_deb",
+      "file": "Ghost_0.1.0_amd64.deb",
+      "signature": "Ghost_0.1.0_amd64.deb.sig"
+    },
+    {
+      "kind": "linux_x64_rpm",
+      "file": "Ghost-0.1.0-1.x86_64.rpm",
+      "signature": "Ghost-0.1.0-1.x86_64.rpm.sig"
+    }
+  ]
+}

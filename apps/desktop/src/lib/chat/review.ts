@@ -97,7 +97,7 @@ export function afterHunkRevert(
   });
 }
 
-/** Unsent comments by chat: they outlast the Changes panel and the chat's view, not o7. */
+/** Unsent comments by chat: they outlast the Changes panel and the chat's view, not Ghost. */
 const drafts = new Map<string, readonly DiffComment[]>();
 const listeners = new Set<() => void>();
 const NONE: readonly DiffComment[] = [];

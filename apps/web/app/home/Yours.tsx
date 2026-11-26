@@ -1,7 +1,7 @@
 const FACTS: readonly { figure: string; text: string }[] = [
-  { figure: "0", text: "accounts to create. o7 has none, so there is nothing to sign up for." },
+  { figure: "0", text: "accounts to create. Ghost has none, so there is nothing to sign up for." },
   { figure: "0", text: "uploads. Chats, projects and settings stay on your computer." },
-  { figure: "9", text: "agents, each through its own sign-in. o7 never sees their keys." },
+  { figure: "9", text: "agents, each through its own sign-in. Ghost never sees their keys." },
   { figure: "3", text: "systems: Windows, macOS and Linux, free, under the MIT license." },
 ];
 
@@ -18,8 +18,8 @@ export function Yours() {
             Yours. <span className="tone">Your agents, on your machine.</span>
           </h2>
           <p className="lead">
-            o7 is a desktop app, not a service. It works without a connection, and your agents still
-            send what they need to their own services, as they do without it.
+            Ghost is a desktop app, not a service. It works without a connection, and your agents
+            still send what they need to their own services, as they do without it.
           </p>
         </div>
         <ul className="facts">

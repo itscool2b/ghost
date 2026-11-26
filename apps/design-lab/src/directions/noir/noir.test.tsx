@@ -294,7 +294,7 @@ describe("the Noir window", () => {
     expect(thinking).toContain('aria-busy="true"');
     expect(thinking).toContain("Claude Code is working");
     const working = render("streaming", 24);
-    expect(working).toContain("Running pnpm --filter @o7/ui test pacing");
+    expect(working).toContain("Running pnpm --filter @ghost/ui test pacing");
   });
 
   it("keeps a passed command open while its turn runs, down to its last lines", () => {

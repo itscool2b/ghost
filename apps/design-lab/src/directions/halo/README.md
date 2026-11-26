@@ -15,7 +15,7 @@ This folder belongs to the Halo designer. Only that designer edits files here.
   so depth reads in a still frame. Parallax adds to it: the aura drifts against the pointer and the
   dock drifts with it, and everything holds still while the pointer is in the dock or a menu is
   open, so nothing you aim at moves (off under reduced motion).
-- **Glass.** Every slab is a squircle (`squirclePath` from `@o7/ui`) with three layers: a
+- **Glass.** Every slab is a squircle (`squirclePath` from `@ghost/ui`) with three layers: a
   fill, a bevel (white light along the top inner edge, the agent's colour refracting along the
   bottom one), and a 1px rim drawn as an SVG stroke on the same path. Wells (code, diffs, terminal,
   the thought) are recessed.
@@ -73,7 +73,7 @@ wallpapers (measured against the real pixels behind it, in WebKit).
 - Real Liquid Glass adapts to bright wallpapers by itself; the lab's stand-in does not, so
   `.halo-guard` caps how bright the glass behind Halo can get (a `darken` blend that leaves dark
   wallpapers alone). Over native glass it blends with nothing and does nothing.
-- Geist ships no italic in `@o7/ui/fonts.css`, so comments are marked by colour alone and
+- Geist ships no italic in `@ghost/ui/fonts.css`, so comments are marked by colour alone and
   `em` is a synthesized slant until the italic faces are imported there.
 - Backdrop blur only on small overlays (menus, the picker, "Latest"); the blurred element itself
   fades, never a parent, so the blur never snaps in.

@@ -36,7 +36,7 @@ const entry = (item: ChatSummary, projectId: string): WorkspaceChat => ({
   pinned: false,
   archived: false,
 });
-const projects = [project("project-app", "o7"), project("project-site", "o7.codes")];
+const projects = [project("project-app", "Ghost"), project("project-site", "onghost.dev")];
 
 // What the last launch kept: one chat was working then, and one has been deleted since.
 const kept = [
@@ -132,7 +132,7 @@ export function mountOpeningPreview(container: HTMLElement) {
           reject(
             new CommandError(
               "storage_unavailable",
-              "o7's database is not available: The disk is full.",
+              "Ghost's database is not available: The disk is full.",
             ),
           );
         } else resolve(value);

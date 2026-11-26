@@ -828,7 +828,7 @@ async function richAnswer(page, theme) {
   assert.match(await diagram.locator("pre code").textContent(), /flowchart LR/);
   await diagram.getByRole("button", { name: "Diagram", exact: true }).click();
   await diagram.locator(".mermaid-diagram svg").waitFor();
-  // A diagram asking for ELK, which o7 leaves out, shows its code and says why.
+  // A diagram asking for ELK, which Ghost leaves out, shows its code and says why.
   const elk = page.locator(".mermaid-block").filter({ hasText: "layout: elk" });
   await elk.locator(".mermaid-problem").filter({ hasText: "ELK layout" }).waitFor();
   assert.equal(await elk.locator(".mermaid-diagram svg").count(), 0);

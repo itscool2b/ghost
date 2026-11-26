@@ -1,4 +1,4 @@
-//! Demo streams: the scripted mock agent from o7-drivers, played into a Tauri channel.
+//! Demo streams: the scripted mock agent from ghost-drivers, played into a Tauri channel.
 //!
 //! This is the M0 stand-in for a real agent session and the load generator for the streaming stress
 //! test. Each stream is one session with its own id; the registry only tracks how to cancel the
@@ -10,8 +10,8 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use o7_drivers::mock::{MockScript, RunOutcome, run_script};
-use o7_protocol::EventBatch;
+use ghost_drivers::mock::{MockScript, RunOutcome, run_script};
+use ghost_protocol::EventBatch;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
@@ -81,7 +81,7 @@ impl DemoSessions {
         F: FnMut(EventBatch) -> bool + Send + 'static,
     {
         let script = kind.script(tokens_per_sec)?;
-        let session_id = o7_core::ids::new_id();
+        let session_id = ghost_core::ids::new_id();
         let cancel = CancellationToken::new();
         {
             let mut running = lock(&self.running);
@@ -151,7 +151,7 @@ impl Drop for Registration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use o7_protocol::{O7Event, StopReason};
+    use ghost_protocol::{GhostEvent, StopReason};
     use std::sync::Mutex as StdMutex;
 
     fn collector() -> (
@@ -167,7 +167,7 @@ mod tests {
         (frames, sink)
     }
 
-    fn events(frames: &[EventBatch]) -> Vec<O7Event> {
+    fn events(frames: &[EventBatch]) -> Vec<GhostEvent> {
         frames.iter().flat_map(|f| f.events.clone()).collect()
     }
 
@@ -193,10 +193,10 @@ mod tests {
             next += u32::try_from(frame.events.len()).expect("small");
         }
         let all = events(&frames);
-        assert!(matches!(all.first(), Some(O7Event::TurnStarted { .. })));
+        assert!(matches!(all.first(), Some(GhostEvent::TurnStarted { .. })));
         assert!(matches!(
             all.last(),
-            Some(O7Event::TurnEnded {
+            Some(GhostEvent::TurnEnded {
                 stop_reason: StopReason::EndTurn,
                 ..
             })
@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(sessions.running_count(), 0);
         assert!(matches!(
             events(&lock(&frames)).last(),
-            Some(O7Event::TurnEnded {
+            Some(GhostEvent::TurnEnded {
                 stop_reason: StopReason::Cancelled,
                 ..
             })

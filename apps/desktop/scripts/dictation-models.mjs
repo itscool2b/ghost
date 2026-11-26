@@ -1,5 +1,5 @@
 /**
- * The speech models o7 bundles: for dictation (docs/local-dictation.md) and for reading aloud
+ * The speech models Ghost bundles: for dictation (docs/local-dictation.md) and for reading aloud
  * (docs/read-aloud.md). Each is pinned to a Hugging Face revision, a size and a SHA-256, fetched
  * into src-tauri/resources/dictation or resources/speech before a release bundle, and verified
  * there. The files are model weights and their settings only: nothing runs from them.
@@ -76,7 +76,7 @@ export const SPEECH_DIR = resolve(
 );
 
 /**
- * The voice model o7 bundles for reading aloud (docs/read-aloud.md), kept in step with
+ * The voice model Ghost bundles for reading aloud (docs/read-aloud.md), kept in step with
  * `speech::model::BUNDLED` and resources/speech/voices.json in the Rust crate (a test compares
  * them). Phonon 31M English, 8-bit, with its config, its tokenizer and its own voice: Apache 2.0
  * (Gradium). Then the English voices of Gradium's catalogue, Apache 2.0, one small tensor each.

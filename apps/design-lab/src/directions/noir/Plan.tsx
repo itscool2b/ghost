@@ -1,4 +1,4 @@
-import { GlassPanel } from "@o7/ui";
+import { GlassPanel } from "@ghost/ui";
 import { Check, ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";

@@ -7,9 +7,9 @@ mod power;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use o7_core::onboarding::GeneralPreferences;
-use o7_core::session::{SinkGone, StatusSink};
-use o7_protocol::session::ChatStatusUpdate;
+use ghost_core::onboarding::GeneralPreferences;
+use ghost_core::session::{SinkGone, StatusSink};
+use ghost_protocol::session::ChatStatusUpdate;
 use tauri::{Emitter, Manager};
 use tokio::sync::{mpsc, watch};
 
@@ -276,7 +276,7 @@ pub fn apply_preferences(app: &tauri::AppHandle, general: &GeneralPreferences) {
     }
 }
 
-/// Keeps the computer awake for remote access while `on` (`o7_remote::Service::wants_awake`),
+/// Keeps the computer awake for remote access while `on` (`ghost_remote::Service::wants_awake`),
 /// or stops. Without a shell (smoke launches) there is nothing to hold.
 pub fn keep_reachable(app: &tauri::AppHandle, on: bool) {
     if let Some(shell) = app.try_state::<Arc<NativeShell>>() {
@@ -284,7 +284,7 @@ pub fn keep_reachable(app: &tauri::AppHandle, on: bool) {
     }
 }
 
-/// True only after the tray was successfully installed and while Settings keeps o7 in the
+/// True only after the tray was successfully installed and while Settings keeps Ghost in the
 /// tray. Otherwise the window uses the ordinary guarded quit path, never hiding an application
 /// the person asked to close or could not reach again.
 pub fn close_to_tray(app: &tauri::AppHandle) -> bool {
@@ -330,7 +330,7 @@ pub fn shell_take_navigation(app: tauri::AppHandle) -> Option<String> {
 fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-    // The first Linux tray loads the AppIndicator library and panics, ending o7, when it is
+    // The first Linux tray loads the AppIndicator library and panics, ending Ghost, when it is
     // missing. The same lookup first, so such a system runs without a tray instead.
     #[cfg(target_os = "linux")]
     if !appindicator_available() {
@@ -339,14 +339,14 @@ fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         )
         .into());
     }
-    let open = MenuItem::with_id(app, OPEN, "Open o7", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, QUIT, "Quit o7", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, OPEN, "Open Ghost", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, QUIT, "Quit Ghost", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
     let tray = TrayIconBuilder::with_id(TRAY)
         .icon(tray_icon())
         .icon_as_template(cfg!(target_os = "macos"))
         .menu(&menu)
-        .tooltip("o7")
+        .tooltip("Ghost")
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             OPEN => crate::window::focus_main(app),
@@ -545,7 +545,7 @@ fn show_notification(app: &tauri::AppHandle, epoch: u64, chat: &str, notice: Not
         .builder()
         .id(id)
         .title(notice.title())
-        .body("Open o7 to view the chat.")
+        .body("Open Ghost to view the chat.")
         .extra("chat_id", chat)
         .extra("profile_epoch", epoch)
         .extra("profile_id", profile.id)
@@ -579,7 +579,7 @@ mod profile_tests {
         };
         let update = ChatStatusUpdate {
             chat_id: "old-chat".into(),
-            status: o7_protocol::SessionStatus::Running,
+            status: ghost_protocol::SessionStatus::Running,
             needs_attention: false,
             title: None,
             updated_at: 1,

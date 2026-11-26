@@ -1,4 +1,4 @@
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { AgentMaintenance } from "../../bindings";
@@ -16,7 +16,7 @@ export interface AgentUpdateActions {
   /** Settings > Agents, where every agent's update and installation details are. */
   openAgents?: () => void;
   /**
-   * The same update command in o7's terminal sheet, for when the background update failed
+   * The same update command in Ghost's terminal sheet, for when the background update failed
    * (owner, 7 November 2026: "it says go through with it in the terminal for debugging ... we
    * should make a flow to be able to do that in this ADE directly").
    */
@@ -33,8 +33,8 @@ type Run =
 /**
  * One agent's newer release, a row in the notifications panel: it stays until its X, and while the
  * agent's chats have a turn under way it waits for them instead of offering Update. An agent whose
- * installation o7 cannot update (another tool owns it) says why and points to Settings >
- * Agents. A failed update offers its command in o7's own terminal, where its output and
+ * installation Ghost cannot update (another tool owns it) says why and points to Settings >
+ * Agents. A failed update offers its command in Ghost's own terminal, where its output and
  * prompts show, and `onFailed` turns the bell red while it stands.
  */
 export function AgentUpdateBanner({
@@ -89,7 +89,7 @@ export function AgentUpdateBanner({
   const verify = async () => {
     setRun({ state: "updating" });
     // Until the refresh answers it reads as still updating; if the old version is still what
-    // o7 finds, the update went to another copy than the one it runs.
+    // Ghost finds, the update went to another copy than the one it runs.
     await actions.refresh().catch(() => {});
     setRun({ state: "unchanged" });
   };
@@ -109,7 +109,7 @@ export function AgentUpdateBanner({
     maintenance !== null && maintenance !== "failed" && !maintenance.update_unavailable;
   const blocked =
     maintenance === "failed"
-      ? "o7 couldn't check how to update it."
+      ? "Ghost couldn't check how to update it."
       : (maintenance?.update_unavailable ?? null);
   const waiting =
     working > 0
@@ -117,7 +117,7 @@ export function AgentUpdateBanner({
       : null;
   const detail =
     run.state === "unchanged"
-      ? `The update finished, but o7 still finds ${update.version}${
+      ? `The update finished, but Ghost still finds ${update.version}${
           update.path ? ` at ${update.path}` : ""
         }. The newer release may not be out for this installation yet, or another copy was updated.`
       : (blocked ?? waiting);
@@ -195,7 +195,7 @@ export function AgentUpdateBanner({
         type="button"
         className="g-button g-button-ghost g-button-24 g-button-icon ui-toast-close"
         aria-label={`Dismiss the ${update.name} update notice`}
-        title="Dismiss until o7 starts again"
+        title="Dismiss until Ghost starts again"
         onClick={onDismiss}
       >
         <X size={14} aria-hidden="true" />

@@ -1,11 +1,11 @@
-//! The dictation models o7 bundles (docs/local-dictation.md): Parakeet TDT-CTC 110M for
+//! The dictation models Ghost bundles (docs/local-dictation.md): Parakeet TDT-CTC 110M for
 //! English speech, with punctuation and capitals, and Silero VAD v6.2 for voice activity. They ship
 //! in the app's resources, so dictation needs no download. A release bundle refuses to build
 //! without the pinned files (apps/desktop/scripts/dictation-models.mjs verifies their SHA-256);
 //! the installer and updater signatures cover them from there, so the app checks only their sizes.
 //!
 //! A larger speech model, Parakeet Ultra, is fetched once into the data folder (`larger.rs`), by
-//! o7 itself or when the person asks: it is too large to ride in the installer. Where it is
+//! Ghost itself or when the person asks: it is too large to ride in the installer. Where it is
 //! present at its pinned size, dictation uses it in place of the built-in one.
 use super::engine::Engine;
 use super::{DictationModel, Failure, LargerModel, LargerState};
@@ -106,7 +106,7 @@ pub fn status(folder: Option<&Path>, downloads: Option<&Path>) -> DictationModel
 pub fn engine(folder: &Path, downloads: Option<&Path>) -> Result<Arc<Engine>, Failure> {
     if !present(folder) {
         return Err(Failure::model(
-            "This build of o7 is missing its dictation models. Reinstall o7 to restore them.",
+            "This build of Ghost is missing its dictation models. Reinstall Ghost to restore them.",
         ));
     }
     let speech = larger(downloads).unwrap_or_else(|| folder.join(ASR.file));

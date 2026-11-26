@@ -1,21 +1,21 @@
 //! How this launch was asked to behave, read once from the environment at startup.
 //!
-//! These switches exist for automation, not for users: `O7_SMOKE` runs a scripted check and
-//! reports the result on stdout, `O7_STRESS` opens straight into the stress view for the power
-//! spike, and `O7_NO_GLASS` turns the native window material off so its cost can be measured.
+//! These switches exist for automation, not for users: `GHOST_SMOKE` runs a scripted check and
+//! reports the result on stdout, `GHOST_STRESS` opens straight into the stress view for the power
+//! spike, and `GHOST_NO_GLASS` turns the native window material off so its cost can be measured.
 //! The frontend learns the outcome through `app_info` (`LaunchMode`), never by reading the
 //! environment itself.
 //!
-//! `O7_DATA_DIR` is o7-core's: it moves the data folder. This module only notes whether the
+//! `GHOST_DATA_DIR` is ghost-core's: it moves the data folder. This module only notes whether the
 //! launch opens a folder other than the installed app's, because such a launch is its own instance
 //! ([`LaunchOptions::single_instance`]). A development build always does: without
-//! `O7_DATA_DIR` it opens o7-core's development folder (`o7_core::paths`). A smoke run
+//! `GHOST_DATA_DIR` it opens ghost-core's development folder (`ghost_core::paths`). A smoke run
 //! must name its folder ([`SMOKE_NEEDS_DATA_DIR`]).
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-use o7_core::paths::{DATA_DIR_ENV, DEVELOPMENT_BUILD};
+use ghost_core::paths::{DATA_DIR_ENV, DEVELOPMENT_BUILD};
 use serde::{Deserialize, Serialize};
 
 use crate::smoke::SmokeScenario;
@@ -23,36 +23,36 @@ use crate::smoke::SmokeScenario;
 /// Which smoke check to run ([`SmokeScenario`]): `1` (or `stream`) the stream check (a demo turn, a
 /// cancelled turn, and a short stress burst), `chat` the chat screens against the demo agent, and
 /// `chat-reopen` the second launch of that check on the same data folder.
-pub const SMOKE_ENV: &str = "O7_SMOKE";
+pub const SMOKE_ENV: &str = "GHOST_SMOKE";
 /// With smoke mode, `1` exits after the report: code 0 when it passed, 1 otherwise.
-pub const SMOKE_EXIT_ENV: &str = "O7_SMOKE_EXIT";
+pub const SMOKE_EXIT_ENV: &str = "GHOST_SMOKE_EXIT";
 /// The chat scenarios' chat folder, an absolute path. The folder picker answers it without showing
 /// a dialog, so the run creates its chat through the New chat screen as a user would.
-pub const SMOKE_FOLDER_ENV: &str = "O7_SMOKE_FOLDER";
-/// With `O7_SMOKE=chat`, one minimal chat with this agent (a catalog id) instead of the demo
+pub const SMOKE_FOLDER_ENV: &str = "GHOST_SMOKE_FOLDER";
+/// With `GHOST_SMOKE=chat`, one minimal chat with this agent (a catalog id) instead of the demo
 /// agent's scenario. A real agent spends its user's quota, so this is refused under CI.
-pub const SMOKE_AGENT_ENV: &str = "O7_SMOKE_AGENT";
+pub const SMOKE_AGENT_ENV: &str = "GHOST_SMOKE_AGENT";
 /// Set by CI systems; GitHub Actions sets both.
 pub const CI_ENVS: [&str; 2] = ["CI", "GITHUB_ACTIONS"];
 /// The built-in demo agent's catalog id, which the chat scenarios use.
 pub const DEMO_AGENT: &str = "mock";
 /// `orbs=24,rate=200,aura=1,seconds=0` opens the stress view with those settings.
-pub const STRESS_ENV: &str = "O7_STRESS";
+pub const STRESS_ENV: &str = "GHOST_STRESS";
 /// `1` disables window effects and transparency (an opaque window).
-pub const NO_GLASS_ENV: &str = "O7_NO_GLASS";
+pub const NO_GLASS_ENV: &str = "GHOST_NO_GLASS";
 /// The webview profile folder inside a data folder, the name WebView2 and Tauri use by default.
 pub const WEBVIEW_DATA_FOLDER: &str = "EBWebView";
-/// Why a smoke run without `O7_DATA_DIR` does not run. A smoke run skips the single-instance
+/// Why a smoke run without `GHOST_DATA_DIR` does not run. A smoke run skips the single-instance
 /// hand-over, so without a folder of its own it would open the default one beside a running app:
 /// for an installed build, the installed app's chats, which the run's quit flow and any newer
 /// schema would then change.
-pub const SMOKE_NEEDS_DATA_DIR: &str = "a smoke run needs O7_DATA_DIR: a data folder of its own, so it never opens the installed app's data.";
+pub const SMOKE_NEEDS_DATA_DIR: &str = "a smoke run needs GHOST_DATA_DIR: a data folder of its own, so it never opens the installed app's data.";
 
 /// Bounds for [`StressConfig`], shared with the stress view's controls.
 pub const MIN_ORBS: u32 = 1;
 pub const MAX_ORBS: u32 = 24;
-pub const MIN_RATE: u32 = o7_drivers::mock::MIN_TOKENS_PER_SEC;
-pub const MAX_RATE: u32 = o7_drivers::mock::MAX_TOKENS_PER_SEC;
+pub const MIN_RATE: u32 = ghost_drivers::mock::MIN_TOKENS_PER_SEC;
+pub const MAX_RATE: u32 = ghost_drivers::mock::MAX_TOKENS_PER_SEC;
 /// A day. Longer runs use `seconds=0` (until the window closes).
 pub const MAX_SECONDS: u32 = 86_400;
 
@@ -77,7 +77,7 @@ impl Default for StressConfig {
     }
 }
 
-/// Why an `O7_STRESS` value was rejected. Rejected rather than clamped: the value drives a
+/// Why a `GHOST_STRESS` value was rejected. Rejected rather than clamped: the value drives a
 /// power measurement, and a silently adjusted setting would measure something else.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StressConfigError {
@@ -98,7 +98,7 @@ pub enum StressConfigError {
     NotABool(String),
 }
 
-/// Parses `O7_STRESS`: comma-separated `key=value` pairs (`orbs`, `rate`, `aura`, `seconds`)
+/// Parses `GHOST_STRESS`: comma-separated `key=value` pairs (`orbs`, `rate`, `aura`, `seconds`)
 /// in any order, with defaults for missing keys. A bare `1`/`true`/`yes`/`on` means all defaults.
 /// Keys are case-insensitive and whitespace around entries is ignored. The frontend's
 /// `parseStressConfig` (lib/stress.ts) applies the same rules to the stress view's settings line,
@@ -182,14 +182,14 @@ fn is_falsy(value: &str) -> bool {
 }
 
 /// Whether an on/off environment variable is on. Unset, blank, and anything but `1`, `true`, `yes`
-/// or `on` (any case) is off, so `O7_SMOKE=0` really means off.
+/// or `on` (any case) is off, so `GHOST_SMOKE=0` really means off.
 pub fn env_flag(value: Option<&str>) -> bool {
     value.is_some_and(|v| is_truthy(v.trim()))
 }
 
-/// Whether an `O7_DATA_DIR` value moves the data folder, by the rule o7-core's
+/// Whether a `GHOST_DATA_DIR` value moves the data folder, by the rule ghost-core's
 /// `DataRoot::resolve` applies: a value that is empty or only whitespace is ignored, and one that
-/// is not valid Unicode counts unless it is empty. o7-core keeps the rule private, so
+/// is not valid Unicode counts unless it is empty. ghost-core keeps the rule private, so
 /// `own_data_dir_agrees_with_where_aura_core_puts_the_data` holds the two together.
 fn moves_data_root(value: &OsStr) -> bool {
     match value.to_str() {
@@ -203,9 +203,9 @@ fn moves_data_root(value: &OsStr) -> bool {
 pub struct SmokePlan {
     pub scenario: SmokeScenario,
     /// The agent the chat scenarios create their chat with: the demo agent for `chat` and
-    /// `chat_reopen`, `O7_SMOKE_AGENT`'s for `agent`; `null` for `stream`.
+    /// `chat_reopen`, `GHOST_SMOKE_AGENT`'s for `agent`; `null` for `stream`.
     pub agent_id: Option<String>,
-    /// `O7_SMOKE_FOLDER`, which the folder picker answers; `null` for `stream`.
+    /// `GHOST_SMOKE_FOLDER`, which the folder picker answers; `null` for `stream`.
     pub folder: Option<String>,
 }
 
@@ -221,7 +221,7 @@ impl SmokePlan {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{message}")]
 pub struct SmokeSetupError {
-    /// The scenario asked for, when `O7_SMOKE` named one.
+    /// The scenario asked for, when `GHOST_SMOKE` named one.
     pub scenario: Option<SmokeScenario>,
     pub message: String,
 }
@@ -232,16 +232,16 @@ impl SmokeSetupError {
     }
 }
 
-/// Reads the smoke switches: `None` when `O7_SMOKE` is unset, blank, or an explicit off
+/// Reads the smoke switches: `None` when `GHOST_SMOKE` is unset, blank, or an explicit off
 /// (`0`, `false`, `no`, `off`); otherwise the plan, or why it cannot run.
 ///
 /// - `1`, `true`, `yes`, `on` or `stream` (any case): the stream check. `chat`: the chat scenario,
 ///   or with `agent` set the minimal chat with that agent. `chat-reopen`: the chat scenario's
 ///   second launch. Anything else names no scenario.
-/// - The chat scenarios need `folder` (`O7_SMOKE_FOLDER`): an absolute path in valid Unicode
+/// - The chat scenarios need `folder` (`GHOST_SMOKE_FOLDER`): an absolute path in valid Unicode
 ///   (a chat folder reaches the agent as a JSON string). Whether it exists is the session manager's
 ///   to check, as for any new chat.
-/// - `agent` (`O7_SMOKE_AGENT`) must be a catalog id and goes with `chat` only. It is refused
+/// - `agent` (`GHOST_SMOKE_AGENT`) must be a catalog id and goes with `chat` only. It is refused
 ///   when `in_ci` (`CI` or `GITHUB_ACTIONS` is on): a real agent run spends the user's quota.
 pub fn parse_smoke(
     value: Option<&str>,
@@ -311,14 +311,14 @@ fn smoke_plan(
                 ),
             ));
         }
-        Some(id) => match o7_agents::get(id) {
+        Some(id) => match ghost_agents::get(id) {
             Some(spec) => spec.id.to_owned(),
             None => {
-                let known: Vec<&str> = o7_agents::catalog().iter().map(|spec| spec.id).collect();
+                let known: Vec<&str> = ghost_agents::catalog().iter().map(|spec| spec.id).collect();
                 return Err(SmokeSetupError::new(
                     Some(scenario),
                     format!(
-                        "{SMOKE_AGENT_ENV}=\"{id}\" is not an agent o7 knows ({}).",
+                        "{SMOKE_AGENT_ENV}=\"{id}\" is not an agent Ghost knows ({}).",
                         known.join(", ")
                     ),
                 ));
@@ -338,7 +338,7 @@ fn smoke_plan(
             ),
         )
     };
-    // Blank reads as unset, the rule `O7_DATA_DIR` follows.
+    // Blank reads as unset, the rule `GHOST_DATA_DIR` follows.
     let folder = folder
         .filter(|folder| moves_data_root(folder))
         .ok_or_else(needs)?;
@@ -377,18 +377,18 @@ pub enum LaunchMode {
 /// Every launch switch, read once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchOptions {
-    /// `O7_SMOKE` asked for a smoke run: what it runs, or why it cannot ([`parse_smoke`]).
+    /// `GHOST_SMOKE` asked for a smoke run: what it runs, or why it cannot ([`parse_smoke`]).
     pub smoke: Option<Result<SmokePlan, SmokeSetupError>>,
     pub smoke_exit: bool,
     pub no_glass: bool,
-    /// This launch opens a data folder other than the installed app's: `O7_DATA_DIR` names
+    /// This launch opens a data folder other than the installed app's: `GHOST_DATA_DIR` names
     /// one (a second dev instance, a portable install), or this is a development build, whose
     /// default folder is its own.
     pub own_data_dir: bool,
-    /// `O7_DATA_DIR` names a data folder: a start at sign-in, which cannot pass it, would open
+    /// `GHOST_DATA_DIR` names a data folder: a start at sign-in, which cannot pass it, would open
     /// the usual one instead (`login_start`).
     pub names_data_dir: bool,
-    /// `None` when `O7_STRESS` is unset, blank (like `O7_DATA_DIR`, an exported but
+    /// `None` when `GHOST_STRESS` is unset, blank (like `GHOST_DATA_DIR`, an exported but
     /// empty variable must not change behaviour), or an explicit off (`0`, `false`, `no`, `off`).
     pub stress: Option<Result<StressConfig, StressConfigError>>,
 }
@@ -399,8 +399,8 @@ impl LaunchOptions {
     }
 
     /// [`LaunchOptions::from_env`] with the variables passed in, so tests never touch the process
-    /// environment (shared by every test thread). Values come as the OS gave them: o7-core
-    /// honours an `O7_DATA_DIR` that is not valid Unicode, so this must see it too. The
+    /// environment (shared by every test thread). Values come as the OS gave them: ghost-core
+    /// honours a `GHOST_DATA_DIR` that is not valid Unicode, so this must see it too. The
     /// other switches treat such a value as unset.
     pub fn from_lookup(lookup: impl Fn(&str) -> Option<OsString>) -> LaunchOptions {
         LaunchOptions::from_lookup_in(DEVELOPMENT_BUILD, lookup)
@@ -414,9 +414,9 @@ impl LaunchOptions {
     ) -> LaunchOptions {
         let text = |name: &str| lookup(name).and_then(|value| value.into_string().ok());
         let in_ci = CI_ENVS.iter().any(|name| env_flag(text(name).as_deref()));
-        // The override under the app's earlier name counts too (o7_core::paths).
-        let names_data_dir = [DATA_DIR_ENV, o7_core::paths::LEGACY_DATA_DIR_ENV]
-            .iter()
+        // The override under the app's earlier names counts too (ghost_core::paths).
+        let names_data_dir = std::iter::once(DATA_DIR_ENV)
+            .chain(ghost_core::paths::LEGACY_DATA_DIR_ENVS)
             .any(|name| lookup(name).is_some_and(|value| moves_data_root(&value)));
         let smoke = parse_smoke(
             text(SMOKE_ENV).as_deref(),
@@ -448,7 +448,7 @@ impl LaunchOptions {
         }
     }
 
-    /// Whether `O7_SMOKE` asked for a smoke run, whether or not it can run.
+    /// Whether `GHOST_SMOKE` asked for a smoke run, whether or not it can run.
     pub fn is_smoke(&self) -> bool {
         self.smoke.is_some()
     }
@@ -469,9 +469,9 @@ impl LaunchOptions {
     /// this one's window and exit. The plugin recognizes the running instance by the bundle
     /// identifier alone, so every launch on the machine counts as the same app. Two kinds of
     /// launch run on their own instead: a smoke run, which has to run even while someone has
-    /// o7 open, and a launch with its own data folder, which would otherwise exit without
+    /// Ghost open, and a launch with its own data folder, which would otherwise exit without
     /// ever opening it. Such a launch never hands over to a running instance, and later launches
-    /// never hand over to it. Sharing data with a running instance is safe: o7-core coordinates
+    /// never hand over to it. Sharing data with a running instance is safe: ghost-core coordinates
     /// processes that open the same database.
     pub fn single_instance(&self) -> bool {
         !self.is_smoke() && !self.own_data_dir
@@ -483,11 +483,12 @@ impl LaunchOptions {
     /// webview profile, and WebView2 refuses a second app on one profile while the first runs.
     /// `None` keeps Tauri's default. macOS ignores the setting and keeps WebKit's per-app store.
     ///
-    /// A copy updated from auracode keeps its data in the folder auracode used (o7_core::paths),
-    /// which is no longer Tauri's default. Tauri gave WebView2 that folder itself, and WebView2
-    /// keeps its profile in `EBWebView` inside the folder it is given, so the same folder is given
-    /// again: the profile is the one auracode had, with the page's own settings and the browser's
-    /// sign-ins. (macOS keys WebKit's store by the bundle identifier, so there they start over.)
+    /// A copy updated from o7 or from auracode keeps its data in the folder it used then
+    /// (ghost_core::paths), which is no longer Tauri's default. Tauri gave WebView2 that folder
+    /// itself, and WebView2 keeps its profile in `EBWebView` inside the folder it is given, so the
+    /// same folder is given again: the profile is the one the app had then, with the page's own
+    /// settings and the browser's sign-ins. (macOS keys WebKit's store by the bundle identifier,
+    /// so there they start over.)
     pub fn webview_data_dir(&self, data_dir: Option<&Path>) -> Option<PathBuf> {
         let root = data_dir?;
         if self.own_data_dir {
@@ -495,7 +496,7 @@ impl LaunchOptions {
         }
         let default = root
             .file_name()
-            .is_some_and(|name| name == o7_core::paths::APP_IDENTIFIER);
+            .is_some_and(|name| name == ghost_core::paths::APP_IDENTIFIER);
         (!default).then(|| root.to_path_buf())
     }
 
@@ -507,7 +508,7 @@ impl LaunchOptions {
     }
 
     /// A smoke launch whose switches are not valid opens the normal screen: it reports its failure
-    /// itself (and exits with `O7_SMOKE_EXIT`), and must not open the stress view either.
+    /// itself (and exits with `GHOST_SMOKE_EXIT`), and must not open the stress view either.
     pub fn mode(&self) -> LaunchMode {
         match &self.smoke {
             Some(Ok(plan)) => return LaunchMode::Smoke { plan: plan.clone() },
@@ -655,7 +656,7 @@ mod tests {
         assert_eq!(
             options.notices(),
             vec![
-                "O7_STRESS was ignored because it is not valid: orbs must be a whole number from 1 to 24, not \"99\"."
+                "GHOST_STRESS was ignored because it is not valid: orbs must be a whole number from 1 to 24, not \"99\"."
                     .to_string()
             ]
         );
@@ -807,7 +808,7 @@ mod tests {
             plan("chta", None, None, false),
             Some(Err(setup_error(
                 None,
-                "O7_SMOKE=\"chta\" names no smoke run: use 1 (or stream), chat or chat-reopen."
+                "GHOST_SMOKE=\"chta\" names no smoke run: use 1 (or stream), chat or chat-reopen."
             )))
         );
         for folder in [None, Some(""), Some("   ")] {
@@ -815,7 +816,7 @@ mod tests {
                 plan("chat", folder, None, false),
                 Some(Err(setup_error(
                     Some(SmokeScenario::Chat),
-                    "O7_SMOKE=chat needs O7_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
+                    "GHOST_SMOKE=chat needs GHOST_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
                 ))),
                 "{folder:?}"
             );
@@ -824,14 +825,14 @@ mod tests {
             plan("chat-reopen", None, None, false),
             Some(Err(setup_error(
                 Some(SmokeScenario::ChatReopen),
-                "O7_SMOKE=chat-reopen needs O7_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
+                "GHOST_SMOKE=chat-reopen needs GHOST_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
             )))
         );
         assert_eq!(
             plan("chat", Some("work/chat"), None, false),
             Some(Err(setup_error(
                 Some(SmokeScenario::Chat),
-                "O7_SMOKE_FOLDER must be an absolute path, not \"work/chat\"."
+                "GHOST_SMOKE_FOLDER must be an absolute path, not \"work/chat\"."
             )))
         );
     }
@@ -848,7 +849,7 @@ mod tests {
         assert!(
             error
                 .message
-                .starts_with("O7_SMOKE_FOLDER must be valid Unicode"),
+                .starts_with("GHOST_SMOKE_FOLDER must be valid Unicode"),
             "{}",
             error.message
         );
@@ -881,8 +882,8 @@ mod tests {
             Some(Err(setup_error(
                 Some(SmokeScenario::Agent),
                 &format!(
-                    "O7_SMOKE_AGENT=\"gpt-cli\" is not an agent o7 knows ({}).",
-                    o7_agents::catalog()
+                    "GHOST_SMOKE_AGENT=\"gpt-cli\" is not an agent Ghost knows ({}).",
+                    ghost_agents::catalog()
                         .iter()
                         .map(|spec| spec.id)
                         .collect::<Vec<_>>()
@@ -893,7 +894,7 @@ mod tests {
         for value in ["1", "chat-reopen"] {
             let refused = plan(value, Some(&folder), Some("claude-acp"), false);
             assert!(
-                matches!(&refused, Some(Err(error)) if error.message == "O7_SMOKE_AGENT goes with O7_SMOKE=chat only."),
+                matches!(&refused, Some(Err(error)) if error.message == "GHOST_SMOKE_AGENT goes with GHOST_SMOKE=chat only."),
                 "{value}: {refused:?}"
             );
         }
@@ -908,7 +909,7 @@ mod tests {
                 plan("chat", Some(&folder), Some(agent), true),
                 Some(Err(setup_error(
                     Some(SmokeScenario::Agent),
-                    "O7_SMOKE_AGENT runs a real agent, which spends its user's quota, so it is for local runs only: it is refused while CI or GITHUB_ACTIONS is set."
+                    "GHOST_SMOKE_AGENT runs a real agent, which spends its user's quota, so it is for local runs only: it is refused while CI or GITHUB_ACTIONS is set."
                 )))
             );
         }
@@ -959,7 +960,7 @@ mod tests {
         assert_eq!(
             broken.notices(),
             vec![
-                "O7_SMOKE was ignored: O7_SMOKE=chat needs O7_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
+                "GHOST_SMOKE was ignored: GHOST_SMOKE=chat needs GHOST_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
                     .to_string()
             ]
         );
@@ -987,8 +988,8 @@ mod tests {
 
     #[test]
     fn the_demo_agent_is_in_the_catalog() {
-        let spec = o7_agents::get(DEMO_AGENT).expect("the demo agent");
-        assert_eq!(spec.kind, o7_protocol::DriverKind::Mock);
+        let spec = ghost_agents::get(DEMO_AGENT).expect("the demo agent");
+        assert_eq!(spec.kind, ghost_protocol::DriverKind::Mock);
     }
 
     #[test]
@@ -1024,7 +1025,7 @@ mod tests {
             "a plain launch hands over to a running one"
         );
 
-        // "0" is not a flag here: o7-core reads it as a folder named 0.
+        // "0" is not a flag here: ghost-core reads it as a folder named 0.
         for value in [
             "/tmp/second instance",
             " relative ",
@@ -1036,7 +1037,7 @@ mod tests {
             assert!(!own.single_instance(), "{value:?}");
             assert!(own.notices().is_empty(), "nothing to report: {value:?}");
         }
-        // o7-core ignores these, so the launch opens the default folder like any other.
+        // ghost-core ignores these, so the launch opens the default folder like any other.
         for value in ["", "   ", "\t\n"] {
             let blank = options(&[(DATA_DIR_ENV, value)]);
             assert!(!blank.own_data_dir, "{value:?}");
@@ -1064,7 +1065,7 @@ mod tests {
         assert!(!own.remembers_window_geometry());
         assert_eq!(own.webview_data_dir(None), None, "no data folder at all");
 
-        let default = Path::new("local").join(o7_core::paths::APP_IDENTIFIER);
+        let default = Path::new("local").join(ghost_core::paths::APP_IDENTIFIER);
         for plain in [options(&[]), options(&[(SMOKE_ENV, "1")])] {
             assert_eq!(
                 plain.webview_data_dir(Some(&default)),
@@ -1102,19 +1103,23 @@ mod tests {
         let installed = options(&[]);
         assert!(!installed.own_data_dir);
         assert!(installed.single_instance());
-        let default = Path::new("local").join(o7_core::paths::APP_IDENTIFIER);
+        let default = Path::new("local").join(ghost_core::paths::APP_IDENTIFIER);
         assert_eq!(installed.webview_data_dir(Some(&default)), None);
-        // In the folder auracode used, WebView2 is given that folder, as Tauri gave it then: the
-        // profile is auracode's, in its `EBWebView`, not a new one one level down.
-        let legacy = Path::new("local").join(o7_core::paths::LEGACY_IDENTIFIER);
-        assert_eq!(
-            installed.webview_data_dir(Some(&legacy)),
-            Some(legacy.clone())
-        );
-        // The override's earlier name is a folder of the launch's own too.
-        let named = options(&[(o7_core::paths::LEGACY_DATA_DIR_ENV, "scratch/data")]);
-        assert!(named.own_data_dir);
-        assert!(!named.single_instance());
+        // In a folder an earlier name used, WebView2 is given that folder, as Tauri gave it then:
+        // the profile is the one from then, in its `EBWebView`, not a new one one level down.
+        for legacy in ghost_core::paths::LEGACY_IDENTIFIERS {
+            let legacy = Path::new("local").join(legacy);
+            assert_eq!(
+                installed.webview_data_dir(Some(&legacy)),
+                Some(legacy.clone())
+            );
+        }
+        // The override's earlier names are a folder of the launch's own too.
+        for name in ghost_core::paths::LEGACY_DATA_DIR_ENVS {
+            let named = options(&[(name, "scratch/data")]);
+            assert!(named.own_data_dir, "{name}");
+            assert!(!named.single_instance(), "{name}");
+        }
     }
 
     /// A smoke run skips the hand-over, so without a folder of its own it opened the default
@@ -1150,7 +1155,7 @@ mod tests {
                     assert_eq!(refused.mode(), LaunchMode::Normal);
                     assert_eq!(
                         refused.notices(),
-                        vec![format!("O7_SMOKE was ignored: {SMOKE_NEEDS_DATA_DIR}")]
+                        vec![format!("GHOST_SMOKE was ignored: {SMOKE_NEEDS_DATA_DIR}")]
                     );
                 }
                 let runs = options_in(
@@ -1172,7 +1177,7 @@ mod tests {
         assert_eq!(
             options(&[(SMOKE_ENV, "chat")]).notices(),
             vec![
-                "O7_SMOKE was ignored: O7_SMOKE=chat needs O7_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
+                "GHOST_SMOKE was ignored: GHOST_SMOKE=chat needs GHOST_SMOKE_FOLDER: an absolute path to the folder its chat opens in."
                     .to_string()
             ]
         );
@@ -1206,12 +1211,12 @@ mod tests {
         let own = LaunchOptions::from_lookup_in(false, |name| {
             (name == DATA_DIR_ENV).then(|| folder.clone())
         });
-        assert!(own.own_data_dir, "o7-core moves the data there");
+        assert!(own.own_data_dir, "ghost-core moves the data there");
         assert!(!own.single_instance());
 
         // The other switches read such a value as unset, as they always have.
         let garbled = LaunchOptions::from_lookup_in(false, |name| {
-            (name != DATA_DIR_ENV && name != o7_core::paths::LEGACY_DATA_DIR_ENV)
+            (name != DATA_DIR_ENV && !ghost_core::paths::LEGACY_DATA_DIR_ENVS.contains(&name))
                 .then(|| not_unicode(OsStr::new("1")))
         });
         assert!(garbled.smoke.is_none() && !garbled.no_glass && !garbled.own_data_dir);
@@ -1219,20 +1224,20 @@ mod tests {
     }
 
     /// Marks a re-executed copy of the test binary (see the next test).
-    const CHILD_CHECKS_DATA_DIR: &str = "O7_DESKTOP_TEST_CHECK_DATA_DIR";
+    const CHILD_CHECKS_DATA_DIR: &str = "GHOST_DESKTOP_TEST_CHECK_DATA_DIR";
 
-    /// o7-core keeps its rule for `O7_DATA_DIR` private and `moves_data_root` restates it.
+    /// ghost-core keeps its rule for `GHOST_DATA_DIR` private and `moves_data_root` restates it.
     /// If the two drifted apart, a launch on the default folder would skip the single-instance
     /// plugin, or one with its own folder would hand over and exit. So for each value a child
     /// process (this process's environment must not change) checks that `own_data_dir` holds
-    /// exactly when o7-core resolves a folder other than the installed app's, the only one
-    /// named `codes.o7.desktop`. The test binary is a development build, so that is every
+    /// exactly when ghost-core resolves a folder other than the installed app's, the only one
+    /// named `dev.onghost.desktop`. The test binary is a development build, so that is every
     /// value, blank ones included. Resolving only computes the path; nothing is created.
     #[test]
     fn own_data_dir_agrees_with_where_aura_core_puts_the_data() {
         if std::env::var_os(CHILD_CHECKS_DATA_DIR).is_some() {
-            let root = o7_core::paths::DataRoot::resolve().expect("resolve the data folder");
-            let default = root.root().ends_with(o7_core::paths::APP_IDENTIFIER);
+            let root = ghost_core::paths::DataRoot::resolve().expect("resolve the data folder");
+            let default = root.root().ends_with(ghost_core::paths::APP_IDENTIFIER);
             assert_eq!(
                 LaunchOptions::from_env().own_data_dir,
                 !default,
@@ -1275,7 +1280,7 @@ mod tests {
         assert!(opaque.no_glass);
         assert_eq!(
             opaque.notices(),
-            vec!["Window glass is off because O7_NO_GLASS is set.".to_string()]
+            vec!["Window glass is off because GHOST_NO_GLASS is set.".to_string()]
         );
     }
 

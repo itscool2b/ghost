@@ -1,4 +1,4 @@
-import type { AgentBrandId } from "@o7/ui";
+import type { AgentBrandId } from "@ghost/ui";
 import { chunkText, seededRandom } from "../../fixture/timeline";
 import type { LabEvent, TimedEvent } from "../../fixture/types";
 import type { PermissionModel, TranscriptModel } from "../../kit";
@@ -94,7 +94,7 @@ export function scriptFor(agent: string): Script {
   if (agent === "claude-code") {
     return {
       thought: "Running the pacing tests again before answering.",
-      command: "pnpm --filter @o7/ui test pacing",
+      command: "pnpm --filter @ghost/ui test pacing",
       output: VITEST_LINES,
       runMs: 2400,
       reply:

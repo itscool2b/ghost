@@ -1,6 +1,6 @@
 # Third-party notices
 
-These files preserve third-party terms. They do not select, grant or change a license for o7,
+These files preserve third-party terms. They do not select, grant or change a license for Ghost,
 whose own license is the [MIT License](../LICENSE) at the repository root.
 
 `catalogue.json` contains the locked production dependency closure of the desktop and website,
@@ -29,13 +29,13 @@ file, since they share a license and a source. Its runtime, the `ptts` crate and
 library (MIT OR Apache-2.0), is in the Rust dependency closure like any other crate.
 
 The desktop also bundles one prebuilt program that is not built from this repository: the scrcpy
-server (Genymobile, Apache-2.0), which o7 puts on a person's Android device to show its screen
+server (Genymobile, Apache-2.0), which Ghost puts on a person's Android device to show its screen
 and take input in the Device pane. `scrcpy.json` pins its release and the SHA-256 the release
-publishes, `crates/o7-devices` refuses any other bytes, and its LICENSE is preserved in
+publishes, `crates/ghost-devices` refuses any other bytes, and its LICENSE is preserved in
 `upstream/`. The generator fails when the bundled file and that pin disagree. Android's own tools
-(adb, the emulator, a system image) are not bundled: o7 fetches them from Google on the person's
+(adb, the emulator, a system image) are not bundled: Ghost fetches them from Google on the person's
 own computer, after the person has read and accepted Google's SDK licence in the pane. AXe, which
-drives iPhone simulators on a Mac, is not bundled either: o7 fetches one pinned MIT release from
+drives iPhone simulators on a Mac, is not bundled either: Ghost fetches one pinned MIT release from
 its own GitHub release page on an iPhone's first start, checked by size and SHA-256 (`axe.md`).
 
 The iPhone app (`apps/ios`) bundles two more things this repository does not build from its own
@@ -51,7 +51,7 @@ come.
 
 An npm package whose package.json names no license gets the license its own license file states,
 reviewed into `NPM_LICENSES` (khroma, MIT); any other stops the refresh. `NPM_EXCLUDED` lists packages
-a dependency names that o7 does not ship, with why and what keeps them out: elkjs (EPL-2.0 or
+a dependency names that Ghost does not ship, with why and what keeps them out: elkjs (EPL-2.0 or
 GPL-3.0), which Mermaid imports only for its optional ELK layout, is replaced by a stub through the
 desktop's Vite alias, and the generator fails if that alias goes.
 

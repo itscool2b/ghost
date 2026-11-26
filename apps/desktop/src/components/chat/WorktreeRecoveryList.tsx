@@ -27,7 +27,7 @@ export function needsRecovery(record: ManagedWorktree): boolean {
  * The worktrees to offer for review: those no saved chat holds, and any whose operation stopped
  * half way, from `inProject` when a project is chosen. Which ones no chat holds can only be told
  * once the chats have loaded (`savedChats` null until then): before, every chat's worktree looked
- * kept, and each start of o7 listed them all.
+ * kept, and each start of Ghost listed them all.
  */
 export function worktreesToReview(
   records: readonly ManagedWorktree[],

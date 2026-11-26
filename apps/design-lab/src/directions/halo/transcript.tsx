@@ -5,7 +5,7 @@ import {
   type OrbState,
   springs,
   usePrefersReducedMotion,
-} from "@o7/ui";
+} from "@ghost/ui";
 import { ArrowDown, ChevronDown, GitFork, Pencil, RotateCcw, Square } from "lucide-react";
 import { motion } from "motion/react";
 import {

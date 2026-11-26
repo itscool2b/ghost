@@ -11,7 +11,7 @@ export async function checkAutomaticCheckpoints(page, out, label) {
     false,
   );
   await page
-    .getByText("Aura's per-turn file undo is unavailable for new messages.", { exact: false })
+    .getByText("Ghost's per-turn file undo is unavailable for new messages.", { exact: false })
     .waitFor();
 
   await checkpoints.check();

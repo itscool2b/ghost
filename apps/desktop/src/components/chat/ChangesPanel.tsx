@@ -115,7 +115,7 @@ export function ChangesPanel({
   const selectAllFor = useRef<string | null>(rewind?.turnId ?? null);
   const [editAfter, setEditAfter] = useState(rewind !== null && onEditFrom !== undefined);
   const applied = useRef(rewind?.nonce ?? 0);
-  // The agent's own checkpoints (Claude's file rewind), for a turn o7 saved none for.
+  // The agent's own checkpoints (Claude's file rewind), for a turn Ghost saved none for.
   const [nativePreview, setNativePreview] = useState<NativeRewind | null>(null);
   const [nativeError, setNativeError] = useState<string | null>(null);
   const [nativeBusy, setNativeBusy] = useState(false);
@@ -275,7 +275,7 @@ export function ChangesPanel({
     setPreview(null);
     setHunk(null);
   };
-  // Without o7's checkpoint for the turn, an agent that keeps its own restores what its
+  // Without Ghost's checkpoint for the turn, an agent that keeps its own restores what its
   // edit tools changed. Its preview changes nothing; the session must be live and idle.
   const agentName = agent?.name ?? state.chat?.agent_name ?? "The agent";
   const native =
@@ -898,7 +898,7 @@ export function ChangesPanel({
             <span className="chat-diff-totals">
               <span data-op="add">+{hunk.added}</span> <span data-op="remove">−{hunk.removed}</span>
             </span>{" "}
-            lines change back. o7 keeps the file as it is now in its recovery folder.
+            lines change back. Ghost keeps the file as it is now in its recovery folder.
           </p>
           <div className="g-dialog-actions">
             <button type="button" className="g-button" disabled={acting} onClick={closePreview}>

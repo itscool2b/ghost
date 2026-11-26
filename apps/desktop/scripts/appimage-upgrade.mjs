@@ -1,16 +1,16 @@
-// `pnpm host-upgrade` on Linux: replaces the installed o7 AppImage with a local build, and
+// `pnpm host-upgrade` on Linux: replaces the installed Ghost AppImage with a local build, and
 // puts the previous build back when the new one does not work.
 //
-// The installed app is one file behind a link, `~/Applications/o7.AppImage`, which the
+// The installed app is one file behind a link, `~/Applications/Ghost.AppImage`, which the
 // desktop entry starts. A running AppImage reads its own file, so a new build is a new file next to
 // it and the link moves; the running app is untouched and the previous files stay for a rollback.
 // The installed app is usually the one running the agent session that built the new one, and an
 // agent's shutdown ends every process it started, so `install --after-exit` starts its waiter
 // under the user's systemd (`systemd-run --user`), which shares nothing with the app, and returns.
-// When the person quits o7 the waiter moves the link, starts o7, and moves the link
+// When the person quits Ghost the waiter moves the link, starts Ghost, and moves the link
 // back and starts the previous build if the new one does not stay up. `rollback` moves the link
 // back by hand and, with `--restore-database`, restores the databases a newer schema migrated.
-// See docs/developing-in-o7.md.
+// See docs/developing-in-ghost.md.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -43,27 +43,28 @@ import { cleanEnv, EXIT, restoreDatabases, stampOf } from "./host-upgrade.mjs";
 const SCRIPT = fileURLToPath(import.meta.url);
 const REPO = resolve(dirname(SCRIPT), "..", "..", "..");
 /**
- * A kept build: `o7_<anything>.AppImage`, as builds are named since the rename, or
- * `auracode_<anything>.AppImage` from before it; never the link itself.
+ * A kept build: `Ghost_<anything>.AppImage`, as builds are named now, or `o7_<anything>.AppImage`
+ * or `auracode_<anything>.AppImage` from before the renames; never the link itself.
  */
-const BUILD = /^(o7|auracode)_.+\.AppImage$/u;
+const BUILD = /^(Ghost|o7|auracode)_.+\.AppImage$/u;
 
-const USAGE = `Usage: pnpm --filter @o7/desktop host-upgrade <command> [options]   (Linux)
+const USAGE = `Usage: pnpm --filter @ghost/desktop host-upgrade <command> [options]   (Linux)
 
   install [--appimage <file>] [--after-exit [--wait <minutes>]]
       Copies a local AppImage next to the installed one and points the link at it. The newest
       target/**/release/bundle/appimage/*.AppImage is used by default. --after-exit arms it
-      instead: it runs once o7 quits (default wait 30 minutes).
+      instead: it runs once Ghost quits (default wait 30 minutes).
   rollback [--to <file>] [--restore-database]
       Points the link back at the previous build (or --to). --restore-database also restores
-      each database a newer build migrated since then, from o7-core's pre-migration backup.
+      each database a newer build migrated since then, from ghost-core's pre-migration backup.
   status    What is installed, running, armed and kept.
   cancel    Stops an armed install.
 
-  --link, --data-dir and --state-dir override ~/Applications/o7.AppImage (auracode.AppImage on a
-  machine set up before the rename),
-  the data folder ($XDG_DATA_HOME/codes.o7.desktop, or si.auracode.desktop from then) and
-  $XDG_STATE_HOME/o7-upgrades (or auracode-upgrades).`;
+  --link, --data-dir and --state-dir override ~/Applications/Ghost.AppImage (o7.AppImage or
+  auracode.AppImage on a machine set up under an earlier name),
+  the data folder ($XDG_DATA_HOME/dev.onghost.desktop, or codes.o7.desktop or
+  si.auracode.desktop from then) and $XDG_STATE_HOME/ghost-upgrades (or o7-upgrades or
+  auracode-upgrades).`;
 
 /** The files the commands work on. */
 export function folders(env, overrides = {}) {
@@ -73,33 +74,46 @@ export function folders(env, overrides = {}) {
   return {
     link: resolve(
       overrides.link ??
-        inUse(
+        inUse([
+          join(home, "Applications", "Ghost.AppImage"),
           join(home, "Applications", "o7.AppImage"),
           join(home, "Applications", "auracode.AppImage"),
-        ),
+        ]),
     ),
     dataDir: resolve(
       overrides.dataDir ??
-        inUse(join(data, "codes.o7.desktop"), join(data, "si.auracode.desktop"), true),
+        inUse(
+          [
+            join(data, "dev.onghost.desktop"),
+            join(data, "codes.o7.desktop"),
+            join(data, "si.auracode.desktop"),
+          ],
+          true,
+        ),
     ),
     stateDir: resolve(
-      overrides.stateDir ?? inUse(join(state, "o7-upgrades"), join(state, "auracode-upgrades")),
+      overrides.stateDir ??
+        inUse([
+          join(state, "ghost-upgrades"),
+          join(state, "o7-upgrades"),
+          join(state, "auracode-upgrades"),
+        ]),
     ),
   };
 }
 
 /**
- * o7 was auracode until 19 November 2026. A machine set up before then keeps its link, its data
- * and its kept upgrades under the earlier names: `current` when it is used, else `earlier` when
- * that is, else `current`. A data folder is used when it has `device.json` or `profiles`;
- * anything else when it exists.
+ * Ghost was o7 from 19 to 26 November 2026 and auracode before that. A machine set up then keeps
+ * its link, its data and its kept upgrades under the earlier names. So of the names given, newest
+ * first: the first when it is used, else the newest earlier one that is, else the first. A data
+ * folder is used when it has `device.json` or `profiles`; anything else when it exists.
  */
-export function inUse(current, earlier, data = false) {
+export function inUse([current, ...earlier], data = false) {
   const used = (path) =>
     data
       ? existsSync(join(path, "device.json")) || existsSync(join(path, "profiles"))
       : existsSync(path);
-  return !used(current) && used(earlier) ? earlier : current;
+  return used(current) ? current : (earlier.find(used) ?? current);
 }
 
 /** Whether `file` is a type 2 AppImage (`AI\x02` at byte 8 of an ELF file). */
@@ -147,7 +161,7 @@ export function newestAppImage(roots) {
 /** The kept name for `source` staged at `date`: its own name with the time added. */
 export function stagedName(source, date) {
   const stem = basename(source).replace(/\.AppImage$/u, "");
-  const named = stem.startsWith("o7_") ? stem : `o7_${stem}`;
+  const named = stem.startsWith("Ghost_") ? stem : `Ghost_${stem}`;
   return `${named}_${stampOf(date)}.AppImage`;
 }
 
@@ -191,7 +205,7 @@ export function launchEnv(env) {
 /**
  * Which kept build in `dir` a process runs, or undefined. The AppImage runtime's own executable is
  * the build file; the app it starts runs from the image's mount (`/tmp/.mount_…`) with `APPIMAGE`
- * naming the file. Both count: when o7 quits, the runtime can end, and its mount go, while
+ * naming the file. Both count: when Ghost quits, the runtime can end, and its mount go, while
  * the app is still shutting down, and a build started then would hand over to that app and exit.
  * `environ` is the process's NUL-separated environment, read only for executables in a mount.
  */
@@ -234,7 +248,7 @@ export const linux = {
   systemd() {
     return spawnSync("systemd-run", ["--user", "--version"], { stdio: "ignore" }).status === 0;
   },
-  /** Starts `program` with `args` outside o7's process tree; returns how to stop it. */
+  /** Starts `program` with `args` outside Ghost's process tree; returns how to stop it. */
   detach(name, program, args, env) {
     if (this.systemd()) {
       const unit = `${name}-${Date.now()}`;
@@ -352,7 +366,7 @@ async function healthy(system, file, seconds) {
   return system.running(dirname(file)).some((process) => process.exe === file);
 }
 
-/** Starts the build the link names, outside o7's tree. */
+/** Starts the build the link names, outside Ghost's tree. */
 function launch(paths, system, env) {
   system.detach("auracode", paths.link, [], launchEnv(env));
 }
@@ -382,7 +396,7 @@ export async function activate(staged, options, paths, system, log, env) {
   );
   launch(paths, system, env);
   if (await healthy(system, staged, options.healthSeconds)) {
-    log(`o7 is running from ${basename(staged)}.`);
+    log(`Ghost is running from ${basename(staged)}.`);
     prune(paths, options.keep, system, log);
     return EXIT.done;
   }
@@ -429,7 +443,9 @@ export async function install(options, paths, system, log, env) {
   }
   const running = system.running(dirname(paths.link));
   if (running.length > 0 && !options.afterExit) {
-    log("o7 is running. Quit it first, or arm the install with --after-exit; nothing was changed.");
+    log(
+      "Ghost is running. Quit it first, or arm the install with --after-exit; nothing was changed.",
+    );
     return EXIT.running;
   }
   const staged = stage(source, paths, system);
@@ -468,12 +484,12 @@ export async function install(options, paths, system, log, env) {
   record.handle = handle;
   write();
   log(
-    `Armed: ${basename(staged)} installs when o7 quits (waiting up to ${options.wait} minutes, ${handle.unit ? `unit ${handle.unit}` : `PID ${handle.pid}`}).`,
+    `Armed: ${basename(staged)} installs when Ghost quits (waiting up to ${options.wait} minutes, ${handle.unit ? `unit ${handle.unit}` : `PID ${handle.pid}`}).`,
   );
   return EXIT.done;
 }
 
-/** The armed waiter: waits for o7 to quit, then activates the staged build. */
+/** The armed waiter: waits for Ghost to quit, then activates the staged build. */
 export async function waiter(options, paths, system, log, env) {
   const armed = armedRecord(paths.stateDir);
   if (!armed) {
@@ -485,13 +501,13 @@ export async function waiter(options, paths, system, log, env) {
     while (system.running(dirname(paths.link)).length > 0) {
       if (system.now().getTime() > deadline) {
         log(
-          `o7 did not quit within ${options.wait} minutes; the armed install is dropped. ${basename(armed.staged)} stays until the next prune.`,
+          `Ghost did not quit within ${options.wait} minutes; the armed install is dropped. ${basename(armed.staged)} stays until the next prune.`,
         );
         return EXIT.running;
       }
       await system.sleep(1000);
     }
-    log("o7 quit; installing.");
+    log("Ghost quit; installing.");
     return await activate(armed.staged, options, paths, system, log, env);
   } finally {
     rmSync(armedPath(paths.stateDir), { force: true });
@@ -500,7 +516,7 @@ export async function waiter(options, paths, system, log, env) {
 
 export async function rollback(options, paths, system, log, env) {
   if (system.running(dirname(paths.link)).length > 0) {
-    log("o7 is running. Quit it first; nothing was changed.");
+    log("Ghost is running. Quit it first; nothing was changed.");
     return EXIT.running;
   }
   const current = linkTarget(paths.link);

@@ -42,7 +42,7 @@ export function Hero() {
     <section className="hero" aria-labelledby="hero-title" data-zone="">
       <div className="wrap hero-copy">
         <h1 id="hero-title" className="hero-title">
-          <span className="hero-line">Meet o7.</span>{" "}
+          <span className="hero-line">Meet Ghost ADE.</span>{" "}
           <span className="hero-line tone">One window for every coding agent.</span>
         </h1>
         <p className="hero-lead">

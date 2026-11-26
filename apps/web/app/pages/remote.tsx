@@ -1,4 +1,4 @@
-import { AgentMark, Logo, PixelLoader, StatusDot } from "@o7/ui/graphite";
+import { AgentMark, Logo, PixelLoader, StatusDot } from "@ghost/ui/graphite";
 import {
   type FormEvent,
   memo,
@@ -39,11 +39,11 @@ import { Markdown } from "../remote/markdown";
 import { ChatPickers } from "../remote/pickers";
 import { keepsPairings, loadHosts, type SavedHost } from "../remote/storage";
 // The desktop's themes, one per agent: the page wears the one its computer wears.
-import "@o7/ui/themes.css";
+import "@ghost/ui/themes.css";
 import "../styles/remote.css";
 
 export const meta = () => [
-  { title: "Remote · o7" },
+  { title: "Remote · Ghost" },
   { name: "robots", content: "noindex" },
   { name: "referrer", content: "no-referrer" },
 ];
@@ -56,7 +56,7 @@ function relayOrigin(): string {
   return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
 }
 
-/** o7's own default, Main (saved as "aura"), until the computer says otherwise. */
+/** Ghost's own default, Main (saved as "aura"), until the computer says otherwise. */
 const DEFAULT_LOOK: Look = { theme: "aura", appearance: "system" };
 
 /**
@@ -291,12 +291,12 @@ function Remote({ client }: { readonly client: RemoteClient }) {
     return (
       <Centered title="Reach your computer from here.">
         <p>
-          In o7 on your computer, open Settings, then Remote access, and choose Pair. Scan the code
-          it shows with this device, or open its link here.
+          In Ghost on your computer, open Settings, then Remote access, and choose Pair. Scan the
+          code it shows with this device, or open its link here.
         </p>
         <p>
           <a className="g-button remote-button remote-quiet" href="/download">
-            Get o7
+            Get Ghost
           </a>
         </p>
       </Centered>
@@ -362,7 +362,7 @@ function Refused({ client, hostId }: { readonly client: RemoteClient; readonly h
 function Centered({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   return (
     <div className="remote-centered">
-      <a className="remote-mark" href="/" aria-label="o7">
+      <a className="remote-mark" href="/" aria-label="Ghost">
         <Logo size={64} />
       </a>
       <h1>{title}</h1>
@@ -511,7 +511,7 @@ function ListScreen({ client, state }: { readonly client: RemoteClient; readonly
   return (
     <div className="remote-screen remote-list-screen">
       <header className="remote-bar">
-        <a className="remote-mark" href="/" aria-label="o7">
+        <a className="remote-mark" href="/" aria-label="Ghost">
           <Logo size={30} />
         </a>
         <div className="remote-bar-title">
@@ -537,7 +537,7 @@ function ListScreen({ client, state }: { readonly client: RemoteClient; readonly
         ) : null}
         {state.phase.name === "away" ? (
           <p className="remote-banner">
-            Your computer is not answering. Open o7 there, and check it is awake and online. This
+            Your computer is not answering. Open Ghost there, and check it is awake and online. This
             page connects by itself when it is back.
           </p>
         ) : null}
@@ -545,7 +545,7 @@ function ListScreen({ client, state }: { readonly client: RemoteClient; readonly
           <p className="remote-hint">
             {folders.length > 0
               ? "No chats yet. Start one below."
-              : "No projects yet. Add one in o7 on your computer."}
+              : "No projects yet. Add one in Ghost on your computer."}
           </p>
         ) : null}
         {!overview && state.phase.name !== "away" ? <ListSkeleton /> : null}
@@ -803,7 +803,7 @@ interface Sending {
   readonly queued: boolean;
 }
 
-/** What the person sent, without the project memory o7 attaches after it. */
+/** What the person sent, without the project memory Ghost attaches after it. */
 const MEMORY = "\n\nProject memory (Aura reference context, revision ";
 function ownWords(text: string): string {
   const at = text.indexOf(MEMORY);
@@ -848,7 +848,7 @@ function ChatScreen({ client, state }: { readonly client: RemoteClient; readonly
     });
   }, [chat]);
   const ready = state.phase.name === "ready";
-  // Offered only by an o7 that answers it: an older one ends the session on the request.
+  // Offered only by a Ghost that answers it: an older one ends the session on the request.
   const pickers = state.features.includes("pickers") && ready;
   const send = async (text: string) => {
     if (!chat) return;

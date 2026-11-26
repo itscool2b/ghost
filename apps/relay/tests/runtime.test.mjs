@@ -22,8 +22,8 @@ const idOf = (key) =>
     .subarray(0, 16)
     .toString("base64url");
 const hash = (text) => createHash("sha256").update(text).digest("base64url");
-/** Where Apple delivers o7's notifications, and the push key's id and its team's. */
-const TOPIC = "codes.o7.mobile";
+/** Where Apple delivers Ghost's notifications, and the push key's id and its team's. */
+const TOPIC = "dev.onghost.mobile";
 const KEY_ID = "ABC123DEFG";
 const TEAM_ID = "DEF123GHIJ";
 let runtime;
@@ -135,7 +135,8 @@ before(async () => {
       // As deployed before the owner sets Apple's push key: push is off.
       bindings: {
         APP_ORIGIN: ORIGIN,
-        FORMER_ORIGIN: FORMER,
+        // Two former addresses, as production has: the one the tests use is the second.
+        FORMER_ORIGINS: `https://older.test ${FORMER}`,
         APNS_TOPIC: TOPIC,
         APNS_KEY_ID: "",
         APNS_TEAM_ID: "",
@@ -239,7 +240,7 @@ async function client(hostId, on = runtime) {
   return reader(response.webSocket);
 }
 
-/** o7 for iPhone's socket: the app's path, with no Origin. */
+/** Ghost for iPhone's socket: the app's path, with no Origin. */
 async function app(hostId, headers = {}) {
   const response = await upgrade(`app/${hostId}`, headers);
   assert.equal(response.status, 101);
@@ -763,7 +764,7 @@ test("serves a bot's MCP calls through the desktop", async () => {
   const hello = await started.json();
   assert.equal(hello.result.protocolVersion, "2025-06-18");
   assert.deepEqual(hello.result.capabilities, { tools: { listChanged: false } });
-  assert.equal(hello.result.serverInfo.name, "o7");
+  assert.equal(hello.result.serverInfo.name, "ghost");
   assert.match(hello.result.instructions, /list_chats/);
   // An unknown protocol version gets the newest one this server speaks.
   const newer = await (
@@ -1383,7 +1384,7 @@ test("sockets that prove nothing cannot keep a paired browser out", async () => 
   back.close();
 });
 
-// Notifications for o7 for iPhone. Apple is played here, through the runtime's outbound fetch,
+// Notifications for Ghost for iPhone. Apple is played here, through the runtime's outbound fetch,
 // so nothing leaves the machine.
 
 /** A phone's address at Apple: 32 bytes in hex, as iOS gives one. */
@@ -1618,7 +1619,7 @@ test("a notification goes to Apple as Apple takes one, signed with the relay's o
       to: Math.floor(Date.now() / 1000),
     };
   };
-  const words = '"alert":{"title":"o7","body":"Something changed on your computer."}';
+  const words = '"alert":{"title":"Ghost","body":"Something changed on your computer."}';
 
   // An alert, in production: Apple's fixed words, then what the desktop sealed. Never a category.
   const alert = await sent({ collapse: "Q2hhdDE", ttl: 3600 });
@@ -1634,7 +1635,7 @@ test("a notification goes to Apple as Apple takes one, signed with the relay's o
   within(Number(expires), alert.from + 3600, alert.to + 3600, "apns-expiration");
   assert.equal(
     alert.request.body,
-    `{"aps":{${words},"sound":"default","mutable-content":1},"o7":{"v":1,"d":"${alert.asked.d}","b":"${alert.asked.b}"}}`,
+    `{"aps":{${words},"sound":"default","mutable-content":1},"ghost":{"v":1,"d":"${alert.asked.d}","b":"${alert.asked.b}"}}`,
   );
   // The token: ES256 with the push key's id, the team and when it was made, signed by the key.
   const token = await provider(authorization);
@@ -1657,7 +1658,7 @@ test("a notification goes to Apple as Apple takes one, signed with the relay's o
   });
   assert.equal(
     quiet.request.body,
-    `{"aps":{${words},"mutable-content":1},"o7":{"v":1,"d":"${quiet.asked.d}","b":"${quiet.asked.b}"}}`,
+    `{"aps":{${words},"mutable-content":1},"ghost":{"v":1,"d":"${quiet.asked.d}","b":"${quiet.asked.b}"}}`,
   );
 
   // A Live Activity's update: its own topic and push type, and the sealed state. What only an
@@ -1894,7 +1895,7 @@ test("the relay makes one token at a time, and a new one when Apple calls it exp
 
 test("a room that starts again, as after it slept, keeps its limits and the relay its token", async () => {
   // What the relay stores goes to a folder, so a second runtime starts from it, memory empty.
-  const folder = await mkdtemp(join(tmpdir(), "o7-relay-stored-"));
+  const folder = await mkdtemp(join(tmpdir(), "ghost-relay-stored-"));
   const played = appleMock();
   const key = id(32);
   const phone = deviceToken();

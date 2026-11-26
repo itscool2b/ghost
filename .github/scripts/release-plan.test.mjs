@@ -3,19 +3,19 @@ import test from "node:test";
 import { artifacts, plan, workspaceVersion } from "./release-plan.mjs";
 
 const NAMES = [
-  "o7_0.2.0_universal.dmg",
-  "o7.app.tar.gz",
-  "o7.app.tar.gz.sig",
-  "o7_0.2.0_x64-setup.exe",
-  "o7_0.2.0_x64-setup.exe.sig",
-  "o7_0.2.0_arm64-setup.exe",
-  "o7_0.2.0_arm64-setup.exe.sig",
-  "o7_0.2.0_amd64.AppImage",
-  "o7_0.2.0_amd64.AppImage.sig",
-  "o7_0.2.0_amd64.deb",
-  "o7_0.2.0_amd64.deb.sig",
-  "o7-0.2.0-1.x86_64.rpm",
-  "o7-0.2.0-1.x86_64.rpm.sig",
+  "Ghost_0.2.0_universal.dmg",
+  "Ghost.app.tar.gz",
+  "Ghost.app.tar.gz.sig",
+  "Ghost_0.2.0_x64-setup.exe",
+  "Ghost_0.2.0_x64-setup.exe.sig",
+  "Ghost_0.2.0_arm64-setup.exe",
+  "Ghost_0.2.0_arm64-setup.exe.sig",
+  "Ghost_0.2.0_amd64.AppImage",
+  "Ghost_0.2.0_amd64.AppImage.sig",
+  "Ghost_0.2.0_amd64.deb",
+  "Ghost_0.2.0_amd64.deb.sig",
+  "Ghost-0.2.0-1.x86_64.rpm",
+  "Ghost-0.2.0-1.x86_64.rpm.sig",
 ];
 const CARGO = `[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\nversion = "0.2.0"\nedition = "2024"\n\n[workspace.dependencies]\nserde = "1"\n`;
 
@@ -24,22 +24,22 @@ test("every role gets its one package, and every updater package its signature",
   assert.deepEqual(
     found.map(({ kind, file, signature }) => [kind, file, signature]),
     [
-      ["macos_universal_dmg", "o7_0.2.0_universal.dmg", null],
-      ["macos_universal_updater", "o7.app.tar.gz", "o7.app.tar.gz.sig"],
-      ["windows_x64_nsis", "o7_0.2.0_x64-setup.exe", "o7_0.2.0_x64-setup.exe.sig"],
-      ["windows_arm64_nsis", "o7_0.2.0_arm64-setup.exe", "o7_0.2.0_arm64-setup.exe.sig"],
-      ["linux_x64_appimage", "o7_0.2.0_amd64.AppImage", "o7_0.2.0_amd64.AppImage.sig"],
-      ["linux_x64_deb", "o7_0.2.0_amd64.deb", "o7_0.2.0_amd64.deb.sig"],
-      ["linux_x64_rpm", "o7-0.2.0-1.x86_64.rpm", "o7-0.2.0-1.x86_64.rpm.sig"],
+      ["macos_universal_dmg", "Ghost_0.2.0_universal.dmg", null],
+      ["macos_universal_updater", "Ghost.app.tar.gz", "Ghost.app.tar.gz.sig"],
+      ["windows_x64_nsis", "Ghost_0.2.0_x64-setup.exe", "Ghost_0.2.0_x64-setup.exe.sig"],
+      ["windows_arm64_nsis", "Ghost_0.2.0_arm64-setup.exe", "Ghost_0.2.0_arm64-setup.exe.sig"],
+      ["linux_x64_appimage", "Ghost_0.2.0_amd64.AppImage", "Ghost_0.2.0_amd64.AppImage.sig"],
+      ["linux_x64_deb", "Ghost_0.2.0_amd64.deb", "Ghost_0.2.0_amd64.deb.sig"],
+      ["linux_x64_rpm", "Ghost-0.2.0-1.x86_64.rpm", "Ghost-0.2.0-1.x86_64.rpm.sig"],
     ],
   );
 });
 
 test("a missing, doubled, unsigned or unexpected file stops the plan", () => {
   assert.throws(() => artifacts(NAMES.filter((name) => !name.endsWith(".deb"))), /linux_x64_deb/u);
-  assert.throws(() => artifacts([...NAMES, "o7_0.1.0_amd64.deb"]), /found 2/u);
+  assert.throws(() => artifacts([...NAMES, "Ghost_0.1.0_amd64.deb"]), /found 2/u);
   assert.throws(
-    () => artifacts(NAMES.filter((name) => name !== "o7_0.2.0_x64-setup.exe.sig")),
+    () => artifacts(NAMES.filter((name) => name !== "Ghost_0.2.0_x64-setup.exe.sig")),
     /no updater signature/u,
   );
   assert.throws(() => artifacts([...NAMES, "notes.txt"]), /Unexpected files/u);

@@ -3,7 +3,7 @@ import type { RemoteApi } from "../lib/remote";
 
 /**
  * Remote access for development previews: nothing connects anywhere. `?remote=on` starts with it
- * on, a paired phone's browser, o7 for iPhone with notifications on and a linked bot;
+ * on, a paired phone's browser, Ghost for iPhone with notifications on and a linked bot;
  * `window.remoteFixture` plays the other side (a device opening the pairing link, the relay going
  * away or not sending notifications).
  */
@@ -146,7 +146,7 @@ export function remoteFixture(): RemoteApi {
       return { ...loginStart };
     },
     projects: async () => projects,
-    localProgram: async () => "C:\\Users\\you\\AppData\\Local\\o7\\o7.exe",
+    localProgram: async () => "C:\\Users\\you\\AppData\\Local\\Ghost\\ghost.exe",
     createAutomation: async (name, project, instruction) => {
       calls.push(`create-automation:${name}:${project}`);
       if (!instruction.trim()) throw new Error("Say what its agent should do with what is sent.");
@@ -172,7 +172,7 @@ export function remoteFixture(): RemoteApi {
       return {
         id,
         name: name.trim() || "Automation",
-        url: `https://o7.codes/api/remote/v1/hook/${"h".repeat(22)}/${"a".repeat(11)}.${"t".repeat(43)}`,
+        url: `https://onghost.dev/api/remote/v1/hook/${"h".repeat(22)}/${"a".repeat(11)}.${"t".repeat(43)}`,
       };
     },
     pair: async () => {
@@ -181,7 +181,7 @@ export function remoteFixture(): RemoteApi {
       publish({ ...status, pairing_expires_at: expires_at });
       return {
         // The shape of a real link, with nothing secret in it.
-        url: `https://o7.codes/remote#${"h".repeat(22)}.${"p".repeat(11)}.${"k".repeat(43)}`,
+        url: `https://onghost.dev/remote#${"h".repeat(22)}.${"p".repeat(11)}.${"k".repeat(43)}`,
         expires_at,
       };
     },
@@ -224,7 +224,7 @@ export function remoteFixture(): RemoteApi {
       return {
         id,
         name: name.trim() || "Bot",
-        url: `https://o7.codes/api/remote/v1/mcp/${"h".repeat(22)}/${"b".repeat(11)}.${"t".repeat(43)}`,
+        url: `https://onghost.dev/api/remote/v1/mcp/${"h".repeat(22)}/${"b".repeat(11)}.${"t".repeat(43)}`,
       };
     },
     renewBot: async (id) => {
@@ -234,7 +234,7 @@ export function remoteFixture(): RemoteApi {
         return {
           id,
           name: automation.name,
-          url: `https://o7.codes/api/remote/v1/hook/${"h".repeat(22)}/${"a".repeat(11)}.${"n".repeat(43)}`,
+          url: `https://onghost.dev/api/remote/v1/hook/${"h".repeat(22)}/${"a".repeat(11)}.${"n".repeat(43)}`,
         };
       const bot = status.bots.find((item) => item.id === id);
       if (!bot) throw new Error("That bot link is gone.");
@@ -254,7 +254,7 @@ export function remoteFixture(): RemoteApi {
       return {
         id,
         name: bot.name,
-        url: `https://o7.codes/api/remote/v1/mcp/${"h".repeat(22)}/${"b".repeat(11)}.${"n".repeat(43)}`,
+        url: `https://onghost.dev/api/remote/v1/mcp/${"h".repeat(22)}/${"b".repeat(11)}.${"n".repeat(43)}`,
       };
     },
     removeBot: async (id) => {
@@ -316,7 +316,7 @@ export function remoteFixture(): RemoteApi {
       const device = status.devices.find((item) => item.id === id);
       if (!device?.notifications)
         throw new Error(
-          "Notifications are not on for this device here. Turn them on in o7 for iPhone.",
+          "Notifications are not on for this device here. Turn them on in Ghost for iPhone.",
         );
       if (!status.notifications)
         throw new Error("The relay this computer uses does not send notifications yet.");

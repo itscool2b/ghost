@@ -1,4 +1,4 @@
-import { AgentMark, StatusDot } from "@o7/ui/graphite";
+import { AgentMark, StatusDot } from "@ghost/ui/graphite";
 import { ArrowUpRight, Check, Ellipsis } from "lucide-react";
 import {
   type CSSProperties,
@@ -71,7 +71,7 @@ export function connectionDetail(connections: AgentConnections): string {
 }
 
 /**
- * An agent's Connection setting, for an agent o7 can run more than one way (Claude Code's
+ * An agent's Connection setting, for an agent Ghost can run more than one way (Claude Code's
  * own protocol or its ACP adapter). Automatic is the default; the choice applies to new sessions.
  */
 export function ConnectionSetting({
@@ -194,7 +194,7 @@ export function verifiedDate(value: string): string {
 }
 
 /**
- * The row's short word on how far o7 has tested this integration: the catalog's note is a
+ * The row's short word on how far Ghost has tested this integration: the catalog's note is a
  * sentence ("Codex 0.162.1 free controls and fixtures (Windows); ..."), which the details show in
  * full. The row says "Tested on 0.162.1" (the last version the note names), "Untested" for an
  * unverified integration, and nothing for a note without a version (the built-in demo).
@@ -366,7 +366,7 @@ function RowMenu({
 
 /**
  * One agent as a row (Vercel's project list): its mark, name and version, what detection found,
- * the date o7 last verified the integration, one action and a menu for the rest. Choosing the
+ * the date Ghost last verified the integration, one action and a menu for the rest. Choosing the
  * row opens its details: what it is, where it runs from and which executable it uses.
  *
  * Actions are offered only when Rust verifies the exact detected installation supports them, and
@@ -405,7 +405,7 @@ export function AgentRow({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signIn, setSignIn] = useState(false);
-  // A failed Update offers its command in o7's terminal, where its output shows.
+  // A failed Update offers its command in Ghost's terminal, where its output shows.
   const [updateFailed, setUpdateFailed] = useState(false);
   const [updateTerminal, setUpdateTerminal] = useState(false);
   const updateExit = useRef<number | null>(null);
@@ -686,7 +686,7 @@ export function AgentRow({
           <StatusDot tone="volt" />
           <span>
             {harnessText(agent.name, agent.harness)}
-            {/* No Update button is no explanation: say why o7 cannot install it. */}
+            {/* No Update button is no explanation: say why Ghost cannot install it. */}
             {maintenance && maintenance.update_unavailable !== null
               ? ` ${maintenance.update_unavailable}`
               : canUpdate && waits
@@ -842,7 +842,7 @@ function AgentDetail({
       : null;
   const installation = agent.installation;
   const release = agent.latest_release;
-  // One Updates fact: where the release stands, then why o7 cannot update it, if it cannot.
+  // One Updates fact: where the release stands, then why Ghost cannot update it, if it cannot.
   const updates = [
     ...new Set([
       agent.harness && !updateLine ? harnessText(agent.name, agent.harness) : null,

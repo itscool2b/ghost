@@ -1,5 +1,5 @@
-import { AGENT_BRAND_IDS, type AgentBrandId } from "@o7/ui";
-import { agentCode, agentLogo, LogoSymbol, logoSide } from "@o7/ui/graphite";
+import { AGENT_BRAND_IDS, type AgentBrandId } from "@ghost/ui";
+import { agentCode, agentLogo, LogoSymbol, logoSide } from "@ghost/ui/graphite";
 
 /** Every agent with a designed brand, in brand order (never the generic one). */
 export const AGENTS: readonly AgentBrandId[] = AGENT_BRAND_IDS.filter((id) => id !== "generic");

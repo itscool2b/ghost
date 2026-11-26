@@ -20,7 +20,7 @@ export interface MemoryEditBanner {
   readonly key: string;
   /** "Project memory updated". */
   readonly title: string;
-  /** "Claude Code · Fix the login flow · o7", on one line. */
+  /** "Claude Code · Fix the login flow · Ghost", on one line. */
   readonly detail: string;
   /** The whole sentence, for the tooltip a shortened line leaves out. */
   readonly text: string;
@@ -44,8 +44,8 @@ export function storageBanner(storage: StorageStatus | null): string | null {
       return null;
     case "paused":
       return storage.state.reason === "disk_full"
-        ? "The disk is full. o7 paused saving and the agents are waiting. Free some space; nothing is lost unless you quit now."
-        : "o7's database is busy (another program is using it). o7 paused saving and the agents are waiting; nothing is lost unless you quit now.";
+        ? "The disk is full. Ghost paused saving and the agents are waiting. Free some space; nothing is lost unless you quit now."
+        : "Ghost's database is busy (another program is using it). Ghost paused saving and the agents are waiting; nothing is lost unless you quit now.";
     case "failed":
       return storage.state.message;
   }
@@ -54,7 +54,7 @@ export function storageBanner(storage: StorageStatus | null): string | null {
 /** The sentence an environment fallback shows, or `null` when the login shell's env is in use. */
 export function envBanner(env: EnvStatus | null): string | null {
   if (env?.state.state !== "fallback") return null;
-  return `o7 couldn't read your shell's environment (${env.state.reason}), so agents start with a basic one and may not find their tools.`;
+  return `Ghost couldn't read your shell's environment (${env.state.reason}), so agents start with a basic one and may not find their tools.`;
 }
 
 /**
@@ -441,7 +441,7 @@ export function RecoveryBannerView({
     <Toast
       level="warning"
       mark={<DatabaseBackup size={16} />}
-      title="o7 repaired its database"
+      title="Ghost repaired its database"
       detail={
         <>
           {message}

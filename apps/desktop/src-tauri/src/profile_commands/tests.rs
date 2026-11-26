@@ -1,6 +1,6 @@
 use super::*;
 use crate::{glass::GlassEffect, launch::LaunchOptions, os::OsInfo};
-use o7_core::{chatstore::NewChat, owner::ProfileOwner};
+use ghost_core::{chatstore::NewChat, owner::ProfileOwner};
 
 fn state(root: &DataRoot) -> AppState {
     let mut booted = boot::boot(Ok(root.clone()));
@@ -224,10 +224,10 @@ async fn reserved_terminal_and_target_owner_failure_preserve_current_profile() {
     drop(owner);
 }
 
-/// What an o7 account left in the data folder: a profile folder whose `profile.json` says
+/// What a Ghost account left in the data folder: a profile folder whose `profile.json` says
 /// `account`, with an encrypted database. Returns its id and every file with its bytes.
 fn account_leftover(root: &DataRoot) -> (String, Vec<(std::path::PathBuf, Vec<u8>)>) {
-    let id = o7_core::ids::new_id();
+    let id = ghost_core::ids::new_id();
     let dir = root.profile_dir(&id).unwrap();
     std::fs::create_dir_all(dir.join("attachments")).unwrap();
     let files = [
@@ -253,7 +253,7 @@ fn account_leftover(root: &DataRoot) -> (String, Vec<(std::path::PathBuf, Vec<u8
     (id, written)
 }
 
-/// o7 accounts were removed. A data folder whose last-used profile was an account's starts
+/// Ghost accounts were removed. A data folder whose last-used profile was an account's starts
 /// in Local (created here, since the account was the only profile), ready for chats; the
 /// account's folder is not offered, cannot be switched to, and is still there byte for byte.
 #[tokio::test]

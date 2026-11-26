@@ -361,7 +361,7 @@ export function TerminalPanel({
         {offer?.length ? (
           <div className="terminal-panel-status" role="status" data-testid="terminal-resume">
             <span>
-              {rememberedNames(offer)} {offer.length === 1 ? "was" : "were"} open when o7 last
+              {rememberedNames(offer)} {offer.length === 1 ? "was" : "were"} open when Ghost last
               closed. Output from then was not kept.
             </span>
             <button

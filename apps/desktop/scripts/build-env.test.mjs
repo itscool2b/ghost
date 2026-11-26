@@ -36,11 +36,14 @@ test("empty optional roots are omitted and ambiguous separators fail", () => {
 
 test("updater channel is explicit and closed", () => {
   for (const channel of ["stable", "staging"]) {
-    assert.equal(releaseBuildEnv({ O7_UPDATER_CHANNEL: channel }, []).O7_UPDATER_CHANNEL, channel);
+    assert.equal(
+      releaseBuildEnv({ GHOST_UPDATER_CHANNEL: channel }, []).GHOST_UPDATER_CHANNEL,
+      channel,
+    );
   }
   for (const channel of ["", "preview", "https://example.com", "staging "]) {
     assert.throws(
-      () => releaseBuildEnv({ O7_UPDATER_CHANNEL: channel }, []),
+      () => releaseBuildEnv({ GHOST_UPDATER_CHANNEL: channel }, []),
       /must be stable or staging/,
     );
   }
@@ -49,7 +52,7 @@ test("updater channel is explicit and closed", () => {
 test("signed updater builds require both public and private material without printing either", () => {
   for (const env of [
     {},
-    { O7_UPDATER_PUBLIC_KEY: "fixture-public" },
+    { GHOST_UPDATER_PUBLIC_KEY: "fixture-public" },
     { TAURI_SIGNING_PRIVATE_KEY: "fixture-private" },
   ]) {
     assert.throws(
@@ -61,7 +64,7 @@ test("signed updater builds require both public and private material without pri
     );
   }
   requireUpdaterSigning({
-    O7_UPDATER_PUBLIC_KEY: "fixture-public",
+    GHOST_UPDATER_PUBLIC_KEY: "fixture-public",
     TAURI_SIGNING_PRIVATE_KEY: "fixture-private",
   });
 });

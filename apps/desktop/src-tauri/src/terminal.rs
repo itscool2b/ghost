@@ -3,9 +3,9 @@ use crate::{
     error::{AppError, AppErrorCode},
     state::AppState,
 };
-use o7_core::terminal::{TerminalChunk, TerminalError};
-use o7_process::{Spawner, pty::PtySize};
-use o7_protocol::setup_actions::AgentInstallReview;
+use ghost_core::terminal::{TerminalChunk, TerminalError};
+use ghost_process::{Spawner, pty::PtySize};
+use ghost_protocol::setup_actions::AgentInstallReview;
 use tauri::{State, Webview};
 
 impl From<TerminalError> for AppError {
@@ -45,7 +45,10 @@ pub async fn agent_install_start(
     cols: u16,
 ) -> Result<String, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     let owner = webview.label();
     let page = state.pages.for_view(owner);
@@ -75,7 +78,10 @@ pub async fn agent_install_start(
 #[specta::specta]
 pub fn terminal_reserve(webview: Webview, state: State<'_, AppState>) -> Result<String, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     if !state.pages.for_view(webview.label()).is_current() {
         return Err(TerminalError::Closed.into());
@@ -92,7 +98,10 @@ pub fn chat_terminal_reserve(
     state: State<'_, AppState>,
 ) -> Result<String, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     if !state.pages.for_view(webview.label()).is_current() {
         return Err(TerminalError::Closed.into());
@@ -111,7 +120,10 @@ pub async fn agent_login_start(
     cols: u16,
 ) -> Result<String, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     let owner = webview.label();
     let page = state.pages.for_view(owner);
@@ -148,7 +160,10 @@ pub async fn agent_token_start(
     cols: u16,
 ) -> Result<String, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     let owner = webview.label();
     let page = state.pages.for_view(owner);
@@ -185,7 +200,10 @@ pub async fn agent_update_start(
     cols: u16,
 ) -> Result<String, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     let owner = webview.label();
     let page = state.pages.for_view(owner);
@@ -370,7 +388,10 @@ pub async fn chat_terminal_start(
     cols: u16,
 ) -> Result<ChatTerminalStarted, AppError> {
     if state.quit.is_quitting() {
-        return Err(AppError::new(AppErrorCode::ShuttingDown, "o7 is quitting."));
+        return Err(AppError::new(
+            AppErrorCode::ShuttingDown,
+            "Ghost is quitting.",
+        ));
     }
     let owner = webview.label().to_owned();
     let page = state.pages.for_view(&owner);

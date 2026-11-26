@@ -9,7 +9,10 @@ import { chromium, webkit } from "playwright";
 
 /** A download button goes through the site's counter (app/counted.ts). */
 const counted = (url) =>
-  url.replace(/^https:\/\/github\.com\/itscool2b\/(?:o7|auracode)\/releases\/download\//, "/get/");
+  url.replace(
+    /^https:\/\/github\.com\/itscool2b\/(?:ghost|o7|auracode)\/releases\/download\//,
+    "/get/",
+  );
 
 // Graphite settles a control's colours over 300ms when its state changes; audit the settled page.
 const settled = (page) =>
@@ -141,7 +144,7 @@ try {
       assert.equal(await pageColour(page), PAGE);
       // The agents' table: every agent once, in view.
       assertWall(await agentWall(page), "1440px");
-      assert.equal(await page.getByRole("list", { name: "Agents o7 runs" }).count(), 1);
+      assert.equal(await page.getByRole("list", { name: "Agents Ghost runs" }).count(), 1);
       assert.equal(
         await page.getByRole("navigation", { name: "Main" }).getByRole("link").count(),
         5,
@@ -151,7 +154,10 @@ try {
       await page.reload();
       // One heading opens the page, in two tones: the name, then what it is.
       await page
-        .getByRole("heading", { level: 1, name: "Meet o7. One window for every coding agent." })
+        .getByRole("heading", {
+          level: 1,
+          name: "Meet Ghost ADE. One window for every coding agent.",
+        })
         .waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
       await settled(page);

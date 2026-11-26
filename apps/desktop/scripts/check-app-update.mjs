@@ -98,7 +98,7 @@ try {
           page.goto(`${origin}/?preview=agent-updates&theme=${scheme}&app-update=${kind}`);
         const pill = page.getByTestId("app-update");
         const start = page.getByTestId("app-update-start");
-        const panel = page.getByRole("region", { name: "Update o7" });
+        const panel = page.getByRole("region", { name: "Update Ghost" });
 
         // Up to date: the footer is as it always was.
         await open("current");
@@ -130,7 +130,7 @@ try {
         assert.ok(room.clear >= 0, `the pill runs under the bell: ${JSON.stringify(room)}`);
         assert.equal(await calls(page), "", "showing the pill asks for nothing");
         await pill.click();
-        await panel.getByRole("heading", { name: "o7 0.1.1571" }).waitFor();
+        await panel.getByRole("heading", { name: "Ghost 0.1.1571" }).waitFor();
         assert.match(await panel.textContent(), /You have 0\.1\.1570/);
         assert.match(await panel.textContent(), /The Update button\./);
         // One Cursor chat is working in this fixture: the panel says what the restart does to it.
@@ -179,7 +179,7 @@ try {
         assert.ok((await pill.boundingBox()).width <= 30, "the pill folds to its arrow");
         assert.match(
           await page.locator(".app-update > summary").getAttribute("aria-label"),
-          /Update: o7 0\.1\.1571 is available/,
+          /Update: Ghost 0\.1\.1571 is available/,
         );
         await settled(page);
         await axe(page, `${engine} ${scheme}: the rail`);

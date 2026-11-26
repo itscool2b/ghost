@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use o7_config::{
+use ghost_config::{
     CopyPreview, CopyReceipt, CopyResult, Inventory, ItemPreview, ItemRef, Library, PreparedCopy,
     Source,
 };
@@ -50,7 +50,7 @@ impl Default for LibraryService {
     }
 }
 
-fn config_error(error: o7_config::Error) -> AppError {
+fn config_error(error: ghost_config::Error) -> AppError {
     AppError::new(AppErrorCode::InvalidArgument, error.to_string())
 }
 
@@ -206,9 +206,9 @@ pub async fn library_copy_apply(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .remove(&id)
-        .ok_or_else(|| config_error(o7_config::Error::Stale))?;
+        .ok_or_else(|| config_error(ghost_config::Error::Stale))?;
     if !pending.generation.is_current() {
-        return Err(config_error(o7_config::Error::Stale));
+        return Err(config_error(ghost_config::Error::Stale));
     }
     let gate = Arc::clone(&service.mutation);
     // Explicit apply outlives the initiating webview. Queued work still rechecks shutdown before
@@ -219,7 +219,7 @@ pub async fn library_copy_apply(
             .config_library_roots(pending.folder_id.as_deref())
             .await?;
         if current.sources != pending.sources {
-            return Err(config_error(o7_config::Error::Stale));
+            return Err(config_error(ghost_config::Error::Stale));
         }
         manager
             .config_library_apply(pending.library, pending.prepared)
@@ -265,7 +265,7 @@ pub async fn library_mcp_share(
     item: ItemRef,
     revision: String,
     expected: u32,
-) -> Result<o7_protocol::mcp::McpSnapshot, AppError> {
+) -> Result<ghost_protocol::mcp::McpSnapshot, AppError> {
     let manager = state.sessions()?;
     let roots = manager.config_library_roots(folder_id.as_deref()).await?;
     let key = item.key.clone();
@@ -281,7 +281,7 @@ pub async fn library_mcp_share(
     servers.insert(key, server);
     let document = serde_json::json!({ "mcpServers": servers }).to_string();
     Ok(manager
-        .shared_mcp(o7_core::mcp::Command::ImportNative {
+        .shared_mcp(ghost_core::mcp::Command::ImportNative {
             expected,
             project_id: None,
             document,

@@ -21,7 +21,7 @@ function memory(initial: Record<string, string> = {}) {
 }
 
 describe("the terminals' font", () => {
-  it("follows the person's terminal app by default, its symbols and o7's face behind it", () => {
+  it("follows the person's terminal app by default, its symbols and Ghost's face behind it", () => {
     const font = resolveFont({ font: "system", size: null }, KITTY, "chat", OWN);
     expect(font).toEqual({
       fontFamily: `"JetBrainsMono Nerd Font", "Symbols Nerd Font Mono", "Symbols Nerd Font", ${OWN}`,
@@ -31,7 +31,7 @@ describe("the terminals' font", () => {
     expect(resolveFont({ font: "system", size: null }, KITTY, "shell", OWN).lineHeight).toBe(1.2);
   });
 
-  it("keeps o7's own look until the system answers, or when chosen", () => {
+  it("keeps Ghost's own look until the system answers, or when chosen", () => {
     for (const [preference, system] of [
       [{ font: "system", size: null }, null],
       [{ font: "auracode", size: null }, KITTY],

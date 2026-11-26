@@ -1,6 +1,6 @@
 //! Thin Git workspace IPC. The core owns review tokens, folder admission and mutation journals.
 
-use o7_protocol::git::{
+use ghost_protocol::git::{
     GitWorkspace, IsolationInput, IsolationPreview, IsolationResult, ManagedWorktree,
     WorktreeAction, WorktreeActionPreview, WorktreeActionResult, WorktreeDestination,
     WorktreeRecoveryAction, WorktreeRecoveryPreview, WorktreeRelocationPreview,
@@ -39,7 +39,7 @@ pub async fn profile_worktree_recovery_preview(
 pub async fn profile_worktree_recreate_preview(
     state: State<'_, AppState>,
     worktree_id: String,
-) -> Result<o7_protocol::git::WorktreeRecreatePreview, AppError> {
+) -> Result<ghost_protocol::git::WorktreeRecreatePreview, AppError> {
     Ok(state
         .sessions()?
         .profile_worktree_recreate_preview(&worktree_id)
@@ -104,8 +104,8 @@ pub async fn git_workspace(
 pub async fn git_commit_preview(
     state: State<'_, AppState>,
     chat_id: String,
-    input: o7_protocol::git::CommitInput,
-) -> Result<o7_protocol::git::CommitPreview, AppError> {
+    input: ghost_protocol::git::CommitInput,
+) -> Result<ghost_protocol::git::CommitPreview, AppError> {
     Ok(state
         .sessions()?
         .git_commit_preview(&chat_id, input)
@@ -118,7 +118,7 @@ pub async fn git_commit_apply(
     state: State<'_, AppState>,
     chat_id: String,
     token: String,
-) -> Result<o7_protocol::git::CommitResult, AppError> {
+) -> Result<ghost_protocol::git::CommitResult, AppError> {
     Ok(state.sessions()?.git_commit_apply(&chat_id, &token).await?)
 }
 
@@ -128,7 +128,7 @@ pub async fn git_commit_apply(
 pub async fn git_push_preview(
     state: State<'_, AppState>,
     chat_id: String,
-) -> Result<o7_protocol::git::PushPreview, AppError> {
+) -> Result<ghost_protocol::git::PushPreview, AppError> {
     Ok(state.sessions()?.git_push_preview(&chat_id).await?)
 }
 
@@ -138,7 +138,7 @@ pub async fn git_push_apply(
     state: State<'_, AppState>,
     chat_id: String,
     token: String,
-) -> Result<o7_protocol::git::PushResult, AppError> {
+) -> Result<ghost_protocol::git::PushResult, AppError> {
     Ok(state.sessions()?.git_push_apply(&chat_id, &token).await?)
 }
 
@@ -246,7 +246,7 @@ pub async fn worktree_relocation_apply(
     state: State<'_, AppState>,
     chat_id: String,
     token: String,
-) -> Result<o7_protocol::conversation::ContinuationResult, AppError> {
+) -> Result<ghost_protocol::conversation::ContinuationResult, AppError> {
     Ok(state
         .sessions()?
         .worktree_relocation_apply(&chat_id, &token)
@@ -259,8 +259,8 @@ pub async fn worktree_pr_preview(
     state: State<'_, AppState>,
     chat_id: String,
     worktree_id: String,
-    input: o7_protocol::git::PullRequestInput,
-) -> Result<o7_protocol::git::PullRequestPreview, AppError> {
+    input: ghost_protocol::git::PullRequestInput,
+) -> Result<ghost_protocol::git::PullRequestPreview, AppError> {
     Ok(state
         .sessions()?
         .worktree_pr_preview(&chat_id, &worktree_id, input)
@@ -273,7 +273,7 @@ pub async fn worktree_pr_apply(
     state: State<'_, AppState>,
     chat_id: String,
     token: String,
-) -> Result<o7_protocol::git::PullRequestResult, AppError> {
+) -> Result<ghost_protocol::git::PullRequestResult, AppError> {
     Ok(state
         .sessions()?
         .worktree_pr_apply(&chat_id, &token)
@@ -284,8 +284,8 @@ pub async fn worktree_pr_apply(
 #[specta::specta]
 pub async fn worktree_chat_preview(
     state: State<'_, AppState>,
-    input: o7_protocol::git::WorktreeChatInput,
-) -> Result<o7_protocol::git::WorktreeChatPreview, AppError> {
+    input: ghost_protocol::git::WorktreeChatInput,
+) -> Result<ghost_protocol::git::WorktreeChatPreview, AppError> {
     Ok(state.sessions()?.worktree_chat_preview(input).await?)
 }
 
@@ -294,7 +294,7 @@ pub async fn worktree_chat_preview(
 pub async fn worktree_chat_apply(
     state: State<'_, AppState>,
     token: String,
-) -> Result<o7_protocol::git::WorktreeChatResult, AppError> {
+) -> Result<ghost_protocol::git::WorktreeChatResult, AppError> {
     Ok(state.sessions()?.worktree_chat_apply(&token).await?)
 }
 
@@ -304,7 +304,7 @@ pub async fn worktree_recreate_preview(
     state: State<'_, AppState>,
     chat_id: String,
     worktree_id: String,
-) -> Result<o7_protocol::git::WorktreeRecreatePreview, AppError> {
+) -> Result<ghost_protocol::git::WorktreeRecreatePreview, AppError> {
     Ok(state
         .sessions()?
         .worktree_recreate_preview(&chat_id, &worktree_id)

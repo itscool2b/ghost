@@ -1,4 +1,4 @@
-import { type AgentBrandId, getBrand, Orb } from "@o7/ui";
+import { type AgentBrandId, getBrand, Orb } from "@ghost/ui";
 import { ChevronRight } from "lucide-react";
 import type { Autonomy, FileChange, TranscriptModel } from "../../kit";
 import { DiffStat } from "./ui";

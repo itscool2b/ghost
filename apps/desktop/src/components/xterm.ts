@@ -25,7 +25,7 @@ export interface XtermOptions {
   /**
    * A terminal chat runs an agent's whole interface: deep scrollback and the blinking cursor its
    * prompt expects. A shell in the docked panel and a tool's sheet keep the compact defaults. All
-   * draw with the person's terminal font unless they chose o7's (lib/terminalFont.ts).
+   * draw with the person's terminal font unless they chose Ghost's (lib/terminalFont.ts).
    */
   readonly variant?: TerminalVariant;
 }

@@ -6,7 +6,7 @@ import {
   orbPosterBackground,
   springs,
   usePrefersReducedMotion,
-} from "@o7/ui";
+} from "@ghost/ui";
 import {
   ArrowUp,
   Check,

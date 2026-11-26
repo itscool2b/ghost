@@ -43,7 +43,7 @@ export function GetIt() {
       <div className="wrap two-col">
         <div className="two-col-head">
           <h2 id="getit-title" className="title">
-            Download o7. <span className="tone">Free, with no account.</span>
+            Download Ghost. <span className="tone">Free, with no account.</span>
           </h2>
           <p className="lead">
             {PUBLISHED

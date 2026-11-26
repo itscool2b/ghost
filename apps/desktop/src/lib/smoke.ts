@@ -6,14 +6,14 @@ import { lastMessage } from "./stream";
 import { stressTurnTokens } from "./stress";
 
 /**
- * The stream check of smoke mode (`O7_SMOKE=1`): a scripted check of the real shell, through
+ * The stream check of smoke mode (`GHOST_SMOKE=1`): a scripted check of the real shell, through
  * the real UI. The chat scenarios are in `smokeChat.ts`.
  *
  * 1. A full demo turn: every block arrives complete, in order, and the answer renders.
  * 2. A cancelled turn: stopping mid-stream ends the turn as "cancelled".
  * 3. A stress burst (6 orbs, 200 tokens/s, 3 s) with the frame rate measured while it streams.
  *
- * The report goes to the shell, which prints `O7_SMOKE_RESULT <json>` and may exit with it.
+ * The report goes to the shell, which prints `GHOST_SMOKE_RESULT <json>` and may exit with it.
  */
 
 export const SMOKE_STRESS: StressConfig = { orbs: 6, rate: 200, aura: true, seconds: 3 };
@@ -100,7 +100,7 @@ export async function runSmoke(info: AppInfo, hooks: SmokeHooks): Promise<SmokeR
       if (summary.frames === 0) {
         // Not a failure: WebKit pauses animation frames while the window is hidden or covered
         // (a locked screen included), so there is no rate to measure.
-        console.warn("o7 smoke: no animation frames ran during the stress burst");
+        console.warn("Ghost smoke: no animation frames ran during the stress burst");
       }
       const stressReason = stress.stream.turn?.stopReason ?? "no turn_ended";
       if (stressReason !== "end_turn") errors.push(`the stress turn ended with ${stressReason}`);

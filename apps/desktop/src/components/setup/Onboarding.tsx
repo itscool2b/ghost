@@ -1,6 +1,6 @@
-import { usePrefersReducedMotion } from "@o7/ui";
-import { BotMark } from "@o7/ui/bot-mark";
-import { BOTS, type BotId, botNamed, Keycap, Wing, Wordmark } from "@o7/ui/graphite";
+import { usePrefersReducedMotion } from "@ghost/ui";
+import { BotMark } from "@ghost/ui/bot-mark";
+import { BOTS, type BotId, botNamed, Keycap, Wing, Wordmark } from "@ghost/ui/graphite";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowRight, Check, FolderOpen, GitBranch, RefreshCw } from "lucide-react";
 import {
@@ -397,7 +397,7 @@ export function Onboarding({
               absent > 0 ? `${absent} more can be installed.` : "Nothing left to install.",
             ];
   const headings: Record<Page, [string, string]> = {
-    welcome: ["Welcome to o7.", "Every agent, one window."],
+    welcome: ["Welcome to Ghost ADE.", "Every agent, one window."],
     agents: agentsHeading,
     bots: ["Bring your assistant.", "It can run the work for you."],
     phone: ["Build phone apps.", "Your agents test on a real phone."],
@@ -487,12 +487,12 @@ export function Onboarding({
                 <p className="setup-lead">
                   Run the coding agents on this computer side by side, and steer them from your
                   phone or your own assistant when you are away. Each agent keeps its own sign-in,
-                  and o7 itself needs no account.
+                  and Ghost itself needs no account.
                 </p>
               ) : null}
               {step === "welcome" ? (
                 <p className="setup-footnote setup-legal" data-testid="setup-legal">
-                  By continuing, you agree to o7’s{" "}
+                  By continuing, you agree to Ghost’s{" "}
                   <a href={TERMS_URL} target="_blank" rel="noreferrer noopener">
                     Terms of Service
                   </a>{" "}
@@ -730,7 +730,7 @@ export function Onboarding({
                     : step === "welcome"
                       ? "Get started"
                       : step === "project"
-                        ? "Open o7"
+                        ? "Open Ghost"
                         : "Continue"}
                   <span className="setup-enter" aria-hidden="true">
                     <Keycap>↵</Keycap>

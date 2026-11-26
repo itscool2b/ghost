@@ -7,7 +7,7 @@ const QUESTION: QuitQuestion = {
   token: "preview",
   message: "One chat is still active. Quitting stops its agent.",
   quit: "Stop agents and quit",
-  keep: "Keep o7 open",
+  keep: "Keep Ghost open",
 };
 
 export function mountQuitPreview(): void {

@@ -9,8 +9,8 @@
  * - plan: a plan waiting for review, offering Accept and build with.
  * - wing-light.svg and wing-dark.svg: the logo in each appearance's ink.
  *
- * The preview's fixture project is called "auracode", the app's name before 19 November 2026; the
- * pictures show it as "o7".
+ * The preview's fixture project is called "auracode", the app's first name; the pictures show it
+ * as "ghost", the repository's name.
  *
  * Usage: node apps/web/scripts/readme-images.mjs [--server http://127.0.0.1:1427]
  * Without --server it starts the desktop's Vite on 127.0.0.1:1427 (strictPort) and stops it after.
@@ -81,8 +81,12 @@ try {
     await open(page, `preview=thinking&theme=${theme}&palette=aura&agents=lineup&roles=1`);
     await page.getByTestId("worked-for").first().click();
     await page.waitForTimeout(400);
-    await page.locator('details:not([open]) > [data-testid="thought-toggle"]').first().click();
-    await page.waitForTimeout(400);
+    // The turn's reasoning opens too, where the fold shows it as a row of its own.
+    const thought = page.locator('details:not([open]) > [data-testid="thought-toggle"]').first();
+    if (await thought.count()) {
+      await thought.click();
+      await page.waitForTimeout(400);
+    }
     await page.getByTestId("transcript").evaluate((node) => {
       node.scrollTop = 0;
     });
@@ -124,7 +128,7 @@ try {
     ["wing-dark.svg", "#ededed"],
   ]) {
     const [width, height] = LOGO_VIEWBOX;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>o7</title><path fill="${ink}" fill-rule="evenodd" d="${LOGO_PATH}"/></svg>\n`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>Ghost</title><path fill="${ink}" fill-rule="evenodd" d="${LOGO_PATH}"/></svg>\n`;
     await writeFile(resolve(out, name), svg);
     console.log(`${name}: ${svg.length} bytes`);
   }
@@ -159,7 +163,7 @@ async function rename(page) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode())
       if (node.nodeValue?.includes("auracode"))
-        node.nodeValue = node.nodeValue.replaceAll("auracode", "o7");
+        node.nodeValue = node.nodeValue.replaceAll("auracode", "ghost");
   });
 }
 

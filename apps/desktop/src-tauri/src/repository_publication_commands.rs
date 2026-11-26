@@ -3,7 +3,7 @@ use crate::{
     error::{AppError, AppErrorCode},
     state::AppState,
 };
-use o7_protocol::repository_publication::{
+use ghost_protocol::repository_publication::{
     RepositoryPublicationInput, RepositoryPublicationResult, RepositoryPublicationReview,
 };
 use tauri::{State, Webview};
@@ -13,7 +13,7 @@ pub async fn repository_publication_draft(
     webview: Webview,
     state: State<'_, AppState>,
     folder_id: String,
-) -> Result<Option<o7_protocol::repository_publication::RepositoryPublicationDraft>, AppError> {
+) -> Result<Option<ghost_protocol::repository_publication::RepositoryPublicationDraft>, AppError> {
     current(&webview, &state)?;
     Ok(state
         .sessions()?

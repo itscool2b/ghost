@@ -1,16 +1,16 @@
-# Developing o7
+# Developing Ghost
 
-How the repository is laid out, how to run and check it, and the switches development builds read. The [README](../README.md) is the short version. Working on o7 from a chat inside the installed app has its own guide, [developing-in-o7.md](developing-in-o7.md), and [CONTRIBUTING.md](../CONTRIBUTING.md) says how to send a change.
+How the repository is laid out, how to run and check it, and the switches development builds read. The [README](../README.md) is the short version. Working on Ghost from a chat inside the installed app has its own guide, [developing-in-ghost.md](developing-in-ghost.md), and [CONTRIBUTING.md](../CONTRIBUTING.md) says how to send a change.
 
 ## Layout
 
 ```
-crates/o7-protocol/   shared types: events, frames, IPC and session types (serde, exported to TypeScript)
-crates/o7-process/    agent processes: spawning, shutdown, leftovers, the agents' env, protocol logs
-crates/o7-agents/     the agent catalog, detection, the one-time npm adapter install, launch specs
-crates/o7-core/       device identity, data folder, profiles, the per-profile SQLite store, chat sessions
-crates/o7-drivers/    the driver contract, frame batching, the scripted mock agent; the ACP driver (M1a)
-crates/o7-cli/        dev CLI: probes and smoke-tests agents headlessly, records and replays fixtures
+crates/ghost-protocol/   shared types: events, frames, IPC and session types (serde, exported to TypeScript)
+crates/ghost-process/    agent processes: spawning, shutdown, leftovers, the agents' env, protocol logs
+crates/ghost-agents/     the agent catalog, detection, the one-time npm adapter install, launch specs
+crates/ghost-core/       device identity, data folder, profiles, the per-profile SQLite store, chat sessions
+crates/ghost-drivers/    the driver contract, frame batching, the scripted mock agent; the ACP driver (M1a)
+crates/ghost-cli/        dev CLI: probes and smoke-tests agents headlessly, records and replays fixtures
 apps/desktop/           Tauri v2 app: Rust shell in src-tauri/, React UI in src/
 apps/design-lab/        M1a Design Lab: visual directions rendered from a recorded chat (see its README)
 packages/ui/            shared design system: Aura tokens, components and marks (historical studies kept for the lab)
@@ -23,10 +23,10 @@ docs/                   plan and spike write-ups; spike code sits next to its wr
 The rest (the Cloudflare resource inventory is in infra/README.md):
 
 ```
-crates/o7-config/     per-agent config adapters for the Plugin library and Instructions
-crates/o7-remote/     remote access: pairing, devices, bot links and the sealed channel
-crates/o7-release/    offline preparation and verification of release artifacts
-apps/web/               o7.codes (React Router 7, prerendered)
+crates/ghost-config/     per-agent config adapters for the Plugin library and Instructions
+crates/ghost-remote/     remote access: pairing, devices, bot links and the sealed channel
+crates/ghost-release/    offline preparation and verification of release artifacts
+apps/web/               onghost.dev (React Router 7, prerendered)
 apps/web-worker/        the Rust Worker that serves the prerendered site
 apps/relay/             the Worker behind remote access
 infra/                  the Cloudflare resource inventory
@@ -61,48 +61,48 @@ pnpm dev
 rebuilds and relaunches when its code changes. Release bundles (`pnpm bundle`) and the macOS signing
 identity (`pnpm signing`) are described in [apps/desktop/README.md](../apps/desktop/README.md).
 
-App data lives in a folder named `codes.o7.desktop` inside the local (never roaming) app data folder:
+App data lives in a folder named `dev.onghost.desktop` inside the local (never roaming) app data folder:
 
 | OS | Folder |
 |---|---|
-| macOS | `~/Library/Application Support/codes.o7.desktop` |
-| Windows | `%LOCALAPPDATA%\codes.o7.desktop` |
-| Linux | `$XDG_DATA_HOME/codes.o7.desktop`, or `~/.local/share/codes.o7.desktop` when `XDG_DATA_HOME` is unset |
+| macOS | `~/Library/Application Support/dev.onghost.desktop` |
+| Windows | `%LOCALAPPDATA%\dev.onghost.desktop` |
+| Linux | `$XDG_DATA_HOME/dev.onghost.desktop`, or `~/.local/share/dev.onghost.desktop` when `XDG_DATA_HOME` is unset |
 
 A copy updated from auracode, the app's name until 19 November 2026, keeps using the folder it
 had, `si.auracode.desktop`, because the worktrees inside it record their full paths
 ([docs/name.md](name.md)).
 
-`O7_DATA_DIR` moves it anywhere else (see [Environment switches](#environment-switches)); the
+`GHOST_DATA_DIR` moves it anywhere else (see [Environment switches](#environment-switches)); the
 old name, `AURACODE_DATA_DIR`, still works.
-Uninstalling deletes it, with everything else o7 keeps, and Settings can do the same
+Uninstalling deletes it, with everything else Ghost keeps, and Settings can do the same
 without uninstalling; [docs/uninstall.md](uninstall.md) lists what goes and what stays.
 
-A development build (`pnpm dev`, `cargo run`, `tauri build --debug`) uses `codes.o7.desktop.dev`
+A development build (`pnpm dev`, `cargo run`, `tauri build --debug`) uses `dev.onghost.desktop.dev`
 next to it instead, runs as its own instance beside the installed app, and cleans up only its own
-folder, so working on o7 from a chat inside o7 never touches the app running that
-chat. [docs/developing-in-o7.md](developing-in-o7.md) covers building, testing and
+folder, so working on Ghost from a chat inside Ghost never touches the app running that
+chat. [docs/developing-in-ghost.md](developing-in-ghost.md) covers building, testing and
 installing a change from inside the app, and recovering from a broken build.
 
-### o7-cli
+### ghost-cli
 
-`o7-cli` runs agents without the app, through the same session manager, on a temporary profile
+`ghost-cli` runs agents without the app, through the same session manager, on a temporary profile
 with a fresh temporary git repository as the chat folder (M1a spec 9.5 and 10):
 
 ```sh
-cargo run -p o7-cli -- agents                               # the env and each agent
-cargo run -p o7-cli -- probe hermes                         # free probe steps, no prompt
-cargo run -p o7-cli -- smoke hermes --scenario all --spend  # paid scenarios
-cargo run -p o7-cli -- fixture <log> --scenario basic --out <file>
-cargo run -p o7-cli -- replay <fixture>                     # against its golden; --update writes it
+cargo run -p ghost-cli -- agents                               # the env and each agent
+cargo run -p ghost-cli -- probe hermes                         # free probe steps, no prompt
+cargo run -p ghost-cli -- smoke hermes --scenario all --spend  # paid scenarios
+cargo run -p ghost-cli -- fixture <log> --scenario basic --out <file>
+cargo run -p ghost-cli -- replay <fixture>                     # against its golden; --update writes it
 ```
 
 A probe or smoke run keeps its folder (protocol logs, database, chat folder) and ends with the
-`o7-cli fixture` command for each log it left. Its agent processes register in the data folder's
+`ghost-cli fixture` command for each log it left. Its agent processes register in the data folder's
 `run/` (for a development build, its own folder), so the next app start on that folder cleans up
 after a crashed run, and it shares that folder's
 downloaded adapters. `--data-dir <dir>` runs on that data folder's own profile instead, and is refused
-while the app runs on it. `o7-cli help` lists every option; `RUST_LOG` shows its logs on stderr
+while the app runs on it. `ghost-cli help` lists every option; `RUST_LOG` shows its logs on stderr
 (default: warnings only).
 
 ### Checks
@@ -129,8 +129,8 @@ bash .github/scripts/test.sh                                        # the CI scr
 # stress burst through the real UI; then it drives the chat screens against the demo agent in two
 # launches on one data folder, quitting through the quit flow between them, and prints every
 # check. A second argument, stream or chat, runs one of the two.
-pnpm --filter @o7/desktop tauri build --debug --no-bundle
-bash .github/scripts/run-smoke.sh target/debug/o7
+pnpm --filter @ghost/desktop tauri build --debug --no-bundle
+bash .github/scripts/run-smoke.sh target/debug/ghost
 ```
 
 `.github/workflows/ci.yml` includes Rust and native smoke checks on Windows/macOS, the Windows
@@ -142,7 +142,7 @@ tag publishes a release. Signing, hardware acceptance and distribution follow [d
 - Biome is the only linter and formatter outside Rust (there is no ESLint or Prettier): `pnpm lint`
   checks, `pnpm format` rewrites. It covers TypeScript, CSS, JSON, and YAML. It does not format Markdown
   (hand-wrapped prose and tables) and never touches `pnpm-lock.yaml` (written by pnpm) or the replay
-  fixtures and goldens in `crates/o7-drivers/tests/fixtures` (written by the replay harness). Rust is
+  fixtures and goldens in `crates/ghost-drivers/tests/fixtures` (written by the replay harness). Rust is
   formatted with `cargo fmt --all`.
 - Clippy rejects `unwrap()` and `expect()` outside tests (`Cargo.toml` and `clippy.toml`).
 - The claude-control binary is never run, in CI too, because running it drives a real Claude Code
@@ -153,7 +153,7 @@ tag publishes a release. Signing, hardware acceptance and distribution follow [d
 
 `apps/desktop/src/bindings.ts` types the UI's calls into Rust. tauri-specta generates it from the shell's
 command list. After changing a command or a type it uses, run
-`cargo test -p o7-desktop export_bindings` and commit the result (debug builds of the app also
+`cargo test -p ghost-desktop export_bindings` and commit the result (debug builds of the app also
 regenerate it at startup). CI fails when the committed file is out of date.
 
 ### Environment switches
@@ -163,17 +163,17 @@ For development and automation; the app reads them once at startup. On/off switc
 
 | Variable | Effect |
 |---|---|
-| `O7_DATA_DIR` | Keeps all app data in this folder instead of the OS default (`codes.o7.desktop`, or `codes.o7.desktop.dev` for a development build), for example a throwaway folder to test a first launch. Such a launch runs as its own instance beside a running app. On Windows that includes the webview profile (`EBWebView`); such a launch does not remember the window size and position, so it never touches the installed app's. Blank values are ignored; a relative path is resolved against the current folder. |
-| `O7_NO_GLASS` | Opaque window without the native glass (Liquid Glass, vibrancy, Mica): the baseline of the power spike. |
-| `O7_STRESS` | Opens straight into the stress view. Comma-separated `orbs` (1 to 24), `rate` (1 to 5000 tokens/s), `aura` (1 or 0), and `seconds` (0 to 86400, 0 streams until the window closes); missing keys default to `orbs=6,rate=200,aura=1,seconds=0`, and `1` alone means all defaults. An invalid value is ignored and the app shows a notice. See [docs/spikes/render-power.md](spikes/render-power.md). |
-| `O7_SMOKE` | Runs a scripted smoke check through the real UI and prints `O7_SMOKE_RESULT <json>` on stdout, or a failing result if the UI has not reported in time (120 seconds; 300 for `chat`, 900 with `O7_SMOKE_AGENT`). `1` (or `stream`): a demo turn, a cancelled turn, a short stress burst. `chat`: the chat screens against the demo agent, every block, card and queue path, ending with the quit flow while a turn runs; `chat-reopen`: the same data folder started again, checking the stored history, the interrupted turn and Resume. Each chat check is in the result. `0`, `false`, `no` and `off` are off; any other value that names no check prints a failing result. Takes precedence over `O7_STRESS`. Every smoke run needs `O7_DATA_DIR`, a data folder of its own; without it the run prints a failing result and opens nothing, so it can never change the installed app's chats. Smoke runs keep running while the window is hidden or the screen is locked (macOS 14 and later). |
-| `O7_SMOKE_EXIT` | With `O7_SMOKE`, exits after the result, through the quit flow: code 0 if the check passed, 1 otherwise. |
-| `O7_SMOKE_FOLDER` | With `O7_SMOKE=chat` or `chat-reopen`, the chat's folder (an absolute path), which the folder picker answers without a dialog. Required for those. |
-| `O7_SMOKE_AGENT` | With `O7_SMOKE=chat`, one minimal chat with this agent (`hermes`, `claude`, `codex`) or connection (`claude-acp`, `codex-acp`: the run first sets that agent's Connection to it, in the run's own data folder) instead of the demo agent's run: under Ask it sends "Reply with exactly: ok" and passes when the reply is ok (`mock`, the demo agent, gets `/echo ok`). `run-smoke.sh` passes it on and then runs that one launch. A real agent spends your quota, so this is for local runs only: the app and `run-smoke.sh` refuse it while `CI` or `GITHUB_ACTIONS` is set. A first start may download the agent's adapter, hence the longer watchdog. |
+| `GHOST_DATA_DIR` | Keeps all app data in this folder instead of the OS default (`dev.onghost.desktop`, or `dev.onghost.desktop.dev` for a development build), for example a throwaway folder to test a first launch. Such a launch runs as its own instance beside a running app. On Windows that includes the webview profile (`EBWebView`); such a launch does not remember the window size and position, so it never touches the installed app's. Blank values are ignored; a relative path is resolved against the current folder. |
+| `GHOST_NO_GLASS` | Opaque window without the native glass (Liquid Glass, vibrancy, Mica): the baseline of the power spike. |
+| `GHOST_STRESS` | Opens straight into the stress view. Comma-separated `orbs` (1 to 24), `rate` (1 to 5000 tokens/s), `aura` (1 or 0), and `seconds` (0 to 86400, 0 streams until the window closes); missing keys default to `orbs=6,rate=200,aura=1,seconds=0`, and `1` alone means all defaults. An invalid value is ignored and the app shows a notice. See [docs/spikes/render-power.md](spikes/render-power.md). |
+| `GHOST_SMOKE` | Runs a scripted smoke check through the real UI and prints `GHOST_SMOKE_RESULT <json>` on stdout, or a failing result if the UI has not reported in time (120 seconds; 300 for `chat`, 900 with `GHOST_SMOKE_AGENT`). `1` (or `stream`): a demo turn, a cancelled turn, a short stress burst. `chat`: the chat screens against the demo agent, every block, card and queue path, ending with the quit flow while a turn runs; `chat-reopen`: the same data folder started again, checking the stored history, the interrupted turn and Resume. Each chat check is in the result. `0`, `false`, `no` and `off` are off; any other value that names no check prints a failing result. Takes precedence over `GHOST_STRESS`. Every smoke run needs `GHOST_DATA_DIR`, a data folder of its own; without it the run prints a failing result and opens nothing, so it can never change the installed app's chats. Smoke runs keep running while the window is hidden or the screen is locked (macOS 14 and later). |
+| `GHOST_SMOKE_EXIT` | With `GHOST_SMOKE`, exits after the result, through the quit flow: code 0 if the check passed, 1 otherwise. |
+| `GHOST_SMOKE_FOLDER` | With `GHOST_SMOKE=chat` or `chat-reopen`, the chat's folder (an absolute path), which the folder picker answers without a dialog. Required for those. |
+| `GHOST_SMOKE_AGENT` | With `GHOST_SMOKE=chat`, one minimal chat with this agent (`hermes`, `claude`, `codex`) or connection (`claude-acp`, `codex-acp`: the run first sets that agent's Connection to it, in the run's own data folder) instead of the demo agent's run: under Ask it sends "Reply with exactly: ok" and passes when the reply is ok (`mock`, the demo agent, gets `/echo ok`). `run-smoke.sh` passes it on and then runs that one launch. A real agent spends your quota, so this is for local runs only: the app and `run-smoke.sh` refuse it while `CI` or `GITHUB_ACTIONS` is set. A first start may download the agent's adapter, hence the longer watchdog. |
 | `RUST_LOG` | Log filter for the Rust side, which logs to stderr. Default `info`. |
 
-For example `O7_STRESS=orbs=24,rate=200 pnpm dev`. In PowerShell, run
-`$env:O7_STRESS = "orbs=24,rate=200"` first.
+For example `GHOST_STRESS=orbs=24,rate=200 pnpm dev`. In PowerShell, run
+`$env:GHOST_STRESS = "orbs=24,rate=200"` first.
 
 ## History
 
@@ -196,7 +196,7 @@ plugins natively. A profile folder an account left in the data folder is never o
 deleted.
 
 Backend and cloud services are Rust-first: the website is a Rust Worker serving the prerendered
-pages, published at [o7.codes](https://o7.codes) and its isolated preview, and remote access
+pages, published at [onghost.dev](https://onghost.dev) and its isolated preview, and remote access
 goes through the relay Worker (`apps/relay`). The Cloudflare resources are listed in
 [infra/README.md](../infra/README.md), with a record of the ones the account system used, which were
 deleted with it.
@@ -204,8 +204,8 @@ React/TypeScript handles interfaces. Optional local AGENTS.md and CLAUDE.md file
 Git. When present, the lint gate requires both files to be identical; a clean checkout needs neither.
 Installers are unsigned preview builds: publisher signing is deferred at the owner's request. They
 are published on this repository's Releases page and listed with their checksums at
-[o7.codes/download](https://o7.codes/download); [docs/releases.md](releases.md) says
-how. o7 is open source under the [MIT License](../LICENSE).
+[onghost.dev/download](https://onghost.dev/download); [docs/releases.md](releases.md) says
+how. Ghost is open source under the [MIT License](../LICENSE).
 
 Current source includes native agent drivers, the desktop workspace, onboarding, project and Git
 controls, a per-agent Plugin library, remote access, readable chat export and portable folder
@@ -220,12 +220,13 @@ Merged into main.
 
 Done:
 
-- **Domain.** The site is at o7.codes since 2026-11-19. Its first address, auracode.si (a
-  Cloudflare zone since 2026-10-24), sends its pages there and still answers the relay and the
-  remote page for copies of the app from before the move ([infra/README.md](../infra/README.md)).
+- **Domain.** The site is at onghost.dev since 2026-11-26. Its earlier addresses, o7.codes
+  (from 2026-11-19) and auracode.si (a Cloudflare zone since 2026-10-24), send their pages there
+  and still answer the relay and the remote page for copies of the app from before each move
+  ([infra/README.md](../infra/README.md)).
 - **Scaffold.** The Cargo and pnpm workspaces with rustfmt, clippy, and Biome; the event model
-  (`o7-protocol`); the data folder, device identity, profiles, and per-profile database (`o7-core`);
-  frame batching and the scripted mock agent (`o7-drivers`); the design system and WebGL orb renderer
+  (`ghost-protocol`); the data folder, device identity, profiles, and per-profile database (`ghost-core`);
+  frame batching and the scripted mock agent (`ghost-drivers`); the design system and WebGL orb renderer
   (`packages/ui`); the desktop shell with its glass window, typed commands and channels, and a demo stream;
   the CI and bundle workflows, which run on Linux and Windows (see [Checks](#checks)).
 - **Spikes.** [Claude Code's control protocol](spikes/claude-control.md) is decided.
@@ -255,7 +256,7 @@ Pending, each waiting on the repository owner:
 
 Merged into main from the `m1a-core-acp` branch, following [its spec](design/m1a.md): agent processes and their
 environment, the session manager and its store, the ACP driver, the chat commands and channels, a bare
-chat UI styled through tokens, and `o7-cli`. Verified against real agents on this Mac (spec 10.6):
+chat UI styled through tokens, and `ghost-cli`. Verified against real agents on this Mac (spec 10.6):
 Hermes, Claude Code through claude-agent-acp and Codex through codex-acp each pass the free probes, the
 six paid scenarios and a chat through the UI, with recorded fixtures replayed in CI. That M1a
 milestone prototyped the Orbit language in the Design Lab; the proposed current direction is documented in

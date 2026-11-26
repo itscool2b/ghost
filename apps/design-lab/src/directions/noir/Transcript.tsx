@@ -1,4 +1,4 @@
-import { easings, GlassPanel, getBrand, Orb, type OrbState } from "@o7/ui";
+import { easings, GlassPanel, getBrand, Orb, type OrbState } from "@ghost/ui";
 import {
   Brain,
   ChevronDown,

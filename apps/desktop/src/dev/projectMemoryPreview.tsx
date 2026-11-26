@@ -128,7 +128,7 @@ export function createProjectMemoryFixture(
   const note = (id: string, name: string): MemoryNote => {
     const saved = latest(id, name);
     if (!saved || saved.deleted)
-      throw new Error(`There is no note ${name}. o7_memory_read lists the notes there are.`);
+      throw new Error(`There is no note ${name}. ghost_memory_read lists the notes there are.`);
     return {
       project_id: id,
       name,
@@ -183,7 +183,7 @@ export function createProjectMemoryFixture(
       const there = current && !current.deleted ? current : null;
       if (there === null && input.expected_revision !== null)
         throw new Error(
-          `There is no note ${input.name}. o7_memory_read lists the notes there are.`,
+          `There is no note ${input.name}. ghost_memory_read lists the notes there are.`,
         );
       if (there !== null && input.expected_revision !== there.revision)
         throw new Error(
@@ -295,7 +295,7 @@ export function createProjectMemoryFixture(
   };
 }
 
-const ONE = [{ id: FIRST, name: "o7 fixture" }];
+const ONE = [{ id: FIRST, name: "Ghost fixture" }];
 const TWO = [...ONE, { id: "second-project", name: "website fixture" }];
 const CHATS: MemoryChats = new Map([
   ["chat-fixture", { title: "Fix the login flow", agent: "Claude Code" }],
@@ -320,8 +320,8 @@ export default function ProjectMemoryPreview() {
         storage={null}
         memoryEdits={edits.notices.map((notice) => ({
           key: `${notice.projectId}:${notice.revision}`,
-          ...agentEditToast(notice, CHATS, "o7 fixture"),
-          text: agentEditText(notice, CHATS, "o7 fixture"),
+          ...agentEditToast(notice, CHATS, "Ghost fixture"),
+          text: agentEditText(notice, CHATS, "Ghost fixture"),
           state: notice.state,
           onReview: () => {
             edits.dismiss(notice);

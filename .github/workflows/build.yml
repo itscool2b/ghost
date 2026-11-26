@@ -115,11 +115,19 @@ jobs:
           BUNDLE_FORMATS: ${{ matrix.bundles }}
           # The AppImage tools run from their own extraction instead of needing FUSE.
           APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: pnpm --filter @o7/desktop bundle --target "$BUNDLE_TARGET" --bundles "$BUNDLE_FORMATS"
+        run: pnpm --filter @ghost/desktop bundle --target "$BUNDLE_TARGET" --bundles "$BUNDLE_FORMATS"
+      - name: Update the last release with this installer (Windows x64)
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = Get-ChildItem "target/${{ matrix.target }}/release/bundle/nsis" -Filter '*-setup.exe' | Select-Object -First 1
+          ./.github/scripts/test-update-from-release.ps1 -Installer $installer.FullName -Repository $env:GITHUB_REPOSITORY
       - name: Upload bundles
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: auracode-unsigned-${{ matrix.target }}-${{ github.sha }}
+          name: ghost-unsigned-${{ matrix.target }}-${{ github.sha }}
           path: |
             target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             target/${{ matrix.target }}/release/bundle/nsis/*.exe

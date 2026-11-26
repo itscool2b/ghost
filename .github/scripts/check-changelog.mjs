@@ -2,9 +2,9 @@
 // tooling alone; owner, 21 November 2026), newest first: `## YYYY-MM-DD` sections
 // by the day it merged in US Eastern time (the owner's clock, 18 November 2026: an evening merge
 // was showing under tomorrow's date, because the days were UTC), each line
-// `- What changed. ([#N](https://github.com/itscool2b/o7/pull/N))`.
+// `- What changed. ([#N](https://github.com/itscool2b/ghost/pull/N))`.
 // Each such pull request adds its own line, in simple English about what changed for the person using
-// o7 and short enough to read at a glance (docs/developing-in-o7.md, "Changelog").
+// Ghost and short enough to read at a glance (docs/developing-in-ghost.md, "Changelog").
 //
 //   node .github/scripts/check-changelog.mjs [folder]          the format, offline (pnpm lint)
 //   node .github/scripts/check-changelog.mjs [folder] --dates  also each day against GitHub's
@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const ENTRY = /^- (\S.*\S) \(\[#(\d+)\]\(https:\/\/github\.com\/itscool2b\/o7\/pull\/(\d+)\)\)$/;
+const ENTRY = /^- (\S.*\S) \(\[#(\d+)\]\(https:\/\/github\.com\/itscool2b\/ghost\/pull\/(\d+)\)\)$/;
 const DATE = /^## (\d{4}-\d{2}-\d{2})$/;
 /** U+2014, written by code point so the character itself never appears in the source. */
 export const EM_DASH = String.fromCharCode(0x2014);
@@ -48,7 +48,7 @@ export function checkChangelog(text) {
     const entry = line.match(ENTRY);
     if (!entry) {
       problems.push(
-        `${at}: an entry ends with its pull request, ([#N](https://github.com/itscool2b/o7/pull/N))`,
+        `${at}: an entry ends with its pull request, ([#N](https://github.com/itscool2b/ghost/pull/N))`,
       );
       return;
     }

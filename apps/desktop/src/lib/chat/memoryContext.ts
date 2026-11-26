@@ -1,7 +1,7 @@
 /**
  * The project memory Aura attaches to a message as reference context.
  *
- * `visible_context` in `crates/o7-core/src/chatstore/memory.rs` appends it after everything the
+ * `visible_context` in `crates/ghost-core/src/chatstore/memory.rs` appends it after everything the
  * person sent, on the first message of a session and after the memory changes:
  *
  *     \n\nProject memory (Aura reference context, revision <id>)\n

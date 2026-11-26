@@ -1,6 +1,6 @@
 /**
  * A handoff as the window shows it. The text is what the next agent receives, written by Rust
- * (`crates/o7-core/src/conversation.rs`, `handoff`); this reads it back into its parts so the view
+ * (`crates/ghost-core/src/conversation.rs`, `handoff`); this reads it back into its parts so the view
  * shows exactly that text, arranged: the conversation, the working folder, the commands that ran,
  * the last one still failing with its first error, and the changes. Anything that does not read
  * as a handoff is shown as its own plain text instead (`parseHandoff` answers `null`).

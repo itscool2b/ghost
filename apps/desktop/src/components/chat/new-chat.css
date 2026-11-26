@@ -684,7 +684,7 @@
 /*
  * Where the chat works, directly under the card (Codex's per-thread Local or Worktree, drawn as
  * Grok's composer chip): one 28px pill whose icon sits on the 16px axis and whose words read
- * "Worktree from main on aura/...", the connectives in fg-3 and the branches in mono. Bare at rest
+ * "Worktree from main on ghost/...", the connectives in fg-3 and the branches in mono. Bare at rest
  * since Main, like the chips in the box above it: a line of the page until the hand is on it.
  */
 .new-chat-worktree {

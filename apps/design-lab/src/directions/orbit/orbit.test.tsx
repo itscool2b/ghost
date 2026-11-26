@@ -90,7 +90,7 @@ describe("the settled turn", () => {
     expect(shown).toContain("Thought for 6s");
     expect(shown).toContain("Read 2 files, searched 1 pattern");
     expect(shown).toContain("Edited 2 files");
-    expect(shown).toContain("Ran pnpm --filter @o7/ui test pacing 19 passed");
+    expect(shown).toContain("Ran pnpm --filter @ghost/ui test pacing 19 passed");
     expect(shown).toContain("Plan complete 3 of 3 steps");
   });
 
@@ -123,7 +123,7 @@ describe("the streaming turn", () => {
     const shown = text(html);
     // The open command is one block whose header is its row: said once, and opening it moves
     // nothing. Its output unfolds under the row while it runs.
-    expect(shown.match(/Running pnpm --filter @o7\/ui test pacing/g)).toHaveLength(1);
+    expect(shown.match(/Running pnpm --filter @ghost\/ui test pacing/g)).toHaveLength(1);
     expect(shown).toContain("vitest run pacing");
     expect(html).toContain('class="o-call o-cmd" data-open=""');
     // The agent's live mark is in the command's gutter, not on a line of its own.
@@ -352,7 +352,7 @@ describe("round 3: what the critics found missing", () => {
     const shown = text(render("settled"));
     // The waiting chat is listed (and counted) under Needs you, not again under its project.
     expect(shown).toContain("Projects 3 auracode 3");
-    expect(shown).toContain("o7.codes 1 failed");
+    expect(shown).toContain("onghost.dev 1 failed");
   });
 
   it("maps project colours onto four muted tones, never violet and never near the orange", () => {

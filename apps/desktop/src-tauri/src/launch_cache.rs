@@ -1,4 +1,4 @@
-//! The sidebar's last lists, for the window's first frame (`o7_core::launch_cache`).
+//! The sidebar's last lists, for the window's first frame (`ghost_core::launch_cache`).
 //!
 //! `chats_list` and the unfiltered `workspace_snapshot` keep what they answered; the page reads
 //! both back before it first renders, shows them at once, and replaces them when the database
@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use o7_core::launch_cache::{self, Part};
+use ghost_core::launch_cache::{self, Part};
 use serde::Serialize;
 use specta::Type;
 use tauri::State;

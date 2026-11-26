@@ -209,7 +209,7 @@ export function TerminalSheet({
                     : purpose === "project"
                       ? "The project shell finished."
                       : purpose === "update"
-                        ? "The update finished. o7 checks the new version when you close this."
+                        ? "The update finished. Ghost checks the new version when you close this."
                         : "The vendor command finished. Check sign-in status to confirm."
                 : state.exitCode === null
                   ? "The terminal closed without an exit status."
@@ -254,7 +254,7 @@ export function TerminalSheet({
           </h2>
           <p id={description}>
             {purpose === "token"
-              ? "Runs claude setup-token, the agent's own sign-in. It prints a token and saves nothing; o7 keeps the token in this computer's secure storage. Closing stops it."
+              ? "Runs claude setup-token, the agent's own sign-in. It prints a token and saves nothing; Ghost keeps the token in this computer's secure storage. Closing stops it."
               : purpose === "installation"
                 ? "Runs the package manager below. Closing stops it."
                 : purpose === "setup"

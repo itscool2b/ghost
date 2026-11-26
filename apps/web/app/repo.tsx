@@ -1,5 +1,5 @@
 /** The project's public repository, which every build is made from. */
-export const REPOSITORY = "https://github.com/itscool2b/o7";
+export const REPOSITORY = "https://github.com/itscool2b/ghost";
 
 /**
  * GitHub's mark: Octicons `mark-github-16` (MIT), drawn unchanged in the text's colour as

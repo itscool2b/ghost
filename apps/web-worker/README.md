@@ -18,11 +18,11 @@ and the `wasm32-unknown-unknown` target.
 
 ```powershell
 corepack pnpm install --frozen-lockfile
-cargo test -p o7-web-worker --locked
-cargo clippy -p o7-web-worker --all-targets --locked -- -D warnings
-corepack pnpm --filter @o7/web-worker worker:build
-cargo clippy -p o7-web-worker --target wasm32-unknown-unknown --locked -- -D warnings
-corepack pnpm --filter @o7/web-worker worker:test
+cargo test -p ghost-web-worker --locked
+cargo clippy -p ghost-web-worker --all-targets --locked -- -D warnings
+corepack pnpm --filter @ghost/web-worker worker:build
+cargo clippy -p ghost-web-worker --target wasm32-unknown-unknown --locked -- -D warnings
+corepack pnpm --filter @ghost/web-worker worker:test
 ```
 
 `worker:build` first runs the unchanged website build, including its generated `_headers`, then
@@ -69,8 +69,8 @@ which is why these rules are explicitly compiled into the Rust response path.
 The checked-in `wrangler.toml` names local, preview and production scripts. `workers_dev` and preview
 URLs are disabled. No environment variables or secrets are needed. Use ordinary multipart code
 upload with `build/index.js` as the ES module and `build/index_bg.wasm` as the Wasm module. Preserve
-the existing more-specific relay route, `preview.o7.codes/api/remote/*`, before attaching this Worker's
-`preview.o7.codes/*` route. Cloudflare's
+the existing more-specific relay route, `preview.onghost.dev/api/remote/*`, before attaching this Worker's
+`preview.onghost.dev/*` route. Cloudflare's
 [route precedence](https://developers.cloudflare.com/workers/configuration/routing/routes/)
 selects the more-specific match. This is a deployment check, not a substitute for testing it.
 

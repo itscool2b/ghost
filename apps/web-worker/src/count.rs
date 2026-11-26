@@ -1,4 +1,4 @@
-//! The site's two counters: downloads, and copies of o7 that ran on a day.
+//! The site's two counters: downloads, and copies of Ghost that ran on a day.
 //!
 //! Who may do what, and how it is checked:
 //! - Anyone may add one to a count; nobody can read one through the site. The totals are read in
@@ -12,7 +12,7 @@
 
 /// Where installers live. The release feed may still name the repository's old path; GitHub
 /// redirects that, so a download goes to the current one directly.
-const RELEASES: &str = "https://github.com/itscool2b/o7/releases/download";
+const RELEASES: &str = "https://github.com/itscool2b/ghost/releases/download";
 
 /// The one statement that changes a count.
 pub const ADD_ONE: &str = "INSERT INTO daily (day, event, platform, version, n) VALUES (?1, ?2, ?3, ?4, 1) \
@@ -83,9 +83,16 @@ fn download(rest: &str) -> Option<(Count, String)> {
     })
 }
 
-/// The platform and version of one of the installers the Publish workflow makes, by its name.
+/// The platform and version of one of the installers the Publish workflow makes, by its name:
+/// the product's name now, or o7, which the releases made until 26 November 2026 carry.
 fn installer(file: &str) -> Option<(&'static str, &str)> {
-    const NAMES: [(&str, &str, &str); 6] = [
+    const NAMES: [(&str, &str, &str); 12] = [
+        ("Ghost_", "_universal.dmg", "macos"),
+        ("Ghost_", "_x64-setup.exe", "windows-x64"),
+        ("Ghost_", "_arm64-setup.exe", "windows-arm64"),
+        ("Ghost_", "_amd64.AppImage", "linux-appimage"),
+        ("Ghost_", "_amd64.deb", "linux-deb"),
+        ("Ghost-", "-1.x86_64.rpm", "linux-rpm"),
         ("o7_", "_universal.dmg", "macos"),
         ("o7_", "_x64-setup.exe", "windows-x64"),
         ("o7_", "_arm64-setup.exe", "windows-arm64"),
@@ -238,12 +245,12 @@ mod tests {
     #[test]
     fn every_installer_is_counted_by_platform_and_sent_to_its_file() {
         for (file, platform) in [
-            ("o7_0.1.1748_universal.dmg", "macos"),
-            ("o7_0.1.1748_x64-setup.exe", "windows-x64"),
-            ("o7_0.1.1748_arm64-setup.exe", "windows-arm64"),
-            ("o7_0.1.1748_amd64.AppImage", "linux-appimage"),
-            ("o7_0.1.1748_amd64.deb", "linux-deb"),
-            ("o7-0.1.1748-1.x86_64.rpm", "linux-rpm"),
+            ("Ghost_0.1.1748_universal.dmg", "macos"),
+            ("Ghost_0.1.1748_x64-setup.exe", "windows-x64"),
+            ("Ghost_0.1.1748_arm64-setup.exe", "windows-arm64"),
+            ("Ghost_0.1.1748_amd64.AppImage", "linux-appimage"),
+            ("Ghost_0.1.1748_amd64.deb", "linux-deb"),
+            ("Ghost-0.1.1748-1.x86_64.rpm", "linux-rpm"),
         ] {
             let (count, to) = location(plan("GET", &format!("/get/v0.1.1748/{file}"), None))
                 .unwrap_or_else(|| panic!("{file}"));
@@ -252,14 +259,27 @@ mod tests {
             assert_eq!(count.version, "0.1.1748");
             assert_eq!(
                 to,
-                format!("https://github.com/itscool2b/o7/releases/download/v0.1.1748/{file}")
+                format!("https://github.com/itscool2b/ghost/releases/download/v0.1.1748/{file}")
             );
         }
-        let (_, to) =
-            location(plan("HEAD", "/get/staging-v0.2.0/o7_0.2.0_amd64.deb", None)).unwrap();
+        // A release made while the app was o7 is still counted and sent to its file.
+        let (count, to) =
+            location(plan("GET", "/get/v0.7.0/o7_0.7.0_x64-setup.exe", None)).unwrap();
+        assert_eq!(count.platform, "windows-x64");
+        assert_eq!(count.version, "0.7.0");
         assert_eq!(
             to,
-            "https://github.com/itscool2b/o7/releases/download/staging-v0.2.0/o7_0.2.0_amd64.deb"
+            "https://github.com/itscool2b/ghost/releases/download/v0.7.0/o7_0.7.0_x64-setup.exe"
+        );
+        let (_, to) = location(plan(
+            "HEAD",
+            "/get/staging-v0.2.0/Ghost_0.2.0_amd64.deb",
+            None,
+        ))
+        .unwrap();
+        assert_eq!(
+            to,
+            "https://github.com/itscool2b/ghost/releases/download/staging-v0.2.0/Ghost_0.2.0_amd64.deb"
         );
     }
 
@@ -271,23 +291,23 @@ mod tests {
             "/get/v0.1.1748/",
             "/get/v0.1.1748/SHA256SUMS",
             "/get/v0.1.1748/latest.json",
-            "/get/v0.1.1748/o7_0.1.1748_x64-setup.exe.sig",
-            "/get/v0.1.1748/o7.app.tar.gz",
-            "/get/v0.1.1747/o7_0.1.1748_x64-setup.exe",
-            "/get/0.1.1748/o7_0.1.1748_x64-setup.exe",
-            "/get/v0.1.1748/o7_0.1_x64-setup.exe",
-            "/get/v0.1.1748/o7_0.1.1748.1_x64-setup.exe",
-            "/get/v0.1.1748/o7_0.1.x_x64-setup.exe",
-            "/get/v0.1.1748/o7_0.1.1748_x64-setup.exe/more",
-            "/get/v0.1.1748/../../../evil/o7_0.1.1748_x64-setup.exe",
-            "/get/other/o7_0.1.1748_x64-setup.exe",
-            "/get/staging/o7_0.1.1748_x64-setup.exe",
-            "/get/staging-v0.1.1747/o7_0.1.1748_x64-setup.exe",
+            "/get/v0.1.1748/Ghost_0.1.1748_x64-setup.exe.sig",
+            "/get/v0.1.1748/Ghost.app.tar.gz",
+            "/get/v0.1.1747/Ghost_0.1.1748_x64-setup.exe",
+            "/get/0.1.1748/Ghost_0.1.1748_x64-setup.exe",
+            "/get/v0.1.1748/Ghost_0.1_x64-setup.exe",
+            "/get/v0.1.1748/Ghost_0.1.1748.1_x64-setup.exe",
+            "/get/v0.1.1748/Ghost_0.1.x_x64-setup.exe",
+            "/get/v0.1.1748/Ghost_0.1.1748_x64-setup.exe/more",
+            "/get/v0.1.1748/../../../evil/Ghost_0.1.1748_x64-setup.exe",
+            "/get/other/Ghost_0.1.1748_x64-setup.exe",
+            "/get/staging/Ghost_0.1.1748_x64-setup.exe",
+            "/get/staging-v0.1.1747/Ghost_0.1.1748_x64-setup.exe",
         ] {
             assert_eq!(plan("GET", path, None), Some(Plan::Refused(404)), "{path}");
         }
         assert_eq!(
-            plan("POST", "/get/v0.1.1748/o7_0.1.1748_amd64.deb", None),
+            plan("POST", "/get/v0.1.1748/Ghost_0.1.1748_amd64.deb", None),
             Some(Plan::Refused(405))
         );
         // Pages are not counting addresses.

@@ -1267,8 +1267,8 @@ details.setup-install-review[open] > summary::before {
 /* ---------- Quit question (6.19) ---------- */
 
 /*
- * "Quit o7?" in the window's own small dialog: what quitting stops, one fg-2 sentence per
- * fact, then Keep o7 open (focused) and the red explicit choice.
+ * "Quit Ghost?" in the window's own small dialog: what quitting stops, one fg-2 sentence per
+ * fact, then Keep Ghost open (focused) and the red explicit choice.
  */
 .quit-question-body {
   display: flex;
@@ -2787,7 +2787,7 @@ details.setup-install-review[open] > summary::before {
 /* ---------- Update (AppUpdate.tsx) ---------- */
 
 /*
- * A newer o7: one filled pill at the sidebar's foot, before the bell. It is the only filled
+ * A newer Ghost: one filled pill at the sidebar's foot, before the bell. It is the only filled
  * control there, so it reads as the one thing to do; it draws nothing while the app is current.
  */
 .chat-popover.app-update > summary {

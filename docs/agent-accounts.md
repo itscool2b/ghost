@@ -1,7 +1,7 @@
 # Agent accounts
 
 A Claude subscription has usage limits. When a chat reaches one, its work should not stop with it.
-So o7 lets a profile add more Claude Code accounts beside Claude Code's own sign-in. A chat
+So Ghost lets a profile add more Claude Code accounts beside Claude Code's own sign-in. A chat
 stopped at a limit then continues on another account, in the same conversation with all its
 history.
 
@@ -12,7 +12,7 @@ sign-in as `/login`, prints a token valid for one year and saves nothing itself.
 the token from `CLAUDE_CODE_OAUTH_TOKEN` (the
 [authentication docs](https://code.claude.com/docs/en/authentication), checked 2026-11-01).
 
-Claude Code also supports separate `CLAUDE_CONFIG_DIR` folders, one per account. o7 does not
+Claude Code also supports separate `CLAUDE_CONFIG_DIR` folders, one per account. Ghost does not
 use them: each folder has its own settings and session history, so a chat started under one account
 could not resume under another. With a token, every account runs in the same configuration folder.
 History, settings, MCP servers, plugins and skills are shared, and a switch is a restart that
@@ -61,7 +61,7 @@ Details:
 - The sync key review (`auracode.sync.v1`) never sees these entries.
 - **Removing an account** removes its token first. If that fails, the account stays listed so the
   removal can be retried.
-- **Deleting all o7 data, or uninstalling,** reads the account ids from every profile being
+- **Deleting all Ghost data, or uninstalling,** reads the account ids from every profile being
   deleted, then removes their tokens. A token that cannot be removed is named in the report.
 
 Nothing logs a token. The session redactor gets each token as a secret literal, and its `sk-ant-…`
@@ -78,7 +78,7 @@ reported, then Add account and Manage (the Agents page).
 - **Choosing another account** starts the chat's agent again on it, resuming the same session, and
   sends any held messages. A chat without a process only notes it, so its next start uses it.
 - **A running turn** keeps its account: the rows are disabled until it ends or is stopped.
-- **The choice is also the account new chats start on.** o7 keeps one account per agent, not
+- **The choice is also the account new chats start on.** Ghost keeps one account per agent, not
   one per chat: chats sync between devices, and accounts and tokens stay on this one. Other chats
   keep the account they run on until they start again; after a restart they use the new choice.
 
@@ -156,7 +156,7 @@ The chat keeps the id of the account its last start used, so this works after th
   install's thread store is a database of about 1 GB. A second Codex account could not continue a
   chat, so the Agents page says so. Handing the chat off to another agent is the way on there.
 - **Other agents.** They have no documented per-process token, so they have no added accounts.
-- **Automatic switching.** o7 never switches accounts on its own. Moving on to another
+- **Automatic switching.** Ghost never switches accounts on its own. Moving on to another
   subscription at a limit is the person's choice, made in the card.
 
 ## Verification

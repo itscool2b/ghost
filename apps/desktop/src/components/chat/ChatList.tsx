@@ -1,4 +1,4 @@
-import { AgentMark, PixelLoader, StatusDot } from "@o7/ui/graphite";
+import { AgentMark, PixelLoader, StatusDot } from "@ghost/ui/graphite";
 import {
   Bot,
   ChevronDown,

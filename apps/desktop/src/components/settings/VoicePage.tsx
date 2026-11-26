@@ -22,7 +22,7 @@ import { Row } from "./SettingsRow";
 /** What dictation's bundled models say about this device. */
 function modelDetail(model: DictationModel | null | "failed"): string {
   if (model === null) return "Checking the built-in speech model.";
-  if (model === "failed") return "o7 could not read the speech model's status.";
+  if (model === "failed") return "Ghost could not read the speech model's status.";
   if (!model.supported) return UNSUPPORTED_MESSAGE;
   if (!model.installed) return MISSING_MESSAGE;
   if (model.larger.state === "ready")

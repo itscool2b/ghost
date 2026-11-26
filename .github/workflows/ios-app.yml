@@ -1,11 +1,11 @@
 name: iPhone app
 
-# Started by hand only, like every workflow here. It checks o7 for iPhone (apps/ios): O7Kit's
+# Started by hand only, like every workflow here. It checks Ghost for iPhone (apps/ios): GhostKit's
 # tests on a Mac (the sealed channel against the desktop's vectors, the transcript port against
 # the desktop's own reducer), the generated palettes and logos against their sources, the app's
 # build and its tests on a simulator, and optionally its client end to end against the relay and
 # the stand-in desktop. macOS minutes cost ten times Linux ones: say the bill when you start it
-# (docs/developing-in-o7.md).
+# (docs/developing-in-ghost.md).
 on:
   workflow_dispatch:
     inputs:
@@ -30,6 +30,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Bash by name runs with pipefail: a failing xcodebuild fails its step even when its output is
+# piped on to tail. The default shell would report the pipe's last command only.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   generated:
     name: Generated sources match their origins
@@ -50,10 +56,10 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Palettes, logos, highlighter, icon and transcript goldens are current
-        run: pnpm --filter @o7/ios check
+        run: pnpm --filter @ghost/ios check
 
   app:
-    name: O7Kit and the app (Xcode ${{ inputs.xcode }})
+    name: GhostKit and the app (Xcode ${{ inputs.xcode }})
     runs-on: ${{ inputs.xcode == '27' && 'xcode-27' || 'macos-26' }}
     timeout-minutes: 60
     steps:
@@ -66,8 +72,8 @@ jobs:
           sw_vers
           xcodebuild -version
           xcrun simctl list runtimes
-      - name: O7Kit's tests
-        run: swift test --package-path apps/ios/O7Kit
+      - name: GhostKit's tests
+        run: swift test --package-path apps/ios/GhostKit
       - name: XcodeGen
         run: .github/scripts/fetch-xcodegen.sh
       - name: Generate the project
@@ -75,15 +81,15 @@ jobs:
       - name: Build and test on a simulator
         run: |
           destination="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,l in sorted(d.items(), reverse=True) if "iOS" in k for v in l if v["name"].startswith("iPhone")))')"
-          xcodebuild test -project apps/ios/O7.xcodeproj -scheme O7 \
-            -destination "id=$destination" -resultBundlePath "$RUNNER_TEMP/O7.xcresult" \
+          xcodebuild test -project apps/ios/Ghost.xcodeproj -scheme Ghost \
+            -destination "id=$destination" -resultBundlePath "$RUNNER_TEMP/Ghost.xcresult" \
             CODE_SIGNING_ALLOWED=YES | tail -n 200
       - name: Keep the results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-app-xcode-${{ inputs.xcode }}
-          path: ${{ runner.temp }}/O7.xcresult
+          path: ${{ runner.temp }}/Ghost.xcresult
           if-no-files-found: ignore
 
   e2e:
@@ -121,8 +127,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build the relay and the stand-in desktop
         run: |
-          pnpm --filter @o7/relay worker:build
-          cargo build -p o7-remote --example demo_host
+          pnpm --filter @ghost/relay worker:build
+          cargo build -p ghost-remote --example demo_host
       - name: The app's client against them
         run: node apps/ios/scripts/e2e.mjs
 
@@ -142,11 +148,11 @@ jobs:
         run: apps/ios/scripts/project.sh
       - name: Every theme on the main screens
         env:
-          TEST_RUNNER_O7_SCREENSHOTS: "1"
+          TEST_RUNNER_GHOST_SCREENSHOTS: "1"
         run: |
           destination="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,l in sorted(d.items(), reverse=True) if "iOS" in k for v in l if v["name"].startswith("iPhone")))')"
-          xcodebuild test -project apps/ios/O7.xcodeproj -scheme O7 \
-            -destination "id=$destination" -only-testing:O7UITests/ScreenshotTests \
+          xcodebuild test -project apps/ios/Ghost.xcodeproj -scheme Ghost \
+            -destination "id=$destination" -only-testing:GhostUITests/ScreenshotTests \
             -resultBundlePath "$RUNNER_TEMP/Screenshots.xcresult" | tail -n 100
       - name: Keep the screenshots
         if: always()

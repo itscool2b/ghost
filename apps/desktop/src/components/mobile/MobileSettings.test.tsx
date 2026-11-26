@@ -118,7 +118,7 @@ describe("Settings > Mobile", () => {
   it("turned off, says what stops and shows nothing else", () => {
     const html = render(mobileStatus(), { mobile: false });
     expect(html).not.toMatch(/aria-label="Mobile"[^>]*checked=""/);
-    expect(html).toContain("every phone o7 started is stopped");
+    expect(html).toContain("every phone Ghost started is stopped");
     expect(html).not.toContain("Device tools for agents");
     expect(html).not.toContain('data-setting="Android"');
   });

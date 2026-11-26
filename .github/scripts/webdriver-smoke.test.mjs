@@ -34,12 +34,12 @@ test("creates a real application capability and types through W3C element comman
     if (path.endsWith("/property/value")) return { value: "/echo hello" };
     return { value: null };
   });
-  await driver.open("C:\\owned\\o7.exe");
+  await driver.open("C:\\owned\\ghost.exe");
   assert.deepEqual(driver.capabilities, {});
   await driver.type('[data-testid="composer-input"]', "/echo hello");
   await driver.close();
   assert.deepEqual(received[0].body.capabilities.alwaysMatch["tauri:options"], {
-    application: "C:\\owned\\o7.exe",
+    application: "C:\\owned\\ghost.exe",
     args: [],
   });
   assert.deepEqual(received.find((call) => call.path.endsWith("/value")).body, {
@@ -56,7 +56,7 @@ test("protocol failures are not mistaken for missing UI, and malformed sessions 
     status: path === "/session" ? 200 : 500,
     value: path === "/session" ? {} : { error: "unknown error", message: "driver failed" },
   }));
-  await assert.rejects(driver.open("C:\\owned\\o7.exe"), /session was not created/);
+  await assert.rejects(driver.open("C:\\owned\\ghost.exe"), /session was not created/);
   await assert.rejects(driver.request("GET", "/status"), /driver failed/);
   await assert.rejects(
     until("broken transport", () => driver.request("GET", "/status")),
@@ -102,11 +102,11 @@ test("the child cannot inherit a real profile, embedded smoke or agent configura
     Path: "system-path",
     SystemRoot: "C:\\Windows",
     UserProfile: "real-profile",
-    O7_DATA_DIR: "real-data",
-    O7_SMOKE: "chat",
-    O7_SMOKE_AGENT: "claude",
-    O7_STRESS: "1",
-    O7_EXPORT_BINDINGS: "1",
+    GHOST_DATA_DIR: "real-data",
+    GHOST_SMOKE: "chat",
+    GHOST_SMOKE_AGENT: "claude",
+    GHOST_STRESS: "1",
+    GHOST_EXPORT_BINDINGS: "1",
     WEBVIEW2_BROWSER_EXECUTABLE_FOLDER: "other-runtime",
     WEBVIEW2_USER_DATA_FOLDER: "real-webview",
     CODEX_HOME: "real-codex",
@@ -114,7 +114,7 @@ test("the child cannot inherit a real profile, embedded smoke or agent configura
     PI_CODING_AGENT_DIR: "real-pi",
   };
   const env = isolatedEnvironment(source, root);
-  assert.equal(env.O7_DATA_DIR, join(root, "data"));
+  assert.equal(env.GHOST_DATA_DIR, join(root, "data"));
   // Edge WebDriver gives the WebView its own fresh profile and reads its debugging port there.
   assert.equal(env.WEBVIEW2_USER_DATA_FOLDER, undefined);
   assert.equal(env.USERPROFILE, join(root, "home"));
@@ -123,15 +123,15 @@ test("the child cannot inherit a real profile, embedded smoke or agent configura
   assert.equal(env.PI_CODING_AGENT_DIR, join(root, "home", ".pi"));
   for (const key of [
     "UserProfile",
-    "O7_SMOKE",
-    "O7_SMOKE_AGENT",
-    "O7_STRESS",
-    "O7_EXPORT_BINDINGS",
+    "GHOST_SMOKE",
+    "GHOST_SMOKE_AGENT",
+    "GHOST_STRESS",
+    "GHOST_EXPORT_BINDINGS",
     "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER",
   ])
     assert.equal(env[key], undefined);
   assert.equal(env.SystemRoot, source.SystemRoot);
-  assert.equal(source.O7_DATA_DIR, "real-data", "parent environment is unchanged");
+  assert.equal(source.GHOST_DATA_DIR, "real-data", "parent environment is unchanged");
 });
 
 function scenarioDriver() {

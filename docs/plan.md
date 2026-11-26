@@ -1,4 +1,4 @@
-# o7: implementation plan
+# Ghost: implementation plan
 
 ## Current authority
 **Accounts were removed on 16 November 2026, at the owner's request, because Claude Code and Codex
@@ -19,10 +19,10 @@ fixes rerun as needed. Visual work follows the proposed Aura system, with a webs
 
 ## Context
 The user runs many coding agents (Claude Code, Codex, Antigravity, Pi / oh-my-pi, Cursor, Grok Build,
-OpenCode, Hermes...) and hates toggling between apps. o7 is one desktop app (macOS, Windows and Linux)
+OpenCode, Hermes...) and hates toggling between apps. Ghost is one desktop app (macOS, Windows and Linux)
 with a ChatGPT-style interface: projects on the left, chats inside projects, any installed agent driving a
 chat through its real harness (headless, rendered in our UI, never a terminal). The base app needs no login.
-A website at o7.codes lets people create an account and download the app; the same account signs into
+A website at onghost.dev lets people create an account and download the app; the same account signs into
 the app and syncs projects, chats, and agent config (Claude Code, Codex, Pi) across machines. The bar: the
 most beautiful app of its kind, a killer onboarding, dead simple, every edge case handled.
 
@@ -46,12 +46,12 @@ most beautiful app of its kind, a killer onboarding, dead simple, every edge cas
 - **Sync scope:** projects + chats + config; config only for Claude Code, Codex, Pi.
 - **Domain:** stays registered at Namecheap; nameservers moved to Cloudflare on Day 1. The auracode.si
   zone uses `asa.ns.cloudflare.com` + `rohin.ns.cloudflare.com` (the pair all the user's Cloudflare zones
-  share) and has been active since 2026-10-24 09:03 UTC. The site moved to o7.codes, a zone on
+  share) and has been active since 2026-10-24 09:03 UTC. The site moved to onghost.dev, a zone on
   the same account, on 2026-11-19; auracode.si is kept only until copies of the app from before
   the move have updated (infra/README.md).
 - **End-to-end encrypted sync.** Chats contain code and secrets. Cost:
   a new machine is approved from a signed-in one or uses a recovery key.
-- **Trust:** never read, store, or proxy agent credentials; o7 never injects hidden prompts.
+- **Trust:** never read, store, or proxy agent credentials; Ghost never injects hidden prompts.
 
 ## Historical machine facts (verified 2026-10-24 on the Mac)
 - macOS 26.6.2 arm64, rustc/cargo 1.99, Node 26.0.0, npm 11.12, git 2.54, gh 2.92 logged in as itscool2b
@@ -73,7 +73,7 @@ most beautiful app of its kind, a killer onboarding, dead simple, every edge cas
 ## Product principles
 1. Simple first: zero setup, no login needed, everything auto-detected, one composer box, smart defaults.
 2. Real harnesses, not reimplementations: each agent keeps its own auth, config, tools, skills, plugins.
-3. No hidden instructions. The only thing o7 adds to a prompt is the visible handoff block when you
+3. No hidden instructions. The only thing Ghost adds to a prompt is the visible handoff block when you
    switch agents or devices. (The "let the agent chill" philosophy.)
 4. Local-first; cloud only for accounts and sync.
 5. Every animation means something: agent marks and live labels show real state, not decoration.
@@ -103,7 +103,7 @@ first project by folder/drop/gh clone. No agents means installation suggestions 
 The account step stays disabled until M6; encrypted device approval/recovery and restore activate
 with M7. No screen promises sync before it works.
 
-## UX spec: website (o7.codes)
+## UX spec: website (onghost.dev)
 Share semantic tokens and components with the app; use Geist on the website and Inter in desktop chrome. React/TypeScript renders interfaces;
 prerender public pages and serve static assets through Cloudflare. Rust owns API behavior.
 
@@ -115,7 +115,7 @@ prerender public pages and serve static assets through Cloudflare. Rust owns API
   and account deletion after a fresh code.
 - /privacy, /terms, /changelog: accurate processor, retention, export and deletion information.
   Legal copy needs review before public release; a domain suffix alone does not establish jurisdiction.
-- The auracode://signin link prefills email only, never tokens. Display Download beside Open o7.
+- The auracode://signin link prefills email only, never tokens. Display Download beside Open Ghost.
 - Reduced motion, keyboard access, and a whole page without JavaScript (including essential
   information) are required.
 
@@ -125,8 +125,8 @@ prerender public pages and serve static assets through Cloudflare. Rust owns API
   path, which is what lets projects sync across macOS and Windows.
 - **Chat** = one primary folder; extra folders become add-dirs only where the agent supports them, and the
   chat header shows exactly which folders it can reach.
-- **Isolation (M4):** "Direct" vs "Isolated" (git worktree on a new branch `aura/<slug>`). Until M4, a second
-  chat in a busy folder gets a warning. From M4, o7 asks before isolating.
+- **Isolation (M4):** "Direct" vs "Isolated" (git worktree on a new branch `ghost/<slug>`). Until M4, a second
+  chat in a busy folder gets a warning. From M4, Ghost asks before isolating.
 - **One thread, many agents.** Switching agent resumes that agent's native session if it has one in this
   chat (sending only what happened since its last turn), else starts one in the same cwd; either way the
   first prompt carries a visible, token-budgeted handoff block (earlier user messages, other agents' final
@@ -149,26 +149,26 @@ prerender public pages and serve static assets through Cloudflare. Rust owns API
 ```
 auracode/                        Cargo workspace + pnpm workspace
   crates/
-    o7-protocol/               O7Event, commands, capabilities, sync/API types (serde + specta -> TS)
-    o7-process/                process lifecycle (spawn, framing, shutdown, leftovers), env resolution +
+    ghost-protocol/               GhostEvent, commands, capabilities, sync/API types (serde + specta -> TS)
+    ghost-process/                process lifecycle (spawn, framing, shutdown, leftovers), env resolution +
                                  scrub, protocol logs
-    o7-agents/                 data-driven catalog, detection, adapter install, channels, versions, auth
-    o7-drivers/                protocol drivers: acp, claude, codex, pi; stream fallbacks; mock
-    o7-core/                   sessions, store, git/checkpoints/worktrees, search, handoff
-    o7-config/                 (M8) per-agent config adapters (read into items, apply changes)
+    ghost-agents/                 data-driven catalog, detection, adapter install, channels, versions, auth
+    ghost-drivers/                protocol drivers: acp, claude, codex, pi; stream fallbacks; mock
+    ghost-core/                   sessions, store, git/checkpoints/worktrees, search, handoff
+    ghost-config/                 (M8) per-agent config adapters (read into items, apply changes)
     aura-sync/                   (M6/M7/M9) API client, token manager, merge engines, crypto
-    o7-cli/                    dev CLI: detect, smoke-test agents, record fixtures, replay
+    ghost-cli/                    dev CLI: detect, smoke-test agents, record fixtures, replay
   apps/
-    desktop/src-tauri/           Tauri shell: thin commands/channels over o7-core, window glass, plugins
+    desktop/src-tauri/           Tauri shell: thin commands/channels over ghost-core, window glass, plugins
     desktop/src/                 React UI
-    web/                         (M6) o7.codes: React Router 7 on Cloudflare Workers
+    web/                         (M6) onghost.dev: React Router 7 on Cloudflare Workers
   services/api/                  (M6) Rust Cloudflare Worker: accounts, devices, sync, email delivery
   packages/ui/                   TS Aura design system shared by app + site: tokens, marks, motion
-  packages/api-types/            TS types generated from o7-protocol (shared by app, site, API)
+  packages/api-types/            TS types generated from ghost-protocol (shared by app, site, API)
   infra/                         Wrangler configs, SQL migrations for D1, release scripts
 ```
-- **Processes.** One Tauri process runs o7-core on tokio (`panic = "unwind"` in release; panics contained
-  per task). o7-core doesn't depend on Tauri, so a headless daemon can reuse it later for remote access.
+- **Processes.** One Tauri process runs ghost-core on tokio (`panic = "unwind"` in release; panics contained
+  per task). ghost-core doesn't depend on Tauri, so a headless daemon can reuse it later for remote access.
 - **Shell.** Tauri 2.12.x: the window keeps its platform material plan (vibrancy on macOS, Mica on
   Windows 11, opaque elsewhere), but the interface uses solid surfaces, so native material
   shows through. Overlay titlebar + `trafficLightPosition`
@@ -192,12 +192,12 @@ auracode/                        Cargo workspace + pnpm workspace
 - **Web stack.** React + TypeScript, Tailwind, Motion, `packages/ui`, Turnstile. Public pages
   prerendered, account screens call the Rust API. Any framework server glue handles rendering only.
 - **Cloud layout.**
-  - o7.codes and www (redirect): Cloudflare-hosted website assets. /api/v1/* reaches the Rust API
+  - onghost.dev and www (redirect): Cloudflare-hosted website assets. /api/v1/* reaches the Rust API
     Worker by service binding or a same-origin Worker route; no separate cross-origin login service.
   - Rust API: email-code auth, sessions, devices, sync, scoped blob access, quotas and rate limits.
     Use Workers bindings for D1, R2, Turnstile verification and Cloudflare Email Service delivery.
     Minimal JS binding glue is permitted if workers-rs lacks a platform API; business logic stays Rust.
-  - D1 o7: US jurisdiction, read replication disabled for the initial authentication path.
+  - D1 Ghost: US jurisdiction, read replication disabled for the initial authentication path.
     Check session and device revocation authoritatively, never through an eventually consistent cache.
   - R2 auracode-releases: published installers, manifests, checksums; auracode-blobs: private ciphertext.
     Development uses local/emulated or separately named resources, never production test data.
@@ -216,13 +216,13 @@ auracode/                        Cargo workspace + pnpm workspace
   mentions in M2c). Questions have an answer path (`RespondUi` in, `UiResolved` out), like permissions.
   Turns, the prompt queue and persistence belong to the session manager, not the drivers. The UI reads
   `capabilities`, never agent names.
-- **O7Event** (ACP vocabulary): turn.started/ended, user_message.delta, message.delta/completed,
+- **GhostEvent** (ACP vocabulary): turn.started/ended, user_message.delta, message.delta/completed,
   thought.delta/completed, tool.call, tool.update (text | diff | terminal), permission.requested/resolved,
   ui.request/resolved, plan.updated, usage.updated, limits.updated, session.updated (status, native id,
   title, model, effort, mode; no slash commands, which the UI fetches on request), prompt_lifecycle (the
   command lifecycle event: queued, started, completed, cancelled, failed), notice, error. `TokenUsage`
   splits cache reads from cache writes and says whether it counts a turn or the session; `StopReason`
-  adds `interrupted` (o7 ended the turn) and `other`. Stored enums read a value they don't know as a
+  adds `interrupted` (Ghost ended the turn) and `other`. Stored enums read a value they don't know as a
   fallback, so rows from a newer build still load.
 - **Profiles from day one.** All local data under `<app data>/profiles/<profile_id>/` (database,
   attachments, checkpoints, logs). M0 ships one "Local" profile; M6/M7 add one per account.
@@ -233,7 +233,7 @@ auracode/                        Cargo workspace + pnpm workspace
 ## Agent integration (researched 2026-10-24)
 | Agent | Path | Notes |
 |---|---|---|
-| Claude Code | Native: own Rust control loop over stream-json; user's `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-prompt-tool stdio`, always with `--permission-mode`, with `--session-id=<uuid>` (new session) or `--resume=<id>`, and with `--allow-dangerously-skip-permissions` where the user's settings allow bypass | Contract and fixtures in the [M0 spike](spikes/claude-control.md) (2.1.310). Own lenient serde types; `claude-codes` crate and the official Python Agent SDK are references, diffed each release. Control: `initialize`, `interrupt`, `set_model`, `set_permission_mode`, `apply_flag_settings` (effort), `get_usage`, `get_context_usage`, `list_models`, `rewind_files`; we answer `can_use_tool`; fork via `--fork-session` (with our `--session-id`) or resume-at. `--permission-mode` is never left out: without it every spawn, resumes included, takes `permissions.defaultMode` from the user's settings, which can be `auto`. `--session-id` gives a new session's native id before its first turn. `bypassPermissions` can be switched on mid-chat only in a process launched with `--allow-dangerously-skip-permissions`. Resume works after a cwd change (the transcript keeps appending under the original folder's project dir), and `--fork-session` with `--session-id` writes the fork under the new folder's. The user's own hooks run inside these sessions (`SessionStart` context, `PermissionRequest` hooks that can answer or delay a prompt), so a tool call may never reach us as `can_use_tool`; principle 3 still holds, since o7 itself adds nothing. `rate_limit_event` feeds the limits meter. Unknown messages logged, never fatal; capabilities from `system/init`; compatibility smoke per new version. Second connection (M1a; one agent with the native one since 2026-10-28, see "One entry per agent"): ACP via the `claude-agent-acp` npm adapter, installed once per version into `<data root>/adapters` with `npm ci --omit=optional --ignore-scripts` from a lockfile committed for that version, launched as `node <entry>` from there, with the user's `claude` forced through `CLAUDE_CODE_EXECUTABLE`; never `npx` in the chat folder. |
+| Claude Code | Native: own Rust control loop over stream-json; user's `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-prompt-tool stdio`, always with `--permission-mode`, with `--session-id=<uuid>` (new session) or `--resume=<id>`, and with `--allow-dangerously-skip-permissions` where the user's settings allow bypass | Contract and fixtures in the [M0 spike](spikes/claude-control.md) (2.1.310). Own lenient serde types; `claude-codes` crate and the official Python Agent SDK are references, diffed each release. Control: `initialize`, `interrupt`, `set_model`, `set_permission_mode`, `apply_flag_settings` (effort), `get_usage`, `get_context_usage`, `list_models`, `rewind_files`; we answer `can_use_tool`; fork via `--fork-session` (with our `--session-id`) or resume-at. `--permission-mode` is never left out: without it every spawn, resumes included, takes `permissions.defaultMode` from the user's settings, which can be `auto`. `--session-id` gives a new session's native id before its first turn. `bypassPermissions` can be switched on mid-chat only in a process launched with `--allow-dangerously-skip-permissions`. Resume works after a cwd change (the transcript keeps appending under the original folder's project dir), and `--fork-session` with `--session-id` writes the fork under the new folder's. The user's own hooks run inside these sessions (`SessionStart` context, `PermissionRequest` hooks that can answer or delay a prompt), so a tool call may never reach us as `can_use_tool`; principle 3 still holds, since Ghost itself adds nothing. `rate_limit_event` feeds the limits meter. Unknown messages logged, never fatal; capabilities from `system/init`; compatibility smoke per new version. Second connection (M1a; one agent with the native one since 2026-10-28, see "One entry per agent"): ACP via the `claude-agent-acp` npm adapter, installed once per version into `<data root>/adapters` with `npm ci --omit=optional --ignore-scripts` from a lockfile committed for that version, launched as `node <entry>` from there, with the user's `claude` forced through `CLAUDE_CODE_EXECUTABLE`; never `npx` in the chat folder. |
 | Codex | Native: `codex app-server --listen stdio://`, own process | Own serde subset with `#[serde(other)]`, tested against the JSON Schema from `codex app-server generate-json-schema` per supported version. `thread/start/resume/fork/list`, `turn/start` (model, effort, cwd, approvalPolicy, sandboxPolicy, images, mentions), `turn/steer`, `turn/interrupt`, `turn/diff/updated`, approvals, `model/list`, `account/rateLimits/read`, plugin/skill/config APIs (reused by Library + Sync). Never the shared daemon (opt-in later). Second connection (M1a; one agent with the native one, see "One entry per agent"): the `codex-acp` npm adapter, installed and launched like Claude's, with the user's `codex` forced through `CODEX_PATH`. |
 | Pi | Native RPC `pi --mode rpc` | `prompt`/`steer`/`follow_up`/`abort`, `set_model`, `get_available_models`, `set_thinking_level`, `fork`, `get_session_stats`, `extension_ui_request` (rendered as confirm/select/input). Turn ends on `agent_settled`; split on LF only. |
 | Antigravity | ACP via Google's `agy_acp_server` (registry `antigravity-acp`) | Second connection, the text fallback: `agy --input-format stream-json --output-format stream-json`, with visible prompts on stdin (text only, no approvals, interrupt = kill). The persistent input mode drops `-p` prompts. |
@@ -253,7 +253,7 @@ found" so agents never hang.
 
 **One entry per agent (owner decision, 2026-10-28).** People see one Claude Code and one Codex. The
 catalog lists *connections* (ways to start an agent) and files each under its agent: Claude Code is
-`claude` (o7's native driver) and `claude-acp` (the npm ACP adapter); Codex is `codex` and
+`claude` (Ghost's native driver) and `claude-acp` (the npm ACP adapter); Codex is `codex` and
 `codex-acp`; Antigravity and Grok Build are their ACP server and a restricted text fallback
 (`agy-stream`, `grok-stream`); OpenCode is its 1.x and 2.x lines (`opencode`, `opencode-v2`).
 New chat, the composer's picker, onboarding's count, the Agents page and the Plugin library all list
@@ -268,7 +268,7 @@ the agent once, from the same Rust list.
   the data root), names catalog ids only, and applies to new sessions. An explicit connection that
   cannot run makes the agent unavailable with that connection's reason.
 - **None can run:** the agent shows its preferred connection's reason, followed by each other
-  connection's (named by its label) when either is installed but unusable, for example "o7
+  connection's (named by its label) when either is installed but unusable, for example "Ghost
   needs Claude Code 2.1.310 or newer (found 2.1.309). ACP adapter: Node.js 22 or newer is required".
 - **Existing data, no migration:** a chat, project default or New chat default saved as a
   connection id (`claude-acp`, also from a synced older device) reads as its agent. A native
@@ -280,7 +280,7 @@ the agent once, from the same Rust list.
 - **Actions** on an agent (update, sign-in check, executable choice, Plugin library listings) act
   on the connection it uses, so a CLI too old for the native driver can still be updated from the
   row the adapter runs. The adapter's one-time download is stated in the agent's details and in New
-  chat before the first chat that needs it. The developer CLI (`o7-cli probe`, `smoke`) still
+  chat before the first chat that needs it. The developer CLI (`ghost-cli probe`, `smoke`) still
   addresses connections by id.
 
 **Detection + updates.**
@@ -289,7 +289,7 @@ the agent once, from the same Rust list.
   `~/.grok/bin`, `~/.pi/agent/bin`, `~/.bun/bin`, `~/.volta/bin`, the asdf and mise shims,
   `/opt/homebrew/bin`, and the `prefix=` of `~/.npmrc`, read rather than by running npm). nvm stays with
   the login shell: its shell function can't be resolved reliably without one. The variables that describe
-  how o7 itself was launched (terminal session, npm, pnpm, Tauri dev) are stripped from the
+  how Ghost itself was launched (terminal session, npm, pnpm, Tauri dev) are stripped from the
   resolver shell's input.
 - A binary counts only if `--version` runs. Channel from the real path; updates run the vendor's own update
   command for that channel (agents also self-update; we don't fight it). Each driver records a
@@ -303,7 +303,7 @@ the agent once, from the same Rust list.
 - WSL, automatic: `wsl.exe -l -q` (UTF-16LE), probe each distro, show "Codex · WSL Ubuntu"; an `AgentHost`
   (Native | Wsl{distro}) spawns via `wsl.exe -d <distro> --cd <path> -e ...` with path translation.
 
-**Agent terms (matters now that other people can download o7).** o7 only spawns the user's own
+**Agent terms (matters now that other people can download Ghost).** Ghost only spawns the user's own
 unmodified binaries. Anthropic allows signing in to the unmodified binary with your own subscription for
 individual use and forbids third-party products offering claude.ai login or routing plan credentials;
 OpenAI allows local/open-source app-server use, never commercial/hosted; Google's terms ban third-party
@@ -324,7 +324,7 @@ consumer-grade polish. MIT/Apache code may be read for reference; never AGPL (To
   daemons the agent's catalog entry declares (Hermes' gateway, Claude's daemon), which are spared with their
   subtrees, on every OS. On Windows every agent runs in a kill-on-close job; job breakaway for agents that
   declare daemons arrives in M1e, so M1a's Hermes on Windows needs its gateway already running. One
-  o7 process owns a profile's sessions (`<profile>/owner.lock`); a second one refuses to start them.
+  Ghost process owns a profile's sessions (`<profile>/owner.lock`); a second one refuses to start them.
 - **Env scrub:** children inherit the resolved login-shell env minus an explicit denylist. Everything
   else passes through, including documented user configuration (`CLAUDE_CODE_USE_BEDROCK`,
   `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CODE_GIT_BASH_PATH`, `CODEX_HOME`, and
@@ -343,7 +343,7 @@ consumer-grade polish. MIT/Apache code may be read for reference; never AGPL (To
   - `ELECTRON_RUN_AS_NODE`, `VSCODE_INSPECTOR_OPTIONS`, and `NODE_OPTIONS` only when it carries a debugger
     hook (`--inspect`, `--inspect-brk`, `--inspect-wait`, or a `--require` of a debugger bootloader such as
     the one VS Code's auto attach injects), which would attach to or pause every Node-based agent.
-- **Long runs:** keep the machine awake while turns run; closing the window keeps o7 in the menu bar /
+- **Long runs:** keep the machine awake while turns run; closing the window keeps Ghost in the menu bar /
   tray with a badge; quitting with live turns asks; app updates wait for idle.
 - **Diagnostics:** rotating raw protocol log per session + "Copy debug bundle" (tokens redacted; also feeds
   fixtures).
@@ -368,7 +368,7 @@ consumer-grade polish. MIT/Apache code may be read for reference; never AGPL (To
 ## Edge cases (each one has a defined behaviour and a test)
 **Agents.** Not installed; installed but broken (`--version` fails: shown as broken with the error); several
 installs of one agent (PATH order wins, others listed as shadowed, user can pick); installed, updated, or
-removed while o7 runs (watch bin dirs + re-detect on focus; running sessions keep their process);
+removed while Ghost runs (watch bin dirs + re-detect on focus; running sessions keep their process);
 signed out or token expired mid-turn (sign-in sheet, then resume); rate limit or quota hit (meter shows reset
 time, one click hands the chat to another agent); version too old (update required) or untested-new (badge,
 lenient parsing); crash mid-turn (error card with stderr tail + "Restart and resume"); silent for minutes
@@ -407,7 +407,7 @@ mapping; Locate or Clone); server down (local-first, backoff, status dot); stora
 paused", never data loss); config for an agent not installed (waits); secrets (never plaintext).
 **Website + downloads + updates.** Wrong OS/arch guess (universal macOS DMG avoids the Apple Silicon/Intel
 problem; all platforms always listed); unsigned builds (clear Gatekeeper/SmartScreen steps + checksums until
-signing is set up); "Open o7" when not installed (Download sits next to it); cookies or JS disabled
+signing is set up); "Open Ghost" when not installed (Download sits next to it); cookies or JS disabled
 (download page still works); update signature mismatch (refused); interrupted download (retry); update while
 chats run (waits for idle); WebView2 missing on Windows (installer bootstraps it); Windows 10 (no Mica:
 fallback theme). Linux, Wayland, AppImage and Debian package qualification are deferred. Explicit
@@ -420,7 +420,7 @@ or reduced motion (static, still beautiful); tiny windows and multiple monitors 
 **Day 1 (done 2026-10-24):** the `auracode.si` zone was created in Cloudflare and Namecheap now delegates
 to its nameservers, `asa.ns.cloudflare.com` and `rohin.ns.cloudflare.com`. The zone has been active since
 09:03 UTC, and public resolvers serve the delegation. No records are needed until M5
-(`download.o7.codes`) and M6 (the site and mail).
+(`download.onghost.dev`) and M6 (the site and mail).
 
 **Foundation (the app)**
 - **M0 Scaffold + spikes.** Private repo, pnpm (Homebrew), Cargo + pnpm workspaces, fmt/clippy/Biome,
@@ -450,7 +450,7 @@ to its nameservers, `asa.ns.cloudflare.com` and `rohin.ns.cloudflare.com`. The z
   official installers (Cursor/Grok need the user's sign-in), then Pi native driver and the ACP dialects
   (Antigravity, Cursor, Grok, oh-my-pi, OpenCode) + agy/grok fallbacks.
 - **M1e Catalog.** Detection on macOS/Windows, channels, versions, vendor updates,
-  last-verified badges, auth status. Done when `o7-cli smoke <agent>` passes for every installed agent.
+  last-verified badges, auth status. Done when `ghost-cli smoke <agent>` passes for every installed agent.
 - **M2a Design system + transcript.** Shared theme tokens, fonts, state-driven agent marks,
   transcript components and accessibility against live protocol fixtures. Retire legacy shader/serif
   dependencies only when no retained Design Lab direction uses them.
@@ -473,7 +473,7 @@ to its nameservers, `asa.ns.cloudflare.com` and `rohin.ns.cloudflare.com`. The z
 - **M5 Packaging + releases.** DMG (universal) / NSIS (x64, arm64); `tauri-plugin-updater`
   (Tauri signing key generated and backed up; losing it ends updates). Deliberately dispatched CI builds
   acceptance artifacts. Qualified signed installers, `latest.json` and checksums are prepared and verified
-  before publication to R2 (`download.o7.codes`); a tag alone does not authorize publication.
+  before publication to R2 (`download.onghost.dev`); a tag alone does not authorize publication.
   App updates wait for idle. Distributed binaries use `--remap-path-prefix` to remove build-machine
   paths. Signing, installation and old-build update qualification follow `docs/releases.md`.
 
@@ -541,7 +541,7 @@ First sign-in on a machine with Local data offers "Bring your local projects int
 deletes are tombstones; transcripts are append-only and union cleanly (offline continuation on two devices
 shows a fork marker). Git folders resolve on a new device by origin URL across configured code roots, else
 Clone; local-only folders show "Mac only" with one-click "Publish to GitHub". "Continue here" starts a fresh
-native session seeded with the handoff block; optionally the chat's `aura/<slug>` branch is pushed so code
+native session seeded with the handoff block; optionally the chat's `ghost/<slug>` branch is pushed so code
 state follows.
 
 **Config sync (Claude Code, Codex, Pi).** Two snapshots can't tell "installed on the Mac" from "uninstalled
@@ -580,18 +580,18 @@ Settings Sync's model).
 - Deploys are separate even though the repo is shared. Batch source validation before the final
   Windows/macOS CI checkpoint. Use isolated Cloudflare preview resources for web and API acceptance.
   A merge or version tag does not publish an unqualified desktop release; follow `docs/releases.md`.
-- Cloud changes stay within the owner's authorized scope. The o7 database/storage creation was
+- Cloud changes stay within the owner's authorized scope. The Ghost database/storage creation was
   authorized on 2026-10-26; do not request that permission again.
   New consequential actions outside that scope are confirmed before execution; secrets live in Wrangler/Cloudflare secrets and GitHub Actions secrets, never in git.
 
 ## Verification
-- **Rust tests:** replay of recorded raw streams (Claude, Codex, Pi, ACP) into expected O7Events; Codex
+- **Rust tests:** replay of recorded raw streams (Claude, Codex, Pi, ACP) into expected GhostEvents; Codex
   types validated against generated schemas; detection on fake PATHs (symlinks, `agent` collision, leftover
   dirs, WSL output parsing); channel rules; env scrub; process shutdown chain and leftover cleanup;
   checkpoint/revert in git and non-git folders; handoff budget and delta; merges (LWW, append, 3-way config
   table incl. first-sync union, tombstones, skipped, vendor zones); crypto round trips; each edge case above
   that lives in Rust.
-- **Real-agent smoke (opt-in, uses quota):** `o7-cli smoke <agent>` in a temp repo: stream, tool call,
+- **Real-agent smoke (opt-in, uses quota):** `ghost-cli smoke <agent>` in a temp repo: stream, tool call,
   approval, interrupt, resume, model switch, fork.
 - **App UI:** Vitest for logic; Playwright on the Vite build with mocked Tauri IPC in Chromium and WebKit for
   flows (onboarding, project, chat, stream, approve, diff, interrupt, restart, switch agent, sign in, switch

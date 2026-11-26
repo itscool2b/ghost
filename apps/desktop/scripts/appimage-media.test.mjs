@@ -225,8 +225,10 @@ test("the images a build made are found where Tauri writes them", { skip: LINUX_
   const dir = folder();
   writeFileSync(join(dir, "old.AppImage"), "");
   utimesSync(join(dir, "old.AppImage"), new Date(1000), new Date(1000));
-  writeFileSync(join(dir, "o7_0.1.0_amd64.AppImage"), "");
+  writeFileSync(join(dir, "Ghost_0.1.0_amd64.AppImage"), "");
   writeFileSync(join(dir, "notes.txt"), "");
-  assert.deepEqual(builtImages(dir, Date.now() - 60_000), [join(dir, "o7_0.1.0_amd64.AppImage")]);
+  assert.deepEqual(builtImages(dir, Date.now() - 60_000), [
+    join(dir, "Ghost_0.1.0_amd64.AppImage"),
+  ]);
   assert.deepEqual(builtImages(join(dir, "missing"), 0), []);
 });

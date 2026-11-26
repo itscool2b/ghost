@@ -1,10 +1,10 @@
-//! The o7 desktop shell: the Tauri window, the plugins, and typed commands and channels over
-//! o7-core and o7-drivers. Everything that is not UI stays in Rust; this crate is the thin layer
+//! The Ghost desktop shell: the Tauri window, the plugins, and typed commands and channels over
+//! ghost-core and ghost-drivers. Everything that is not UI stays in Rust; this crate is the thin layer
 //! that exposes it to the React UI in `apps/desktop/src`.
 //!
 //! Startup ([`run`]): logging, launch switches from the environment, the plugins (single-instance
 //! first, unless the launch runs on its own: [`LaunchOptions::single_instance`]), then `setup` runs
-//! o7-core's startup sequence on the data root o7-core resolves (failures become an error
+//! ghost-core's startup sequence on the data root ghost-core resolves (failures become an error
 //! screen, never a crash), picks the window glass for this OS, creates the main window hidden,
 //! starts the chat store and the session manager ([`sessions::start_chats`]), and arms the fallback
 //! that shows the window if the page never reports its first paint. If no window can be created at
@@ -97,11 +97,11 @@ use crate::state::AppState;
 /// Log filter when `RUST_LOG` is unset.
 const DEFAULT_LOG_FILTER: &str = "info,ptts=warn,xn=warn";
 
-/// The exit code when o7 cannot start: Tauri failed to initialize, or no window could be
+/// The exit code when Ghost cannot start: Tauri failed to initialize, or no window could be
 /// created.
 pub const STARTUP_FAILED: i32 = 1;
 
-/// Runs o7 until it exits. If the app cannot start at all (Tauri fails to initialize, or no
+/// Runs Ghost until it exits. If the app cannot start at all (Tauri fails to initialize, or no
 /// window can be created), the error is logged and the process exits with [`STARTUP_FAILED`].
 pub fn run() {
     init_tracing();
@@ -133,7 +133,7 @@ pub fn run() {
                 app.exit(0);
                 return;
             }
-            // Another start in the background (a sign-in while o7 runs) leaves the window be.
+            // Another start in the background (a sign-in while Ghost runs) leaves the window be.
             if login_start::in_background(&args) {
                 return;
             }
@@ -153,8 +153,10 @@ pub fn run() {
     // The plugin's file is per bundle identifier, outside any data folder (see
     // `LaunchOptions::remembers_window_geometry`).
     if launch.remembers_window_geometry() {
-        // A copy updated from auracode: its window opens where auracode's last was.
-        o7_core::paths::carry_window_state();
+        // A copy updated from an earlier name: its window opens where it last was, and a start at
+        // sign-in turned on then carries on.
+        ghost_core::paths::carry_window_state();
+        login_start::carry_earlier();
         builder = builder.plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(window::restored_state())
@@ -180,7 +182,7 @@ pub fn run() {
     match app {
         Ok(app) => app.run(on_event),
         Err(error) => {
-            tracing::error!(%error, "o7 could not start");
+            tracing::error!(%error, "Ghost could not start");
             std::process::exit(STARTUP_FAILED);
         }
     }
@@ -206,7 +208,7 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     app.set_theme(None);
     if let Some(Err(error)) = &launch.smoke {
         // Automation is waiting for a result: say why no scenario runs, and with
-        // O7_SMOKE_EXIT end here, before any data opens or any agent starts.
+        // GHOST_SMOKE_EXIT end here, before any data opens or any agent starts.
         tracing::error!(%error, "the smoke switches cannot run a scenario");
         let report = smoke::setup_failed(error.scenario, &error.message);
         smoke::print(&report);
@@ -223,7 +225,7 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     let glass = match create_window(app, &plan, launch.is_smoke(), webview_data.as_deref()) {
         Ok(glass) => glass,
         Err(error) => {
-            tracing::error!(%error, "o7 could not create its window");
+            tracing::error!(%error, "Ghost could not create its window");
             if let Some(smoke) = launch.smoke_plan() {
                 let report = smoke::no_window(smoke.scenario, &error.to_string());
                 smoke::print(&smoke::finalize(report, smoke.scenario));
@@ -246,7 +248,8 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     let shown = Arc::clone(&state.window_shown);
     let reported = Arc::clone(&state.smoke_reported);
     let quit = Arc::clone(&state.quit);
-    let clones = o7_core::cloning::Clones::new(state.data_dir().map(std::path::Path::to_path_buf));
+    let clones =
+        ghost_core::cloning::Clones::new(state.data_dir().map(std::path::Path::to_path_buf));
     app.manage(state);
     #[cfg(windows)]
     app.manage(window::WebviewVisibility::default());
@@ -370,7 +373,7 @@ fn on_page_load(webview: &Webview, payload: &PageLoadPayload<'_>) {
         if let Some(vendor) = webview.try_state::<Arc<config_vendor::VendorService>>() {
             vendor.drop_owner(owner);
         }
-        if let Some(clones) = webview.try_state::<Arc<o7_core::cloning::Clones>>() {
+        if let Some(clones) = webview.try_state::<Arc<ghost_core::cloning::Clones>>() {
             clones.drop_owner(owner);
         }
         if let Some(chats) = chats {
@@ -437,7 +440,7 @@ fn on_event(app: &tauri::AppHandle, event: RunEvent) {
             // Its emulators save their state and stop; none outlives the app.
             mobile::shutdown(app);
             remote::shutdown(app);
-            if let Some(clones) = app.try_state::<Arc<o7_core::cloning::Clones>>() {
+            if let Some(clones) = app.try_state::<Arc<ghost_core::cloning::Clones>>() {
                 clones.cancel_all();
             }
             if let Some(shell) = app.try_state::<Arc<native_shell::NativeShell>>() {
@@ -469,7 +472,7 @@ fn on_exit_requested(app: &tauri::AppHandle, code: Option<i32>, api: &tauri::Exi
             state.dictation.cancel_all();
             state.speech.stop_all();
             state.terminals.close_non_project();
-            if let Some(clones) = app.try_state::<Arc<o7_core::cloning::Clones>>() {
+            if let Some(clones) = app.try_state::<Arc<ghost_core::cloning::Clones>>() {
                 clones.cancel_all();
             }
             // The last window closing asks without a code; that is a normal quit.
@@ -564,6 +567,6 @@ fn init_tracing() {
         .with_ansi(std::io::stderr().is_terminal())
         .try_init();
     if let Err(error) = installed {
-        eprintln!("o7: logging is unavailable: {error}");
+        eprintln!("Ghost: logging is unavailable: {error}");
     }
 }

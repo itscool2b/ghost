@@ -1,10 +1,10 @@
 /**
  * The Dashboard's AI line edits: a year of days, each with the lines agents' edits changed, laid
  * out as a calendar of weeks (docs/design/visual-language.md, the Dashboard). The core counts by
- * quarter hour (`crates/o7-core/src/chatstore/line_edits.rs`); this places each quarter hour in the
+ * quarter hour (`crates/ghost-core/src/chatstore/line_edits.rs`); this places each quarter hour in the
  * person's own day, so an edit at 11:50 pm counts on the day it was made here.
  */
-import { getBrand } from "@o7/ui";
+import { getBrand } from "@ghost/ui";
 import { commands, type LineEditBucket, type LineEdits } from "../bindings";
 import { settle } from "./ipc";
 

@@ -99,9 +99,9 @@ function fixture(kind: string | null) {
       12,
       214,
     ),
-    row(4388, 4120, "bash.exe", "bash -c cargo test -p o7-desktop", 2, 9),
-    row(5102, 4388, "cargo.exe", "cargo test -p o7-desktop --lib dictation", 2, 61),
-    row(5630, null, "o7.exe", "C:\\Users\\me\\AppData\\Local\\auracode\\o7.exe", 1, 96),
+    row(4388, 4120, "bash.exe", "bash -c cargo test -p ghost-desktop", 2, 9),
+    row(5102, 4388, "cargo.exe", "cargo test -p ghost-desktop --lib dictation", 2, 61),
+    row(5630, null, "ghost.exe", "C:\\Users\\me\\AppData\\Local\\auracode\\ghost.exe", 1, 96),
   ];
   const codex: ProcessRow[] = [
     row(6610, null, "codex.exe", "codex app-server", 40, 88),

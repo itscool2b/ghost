@@ -1,7 +1,7 @@
 /**
- * The font o7's terminals draw with: the person's own terminal app's by default (owner, 17
+ * The font Ghost's terminals draw with: the person's own terminal app's by default (owner, 17
  * November 2026: the terminal should be "the default terminal of the system itself"), read once
- * per run by the native side (`terminal_system_font`), or o7's own Geist Mono. The size
+ * per run by the native side (`terminal_system_font`), or Ghost's own Geist Mono. The size
  * follows the same choice unless the person picks one. Both choices are this device's, like the
  * chat interface: fonts are installed per computer.
  */
@@ -31,7 +31,7 @@ const KEY = "auracode.terminal-font";
 const SIZE_MIN = 9;
 const SIZE_MAX = 28;
 
-/** o7's own sizes and line heights, as before a choice existed. */
+/** Ghost's own sizes and line heights, as before a choice existed. */
 const OWN: Record<TerminalVariant, { size: number; lineHeight: number }> = {
   chat: { size: 13.5, lineHeight: 1.35 },
   shell: { size: 12.5, lineHeight: 1.44 },

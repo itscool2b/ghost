@@ -56,7 +56,7 @@ function inline(text: string): ReactNode[] {
     if (bold !== undefined) out.push(<strong key={at}>{inline(bold)}</strong>);
     else if (code !== undefined) out.push(<code key={at}>{code}</code>);
     else if (label !== undefined && href !== undefined) {
-      const external = /^https?:/.test(href) && !href.startsWith("https://o7.codes");
+      const external = /^https?:/.test(href) && !href.startsWith("https://onghost.dev");
       out.push(
         <a key={at} href={href} {...(external ? { rel: "noreferrer" } : {})}>
           {label}

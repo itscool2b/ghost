@@ -1,4 +1,4 @@
-import { type AgentBrandId, Orb, springs } from "@o7/ui";
+import { type AgentBrandId, Orb, springs } from "@ghost/ui";
 import { BookOpen, Bug, GitPullRequestArrow } from "lucide-react";
 import { motion } from "motion/react";
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";

@@ -4,7 +4,7 @@ Status: the current references are those of Main, the styling pass of 25 Novembe
 
 ## Main, 25 November 2026 (current)
 
-The owner asked for "the greatest styling pass of all time": a default look for the desktop called Main, a new website, and the remote page to match. For the desktop the models are the Grok Bot desktop app, audited below on 17 November, and the Synara ADE. For the website: polar.sh ("look how clean and sleek"), linear.app, ghost.ai ("the attention to detail is awesome") and x.ai/bot. Every page was walked from top to bottom in o7's own browser, section by section, at the owner's word ("make sure u actually scroll through the whole landing pages"), with computed styles read from the page. Nothing of any of them ships: no code, font, icon, artwork or copy.
+The owner asked for "the greatest styling pass of all time": a default look for the desktop called Main, a new website, and the remote page to match. For the desktop the models are the Grok Bot desktop app, audited below on 17 November, and the Synara ADE. For the website: polar.sh ("look how clean and sleek"), linear.app, ghost.ai ("the attention to detail is awesome") and x.ai/bot. Every page was walked from top to bottom in Ghost's own browser, section by section, at the owner's word ("make sure u actually scroll through the whole landing pages"), with computed styles read from the page. Nothing of any of them ships: no code, font, icon, artwork or copy.
 
 ### Synara (the desktop's second model)
 
@@ -19,7 +19,7 @@ Synara is a desktop workspace for coding agents (trysynara.com). The owner belie
 - **Settings.** A sidebar with a search field, a page title with one line under it, and one bordered card of hairline rows with the control at the right of each.
 - **Its own website** is weaker than its app, as the owner said, with one idea worth keeping: each feature is shown as one crisp fragment of the real interface over the rest of the app drawn as grey skeleton bars.
 
-Taken for Main: the inkier dark layers, the thin icon stroke, three control heights and a 30px row, the agent's mark on every chat row, the soft sent message, the message box's bare controls and its tray, quiet menus with grey descriptions on the row, and hairline cards of rows. Not taken: its icon rail and thread tabs (a change of structure, not of look), its second line of Git details on a row (fewer chats would fit), its rectangular buttons (o7 keeps the Grok Bot app's pills), its orange accent.
+Taken for Main: the inkier dark layers, the thin icon stroke, three control heights and a 30px row, the agent's mark on every chat row, the soft sent message, the message box's bare controls and its tray, quiet menus with grey descriptions on the row, and hairline cards of rows. Not taken: its icon rail and thread tabs (a change of structure, not of look), its second line of Git details on a row (fewer chats would fit), its rectangular buttons (Ghost keeps the Grok Bot app's pills), its orange accent.
 
 ### polar.sh
 
@@ -43,7 +43,7 @@ Taken for Main: the inkier dark layers, the thin icon stroke, three control heig
 - **Scroll sequences.** Long pinned passages carry the story: the object opens into a pale blueprint and one part at a time comes into focus with a callout while every other label goes soft; a three-step story whose three tabs sit at the foot with only the current one sharp; a grid-paper stage where a segmented thumb slides between groups as the page moves.
 - **Finish.** Hairline tables, counters, an exact grid visible as lines, a wordmark pressed into a brushed sheet at the foot.
 
-Taken for the website: polar.sh's skeleton, restraint, two-tone headings and stages; Linear's product compositions that fade into the page; one scroll sequence in ghost.ai's manner, with focus as its motion; x.ai/bot's live app window, kept from the page below. Not taken: numbered kickers and uppercase labels (no eyebrows), square corners (o7 is pills), video (the site's Worker serves none), any colour that does not mean something.
+Taken for the website: polar.sh's skeleton, restraint, two-tone headings and stages; Linear's product compositions that fade into the page; one scroll sequence in ghost.ai's manner, with focus as its motion; x.ai/bot's live app window, kept from the page below. Not taken: numbered kickers and uppercase labels (no eyebrows), square corners (Ghost is pills), video (the site's Worker serves none), any colour that does not mean something.
 
 ## dot.com, 17 November 2026 (superseded by Main for the website's look)
 

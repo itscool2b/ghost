@@ -1,0 +1,790 @@
+{
+  "events": [
+    {
+      "type": "status",
+      "data": "spawning"
+    },
+    {
+      "type": "status",
+      "data": "initializing"
+    },
+    {
+      "type": "status",
+      "data": "opening"
+    },
+    {
+      "type": "status",
+      "data": "configuring"
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": "Permission mode",
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan Mode",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default (recommended)",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "opus",
+                "name": "Opus",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "haiku",
+                "name": "Haiku",
+                "description": "Fastest",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "effort",
+          "name": "Effort",
+          "description": "Current reasoning effort",
+          "category": "effort",
+          "kind": {
+            "type": "select",
+            "current": "high",
+            "choices": [
+              {
+                "value": "low",
+                "name": "Low",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "medium",
+                "name": "Medium",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "high",
+                "name": "High",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "fast",
+          "name": "Fast mode",
+          "description": "Faster output on supported models",
+          "category": "model_config",
+          "kind": {
+            "type": "toggle",
+            "current": false
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.access",
+          "name": "Access",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.workflow",
+          "name": "Workflow",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "execute",
+            "choices": [
+              {
+                "value": "execute",
+                "name": "Execute",
+                "description": "Run with the remembered native access setting. Leaving Plan requires implementation approval.",
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan",
+                "description": "Use the harness native planning workflow. Access remains separate; implementation requires your approval.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": "Permission mode",
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "bypassPermissions",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan Mode",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default (recommended)",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "opus",
+                "name": "Opus",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "haiku",
+                "name": "Haiku",
+                "description": "Fastest",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "effort",
+          "name": "Effort",
+          "description": "Current reasoning effort",
+          "category": "effort",
+          "kind": {
+            "type": "select",
+            "current": "high",
+            "choices": [
+              {
+                "value": "low",
+                "name": "Low",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "medium",
+                "name": "Medium",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "high",
+                "name": "High",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "fast",
+          "name": "Fast mode",
+          "description": "Faster output on supported models",
+          "category": "model_config",
+          "kind": {
+            "type": "toggle",
+            "current": false
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.access",
+          "name": "Access",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "bypassPermissions",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.workflow",
+          "name": "Workflow",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "execute",
+            "choices": [
+              {
+                "value": "execute",
+                "name": "Execute",
+                "description": "Run with the remembered native access setting. Leaving Plan requires implementation approval.",
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan",
+                "description": "Use the harness native planning workflow. Access remains separate; implementation requires your approval.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "full_auto",
+        "native_mode": "bypassPermissions",
+        "auto_answer": {
+          "type": "never"
+        },
+        "note": null
+      }
+    },
+    {
+      "type": "status",
+      "data": "ready"
+    },
+    {
+      "type": "ready",
+      "data": {
+        "native_session_id": "<SESSION_1>",
+        "agent_name": "Claude Agent",
+        "agent_version": "0.95.0",
+        "capabilities": {
+          "images": true,
+          "steer": false,
+          "interrupt": true,
+          "resume": true,
+          "fork": false,
+          "rewind": false,
+          "set_model": true,
+          "set_effort": true,
+          "permissions": true,
+          "plans": true,
+          "usage": true,
+          "limits": false,
+          "slash_commands": true,
+          "add_dirs": false,
+          "autonomy_levels": [
+            "full_auto",
+            "auto_edit",
+            "ask"
+          ]
+        },
+        "resumed": {
+          "type": "new"
+        },
+        "spawn_id": "019a0000-0000-7000-8000-0000000000a1",
+        "replay": null
+      }
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": "Permission mode",
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "plan",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan Mode",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default (recommended)",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "opus",
+                "name": "Opus",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "haiku",
+                "name": "Haiku",
+                "description": "Fastest",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "effort",
+          "name": "Effort",
+          "description": "Current reasoning effort",
+          "category": "effort",
+          "kind": {
+            "type": "select",
+            "current": "high",
+            "choices": [
+              {
+                "value": "low",
+                "name": "Low",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "medium",
+                "name": "Medium",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "high",
+                "name": "High",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "fast",
+          "name": "Fast mode",
+          "description": "Faster output on supported models",
+          "category": "model_config",
+          "kind": {
+            "type": "toggle",
+            "current": false
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.access",
+          "name": "Access",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "bypassPermissions",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.workflow",
+          "name": "Workflow",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "plan",
+            "choices": [
+              {
+                "value": "execute",
+                "name": "Execute",
+                "description": "Run with the remembered native access setting. Leaving Plan requires implementation approval.",
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan",
+                "description": "Use the harness native planning workflow. Access remains separate; implementation requires your approval.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "full_auto",
+        "native_mode": "plan",
+        "auto_answer": {
+          "type": "never"
+        },
+        "note": "You picked the Plan mode by hand, so Ghost asks before every action. Choose an autonomy level to hand control back."
+      }
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": "Permission mode",
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "bypassPermissions",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan Mode",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default (recommended)",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "opus",
+                "name": "Opus",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "haiku",
+                "name": "Haiku",
+                "description": "Fastest",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "effort",
+          "name": "Effort",
+          "description": "Current reasoning effort",
+          "category": "effort",
+          "kind": {
+            "type": "select",
+            "current": "high",
+            "choices": [
+              {
+                "value": "low",
+                "name": "Low",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "medium",
+                "name": "Medium",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "high",
+                "name": "High",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "fast",
+          "name": "Fast mode",
+          "description": "Faster output on supported models",
+          "category": "model_config",
+          "kind": {
+            "type": "toggle",
+            "current": false
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.access",
+          "name": "Access",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "bypassPermissions",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "acceptEdits",
+                "name": "Accept Edits",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "bypassPermissions",
+                "name": "Bypass Permissions",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "aura.workflow",
+          "name": "Workflow",
+          "description": null,
+          "category": "other",
+          "kind": {
+            "type": "select",
+            "current": "execute",
+            "choices": [
+              {
+                "value": "execute",
+                "name": "Execute",
+                "description": "Run with the remembered native access setting. Leaving Plan requires implementation approval.",
+                "group": null
+              },
+              {
+                "value": "plan",
+                "name": "Plan",
+                "description": "Use the harness native planning workflow. Access remains separate; implementation requires your approval.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "full_auto",
+        "native_mode": "bypassPermissions",
+        "auto_answer": {
+          "type": "never"
+        },
+        "note": null
+      }
+    },
+    {
+      "type": "status",
+      "data": "closing"
+    }
+  ],
+  "replies": [
+    {
+      "set_option": "mode",
+      "reply": {
+        "ok": null
+      }
+    }
+  ],
+  "exit": {
+    "type": "closed"
+  }
+}

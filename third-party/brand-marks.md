@@ -1,15 +1,15 @@
 # Agent marks
 
-o7 shows each coding agent's own logo beside its name, in the desktop app and on
-o7.codes. The marks live in `packages/ui/src/graphite/agent-logos/` and are drawn by
+Ghost shows each coding agent's own logo beside its name, in the desktop app and on
+onghost.dev. The marks live in `packages/ui/src/graphite/agent-logos/` and are drawn by
 `AgentMark` and `AgentLogo` (`packages/ui/src/graphite/`). Five follow terms their makers publish
 for this kind of use; four (Claude Code, Grok Build, Antigravity, Hermes) are used at the owner's
 direction while the owner handles permissions with those vendors (2026-10-28).
 
-**These marks are trademarks of their respective owners.** They are not part of o7, are not
-covered by o7's license (whichever the owner chooses), and are not licensed to anyone who
+**These marks are trademarks of their respective owners.** They are not part of Ghost, are not
+covered by Ghost's license (whichever the owner chooses), and are not licensed to anyone who
 copies this repository: each vendor grants its own permission, to each user, on its own terms. They
-are used only to say which agent a chat uses (nominative use). o7 is not affiliated with,
+are used only to say which agent a chat uses (nominative use). Ghost is not affiliated with,
 endorsed by or sponsored by any of these companies or projects.
 
 Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
@@ -24,14 +24,14 @@ Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
   between marks uses uniform scaling only (`SCALE` in `agentLogos.ts`). A "not installed" agent
   keeps its mark at full strength in a dashed tile; the dashes and the words say it is missing.
   One exception to "rotated": Nous Research's own site shows the Hermes wing turned 45 degrees, so
-  o7 draws it the same way (`TURN` in `agentLogos.ts`); the stored file stays upright, as
-  published. A mark published in `currentColor` (Grok's) takes o7's foreground colour, as
+  Ghost draws it the same way (`TURN` in `agentLogos.ts`); the stored file stays upright, as
+  published. A mark published in `currentColor` (Grok's) takes Ghost's foreground colour, as
   it takes the foreground on its maker's site.
 - **Clear space.** A mark sits in the app's agent tile with an even margin (2px at 16px and below,
   about a sixth of the tile above that) and never touches other artwork or text; the agent's name
   sits beside the tile.
 - **Size and prominence.** Tiles are 14 to 56px in the app and 16 to 24px on the website, smaller
-  than o7's own logo where both appear. No mark is used in o7's name, logo, app icon
+  than Ghost's own logo where both appear. No mark is used in Ghost's name, logo, app icon
   or headline, and none is combined with other elements into a new mark.
 - **Website motion** moves a whole mark (a rise, a 1.5px drift, a 3px lift on hover) and changes
   nothing about the mark itself.
@@ -85,7 +85,7 @@ Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
   SVG `6ee276e9bff5a166c41bc8e80c6717c525cb9b9e81a1111348559452a711e8cd`. Its two paths and
   colours (`#F2F2F2`, `#0000F2`) are kept; the group's even-odd rules moved onto the paths, and
   its clip, a rectangle the size of the viewBox, was dropped (it trims under 0.2% of the
-  artwork's height). viewBox unchanged. The site turns it 45 degrees, and so does o7.
+  artwork's height). viewBox unchanged. The site turns it 45 degrees, and so does Ghost.
 - This is Nous Research's logomark for Hermes Agent. The repository's other marks
   (https://github.com/NousResearch/hermes-agent/tree/main/assets, the figure on `nous-girl-*.svg`
   and `icon-master*.svg`) are detailed illustrations that do not read under 24px; the Hermes bot
@@ -106,8 +106,8 @@ Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
   one.
 - Guidelines: https://openai.com/brand/ (usage terms on the same page). Followed: used only where
   it directly relates to an OpenAI service; exactly as provided, with no added colour, effect or
-  element; not the primary branding and never more prominent than o7's own marks; no implied
-  partnership, endorsement or sponsorship; not on merchandise; not part of o7's branding.
+  element; not the primary branding and never more prominent than Ghost's own marks; no implied
+  partnership, endorsement or sponsorship; not on merchandise; not part of Ghost's branding.
 - Terms: OpenAI owns the marks; its permission is non-exclusive, non-transferable (it cannot be
   passed on to others, hence the note above), may be reviewed or ended at any time, and follows
   updates to the guide. Requests: partnercomms@openai.com.
@@ -133,7 +133,7 @@ Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
   `5dd4abb4de60204510edf140bbe74b3580d07ebdda79fdb0081cd45acb53d44b`. Its two colours
   (`#F1ECEC`, `#4B4646`) are kept; a full-artwork mask and clip with no effect were removed.
 - Guidelines: https://opencode.ai/brand publishes the assets with no usage terms. The OpenCode
-  README asks projects that use the name to make clear they are not affiliated; o7 states
+  README asks projects that use the name to make clear they are not affiliated; Ghost states
   that above and on its notices page. Repository license MIT, which covers the code, not the
   trademark.
 
@@ -142,7 +142,7 @@ Retrieved 2026-10-28. Hashes are SHA-256 of the file as downloaded.
 - File: `pi.svg`, from https://pi.dev/favicon.svg, the "Badge: Square mark for favicons and
   compact badges" on https://pi.dev/press-kit. SVG
   `d266b2c1d2c7bf169ca30d438963b176fba16fea6263b9ac30c8302f34ad7ce7`. The file switches its fill
-  by colour scheme (`#111111`, or `#f6f6f6` for dark); o7 is dark only, so the stored mark
+  by colour scheme (`#111111`, or `#f6f6f6` for dark); Ghost is dark only, so the stored mark
   uses the vendor's dark-scheme fill `#f6f6f6` and drops the media query. Paths unchanged.
 - Guidelines: the press kit publishes no usage rules. Copyright "Earendil Inc. & Contributors",
   MIT License, which covers the code, not the trademark.
@@ -190,7 +190,7 @@ Before a public release, check each against the company's current mark and brand
 ## Assistants linked as bots
 
 Settings' Remote access page, setup and the website name four assistants that can be linked to
-o7 as bots (`BotMark`, `packages/ui/src/graphite/bots.ts`). Used at the owner's direction
+Ghost as bots (`BotMark`, `packages/ui/src/graphite/bots.ts`). Used at the owner's direction
 (2026-11-21), only to say which assistant a link is for; no endorsement or partnership is implied.
 
 Since 2026-11-23 each wears its own logo, at the owner's direction ("Replace all the logos with
@@ -199,7 +199,7 @@ Bot wore the Grok mark, Hermes the wing and Muse Meta's mark. Grok Bot, Muse and
 as their app icons: the icon is the whole tile, its corners masked by the tile's as a launcher
 masks them, with a hairline just outside it and nothing drawn over it. They are stored in
 `packages/ui/src/graphite/bot-logos/` unaltered (bytes as retrieved) and loaded as files of their
-own when shown. `BotMark` has its own entry (`@o7/ui/bot-mark`), so the website, which shows no
+own when shown. `BotMark` has its own entry (`@ghost/ui/bot-mark`), so the website, which shows no
 assistant's logo, does not carry them. Retrieved 2026-11-23; hashes are SHA-256 of the file as
 stored.
 

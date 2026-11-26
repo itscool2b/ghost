@@ -1,6 +1,6 @@
 /**
  * Reading a plan an agent wrote, for the card that presents it (components/chat/PlanCard.tsx):
- * its own title, its sections and its steps, and the words o7 sends when the person hands it
+ * its own title, its sections and its steps, and the words Ghost sends when the person hands it
  * back. A plan is Markdown; nothing here changes it.
  */
 

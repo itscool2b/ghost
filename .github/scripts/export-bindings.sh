@@ -10,7 +10,7 @@ case "$mode" in check | refresh) ;; *) echo "usage: export-bindings.sh check|ref
 
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
-cargo test --locked -p o7-desktop --lib export_bindings -- --color never | tee "$log"
+cargo test --locked -p ghost-desktop --lib export_bindings -- --color never | tee "$log"
 if ! grep -Eq '^test [^ ]*export_bindings[^ ]* \.\.\. ok' "$log"; then
   echo "::error::No passing export_bindings test ran. No generated artifact will be published."
   exit 1

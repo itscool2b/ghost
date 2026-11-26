@@ -1,4 +1,4 @@
-import { prefersReducedMotion } from "@o7/ui";
+import { prefersReducedMotion } from "@ghost/ui";
 import { Check, Mic, X } from "lucide-react";
 import {
   type CSSProperties,

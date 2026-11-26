@@ -1,4 +1,4 @@
-import { Wordmark } from "@o7/ui/graphite";
+import { Wordmark } from "@ghost/ui/graphite";
 import { useEffect, useRef } from "react";
 import { GitHubMark, REPOSITORY } from "./repo";
 
@@ -70,7 +70,7 @@ export function SiteHeader() {
   return (
     <header className="site-nav">
       <div className="wrap nav-bar">
-        <a className="nav-home" href="/" aria-label="o7 home">
+        <a className="nav-home" href="/" aria-label="Ghost home">
           <Wordmark size={17} />
         </a>
         <nav className="nav-links" aria-label="Main">
@@ -84,7 +84,7 @@ export function SiteHeader() {
           <a
             className="btn btn-quiet btn-sm nav-github"
             href={REPOSITORY}
-            aria-label="o7 on GitHub"
+            aria-label="Ghost on GitHub"
           >
             <GitHubMark />
             <span className="nav-github-text">GitHub</span>
@@ -110,7 +110,7 @@ export function SiteHeader() {
                 <a href={REPOSITORY}>GitHub</a>
               </nav>
               <a className="btn btn-primary btn-lg" href="/download">
-                Download o7
+                Download Ghost
               </a>
             </div>
           </details>

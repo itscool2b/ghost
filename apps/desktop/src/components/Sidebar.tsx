@@ -4,8 +4,8 @@ import {
   type AgentBrandId,
   ORB_STATE_LABELS,
   type OrbState,
-} from "@o7/ui";
-import { AgentMark, Wordmark } from "@o7/ui/graphite";
+} from "@ghost/ui";
+import { AgentMark, Wordmark } from "@ghost/ui/graphite";
 import { ArrowLeft } from "lucide-react";
 import { useId } from "react";
 import { Select } from "./Select";

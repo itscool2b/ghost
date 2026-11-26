@@ -1,14 +1,14 @@
 # Contributing
 
-Thanks for looking. o7 is maintained by one person, so small, focused pull requests are the
+Thanks for looking. Ghost is maintained by one person, so small, focused pull requests are the
 ones that get merged. For anything larger than a fix, open an issue first and say what you want to
 change and why.
 
 ## Setting up
 
 [docs/development.md](docs/development.md) lists the prerequisites and how to run the app. A development
-build keeps its data in a folder of its own (`codes.o7.desktop.dev`), so it never touches an
-installed o7.
+build keeps its data in a folder of its own (`dev.onghost.desktop.dev`), so it never touches an
+installed Ghost.
 
 ## Before you open a pull request
 
@@ -28,10 +28,10 @@ own. Say in the description what you ran and what you saw.
   only, not the website, docs, tests or tooling: newest first under the day it merges in US
   Eastern time, written for someone who uses the app: what changed, then what
   they will notice.
-  [docs/developing-in-o7.md](docs/developing-in-o7.md) has the format, and `pnpm lint` checks
+  [docs/developing-in-ghost.md](docs/developing-in-ghost.md) has the format, and `pnpm lint` checks
   it.
 - **Commit generated files with the change that needs them.** After changing a Rust command or a
-  type it uses, run `cargo test -p o7-desktop export_bindings` and commit
+  type it uses, run `cargo test -p ghost-desktop export_bindings` and commit
   `apps/desktop/src/bindings.ts`. After changing any `package.json` or `Cargo.toml`, run
   `node .github/scripts/third-party-notices.mjs --write`.
 - **No real-looking secrets, anywhere.** A scanner checks every commit. Tests that need a token
@@ -46,7 +46,7 @@ own. Say in the description what you ran and what you saw.
 - **The interface follows one visual system.** Read
   [docs/design/visual-language.md](docs/design/visual-language.md) before changing how anything
   looks, and extend the shared components and tokens instead of adding new ones.
-- **Agents run as their vendors ship them.** o7 never reads, stores or proxies an agent's
+- **Agents run as their vendors ship them.** Ghost never reads, stores or proxies an agent's
   credentials and never adds hidden prompts.
 - **Plain writing.** Short sentences, no em dashes, no marketing words, in the interface, the
   docs and commit messages alike.
@@ -57,5 +57,5 @@ Do not open a public issue for a vulnerability. [SECURITY.md](SECURITY.md) says 
 
 ## License
 
-o7 is released under the [MIT License](LICENSE). By contributing, you agree that your
+Ghost is released under the [MIT License](LICENSE). By contributing, you agree that your
 contribution is released under the same license.

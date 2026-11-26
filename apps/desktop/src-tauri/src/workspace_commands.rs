@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use o7_core::session::{StopReport, StopScope};
-use o7_protocol::workspace::{
+use ghost_core::session::{StopReport, StopScope};
+use ghost_protocol::workspace::{
     ChatCreatePreview, ChatMove, ChatRole, ChatsStopped, FolderBlockers, FolderMatches,
     FolderScope, ProjectChatCreate, ProjectCreate, ProjectFolder, ProjectInput, ProjectSummary,
     RoleModel, WorkspaceChat, WorkspaceFilter, WorkspaceSnapshot,
@@ -99,7 +99,7 @@ pub async fn workspace_snapshot(
     let whole = filter.include_archived && filter.project_id.is_none();
     let snapshot = state.sessions()?.workspace_snapshot(filter).await?;
     if whole {
-        crate::launch_cache::keep(&state, o7_core::launch_cache::Part::Workspace, &snapshot);
+        crate::launch_cache::keep(&state, ghost_core::launch_cache::Part::Workspace, &snapshot);
     }
     Ok(snapshot)
 }
@@ -192,7 +192,7 @@ pub async fn chat_move(
 }
 
 /// What a folder the person picked already is: its projects (compared canonical, so a link or
-/// another spelling of the same folder finds them) and whether o7 manages it as a worktree.
+/// another spelling of the same folder finds them) and whether Ghost manages it as a worktree.
 #[tauri::command]
 #[specta::specta]
 pub async fn workspace_folder_matches(

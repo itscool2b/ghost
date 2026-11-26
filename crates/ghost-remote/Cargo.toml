@@ -1,0 +1,40 @@
+[package]
+name = "ghost-remote"
+description = "Remote sessions for Ghost: pairing, the sealed channel to a browser, bot tools and the relay connection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+ghost-protocol.workspace = true
+# AES-256-GCM, because a browser's own WebCrypto seals with it and can hold its key unextractable.
+aes-gcm = { version = "0.11.1", default-features = false, features = ["alloc", "aes"] }
+base64 = "0.22.1"
+futures = { workspace = true, features = ["std"] }
+getrandom = "0.4.3"
+hkdf = "0.13.0"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.11.0"
+subtle = "2.6.1"
+tempfile.workspace = true
+thiserror.workspace = true
+# The door on this computer listens on loopback (`net`, already in the tree through
+# tokio-tungstenite).
+tokio = { workspace = true, features = ["net"] }
+# The parser the app's HTTP client sends with: a call-back address is checked as it is reached.
+url = "2.5.8"
+# Native TLS matches the rest of the desktop.
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "handshake", "native-tls"] }
+tracing.workspace = true
+zeroize = "1.9.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "net"] }
+
+[lints]
+workspace = true

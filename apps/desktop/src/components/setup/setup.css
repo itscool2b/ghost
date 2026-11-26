@@ -1278,7 +1278,7 @@ html[data-motion="off"] * {
     background-color: var(--ui-card-flat);
   }
 
-  /* The picture already shows the agents joined to o7; the roster keeps its list. */
+  /* The picture already shows the agents joined to Ghost; the roster keeps its list. */
   .setup-column .agent-connect {
     display: none;
   }

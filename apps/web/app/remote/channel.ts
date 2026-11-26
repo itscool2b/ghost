@@ -1,7 +1,7 @@
 /**
- * The browser's half of a remote session's sealed channel. `crates/o7-remote/src/crypto.rs` is
+ * The browser's half of a remote session's sealed channel. `crates/ghost-remote/src/crypto.rs` is
  * the desktop's half and says what it guarantees; both are held to
- * `crates/o7-remote/tests/vectors.json`.
+ * `crates/ghost-remote/tests/vectors.json`.
  *
  * Everything here is WebCrypto. A device's key is imported as a key that cannot be read back out,
  * so a script on this origin can use a stored key but never copy it.

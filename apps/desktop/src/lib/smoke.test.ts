@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AppInfo, DemoKind, EventBatch, O7Event } from "../bindings";
+import type { AppInfo, DemoKind, EventBatch, GhostEvent } from "../bindings";
 import type { FpsMeter } from "./fps";
 import { StreamStore, type StreamTransport } from "./session";
 import { demoProblems, runSmoke, type SmokeHooks } from "./smoke";
@@ -25,8 +25,8 @@ const INFO: AppInfo = {
   media_notice: null,
 };
 
-function demoEvents(): O7Event[] {
-  const tool = (id: string, kind: "read" | "edit"): O7Event[] => [
+function demoEvents(): GhostEvent[] {
+  const tool = (id: string, kind: "read" | "edit"): GhostEvent[] => [
     {
       type: "tool_call",
       tool_call_id: id,
@@ -83,14 +83,14 @@ function demoEvents(): O7Event[] {
 /** Plays scripted turns over a fake channel, one event per frame, asynchronously like IPC. */
 class ScriptedShell implements StreamTransport {
   #sessions = 0;
-  readonly #open = new Map<string, (events: O7Event[]) => void>();
+  readonly #open = new Map<string, (events: GhostEvent[]) => void>();
   gapAt: number | null = null;
 
   start(kind: DemoKind, rate: number, onBatch: (batch: EventBatch) => void): Promise<string> {
     this.#sessions += 1;
     const id = `s${this.#sessions}`;
     let seq = 0;
-    const send = (events: O7Event[]): void => {
+    const send = (events: GhostEvent[]): void => {
       if (this.gapAt !== null && seq === this.gapAt) seq += 1;
       onBatch({ chat_id: id, seq_start: seq, events });
       seq += events.length;
@@ -99,12 +99,12 @@ class ScriptedShell implements StreamTransport {
     const script =
       kind.type === "demo" && rate < 100
         ? // A slow turn that only ends when cancelled.
-          [{ type: "turn_started", turn_id: "turn-1", prompt_id: null } as O7Event]
+          [{ type: "turn_started", turn_id: "turn-1", prompt_id: null } as GhostEvent]
         : kind.type === "demo"
           ? demoEvents()
           : [
-              { type: "turn_started", turn_id: "turn-1", prompt_id: null } as O7Event,
-              { type: "message_delta", message_id: "m", text: "x ".repeat(300) } as O7Event,
+              { type: "turn_started", turn_id: "turn-1", prompt_id: null } as GhostEvent,
+              { type: "message_delta", message_id: "m", text: "x ".repeat(300) } as GhostEvent,
               {
                 type: "turn_ended",
                 turn_id: "turn-1",
@@ -112,7 +112,7 @@ class ScriptedShell implements StreamTransport {
                 usage: null,
                 duration_ms: null,
                 recovered: false,
-              } as O7Event,
+              } as GhostEvent,
             ];
     setTimeout(() => {
       for (const event of script) send([event]);

@@ -14,7 +14,7 @@ describe("the workspace after a restart", () => {
     let unavailable = 3;
     const snapshot = vi.fn(() =>
       unavailable-- > 0
-        ? Promise.reject(new Error("o7's database is not available."))
+        ? Promise.reject(new Error("Ghost's database is not available."))
         : Promise.resolve({ projects: [], chats: [] } as unknown as WorkspaceSnapshot),
     );
     const store = new WorkspaceStore({ snapshot } as unknown as WorkspaceApi, [10, 20]);

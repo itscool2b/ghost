@@ -162,9 +162,9 @@ describe("agent edit notices", () => {
     const [notice] = notices;
     if (!notice) throw new Error("notice");
     expect(editedNotes(notice)).toBe("windows-build, release");
-    expect(agentEditToast(notice, chats, "o7")).toEqual({
+    expect(agentEditToast(notice, chats, "Ghost")).toEqual({
       title: "4 edits to project memory",
-      detail: "Agents in 2 chats · windows-build, release · o7",
+      detail: "Agents in 2 chats · windows-build, release · Ghost",
     });
   });
   it("says which note an agent saved or deleted, and names a linked assistant", () => {
@@ -172,20 +172,20 @@ describe("agent edit notices", () => {
     const [deleted] = noticeAgentEdit([], edit("r2", "r1", "login", "release", true));
     const [bot] = noticeAgentEdit([], edit("r2", "r1", ""));
     if (!saved || !deleted || !bot) throw new Error("notices");
-    expect(agentEditToast(saved, chats, "o7")).toEqual({
+    expect(agentEditToast(saved, chats, "Ghost")).toEqual({
       title: "Memory note saved",
-      detail: "Claude Code · Fix the login flow · windows-build · o7",
+      detail: "Claude Code · Fix the login flow · windows-build · Ghost",
     });
-    expect(agentEditText(saved, chats, "o7")).toBe(
-      "Claude Code in Fix the login flow saved the note windows-build in project memory for o7.",
+    expect(agentEditText(saved, chats, "Ghost")).toBe(
+      "Claude Code in Fix the login flow saved the note windows-build in project memory for Ghost.",
     );
     expect(agentEditToast(deleted, chats, null).title).toBe("Memory note deleted");
     expect(agentEditText(deleted, chats, null)).toBe(
       "Claude Code in Fix the login flow deleted the note release from project memory.",
     );
     expect(agentLabel("", chats)).toBe("A linked assistant");
-    expect(agentEditText(bot, chats, "o7")).toBe(
-      "A linked assistant updated project memory for o7.",
+    expect(agentEditText(bot, chats, "Ghost")).toBe(
+      "A linked assistant updated project memory for Ghost.",
     );
   });
   it("keeps the newest three projects", () => {

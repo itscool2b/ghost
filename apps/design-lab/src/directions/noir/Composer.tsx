@@ -1,4 +1,4 @@
-import { GlassPanel, getBrand, Orb, type OrbState } from "@o7/ui";
+import { GlassPanel, getBrand, Orb, type OrbState } from "@ghost/ui";
 import {
   ArrowRightLeft,
   ArrowUp,

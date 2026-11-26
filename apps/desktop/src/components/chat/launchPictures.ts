@@ -82,7 +82,7 @@ export function pickLaunchPicture(
 
 let thisLaunch: LaunchPicture | null = null;
 
-/** This launch's picture: chosen once, so the start screen keeps it until o7 starts again. */
+/** This launch's picture: chosen once, so the start screen keeps it until Ghost starts again. */
 export function launchPicture(): LaunchPicture {
   thisLaunch ??= pickLaunchPicture();
   return thisLaunch;

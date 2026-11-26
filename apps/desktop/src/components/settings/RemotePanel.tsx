@@ -1,5 +1,5 @@
-import { BotMark } from "@o7/ui/bot-mark";
-import { BOTS, type BotId, botNamed } from "@o7/ui/graphite";
+import { BotMark } from "@ghost/ui/bot-mark";
+import { BOTS, type BotId, botNamed } from "@ghost/ui/graphite";
 import { Bot, Coffee, LogIn, Monitor, MonitorSmartphone, Smartphone, Webhook } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
@@ -49,7 +49,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   /** A link's new address, shown once after renewing it. */
   const [renewed, setRenewed] = useState<RemoteBotLink | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  /** Whether o7 opens at sign-in: the system's own record, read when the page opens. */
+  /** Whether Ghost opens at sign-in: the system's own record, read when the page opens. */
   const [loginStart, setLoginStart] = useState<LoginStart | null>(null);
   /** The workspace's projects, for an automation's; read when the page opens. */
   const [projects, setProjects] = useState<readonly RemoteProject[]>([]);
@@ -162,7 +162,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
   return (
     <>
       <p className="settings-lead">
-        See and steer this computer's chats from your phone, or let a bot work with them. o7
+        See and steer this computer's chats from your phone, or let a bot work with them. Ghost
         connects out to its relay; nothing on this computer listens for connections.
       </p>
       {error ? (
@@ -322,8 +322,8 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         </div>
         <p className="settings-lead">
           Hand your assistant a goal from wherever you are. It starts your coding agents here,
-          answers what they ask and brings back the result. With a call back, o7 tells it when the
-          work is done.
+          answers what they ask and brings back the result. With a call back, Ghost tells it when
+          the work is done.
         </p>
         {bots.length ? (
           <div className="settings-group">
@@ -435,7 +435,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
           </button>
         </div>
         <p className="settings-lead">
-          Start a task from outside o7: a failed build, a new issue, an alert. A service sends to
+          Start a task from outside Ghost: a failed build, a new issue, an alert. A service sends to
           the automation's address, and an agent gets your instruction with what was sent, as data
           it does not obey.
         </p>
@@ -502,7 +502,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
         <p>
           A paired browser's session is encrypted end to end: the relay passes it along and cannot
           read it. A bot's calls are not: the relay and the bot's own service read them, and either
-          could act as that bot. Remote access works while o7 is open, including in the tray.
+          could act as that bot. Remote access works while Ghost is open, including in the tray.
         </p>
       </details>
 
@@ -585,7 +585,7 @@ export function RemotePanel({ api = remoteApi }: { readonly api?: RemoteApi }) {
 }
 
 /**
- * For an assistant that runs on this computer (Hermes, OpenClaw): o7's own helper as its MCP
+ * For an assistant that runs on this computer (Hermes, OpenClaw): Ghost's own helper as its MCP
  * server, started with the link's address, so its calls never leave the computer.
  */
 function OnThisComputer({
@@ -613,12 +613,12 @@ function OnThisComputer({
     <details className="settings-more">
       <summary>If your assistant runs on this computer</summary>
       <p>
-        It can start o7's helper as a local MCP server instead of using the address above: its calls
-        then stay on this computer and never pass through the relay. Give it this command, with the
-        address in the environment variable O7_LINK.
+        It can start Ghost's helper as a local MCP server instead of using the address above: its
+        calls then stay on this computer and never pass through the relay. Give it this command,
+        with the address in the environment variable GHOST_LINK.
       </p>
-      <CopyField value={`"${path}" --o7-bot-helper`} label="Command" />
-      <CopyField value={`O7_LINK=${address}`} label="Environment" />
+      <CopyField value={`"${path}" --ghost-bot-helper`} label="Command" />
+      <CopyField value={`GHOST_LINK=${address}`} label="Environment" />
     </details>
   );
 }
@@ -797,20 +797,20 @@ export function told(bot: Pick<RemoteBot, "callback">): string {
 }
 
 /**
- * Whether a paired browser's name reads as a phone or tablet: its row wears that glyph. o7 for
+ * Whether a paired browser's name reads as a phone or tablet: its row wears that glyph. Ghost for
  * iPhone wears it by its kind, whatever it is named.
  */
 const handheld = (name: string): boolean =>
   /iphone|ipad|android|pixel|galaxy|phone|mobile/i.test(name);
 
-/** The app a device is, after how it stands: " · o7 for iPhone 1.0". Nothing for a browser. */
+/** The app a device is, after how it stands: " · Ghost for iPhone 1.0". Nothing for a browser. */
 export function deviceApp(device: Pick<RemoteDevice, "kind" | "app_version">): string {
   if (device.kind !== "ios") return "";
-  return device.app_version ? ` · o7 for iPhone ${device.app_version}` : " · o7 for iPhone";
+  return device.app_version ? ` · Ghost for iPhone ${device.app_version}` : " · Ghost for iPhone";
 }
 
 /**
- * Whether o7 for iPhone hears from this computer, after which app it is: " · Notifications on ·
+ * Whether Ghost for iPhone hears from this computer, after which app it is: " · Notifications on ·
  * Last notification 5 min ago", or " · Notifications off". Nothing for a browser.
  */
 export function deviceNotifications(
@@ -881,8 +881,8 @@ const SETUP: Readonly<
     paste: (url) => url,
     steps: [
       "In the Grok Bot app, open Connect apps in the sidebar and choose Add a custom connector.",
-      "Name it o7, choose Remote HTTPS, paste this address as the Server URL, then choose Add plugin.",
-      "Ask your bot to list your o7 chats.",
+      "Name it Ghost, choose Remote HTTPS, paste this address as the Server URL, then choose Add plugin.",
+      "Ask your bot to list your Ghost chats.",
     ],
   },
   muse: {
@@ -891,29 +891,32 @@ const SETUP: Readonly<
     steps: [
       "In Muse, ask it to add a custom connector.",
       "Paste this address when it asks for the server's URL.",
-      "Ask it to list your o7 chats.",
+      "Ask it to list your Ghost chats.",
     ],
   },
   hermes: {
     label: "Lines for Hermes' config",
-    paste: (url) => `mcp_servers:\n  o7:\n    url: "${url}"\n    timeout: 300`,
+    paste: (url) => `mcp_servers:\n  ghost:\n    url: "${url}"\n    timeout: 300`,
     steps: [
       "Add these lines to ~/.hermes/config.yaml (under mcp_servers, if you have one already).",
       "Run /reload-mcp in Hermes.",
-      "Ask it to list your o7 chats.",
+      "Ask it to list your Ghost chats.",
     ],
   },
   openclaw: {
     label: "Command for OpenClaw",
-    paste: (url) => `openclaw mcp add o7 --url ${url} --transport streamable-http --timeout 300`,
-    steps: ["Run this command on the computer OpenClaw runs on.", "Ask it to list your o7 chats."],
+    paste: (url) => `openclaw mcp add ghost --url ${url} --transport streamable-http --timeout 300`,
+    steps: [
+      "Run this command on the computer OpenClaw runs on.",
+      "Ask it to list your Ghost chats.",
+    ],
   },
   other: {
     label: "Bot address",
     paste: (url) => url,
     steps: [
       "Add this address wherever your assistant takes a remote MCP server (streamable HTTP).",
-      "Ask it to list your o7 chats.",
+      "Ask it to list your Ghost chats.",
     ],
   },
 };
@@ -1043,7 +1046,7 @@ function PairingDialog({
 
 /**
  * How each assistant is woken from outside, in its own words (their documentation, read
- * 23 November 2026): where its address and key come from. `message` is the field of what o7
+ * 23 November 2026): where its address and key come from. `message` is the field of what Ghost
  * sends that holds the text.
  */
 const CALLBACK: Readonly<
@@ -1062,19 +1065,19 @@ const CALLBACK: Readonly<
     address: "The routine's POST to address",
     key: "The routine's key",
     steps: [
-      "Ask your Bot to make a routine with a webhook trigger and this instruction: “This is a message from o7 about one of my coding chats. Read it, act on it with your o7 tools, and tell me only what I need to know.”",
+      "Ask your Bot to make a routine with a webhook trigger and this instruction: “This is a message from Ghost about one of my coding chats. Read it, act on it with your Ghost tools, and tell me only what I need to know.”",
       "Open the routine on desktop: click the Bot's name above the chat, then Details. Its Webhook section shows POST to and key.",
       "Paste both here. Each message starts a run of that routine, which spends your Bot's usage.",
     ],
   },
   hermes: {
     name: "Hermes",
-    address: "The route's address, such as http://127.0.0.1:8644/webhooks/o7",
+    address: "The route's address, such as http://127.0.0.1:8644/webhooks/ghost",
     key: "The route's secret",
     steps: [
       "Turn the webhook platform on (WEBHOOK_ENABLED=true in ~/.hermes/.env, or hermes gateway setup).",
-      'Run: hermes webhook subscribe o7 --deliver telegram --deliver-chat-id <your chat> --deliver-only --mirror-to-session --prompt "{message}"',
-      "It prints the address; the secret is under o7 in ~/.hermes/webhook_subscriptions.json. Paste both here. Hermes sends you the message without spending a model turn.",
+      'Run: hermes webhook subscribe ghost --deliver telegram --deliver-chat-id <your chat> --deliver-only --mirror-to-session --prompt "{message}"',
+      "It prints the address; the secret is under ghost in ~/.hermes/webhook_subscriptions.json. Paste both here. Hermes sends you the message without spending a model turn.",
     ],
   },
   openclaw: {
@@ -1092,7 +1095,7 @@ const CALLBACK: Readonly<
     address: "An https address that takes Standard Webhooks",
     key: "Its signing secret",
     steps: [
-      "o7 posts a small JSON message with the text in message, and signs it with the key: webhook-id, webhook-timestamp and webhook-signature.",
+      "Ghost posts a small JSON message with the text in message, and signs it with the key: webhook-id, webhook-timestamp and webhook-signature.",
     ],
   },
 };
@@ -1107,7 +1110,7 @@ const kindOf = (name: string): CallbackKind => {
 
 /**
  * Where a bot link is told that a chat it acted on finished, failed or asks for an answer, so
- * its assistant can hand o7 a task and stop, instead of holding a call open or asking again.
+ * its assistant can hand Ghost a task and stop, instead of holding a call open or asking again.
  * The key is typed here and kept in this computer's secure storage; it is never shown again.
  */
 export function CallbackDialog({
@@ -1163,9 +1166,10 @@ export function CallbackDialog({
   return (
     <Modal title={`Tell ${bot.name} when a chat is done`} size="md" onClose={onClose}>
       <p className="remote-note">
-        When a chat this bot started or answered finishes, fails or asks for an answer, o7 sends its
-        assistant one short message, so the bot can hand o7 a task and stop instead of waiting on
-        it. o7 sends only to the address you give here, and only about chats this bot acted on.
+        When a chat this bot started or answered finishes, fails or asks for an answer, Ghost sends
+        its assistant one short message, so the bot can hand Ghost a task and stop instead of
+        waiting on it. Ghost sends only to the address you give here, and only about chats this bot
+        acted on.
       </p>
       {set && !editing ? (
         <>
@@ -1304,7 +1308,7 @@ export function CallbackDialog({
             </>
           ) : null}
           <p className="remote-note remote-fine">
-            The key stays in this computer's secure storage and is not shown again. What o7 sends
+            The key stays in this computer's secure storage and is not shown again. What Ghost sends
             names the chat and quotes a line of the agent's last words, so the address learns that
             much about your work.
           </p>
@@ -1344,7 +1348,7 @@ export function BotDialog({
   onClose,
 }: {
   readonly initial: BotChoice;
-  /** This program's path, for an assistant on this computer that starts o7's helper. */
+  /** This program's path, for an assistant on this computer that starts Ghost's helper. */
   readonly program?: () => Promise<string>;
   readonly create: (name: string, rights: BotRights) => Promise<RemoteBotLink>;
   /** Whether the link with this id has made a call yet: the dialog then says it is connected. */
@@ -1395,10 +1399,11 @@ export function BotDialog({
             ))}
           </ol>
           <p className="remote-note">
-            Then teach it o7: ask it to read this and keep it as a skill. Try "Have o7 fix the
-            failing login test", "What needs me in o7?" or "Queue the README cleanup for tonight".
+            Then teach it Ghost: ask it to read this and keep it as a skill. Try "Have Ghost fix the
+            failing login test", "What needs me in Ghost?" or "Queue the README cleanup for
+            tonight".
           </p>
-          <CopyField value="https://o7.codes/skill.md" label="o7's skill" />
+          <CopyField value="https://onghost.dev/skill.md" label="Ghost's skill" />
           {program ? <OnThisComputer address={link.url} program={program} /> : null}
           {called ? (
             <p className="remote-note" role="status" data-testid="remote-bot-called">
@@ -1489,9 +1494,9 @@ export function BotDialog({
                 <strong>Answer what agents ask</strong>
                 <span>
                   Permission requests (run a command, edit a file) and questions, and loosening a
-                  chat's access. Off, the bot can decline but not answer, and you answer in o7 or on
-                  your phone. The bot reads what agents write, so with this on, what it reads could
-                  talk it into saying yes.
+                  chat's access. Off, the bot can decline but not answer, and you answer in Ghost or
+                  on your phone. The bot reads what agents write, so with this on, what it reads
+                  could talk it into saying yes.
                 </span>
               </span>
             </label>

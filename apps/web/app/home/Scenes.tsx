@@ -1,5 +1,5 @@
-import { AGENT_BRANDS, type AgentBrandId } from "@o7/ui";
-import { Logo } from "@o7/ui/graphite";
+import { AGENT_BRANDS, type AgentBrandId } from "@ghost/ui";
+import { Logo } from "@ghost/ui/graphite";
 import type { CSSProperties, ReactNode } from "react";
 import {
   Check,
@@ -56,7 +56,7 @@ export function NewChatView({ chosen }: { chosen: AgentBrandId }) {
             <span className="m-folder-icon">
               <Icon name="folder" />
             </span>
-            <code className="m-path">~/code/o7</code>
+            <code className="m-path">~/code/ghost</code>
             <span className="m-button m-button-primary">Create</span>
           </div>
         </div>
@@ -243,7 +243,7 @@ const SESSION: readonly { kind: string; text: string }[] = [
 ];
 
 /**
- * A chat open in its agent's own interface, in o7's terminal, with Chat one click away. Its
+ * A chat open in its agent's own interface, in Ghost's terminal, with Chat one click away. Its
  * lines print one after another when its card scrolls into view.
  */
 export function TerminalView() {
@@ -251,7 +251,7 @@ export function TerminalView() {
     <div className="tm">
       <div className="tm-bar">
         <span className="tm-title">
-          Fix the header spacing <span className="tm-project">o7</span>
+          Fix the header spacing <span className="tm-project">Ghost</span>
         </span>
         <span className="tm-switch">
           <span>Chat</span>
@@ -368,7 +368,7 @@ const LANES: readonly {
     card: {
       agent: "claude-code",
       title: "Fix the login flow",
-      project: "o7",
+      project: "Ghost",
       line: "Waiting on you · 2 min",
       tone: "needs",
     },
@@ -380,7 +380,7 @@ const LANES: readonly {
     card: {
       agent: "codex",
       title: "Tighten the sidebar",
-      project: "o7",
+      project: "Ghost",
       line: "Running pnpm test · 0:12",
       tone: "working",
     },

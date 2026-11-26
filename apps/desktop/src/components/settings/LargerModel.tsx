@@ -7,7 +7,7 @@ import { Row } from "./SettingsRow";
 /**
  * Settings > Voice > Larger model (docs/local-dictation.md, "The larger model"): Parakeet Ultra,
  * fetched once. It is too large to come inside the installer, so the built-in model is what
- * dictation starts with, and o7 fetches the better one by itself shortly after it starts. This row
+ * dictation starts with, and Ghost fetches the better one by itself shortly after it starts. This row
  * says so and is where a person says no: Cancel while it is on its way (before it starts, too),
  * Remove once it is in use. After a no it is theirs to ask for again, with Download.
  *
@@ -30,8 +30,8 @@ export function LargerModel({
       live.current = false;
     };
   }, []);
-  // A download this page did not start (o7's own, or the page was reloaded while one ran) reports
-  // to nobody here. This page looks again until it has ended, and while o7 is about to start one.
+  // A download this page did not start (Ghost's own, or the page was reloaded while one ran) reports
+  // to nobody here. This page looks again until it has ended, and while Ghost is about to start one.
   const elsewhere = model.larger.state === "downloading" && phase.state === "idle";
   const coming =
     model.larger.state === "absent" && model.larger.automatic && phase.state === "idle";
@@ -70,11 +70,11 @@ export function LargerModel({
       });
     } catch (reason) {
       if (live.current) setPhase({ state: "failed", message: errorMessage(reason) });
-      // It may have failed because o7 had just started the download itself.
+      // It may have failed because Ghost had just started the download itself.
       onChanged();
     }
   };
-  // Cancel is also a no to o7 starting it by itself, so it is remembered whether or not a
+  // Cancel is also a no to Ghost starting it by itself, so it is remembered whether or not a
   // download runs. One this page started ends on its own channel; any other is seen by looking.
   const cancel = async () => {
     const mine = phase.state === "downloading";
@@ -108,7 +108,7 @@ export function LargerModel({
               type="button"
               className="g-button g-button-outline g-button-28"
               // Verifying is past the point of stopping. A download this page did not start is
-              // cancelled as any other, and so is one o7 has yet to start.
+              // cancelled as any other, and so is one Ghost has yet to start.
               disabled={phase.state === "verifying"}
               onClick={() => void cancel()}
             >

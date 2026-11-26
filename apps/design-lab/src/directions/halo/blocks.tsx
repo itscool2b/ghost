@@ -1,4 +1,4 @@
-import { usePrefersReducedMotion } from "@o7/ui";
+import { usePrefersReducedMotion } from "@ghost/ui";
 import {
   ArrowRightLeft,
   Check,

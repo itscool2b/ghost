@@ -15,7 +15,7 @@ import {
 } from "../bindings";
 import { settle } from "./ipc";
 
-export const MOBILE_EVENT = "o7-mobile";
+export const MOBILE_EVENT = "ghost-mobile";
 
 /** Everything the pane asks of the devices. The fixture implements it without a device. */
 export interface MobileApi {
@@ -282,7 +282,7 @@ export const devicePanels = new DevicePanels(
   typeof localStorage === "undefined" ? null : localStorage,
 );
 
-/** The kinds of packet a device's video is sent as (`o7_devices::manager::Viewer`). */
+/** The kinds of packet a device's video is sent as (`ghost_devices::manager::Viewer`). */
 const PACKET_SIZE = 1;
 const PACKET_CONFIG = 2;
 const PACKET_KEY = 3;

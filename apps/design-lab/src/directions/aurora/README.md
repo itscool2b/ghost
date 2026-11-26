@@ -19,7 +19,7 @@ glass over it. This folder belongs to the Aurora designer; the direction lives e
   the gutters and at the window's edges. The surfaces that carry text are denser: level 1 is the
   frosted sidebar, level 2 the floating transcript sheet (plus the plan, queued messages and the
   user's bubbles), level 3 the composer, the permission card and every popover. Each is a
-  squircle (`squirclePath` from `@o7/ui`) with a gradient rim stroked inside the clip, a
+  squircle (`squirclePath` from `@ghost/ui`) with a gradient rim stroked inside the clip, a
   soft specular top, and a shadow on an unclipped layer. Opened tool output sits in a well
   (level 0). Only small overlays use `backdrop-filter`.
 - **One content box.** Header, transcript column, plan, queue and composer share a symmetric 32px

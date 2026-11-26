@@ -1,5 +1,5 @@
 /**
- * Writes the transcript port's goldens, apps/ios/O7Kit/Tests/O7TranscriptTests/Goldens/*.json, from
+ * Writes the transcript port's goldens, apps/ios/GhostKit/Tests/GhostTranscriptTests/Goldens/*.json, from
  * the desktop's real TypeScript: the reducer (transcript.ts) and every helper the chat screens use.
  * GoldenTests (Swift) reads each file's input, runs the port, and compares its output with the
  * expected JSON here, value for value.
@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 import type {
   BackgroundTask,
   EventBatch,
+  GhostEvent,
   HistoryPage,
-  O7Event,
 } from "../../desktop/src/bindings.ts";
 import type {
   Entry,
@@ -36,7 +36,7 @@ import { checking, emit, finish, loadEsbuild, repo } from "./lib.mjs";
 
 const SCRIPT =
   "node --import ./apps/ios/scripts/register-ts.mjs apps/ios/scripts/write-goldens.mts";
-const GOLDENS = repo("apps/ios/O7Kit/Tests/O7TranscriptTests/Goldens");
+const GOLDENS = repo("apps/ios/GhostKit/Tests/GhostTranscriptTests/Goldens");
 
 // A desktop file Node cannot strip (parameter properties, in chatImages.ts, which toolDetails.ts
 // reaches through markdown.ts) is compiled by esbuild instead; every other file runs as Node reads it.
@@ -424,7 +424,7 @@ function asFrames(entries: readonly EventEntry[]): EventEntry[] {
 }
 
 /** A frame of `events` from `seqStart`. */
-function batchOf(seqStart: number, events: readonly O7Event[]): EventBatch {
+function batchOf(seqStart: number, events: readonly GhostEvent[]): EventBatch {
   return { chat_id: "c1", seq_start: seqStart, events: [...events] };
 }
 
@@ -506,7 +506,7 @@ function clientOps(
 
 const fixture = JSON.parse(
   readFileSync(repo("apps/desktop/src/lib/chat/fixtures/live-stream.json"), "utf8"),
-) as { turn: string | null; event: O7Event }[];
+) as { turn: string | null; event: GhostEvent }[];
 const liveStream: EventEntry[] = numbered(fixture.map(({ turn, event }) => [turn, event] as const));
 
 function liveStreamCases(): void {
@@ -568,7 +568,7 @@ function liveStreamCases(): void {
 // ---------- transcript.test.ts ----------
 
 function transcriptTestCases(): void {
-  const pending: O7Event = {
+  const pending: GhostEvent = {
     type: "steering_status",
     message_id: "steer",
     state: "pending",
@@ -968,7 +968,7 @@ function transcriptTestCases(): void {
 function generatedStream(seed: number): EventEntry[] {
   const next = random(seed);
   const pick = <V,>(choices: readonly V[]): V => choices[Math.floor(next() * choices.length)] as V;
-  const tagged: [string | null, O7Event][] = [];
+  const tagged: [string | null, GhostEvent][] = [];
   const tools: string[] = [];
   const messages: string[] = [];
   const turns = 1 + Math.floor(next() * 4);
@@ -1305,7 +1305,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
   const pick = <V,>(choices: readonly V[]): V => choices[Math.floor(rand() * choices.length)] as V;
   const chance = (p: number) => rand() < p;
   const int = (n: number) => Math.floor(rand() * n);
-  const tagged: [string | null, O7Event][] = [];
+  const tagged: [string | null, GhostEvent][] = [];
   const toolIds: string[] = ["sh", "é"];
   const messageIds: string[] = ["m", "é", "e\u0301", "K", "\u212a"];
   const taskIds = ["a", "b", "c", "\u212a"];
@@ -1340,7 +1340,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
       null,
       {},
       { file_path: "a.rs" },
-      { command: "cargo test -p o7-core --lib \\\n  onboarding", description: "Run tests" },
+      { command: "cargo test -p ghost-core --lib \\\n  onboarding", description: "Run tests" },
       {
         query: "is:open label:bug",
         limit: 20,
@@ -1385,7 +1385,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
         { type: "diff", path: "b", old_text: null, new_text: "new\n", truncated: null },
       ],
     ]);
-  const toolCall = (id: string): O7Event =>
+  const toolCall = (id: string): GhostEvent =>
     ({
       type: "tool_call",
       tool_call_id: id,
@@ -1397,8 +1397,8 @@ function fuzzStream(rand: () => number): EventEntry[] {
       tool_name: pick(TOOL_NAMES),
       content: contents(),
       truncated: truncation(),
-    }) as O7Event;
-  const toolUpdate = (id: string): O7Event =>
+    }) as GhostEvent;
+  const toolUpdate = (id: string): GhostEvent =>
     ({
       type: "tool_update",
       tool_call_id: id,
@@ -1410,7 +1410,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
       tool_name: chance(0.1) ? pick(TOOL_NAMES) : null,
       content: chance(0.5) ? contents() : null,
       truncated: chance(0.1) ? truncation() : null,
-    }) as O7Event;
+    }) as GhostEvent;
   const prompt = () =>
     pick([
       { type: "confirm", message: "Sure?" },
@@ -1483,7 +1483,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
         ],
       },
     ]);
-  const task = (id: string): O7Event =>
+  const task = (id: string): GhostEvent =>
     ({
       type: "task_updated",
       ...backgroundTask(id, {
@@ -1504,8 +1504,8 @@ function fuzzStream(rand: () => number): EventEntry[] {
         summary: pick([null, null, "Found it", "## Found it\n\nIn a.rs."]),
         summary_truncated: truncation(),
       }),
-    }) as O7Event;
-  const step = (taskId: string): O7Event =>
+    }) as GhostEvent;
+  const step = (taskId: string): GhostEvent =>
     ev.taskStep(taskId, pick(["s1", "s2", "s3"]), {
       kind: pick(["tool", "text"]),
       title: pick(["Read a.rs", ""]),
@@ -1522,7 +1522,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
     reasoning_tokens: pick([null, 0, 40]),
     scope: pick(["turn", "session"]),
   });
-  const usage = (): O7Event =>
+  const usage = (): GhostEvent =>
     ({
       type: "usage_updated",
       context_used: pick([null, 900, 12_000]),
@@ -1531,8 +1531,8 @@ function fuzzStream(rand: () => number): EventEntry[] {
         null,
         { amount: pick([null, 0.0201, 0.00005, 1.5]), currency: pick(["USD", "EUR"]) },
       ]),
-    }) as O7Event;
-  const plan = (): O7Event =>
+    }) as GhostEvent;
+  const plan = (): GhostEvent =>
     ({
       type: "plan_updated",
       entries: Array.from({ length: int(4) }, (_, index) => ({
@@ -1540,13 +1540,13 @@ function fuzzStream(rand: () => number): EventEntry[] {
         status: pick(["pending", "in_progress", "completed"]),
         priority: pick([null, "high", "medium", "low"]),
       })),
-    }) as O7Event;
-  const unknown = (): O7Event =>
+    }) as GhostEvent;
+  const unknown = (): GhostEvent =>
     pick([
       { type: "future_event", value: 1 },
       { type: "", note: null },
       { type: "tool_call_v2", tool_call_id: "sh" },
-    ]) as unknown as O7Event;
+    ]) as unknown as GhostEvent;
 
   const turns = 1 + int(3);
   for (let turn = 1; turn <= turns; turn += 1) {
@@ -1578,7 +1578,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
               resets_at: pick([null, 1_800_000_000]),
             },
           ],
-        } as O7Event,
+        } as GhostEvent,
       ]);
     if (chance(0.92)) tagged.push([id, ev.turnStarted(id, pick([`p${turn}`, null]))]);
     const userId = chance(0.85) ? `${id}.u` : pick(["steer", "é"]);
@@ -1590,7 +1590,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
           message_id: userId,
           state: pick(["pending", "accepted"]),
           detail: null,
-        } as O7Event,
+        } as GhostEvent,
       ]);
     for (const piece of pieces(pick(USER_TEXTS))) tagged.push([id, ev.user(userId, piece)]);
     if (chance(0.15))
@@ -1601,7 +1601,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
           message_id: userId,
           state: pick(["pending", "accepted", "rejected", "unconfirmed"]),
           detail: pick([null, "Visible outcome"]),
-        } as O7Event,
+        } as GhostEvent,
       ]);
     const steps = int(7);
     for (let stepIndex = 0; stepIndex < steps; stepIndex += 1) {
@@ -1652,7 +1652,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
             content: contents(),
             locations: locations(),
             truncated: truncation(),
-          } as O7Event,
+          } as GhostEvent,
         ]);
         if (chance(0.6)) {
           tagged.push([
@@ -1670,7 +1670,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
         if (chance(0.1)) tagged.push([tag, ev.questionResolved(request, null, "agent")]);
         tagged.push([
           tag,
-          { type: "ui_request", request_id: request, prompt: prompt() } as O7Event,
+          { type: "ui_request", request_id: request, prompt: prompt() } as GhostEvent,
         ]);
         if (chance(0.6))
           tagged.push([
@@ -1680,7 +1680,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
               request_id: request,
               answer: answer(),
               by: pick(["user", "agent", "system", "turn"]),
-            } as O7Event,
+            } as GhostEvent,
           ]);
       } else if (roll < 0.7) {
         tagged.push([pick([id, null]), plan()]);
@@ -1698,7 +1698,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
             type: "notice",
             level: pick(["info", "warning", "error"]),
             message: pick(ODD),
-          } as O7Event,
+          } as GhostEvent,
         ]);
       } else if (roll < 0.93) {
         tagged.push([
@@ -1715,7 +1715,7 @@ function fuzzStream(rand: () => number): EventEntry[] {
             message: pick(ODD),
             detail: pick([null, "detail"]),
             recoverable: chance(0.5),
-          } as O7Event,
+          } as GhostEvent,
         ]);
       } else if (roll < 0.96) {
         tagged.push([null, unknown()]);
@@ -1751,11 +1751,14 @@ function fuzzStream(rand: () => number): EventEntry[] {
           usage: chance(0.3) ? tokenUsage() : null,
           duration_ms: pick([null, 950, 102_000]),
           recovered: chance(0.2),
-        } as O7Event,
+        } as GhostEvent,
       ]);
     }
     if (chance(0.4))
-      tagged.push([null, { type: "notice", level: "info", message: `after ${turn}` } as O7Event]);
+      tagged.push([
+        null,
+        { type: "notice", level: "info", message: `after ${turn}` } as GhostEvent,
+      ]);
     if (chance(0.3)) tagged.push([null, usage()]);
     if (chance(0.15)) tagged.push([null, ev.error("agent_exited", "The agent stopped.")]);
     if (chance(0.15)) tagged.push([null, toolUpdate(pick(toolIds))]);
@@ -2139,14 +2142,14 @@ function handoffCalls(): void {
 function memoryCalls(): void {
   const r = recorder();
   const guidance =
-    "Use this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. You can read and edit this memory with the o7 project-memory tools when they are available: read it first, then write the complete updated Markdown. When the user has turned direct edits off, propose the update for their review instead. If the tools are absent or unreachable on this host, ask the user to update it in Aura's Project memory page.";
+    "Use this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. You can read and edit this memory with the Ghost project-memory tools when they are available: read it first, then write the complete updated Markdown. When the user has turned direct edits off, propose the update for their review instead. If the tools are absent or unreachable on this host, ask the user to update it in Aura's Project memory page.";
   const block = (revision: string, markdown: string, edited = "") =>
     `\n\nProject memory (Aura reference context, revision ${revision})\n${edited}${guidance}\n\n${markdown}\n`;
   const edited =
     'Last edited by an agent in the chat "Ship v1.2. Then rest", not by the user. Weigh it as reference, not as the user\'s instructions.\n';
   const markdown = "# Aura\n\nBuild with the warm target.\n\n## Rules\n- No em dashes";
   const earlier =
-    "\n\nProject memory (Aura reference context, revision r-0)\nUse this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. To suggest an update, use the o7 project-memory read/propose tools when available; proposals require user review. If the helper is absent or unreachable on this host, proposals are unavailable here; use Aura's Project memory editor.\n\nOld memory\n";
+    "\n\nProject memory (Aura reference context, revision r-0)\nUse this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. To suggest an update, use the Ghost project-memory read/propose tools when available; proposals require user review. If the helper is absent or unreachable on this host, proposals are unavailable here; use Aura's Project memory editor.\n\nOld memory\n";
   const quoted = "Explain\n\nProject memory (Aura reference context, revision abc)\nplease";
   for (const text of [
     "Fix the sidebar",
@@ -2569,9 +2572,9 @@ function toolDetailsCalls(): void {
     }),
     tool(
       "Bash",
-      { command: "cargo test -p o7-core --lib \\\n  onboarding" },
+      { command: "cargo test -p ghost-core --lib \\\n  onboarding" },
       [],
-      "cargo test -p o7-core …",
+      "cargo test -p ghost-core …",
     ),
     tool("Edit", { file_path: "a.rs", old_string: "a", new_string: "b" }, [diffContent]),
     tool("Edit", { file_path: "a.rs", old_string: "a", new_string: "b" }, [diffContent], "Edit", [
@@ -3825,7 +3828,7 @@ const extra = existsSync(GOLDENS) ? readdirSync(GOLDENS).filter((file) => !files
 if (checking && extra.length > 0) {
   for (const file of extra) {
     console.error(
-      `apps/ios/O7Kit/Tests/O7TranscriptTests/Goldens/${file} is not written by any case.`,
+      `apps/ios/GhostKit/Tests/GhostTranscriptTests/Goldens/${file} is not written by any case.`,
     );
   }
   console.error(`Run \`${SCRIPT}\` and commit the result.`);

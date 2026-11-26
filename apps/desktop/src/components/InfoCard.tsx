@@ -20,7 +20,7 @@ export function InfoCard({
     <section className="diagnostics-panel info-card">
       <h2 className="panel-title">This launch</h2>
       <dl className="facts">
-        <dt>o7</dt>
+        <dt>Ghost</dt>
         <dd>{info.app_version}</dd>
         <dt>Tauri</dt>
         <dd>{info.tauri_version}</dd>

@@ -1,4 +1,4 @@
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import type { AgentEntry, ChatRole, ChatRoles, ConfigChoice, RoleModel } from "../../bindings";

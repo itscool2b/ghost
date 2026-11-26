@@ -1,4 +1,4 @@
-import { AGENT_BRANDS, type AgentBrandId } from "@o7/ui";
+import { AGENT_BRANDS, type AgentBrandId } from "@ghost/ui";
 import { SpriteMark } from "./Sprite";
 import { Stage } from "./Stage";
 
@@ -9,7 +9,7 @@ const WAYS: readonly { title: string; text: string }[] = [
   },
   {
     title: "Nothing listens on your computer",
-    text: "o7 connects out to its relay. A paired phone's session is encrypted end to end: the relay passes it along and cannot read it.",
+    text: "Ghost connects out to its relay. A paired phone's session is encrypted end to end: the relay passes it along and cannot read it.",
   },
   {
     title: "Hand your assistant whole tasks",
@@ -31,7 +31,7 @@ const CHATS: readonly {
 const STATE_WORDS = { needs: "Needs you", working: "Working", done: "Finished" } as const;
 
 /**
- * o7 from somewhere else: three plain statements at the left, and at the right a phone standing
+ * Ghost from somewhere else: three plain statements at the left, and at the right a phone standing
  * on a stage, showing this computer's chats as the remote page lists them. The phone is drawn in
  * CSS, an illustration of a supported state, hidden from assistive technology.
  */

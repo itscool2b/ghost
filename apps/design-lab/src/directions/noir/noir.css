@@ -933,7 +933,7 @@
 
 /*
  * The aura: the agent's light field, held low behind the composer like light pooling under the
- * one lamp in the room. The field itself is @o7/ui's AuraField; Noir only frames it.
+ * one lamp in the room. The field itself is @ghost/ui's AuraField; Noir only frames it.
  */
 [data-direction="noir"] .n-aura {
   position: absolute;

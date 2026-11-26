@@ -133,8 +133,8 @@ export function AddAccountDialog({
               />
             </label>
             <small id={hint} className="ui-muted">
-              From <code>claude setup-token</code>. Kept in this computer's secure storage; o7 never
-              shows it again.
+              From <code>claude setup-token</code>. Kept in this computer's secure storage; Ghost
+              never shows it again.
             </small>
             <div className="ui-row">
               <button

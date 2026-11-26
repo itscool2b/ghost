@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { splitMemoryContext } from "./memoryContext";
 
-/** The block as `visible_context` (crates/o7-core/src/chatstore/memory.rs) writes it today. */
+/** The block as `visible_context` (crates/ghost-core/src/chatstore/memory.rs) writes it today. */
 const GUIDANCE =
-  "Use this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. You can read and edit this memory with the o7 project-memory tools when they are available: read it first, then write the complete updated Markdown. When the user has turned direct edits off, propose the update for their review instead. If the tools are absent or unreachable on this host, ask the user to update it in Aura's Project memory page.";
+  "Use this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. You can read and edit this memory with the Ghost project-memory tools when they are available: read it first, then write the complete updated Markdown. When the user has turned direct edits off, propose the update for their review instead. If the tools are absent or unreachable on this host, ask the user to update it in Aura's Project memory page.";
 const block = (revision: string, markdown: string, edited = "") =>
   `\n\nProject memory (Aura reference context, revision ${revision})\n${edited}${GUIDANCE}\n\n${markdown}\n`;
 
@@ -50,7 +50,7 @@ describe("splitMemoryContext", () => {
 
   it("reads the wording earlier versions attached", () => {
     const earlier =
-      "\n\nProject memory (Aura reference context, revision r-0)\nUse this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. To suggest an update, use the o7 project-memory read/propose tools when available; proposals require user review. If the helper is absent or unreachable on this host, proposals are unavailable here; use Aura's Project memory editor.\n\nOld memory\n";
+      "\n\nProject memory (Aura reference context, revision r-0)\nUse this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. To suggest an update, use the Ghost project-memory read/propose tools when available; proposals require user review. If the helper is absent or unreachable on this host, proposals are unavailable here; use Aura's Project memory editor.\n\nOld memory\n";
     expect(splitMemoryContext(`Hello${earlier}`)).toEqual({
       text: "Hello",
       memory: { revision: "r-0", editedBy: null, markdown: "Old memory" },

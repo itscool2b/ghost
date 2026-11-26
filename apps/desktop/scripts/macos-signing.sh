@@ -1,5 +1,5 @@
 #!/bin/sh
-# Local code signing for o7's macOS builds.
+# Local code signing for Ghost's macOS builds.
 #
 # macOS stores privacy grants (access to ~/Desktop, where projects live) against an app's
 # designated requirement. With the default ad-hoc signature that requirement is the build's own
@@ -20,13 +20,13 @@
 # Environment:
 #   APPLE_SIGNING_IDENTITY     sign with this identity instead (Tauri's own variable, so one
 #                              setting covers dev runs and bundles; `-` means ad hoc)
-#   O7_SIGNING_KEYCHAIN  create and look for the identity in this keychain instead of the
+#   GHOST_SIGNING_KEYCHAIN  create and look for the identity in this keychain instead of the
 #                              default one; codesign only finds it if the keychain is on the
 #                              user's search list (`security list-keychains`)
 
 set -eu
 
-NAME="o7 Local Signing"
+NAME="Ghost Local Signing"
 # Ten years: the certificate is only ever checked by its hash (a code signature's designated
 # requirement names it), so a long life just postpones rotation.
 VALID_DAYS=3650
@@ -35,7 +35,7 @@ here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 conf="$here/../src-tauri/tauri.conf.json"
 
 say() {
-  printf 'o7: %s\n' "$*" >&2
+  printf 'Ghost: %s\n' "$*" >&2
 }
 
 die() {
@@ -43,10 +43,10 @@ die() {
   exit 1
 }
 
-# Keychain arguments for `security` and `codesign`: none unless O7_SIGNING_KEYCHAIN is set.
+# Keychain arguments for `security` and `codesign`: none unless GHOST_SIGNING_KEYCHAIN is set.
 keychain_args() {
-  if [ -n "${O7_SIGNING_KEYCHAIN:-}" ]; then
-    printf '%s\n' "$O7_SIGNING_KEYCHAIN"
+  if [ -n "${GHOST_SIGNING_KEYCHAIN:-}" ]; then
+    printf '%s\n' "$GHOST_SIGNING_KEYCHAIN"
   fi
 }
 
@@ -141,7 +141,7 @@ run() {
   }
   # Only the app itself: Cargo uses the same runner for test binaries (deps/<name>-<hash>), which
   # gain nothing from a signature.
-  if [ "$(basename -- "$1")" = o7 ]; then
+  if [ "$(basename -- "$1")" = ghost ]; then
     sign_dev_build "$1"
   fi
   exec "$@"
@@ -188,7 +188,7 @@ create() {
   *) exit 2 ;;
   esac
 
-  work=$(mktemp -d "${TMPDIR:-/tmp}/o7-signing.XXXXXX")
+  work=$(mktemp -d "${TMPDIR:-/tmp}/ghost-signing.XXXXXX")
   trap 'rm -rf "$work"' EXIT
   trap 'exit 130' HUP INT TERM
   # The private key exists outside the keychain only here, readable by this user alone, until
@@ -200,7 +200,7 @@ distinguished_name = dn
 prompt = no
 [ dn ]
 CN = $NAME
-O = o7 local builds
+O = Ghost local builds
 [ codesign ]
 basicConstraints = critical, CA:false
 keyUsage = critical, digitalSignature

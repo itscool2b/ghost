@@ -1,0 +1,21 @@
+{"d":"note","note":{"text":"Synthetic native Claude fixture: bad-late-controls. No paid calls or personal data."}}
+{"d":"note","note":{"start":{"agent_id":"claude","dialect":"claude","resume":null,"native_session_id":"<SESSION_1>","autonomy":"ask","desired":{},"spawn_id":"019a0000-0000-7000-8000-00000000aaaa"}}}
+{"d":"out","msg":{"type":"control_request","request_id":"recorded-init","request":{"subtype":"initialize","hooks":null}}}
+{"d":"in","msg":{"type":"control_response","response":{"subtype":"success","request_id":"recorded-init","response":{"claude_code_version":"2.1.310","current_permission_mode":"default","session_state":"idle","model":"haiku","models":[{"value":"haiku","displayName":"Haiku","supportedEffortLevels":["low","medium","high"]}],"commands":[{"name":"usage","description":"Show usage","builtin":true}]}}}}
+{"d":"out","msg":{"request":{"subtype":"get_context_usage","detail":"summary"},"request_id":"recorded-context-1","type":"control_request"}}
+{"d":"out","msg":{"request":{"subtype":"get_usage","skip_behaviors":true},"request_id":"recorded-usage-1","type":"control_request"}}
+{"d":"in","msg":{"response":{"response":{},"request_id":"recorded-context-1","subtype":"success"},"type":"control_response"}}
+{"d":"in","msg":{"response":{"response":{},"request_id":"recorded-usage-1","subtype":"success"},"type":"control_response"}}
+{"d":"in","raw":"not valid JSON"}
+{"d":"in","msg":{"type":"control_response","response":{"subtype":"future","request_id":"recorded-init"}}}
+{"d":"in","msg":{"type":"control_response","response":{"subtype":"success","request_id":"never-sent","response":{}}}}
+{"d":"in","msg":{"type":"control_request","request_id":"unsupported-1","request":{"subtype":"unsupported"}}}
+{"d":"out","msg":{"type":"control_response","response":{"subtype":"error","request_id":"unsupported-1","error":"This control request is not supported by Ghost."}}}
+{"d":"cmd","cmd":{"type":"set_option","option_id":"model","value":{"type":"choice","value":"haiku"}}}
+{"d":"out","msg":{"type":"control_request","request_id":"recorded-model","request":{"subtype":"set_model","model":"haiku"}}}
+{"d":"in","msg":{"type":"control_response","response":{"subtype":"success","request_id":"recorded-model","response":{"model":"haiku"}}}}
+{"d":"cmd","cmd":{"type":"set_option","option_id":"model","value":{"type":"choice","value":"haiku"}}}
+{"d":"out","msg":{"type":"control_request","request_id":"recorded-model-2","request":{"subtype":"set_model","model":"haiku"}}}
+{"d":"in","msg":{"type":"control_response","response":{"subtype":"success","request_id":"recorded-model","response":{"model":"late-model"}}}}
+{"d":"in","msg":{"type":"control_response","response":{"subtype":"success","request_id":"recorded-model-2","response":{"model":"haiku"}}}}
+{"d":"cmd","cmd":{"type":"shutdown"}}

@@ -1,8 +1,8 @@
-import type { OrbState } from "@o7/ui";
-import { type ActivitySegment, IDLE_TIMELINE, type MarkTimeline } from "@o7/ui/orbit";
+import type { OrbState } from "@ghost/ui";
+import { type ActivitySegment, IDLE_TIMELINE, type MarkTimeline } from "@ghost/ui/orbit";
 import type { TranscriptModel, Turn } from "../../kit";
 
-export * from "@o7/ui/orbit";
+export * from "@ghost/ui/orbit";
 
 /**
  * The last turn's activity as segments: thinking before and between outputs, streaming while a

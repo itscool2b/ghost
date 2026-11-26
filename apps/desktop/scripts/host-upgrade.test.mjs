@@ -50,14 +50,14 @@ function write(path, text) {
 function machine(build = "old") {
   const root = temp();
   const paths = {
-    installDir: join(root, "o7"),
+    installDir: join(root, "Ghost"),
     dataDir: join(root, "si.auracode.desktop"),
     stateDir: join(root, "auracode-upgrades"),
   };
-  write(join(paths.installDir, "o7.exe"), build);
+  write(join(paths.installDir, "ghost.exe"), build);
   write(join(paths.installDir, "uninstall.exe"), "uninstaller");
   write(join(paths.installDir, "resources", "notices.txt"), build);
-  const installer = join(root, "bundle", "o7_0.1.0_x64-setup.exe");
+  const installer = join(root, "bundle", "Ghost_0.1.0_x64-setup.exe");
   write(installer, "installer");
   return { root, paths, installer };
 }
@@ -72,7 +72,7 @@ function fakeSystem(
 ) {
   const calls = [];
   const state = { running, helpers: [...helpers], times: 0, emptyAtInstall: undefined };
-  const exe = join(paths.installDir, "o7.exe");
+  const exe = join(paths.installDir, "ghost.exe");
   return {
     calls,
     state,
@@ -80,7 +80,7 @@ function fakeSystem(
       const list = state.helpers.map((pid) => ({
         ProcessId: pid,
         ExecutablePath: exe,
-        CommandLine: `"${exe}" --o7-memory-helper --mcp`,
+        CommandLine: `"${exe}" --ghost-memory-helper --mcp`,
       }));
       if (state.running)
         list.push({ ProcessId: 100, ExecutablePath: exe, CommandLine: `"${exe}"` });
@@ -147,32 +147,32 @@ const LOCAL = resolve("/", "Users", "a", "AppData", "Local");
 
 test("the folders come from LOCALAPPDATA unless overridden", () => {
   const paths = folders({ LOCALAPPDATA: LOCAL });
-  assert.equal(paths.installDir, join(LOCAL, "o7"));
-  assert.equal(paths.dataDir, join(LOCAL, "codes.o7.desktop"));
-  assert.equal(paths.stateDir, join(LOCAL, "o7-upgrades"));
-  // O7_DATA_DIR belongs to development launches, never to the installed app here.
+  assert.equal(paths.installDir, join(LOCAL, "Ghost"));
+  assert.equal(paths.dataDir, join(LOCAL, "dev.onghost.desktop"));
+  assert.equal(paths.stateDir, join(LOCAL, "ghost-upgrades"));
+  // GHOST_DATA_DIR belongs to development launches, never to the installed app here.
   assert.equal(
-    folders({ LOCALAPPDATA: LOCAL, O7_DATA_DIR: resolve("/", "scratch") }).dataDir,
-    join(LOCAL, "codes.o7.desktop"),
+    folders({ LOCALAPPDATA: LOCAL, GHOST_DATA_DIR: resolve("/", "scratch") }).dataDir,
+    join(LOCAL, "dev.onghost.desktop"),
   );
   assert.throws(() => folders({}), /LOCALAPPDATA/u);
 });
 
 test("only the installed app's processes count, and helpers apart", () => {
-  const install = join(LOCAL, "o7");
-  const debug = resolve("/", "src", "target", "debug", "o7.exe");
+  const install = join(LOCAL, "Ghost");
+  const debug = resolve("/", "src", "target", "debug", "ghost.exe");
   const { app, helpers } = hostProcesses(
     [
-      { ProcessId: 1, ExecutablePath: join(install, "o7.exe"), CommandLine: "o7.exe" },
+      { ProcessId: 1, ExecutablePath: join(install, "ghost.exe"), CommandLine: "ghost.exe" },
       {
         ProcessId: 2,
         // Windows paths ignore case.
         ExecutablePath: join(install.toUpperCase(), "AURACODE.EXE"),
-        CommandLine: "o7.exe --o7-memory-helper --mcp",
+        CommandLine: "ghost.exe --ghost-memory-helper --mcp",
       },
       // A development build is never the host.
       { ProcessId: 3, ExecutablePath: debug, CommandLine: "" },
-      { ProcessId: 4, ExecutablePath: join(`${install}-old`, "o7.exe"), CommandLine: "" },
+      { ProcessId: 4, ExecutablePath: join(`${install}-old`, "ghost.exe"), CommandLine: "" },
       { ProcessId: 5, ExecutablePath: null, CommandLine: null },
     ],
     install,
@@ -189,14 +189,14 @@ test("only the installed app's processes count, and helpers apart", () => {
 
 test("the newest installer wins across target layouts", () => {
   const root = temp();
-  const older = join(root, "release", "bundle", "nsis", "o7_0.1.0_x64-setup.exe");
+  const older = join(root, "release", "bundle", "nsis", "Ghost_0.1.0_x64-setup.exe");
   const newer = join(
     root,
     "x86_64-pc-windows-msvc",
     "release",
     "bundle",
     "nsis",
-    "o7_0.1.0_x64-setup.exe",
+    "Ghost_0.1.0_x64-setup.exe",
   );
   write(older, "a");
   write(newer, "b");
@@ -250,9 +250,9 @@ test("the relaunch and the waiter never inherit an agent session's variables", (
     cleanEnv({
       PATH: "p",
       LOCALAPPDATA: "l",
-      O7_DATA_DIR: "x",
-      O7_SMOKE: "1",
-      O7_MCP_0_env_1: "token",
+      GHOST_DATA_DIR: "x",
+      GHOST_SMOKE: "1",
+      GHOST_MCP_0_env_1: "token",
       CLAUDECODE: "1",
       CLAUDE_CODE_SESSION_ID: "s",
       CLAUDE_PID: "1",
@@ -279,11 +279,11 @@ test("an install keeps the old app, installs, starts the new one and keeps it", 
   const system = fakeSystem(paths);
   const log = recorder();
   assert.equal(await install(options({ installer }), paths, system, log), EXIT.done);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "new");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "new");
   const [name] = readdirSync(join(paths.stateDir, "snapshots"));
   assert.equal(name, "20261101-130554");
   const kept = join(paths.stateDir, "snapshots", name);
-  assert.equal(readFileSync(join(kept, "app", "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(kept, "app", "ghost.exe"), "utf8"), "old");
   assert.equal(readFileSync(join(kept, "app", "resources", "notices.txt"), "utf8"), "old");
   const record = JSON.parse(readFileSync(join(kept, "snapshot.json"), "utf8"));
   assert.equal(record.replacedBy, installer);
@@ -295,7 +295,7 @@ test("an install keeps the old app, installs, starts the new one and keeps it", 
   assert.equal(system.state.emptyAtInstall, true, "the installer found an empty folder");
   assert.match(
     log.lines.join("\n"),
-    /Installed o7\.exe: 3 bytes, sha256 [0-9a-f]{16} \(previous [0-9a-f]{16}\)\./u,
+    /Installed ghost\.exe: 3 bytes, sha256 [0-9a-f]{16} \(previous [0-9a-f]{16}\)\./u,
   );
   assert.match(log.lines.at(-1), /Undo with: rollback --snapshot 20261101-130554/u);
 });
@@ -306,8 +306,8 @@ test("an installer that exits 0 without writing the binary is undone", async () 
   const system = fakeSystem(paths, { writes: false });
   const log = recorder();
   assert.equal(await install(options({ installer }), paths, system, log), EXIT.failed);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
-  assert.match(log.lines.join("\n"), /exited with code 0 but left no o7\.exe/u);
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
+  assert.match(log.lines.join("\n"), /exited with code 0 but left no ghost\.exe/u);
   assert.deepEqual(
     system.calls.map((call) => call[0]),
     ["install", "launch"],
@@ -321,7 +321,7 @@ test("an install never runs while the app runs", async () => {
   assert.equal(await install(options({ installer }), paths, system, log), EXIT.running);
   assert.deepEqual(system.calls, []);
   assert.equal(existsSync(join(paths.stateDir, "snapshots")), false);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
   assert.match(log.lines.at(-1), /Quit it first, or arm the install with --after-exit/u);
 });
 
@@ -332,7 +332,7 @@ test("a waiting install starts when the app quits and stops helpers it left", as
   const log = recorder();
   assert.equal(await install(options({ installer, wait: 30 }), paths, system, log), EXIT.done);
   assert.deepEqual(system.calls[0], ["stop", 7]);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "new");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "new");
 });
 
 test("a waiting install gives up when the app does not quit in time", async () => {
@@ -359,7 +359,7 @@ test("a build that does not stay up is replaced by the snapshot", async () => {
   const system = fakeSystem(paths, { staysUp: false });
   const log = recorder();
   assert.equal(await install(options({ installer }), paths, system, log), EXIT.failed);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
   assert.equal(readFileSync(join(paths.installDir, "resources", "notices.txt"), "utf8"), "old");
   assert.deepEqual(
     system.calls.map((call) => call.slice(0, 1).concat(call[2] ?? [])),
@@ -392,7 +392,7 @@ for (const failure of ["throw", "reject"]) {
     };
     const log = recorder();
     assert.equal(await install(options({ installer }), paths, system, log), EXIT.failed);
-    assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+    assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
     assert.equal(readFileSync(join(paths.installDir, "resources", "notices.txt"), "utf8"), "old");
     assert.equal(system.state.running, true);
     assert.equal(system.state.times, 0, "spawn failure does not wait for a health check");
@@ -416,7 +416,7 @@ for (const failure of ["throw", "reject"]) {
     };
     const log = recorder();
     assert.equal(await install(options({ installer }), paths, system, log), EXIT.failed);
-    assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+    assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
     assert.match(log.lines.join("\n"), /installer exited with code 2/u);
     assert.match(
       log.lines.join("\n"),
@@ -436,7 +436,7 @@ test("manual rollback reports a restored app launch failure", async () => {
   };
   const log = recorder();
   assert.equal(await rollback(options(), paths, system, log), EXIT.failed);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
   assert.match(
     log.lines.join("\n"),
     /restored app could not start: restored executable was blocked/u,
@@ -448,7 +448,7 @@ test("a failed installer is undone", async () => {
   const system = fakeSystem(paths, { installCode: 2 });
   const log = recorder();
   assert.equal(await install(options({ installer }), paths, system, log), EXIT.failed);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
   assert.match(log.lines.join("\n"), /installer exited with code 2/u);
 });
 
@@ -463,12 +463,12 @@ test("an install without an installer or an install to keep changes nothing", as
   rmSync(join(paths.installDir, "uninstall.exe"));
   await assert.rejects(
     install(
-      options({ installer: join(root, "bundle", "o7_0.1.0_x64-setup.exe") }),
+      options({ installer: join(root, "bundle", "Ghost_0.1.0_x64-setup.exe") }),
       paths,
       fakeSystem(paths),
       log,
     ),
-    /holds no installed o7/u,
+    /holds no installed Ghost/u,
   );
 });
 
@@ -482,7 +482,7 @@ test("arming starts one waiter outside the job, from copies", async () => {
   );
   const [call] = system.calls;
   assert.equal(call[0], "startOutsideJob");
-  const staged = join(paths.stateDir, "pending", "20261101-130554-o7_0.1.0_x64-setup.exe");
+  const staged = join(paths.stateDir, "pending", "20261101-130554-Ghost_0.1.0_x64-setup.exe");
   const runner = join(paths.stateDir, "host-upgrade.mjs");
   assert.ok(existsSync(staged) && existsSync(runner));
   assert.ok(call[1].includes(`"${runner}" "install" "--installer" "${staged}" "--wait" "30"`));
@@ -490,7 +490,7 @@ test("arming starts one waiter outside the job, from copies", async () => {
   assert.equal(call[2], paths.stateDir);
   assert.equal(JSON.parse(readFileSync(join(paths.stateDir, "armed.json"), "utf8")).pid, 4242);
   // Nothing was installed yet, and the app was not touched.
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
 
   assert.equal(
     await install(options({ installer, afterExit: true, wait: 30 }), paths, system, log),
@@ -519,11 +519,11 @@ test("a rollback restores the app and, when asked, the migrated databases", asyn
     await rollback(options({ restoreDatabase: true }), paths, system, log),
     EXIT.running,
   );
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "new");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "new");
 
   system.state.running = false;
   assert.equal(await rollback(options({ restoreDatabase: true }), paths, system, log), EXIT.done);
-  assert.equal(readFileSync(join(paths.installDir, "o7.exe"), "utf8"), "old");
+  assert.equal(readFileSync(join(paths.installDir, "ghost.exe"), "utf8"), "old");
   assert.equal(readFileSync(join(local, "aura.db"), "utf8"), "before the new build");
   assert.equal(existsSync(join(local, "aura.db-wal")), false);
   const kept = readdirSync(join(local, "backups")).filter((n) => n.includes(".rolled-back-"));
@@ -545,17 +545,17 @@ test("a rollback restores the app and, when asked, the migrated databases", asyn
 test("the snapshot and the restore keep the original files, not copies", async () => {
   const { paths, installer } = machine();
   const id = (path) => statSync(path, { bigint: true }).ino;
-  const original = id(join(paths.installDir, "o7.exe"));
+  const original = id(join(paths.installDir, "ghost.exe"));
   assert.ok(original > 0n, "the file system reports file ids");
   const system = fakeSystem(paths, { staysUp: false });
   assert.equal(await install(options({ installer }), paths, system, recorder()), EXIT.failed);
-  assert.equal(id(join(paths.installDir, "o7.exe")), original, "the restored file");
+  assert.equal(id(join(paths.installDir, "ghost.exe")), original, "the restored file");
   const [name] = readdirSync(join(paths.stateDir, "snapshots"));
-  const kept = join(paths.stateDir, "snapshots", name, "app", "o7.exe");
+  const kept = join(paths.stateDir, "snapshots", name, "app", "ghost.exe");
   assert.equal(readFileSync(kept, "utf8"), "old", "the snapshot can be restored again");
 
   const again = machine();
-  const before = id(join(again.paths.installDir, "o7.exe"));
+  const before = id(join(again.paths.installDir, "ghost.exe"));
   await install(
     options({ installer: again.installer }),
     again.paths,
@@ -563,38 +563,46 @@ test("the snapshot and the restore keep the original files, not copies", async (
     recorder(),
   );
   const [taken] = readdirSync(join(again.paths.stateDir, "snapshots"));
-  assert.equal(id(join(again.paths.stateDir, "snapshots", taken, "app", "o7.exe")), before);
+  assert.equal(id(join(again.paths.stateDir, "snapshots", taken, "app", "ghost.exe")), before);
 });
 
 test("a rollback never deletes a folder that is not an install", () => {
   const { paths, root } = machine();
   const snapshot = { dir: join(root, "snap") };
-  write(join(snapshot.dir, "app", "o7.exe"), "old");
+  write(join(snapshot.dir, "app", "ghost.exe"), "old");
   write(join(snapshot.dir, "app", "uninstall.exe"), "u");
   const elsewhere = join(root, "Documents");
   write(join(elsewhere, "thesis.docx"), "keep me");
-  assert.throws(() => restoreApp(snapshot, elsewhere), /not an o7 install/u);
+  assert.throws(() => restoreApp(snapshot, elsewhere), /not a Ghost install/u);
   assert.equal(readFileSync(join(elsewhere, "thesis.docx"), "utf8"), "keep me");
   assert.throws(() => restoreApp({ dir: join(root, "empty") }, paths.installDir), /no copy/u);
 });
 
-test("a machine updated from auracode keeps its data folder and its kept upgrades", () => {
-  const local = mkdtempSync(join(tmpdir(), "o7-folders-"));
+test("a machine updated from an earlier name keeps its data folder and its kept upgrades", () => {
+  const local = mkdtempSync(join(tmpdir(), "ghost-folders-"));
   try {
-    // Only an empty new folder, as the platform may make one: the old data is still the one.
+    // Only empty folders under the later names, as the platform may make them: the oldest data
+    // is still the one.
+    mkdirSync(join(local, "dev.onghost.desktop", "EBWebView"), { recursive: true });
     mkdirSync(join(local, "codes.o7.desktop", "EBWebView"), { recursive: true });
     mkdirSync(join(local, "si.auracode.desktop", "profiles"), { recursive: true });
     mkdirSync(join(local, "auracode-upgrades"), { recursive: true });
     const paths = folders({ LOCALAPPDATA: local });
     assert.equal(paths.dataDir, join(local, "si.auracode.desktop"));
     assert.equal(paths.stateDir, join(local, "auracode-upgrades"));
-    assert.equal(paths.installDir, join(local, "o7"));
-    // Once the new names are in use, they win.
+    assert.equal(paths.installDir, join(local, "Ghost"));
+    // o7's names come before auracode's, as they did while the app was o7.
     writeFileSync(join(local, "codes.o7.desktop", "device.json"), "{}");
     mkdirSync(join(local, "o7-upgrades"));
+    const then = folders({ LOCALAPPDATA: local });
+    assert.equal(then.dataDir, join(local, "codes.o7.desktop"));
+    assert.equal(then.stateDir, join(local, "o7-upgrades"));
+    // Once the new names are in use, they win.
+    writeFileSync(join(local, "dev.onghost.desktop", "device.json"), "{}");
+    mkdirSync(join(local, "ghost-upgrades"));
     const now = folders({ LOCALAPPDATA: local });
-    assert.equal(now.dataDir, join(local, "codes.o7.desktop"));
-    assert.equal(now.stateDir, join(local, "o7-upgrades"));
+    assert.equal(now.dataDir, join(local, "dev.onghost.desktop"));
+    assert.equal(now.stateDir, join(local, "ghost-upgrades"));
   } finally {
     rmSync(local, { recursive: true, force: true });
   }

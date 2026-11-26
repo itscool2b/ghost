@@ -9,20 +9,20 @@ import {
 import { inTauri, settle } from "./ipc";
 
 /**
- * Remote access (docs/remote-sessions.md): this computer's chats from a paired browser, o7 for
- * iPhone or a linked bot, through o7's relay. Settings is its only surface in the app.
+ * Remote access (docs/remote-sessions.md): this computer's chats from a paired browser, Ghost for
+ * iPhone or a linked bot, through Ghost's relay. Settings is its only surface in the app.
  */
 export interface RemoteApi {
   readonly status: () => Promise<RemoteStatus>;
   readonly setEnabled: (enabled: boolean) => Promise<RemoteStatus>;
   /** The computer does not sleep on its own while something can reach it. */
   readonly setKeepAwake: (on: boolean) => Promise<RemoteStatus>;
-  /** Whether this copy of o7 opens, in the background, when the person signs in. */
+  /** Whether this copy of Ghost opens, in the background, when the person signs in. */
   readonly loginStart: () => Promise<LoginStart>;
   readonly setLoginStart: (on: boolean) => Promise<LoginStart>;
   /** Opens a pairing link, good once and for ten minutes. It replaces the one before it. */
   readonly pair: () => Promise<RemotePairing>;
-  /** This program's path: an assistant on this computer starts it with `--o7-bot-helper`. */
+  /** This program's path: an assistant on this computer starts it with `--ghost-bot-helper`. */
   readonly localProgram: () => Promise<string>;
   /** The open workspace's projects, for an automation to start its tasks in. */
   readonly projects: () => Promise<readonly RemoteProject[]>;
@@ -51,7 +51,7 @@ export interface RemoteApi {
   /** Sends the address a test message now; the status says how it went. */
   readonly testBotCallback: (id: string) => Promise<RemoteStatus>;
   /**
-   * Sends o7 for iPhone a test notification now, through the relay and Apple: at most one every
+   * Sends Ghost for iPhone a test notification now, through the relay and Apple: at most one every
    * ten seconds. The status says when Apple last took one for it.
    */
   readonly testNotification: (id: string) => Promise<RemoteStatus>;
@@ -161,7 +161,7 @@ export function linkLabel(status: RemoteStatus): string {
       return "On. This computer can be reached by the devices and bots below.";
     case "connecting":
     case "off":
-      return "Connecting to o7's relay…";
+      return "Connecting to Ghost's relay…";
     case "offline":
       return `Not reachable right now; trying again. ${status.link.reason}`;
   }

@@ -35,7 +35,7 @@ describe("server rendering", () => {
 
   it("sets the wordmark as real text after a logo not quite twice as wide as the type is tall", () => {
     const html = renderToString(createElement(Wordmark, { size: 16 }));
-    expect(html).toContain('<span class="g-wordmark-text">o7</span>');
+    expect(html).toContain('<span class="g-wordmark-text">Ghost</span>');
     expect(html).toContain("font-size:16px");
     expect(html).toContain('width="30"');
     expect(renderToString(createElement(Wordmark, { size: 32 }))).toContain('width="61"');

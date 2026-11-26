@@ -20,7 +20,7 @@ const PLAN: WorktreeChatPlan = {
   },
   starting_branch: "main",
   starting_commit: "abc",
-  branch: "aura/7f3a9c2e",
+  branch: "ghost/7f3a9c2e",
   branch_generated: true,
   path: "/worktrees/app-7f3a",
   bring_changes: false,
@@ -32,8 +32,8 @@ const PLAN: WorktreeChatPlan = {
   chip: {
     mode: "worktree",
     starting_branch: "main",
-    branch: "aura/7f3a9c2e",
-    label: "Worktree from main on aura/7f3a9c2e",
+    branch: "ghost/7f3a9c2e",
+    label: "Worktree from main on ghost/7f3a9c2e",
   },
   warnings: ["Uncommitted changes stay in the source folder."],
   expires_at: 1,
@@ -74,13 +74,13 @@ describe("the worktree chip", () => {
   it("names the worktree, its start and its new branch in the chip and its accessible name", () => {
     const html = chip(view());
     expect(chipText(view()).name).toBe(
-      "Worktree from main on aura/7f3a9c2e. Where this chat works",
+      "Worktree from main on ghost/7f3a9c2e. Where this chat works",
     );
     expect(html).toContain(
-      'aria-label="Worktree from main on aura/7f3a9c2e. Where this chat works"',
+      'aria-label="Worktree from main on ghost/7f3a9c2e. Where this chat works"',
     );
     expect(html).toContain('data-test-mode="worktree"');
-    expect(html).toContain('data-test-branch="aura/7f3a9c2e"');
+    expect(html).toContain('data-test-branch="ghost/7f3a9c2e"');
     expect(html).toContain('data-test-start="main"');
     // The popover: both modes, the branches with the current one marked, the generated name.
     expect(html).toMatch(/<button[^>]*class="g-segment"[^>]*aria-pressed="true"[^>]*>.*Worktree/);
@@ -88,7 +88,7 @@ describe("the worktree chip", () => {
     expect(html).toContain('<span class="ui-select-value">main (current)</span>');
     expect(html).toContain('<span data-value="main">main (current)</span>');
     expect(html).toContain('<span data-value="release/1.4">release/1.4</span>');
-    expect(html).toContain('placeholder="aura/7f3a9c2e"');
+    expect(html).toContain('placeholder="ghost/7f3a9c2e"');
     expect(html).toContain("Named for you. Type a name to use your own.");
     expect(html).toContain("Bring uncommitted changes");
     expect(html).toContain("Run saved setup");
@@ -204,14 +204,14 @@ describe("recreating a deleted worktree folder", () => {
         chat_id: "c",
         source: "/code/app",
         path: "/w",
-        branch: "aura/x",
+        branch: "ghost/x",
         base_commit: "abc",
         state: "missing",
         detail: null,
         created_at: 1,
       },
       path: "/w",
-      branch: "aura/x",
+      branch: "ghost/x",
       commit: "abc",
       warnings: [
         "The folder is recreated at its original app-owned path.",

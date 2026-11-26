@@ -1,5 +1,5 @@
 /*
- * The agents joined to o7 (AgentConnect.tsx): a 600 by 152 drawing that scales to its
+ * The agents joined to Ghost (AgentConnect.tsx): a 600 by 152 drawing that scales to its
  * column, the hub and the tiles placed over it in percentages of the same box. Tiles rise in one
  * after another, then their lines draw toward the hub. Only whole tiles move; marks never change.
  */

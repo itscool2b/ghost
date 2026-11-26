@@ -49,8 +49,8 @@ them without running anything, open the shots: `shots/index.json` lists every sc
 
 ```sh
 pnpm install                                         # once, at the repo root
-pnpm --filter @o7/design-lab dev               # http://localhost:5180
-pnpm --filter @o7/design-lab dev --port 5181   # any other port (never 1420, the app's)
+pnpm --filter @ghost/design-lab dev               # http://localhost:5180
+pnpm --filter @ghost/design-lab dev --port 5181   # any other port (never 1420, the app's)
 ```
 
 Each dev server keeps its own Vite cache (`node_modules/.vite/port-<n>`), so several can run side by
@@ -59,8 +59,8 @@ side. Open `#/` for the gallery, or a direction directly.
 ## Build
 
 ```sh
-pnpm --filter @o7/design-lab build             # typecheck, then a static build in dist/
-pnpm --filter @o7/design-lab preview           # serve dist/ at http://localhost:5180
+pnpm --filter @ghost/design-lab build             # typecheck, then a static build in dist/
+pnpm --filter @ghost/design-lab preview           # serve dist/ at http://localhost:5180
 ```
 
 The build is portable. Asset URLs are relative (`base: "./"` in `vite.config.ts`) and routing lives
@@ -77,9 +77,9 @@ Use a server rather than opening `index.html` from disk: browsers refuse the mod
 ## Shoot
 
 ```sh
-pnpm --filter @o7/design-lab shoot --direction all --port 5190
-pnpm --filter @o7/design-lab shoot --direction aurora --port 5190 --engines webkit
-pnpm --filter @o7/design-lab shoot --direction aurora --server http://localhost:5181/ --only settled,picker --no-video
+pnpm --filter @ghost/design-lab shoot --direction all --port 5190
+pnpm --filter @ghost/design-lab shoot --direction aurora --port 5190 --engines webkit
+pnpm --filter @ghost/design-lab shoot --direction aurora --server http://localhost:5181/ --only settled,picker --no-video
 ```
 
 It builds the lab into a private folder, serves it with `vite preview` on the port, and writes
@@ -190,7 +190,7 @@ inside the 1440x900 window, and `meta.ts` holds the name and tagline the gallery
 you need them, the states you render (`states`, default the core five), the themes you draw (`themes`,
 default dark only) and the desktop you open on (`wallpaper`, default dusk). Import types and helpers
 from `src/kit.ts` (`import { usePlayhead, type DirectionProps } from "../../kit"`), and orbs, the aura,
-brands, glass and tokens from `@o7/ui`.
+brands, glass and tokens from `@ghost/ui`.
 
 ```ts
 interface DirectionProps {
@@ -210,7 +210,7 @@ interface DirectionProps {
 - Agent text is markdown: `parseMarkdown(item.text, item.streaming)` gives keyed blocks with inline
   nodes, never HTML. Terminal output comes parsed (`call.terminal.lines`, named colours you map to your
   palette), and so do diffs (`call.diffs`: counts and unified hunks with line numbers).
-- Orbs and the aura come from `@o7/ui`: `<Orb brand={agent} state={model.activity} />`,
+- Orbs and the aura come from `@ghost/ui`: `<Orb brand={agent} state={model.activity} />`,
   `<AuraField brand={agent} intensity={model.aura} />`, and `brandCssVariables(getBrand(agent))` for
   accent colours.
 - Window geometry is in `src/shared/window.ts`: the title bar is 52px, and the traffic lights sit at
@@ -219,14 +219,14 @@ interface DirectionProps {
 
 Rules:
 
-- Edit only your folder. No new dependencies (lucide-react, Motion, Tailwind and `@o7/ui` are
+- Edit only your folder. No new dependencies (lucide-react, Motion, Tailwind and `@ghost/ui` are
   installed). Shared changes go through the lab owner.
 - Scope CSS to your direction: CSS Modules (`*.module.css`), or selectors under
   `[data-direction="<id>"]`, which the lab sets around your App. `lab-` class names belong to the lab.
 - Keep overlays inside the window (no portals to `document.body`), so they scale with it.
 - Time comes from the player, never the wall clock: `?t=` must render the same frame every time, and
   when `player.playing` is false, render the model as it is.
-- Honour reduced motion: `usePrefersReducedMotion()` from `@o7/ui`, Motion's own handling, or
+- Honour reduced motion: `usePrefersReducedMotion()` from `@ghost/ui`, Motion's own handling, or
   `:root[data-motion="reduce"]` in CSS. All three follow both the OS setting and `?motion=reduce`.
 - WebKit first: the app runs in WKWebView. Write `-webkit-backdrop-filter` next to `backdrop-filter`,
   keep blur radii constant (never animate them), and check `--engines webkit` shots. One catch:
@@ -239,8 +239,8 @@ Rules:
 ## Checks
 
 ```sh
-pnpm --filter @o7/design-lab test        # reducer, player, fixture, URLs, rules, directions
-pnpm --filter @o7/design-lab typecheck
-pnpm --filter @o7/design-lab build       # typecheck plus the static build
+pnpm --filter @ghost/design-lab test        # reducer, player, fixture, URLs, rules, directions
+pnpm --filter @ghost/design-lab typecheck
+pnpm --filter @ghost/design-lab build       # typecheck plus the static build
 pnpm lint                                      # Biome, at the repo root
 ```

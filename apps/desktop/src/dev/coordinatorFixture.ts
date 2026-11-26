@@ -1,7 +1,7 @@
 /**
  * A synthetic coordinated project for previews (`?preview=coordinator`, `&case=empty`,
  * `&case=paused`). Nothing is stored and no agent runs: the project lives in memory, and each
- * change is applied the way Rust applies it (`crates/o7-core/src/chatstore/coordinator.rs`),
+ * change is applied the way Rust applies it (`crates/ghost-core/src/chatstore/coordinator.rs`),
  * with the same refusals where the page can reach them.
  *
  * `window.coordinatorFixture` lets a check act as an agent: `agentWrites(path, text)` replaces a
@@ -72,7 +72,7 @@ export function fakeCoordinator(kind: string | null): CoordinatorApi {
     paused: kind === "paused",
     pause_reason:
       kind === "paused"
-        ? "o7 paused this project: its coordinator was sent 60 reports and routines within an hour. Look at what the agents are doing, then resume."
+        ? "Ghost paused this project: its coordinator was sent 60 reports and routines within an hour. Look at what the agents are doing, then resume."
         : null,
     workers: empty
       ? []

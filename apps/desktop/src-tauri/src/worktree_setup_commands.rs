@@ -1,6 +1,6 @@
 //! Explicit review and execution of device-local worktree setup.
 use crate::{error::AppError, state::AppState};
-use o7_protocol::worktree_setup::{
+use ghost_protocol::worktree_setup::{
     WorktreeSetup, WorktreeSetupInput, WorktreeSetupPreview, WorktreeSetupResult,
 };
 use tauri::{State, Webview};
@@ -74,7 +74,7 @@ pub async fn worktree_setup_reserve(
     chat_id: String,
     token: String,
 ) -> Result<String, AppError> {
-    use o7_core::terminal::TerminalError;
+    use ghost_core::terminal::TerminalError;
     if state.quit.is_quitting() || !state.pages.for_view(webview.label()).is_current() {
         return Err(TerminalError::Closed.into());
     }
@@ -100,7 +100,7 @@ pub async fn worktree_setup_start(
     rows: u16,
     cols: u16,
 ) -> Result<String, AppError> {
-    use o7_core::terminal::TerminalError;
+    use ghost_core::terminal::TerminalError;
     if state.quit.is_quitting() || !state.pages.for_view(webview.label()).is_current() {
         return Err(TerminalError::Closed.into());
     }
@@ -108,14 +108,14 @@ pub async fn worktree_setup_start(
         state
             .terminals
             .claim_setup(webview.label(), &terminal_id, &chat_id, &token)?;
-    let size = o7_process::pty::PtySize { rows, cols }
+    let size = ghost_process::pty::PtySize { rows, cols }
         .validate()
         .map_err(|_| TerminalError::Resize)?;
     if !state.pages.for_view(webview.label()).is_current() {
         return Err(TerminalError::Closed.into());
     }
     let chats = state.chats().ok_or(TerminalError::Closed)?;
-    let spawner = o7_process::Spawner::new(
+    let spawner = ghost_process::Spawner::new(
         chats.registry.clone(),
         tauri::async_runtime::handle().inner().clone(),
     );

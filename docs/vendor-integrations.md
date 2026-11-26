@@ -16,7 +16,7 @@ that an integration is installed. No terminal output or credential value is logg
 
 Commands preserve interactive vendor approval. No `--yes`, `-y`, install-command acceptance or
 authentication configuration is supplied. The native CLI uses its own existing authentication.
-o7 reads only approved public declarations to bind the review. Protected or malformed
+Ghost reads only approved public declarations to bind the review. Protected or malformed
 declarations make the review unavailable. A missing personal configuration folder is permitted
 for first installation and is distinguished from an unreadable folder.
 

@@ -8,9 +8,9 @@ const agentList = `${AGENT_NAMES.slice(0, -1).join(", ")} and ${AGENT_NAMES.at(-
 
 const QUESTIONS: readonly { question: string; answer: string; agents?: boolean }[] = [
   {
-    question: "Is o7 free?",
+    question: "Is Ghost free?",
     answer:
-      "Yes. The desktop app is free and there is no paid tier. There is no o7 account and nothing to sign up for.",
+      "Yes. The desktop app is free and there is no paid tier. There is no Ghost account and nothing to sign up for.",
   },
   {
     question: "Which agents does it run?",
@@ -18,14 +18,14 @@ const QUESTIONS: readonly { question: string; answer: string; agents?: boolean }
     agents: true,
   },
   {
-    question: "Can my assistant use o7?",
+    question: "Can my assistant use Ghost?",
     answer:
-      "Yes. Link Grok Bot, Muse, Hermes, OpenClaw or any assistant that takes an MCP server in Settings, Remote access. It hands o7 a goal; o7 runs it on its own branch with your agents, has another agent review it, and tells your assistant when it is done. It can leave work for the night, and o7's skill teaches it the rest: o7.codes/skill.md.",
+      "Yes. Link Grok Bot, Muse, Hermes, OpenClaw or any assistant that takes an MCP server in Settings, Remote access. It hands Ghost a goal; Ghost runs it on its own branch with your agents, has another agent review it, and tells your assistant when it is done. It can leave work for the night, and Ghost's skill teaches it the rest: onghost.dev/skill.md.",
   },
   {
-    question: "Does o7 see my agent logins?",
+    question: "Does Ghost see my agent logins?",
     answer:
-      "No. o7 never reads, stores or proxies agent credentials. Each agent signs in through its own flow and keeps its own keys.",
+      "No. Ghost never reads, stores or proxies agent credentials. Each agent signs in through its own flow and keeps its own keys.",
   },
   {
     question: "Does it work offline?",
@@ -33,9 +33,9 @@ const QUESTIONS: readonly { question: string; answer: string; agents?: boolean }
       "Yes. Projects, chats and sessions are stored on your computer and the app needs no connection. Your agents may still need one for their own services.",
   },
   {
-    question: "Does o7 sync or upload my work?",
+    question: "Does Ghost sync or upload my work?",
     answer:
-      "No. Chats, projects and settings stay on your computer. There is no o7 account, so nothing is uploaded by one. Your agents still send what they need to their own services.",
+      "No. Chats, projects and settings stay on your computer. There is no Ghost account, so nothing is uploaded by one. Your agents still send what they need to their own services.",
   },
   {
     question: "Which systems are supported?",

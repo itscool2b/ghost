@@ -1,10 +1,10 @@
-//! `o7 --o7-bot-helper`: o7's bot tools as an MCP server on standard input and output, for an
-//! assistant that runs on this computer too (Hermes, OpenClaw). It reaches the running o7 through
-//! its door on loopback (`o7_remote`, `door.json` in o7's data folder), never through the relay,
+//! `ghost --ghost-bot-helper`: Ghost's bot tools as an MCP server on standard input and output, for an
+//! assistant that runs on this computer too (Hermes, OpenClaw). It reaches the running Ghost through
+//! its door on loopback (`ghost_remote`, `door.json` in Ghost's data folder), never through the relay,
 //! so a bot's calls stay on this computer.
 //!
-//! The assistant starts it with the bot link's address in `O7_LINK`, as Settings shows it: the
-//! link's token is what o7 checks, and the link's level decides the tools it lists and what each
+//! The assistant starts it with the bot link's address in `GHOST_LINK`, as Settings shows it: the
+//! link's token is what Ghost checks, and the link's level decides the tools it lists and what each
 //! call may do, exactly as through the relay. The tools are the relay's own list
 //! (`apps/relay/src/tools.json`), filtered as the relay filters them.
 
@@ -19,8 +19,8 @@ use serde_json::{Value, json};
 const TOOLS: &str = include_str!("../../../relay/src/tools.json");
 
 /// What a bot is told first, as the relay tells a link of the newest set and a read-only link.
-const INSTRUCTIONS: &str = "o7 runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while o7 is open there. For new work, call task once: o7 starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. Work that can wait goes to task with when tonight. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.";
-const READ_INSTRUCTIONS: &str = "o7 runs coding agents (Claude Code, Codex and others) on a person's computer; this link reads its chats while o7 is open there, and cannot send, answer or change anything. inbox says what needs the person in one call; read and wait return what a chat did.";
+const INSTRUCTIONS: &str = "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer, on the person's own subscriptions; these tools reach its chats while Ghost is open there. For new work, call task once: Ghost starts an agent on its own branch, has it plan, build, check and commit, and has a second agent review it, then tells you when it is all done if this link has a call back. Then end your turn; do not wait or poll. Work that can wait goes to task with when tonight. send continues a chat, and like wait returns the turn's result with the commands that ran and what still fails. When you come back, inbox says what needs you in one call. Where look is listed, it shows a chat's page or emulator as a picture, when seeing the work matters. Agents edit files and run commands, so hand over only what the person asked for.";
+const READ_INSTRUCTIONS: &str = "Ghost runs coding agents (Claude Code, Codex and others) on a person's computer; this link reads its chats while Ghost is open there, and cannot send, answer or change anything. inbox says what needs the person in one call; read and wait return what a chat did.";
 
 /// The longest line read from the assistant, as the relay takes a request.
 const MAX_LINE: usize = 256 * 1024;
@@ -35,7 +35,7 @@ struct Link {
 }
 
 pub fn run() {
-    let link = std::env::var("O7_LINK").unwrap_or_default();
+    let link = std::env::var("GHOST_LINK").unwrap_or_default();
     let out = Arc::new(Mutex::new(std::io::stdout()));
     let write = {
         let out = Arc::clone(&out);
@@ -75,7 +75,7 @@ pub fn run() {
                             .and_then(Value::as_str)
                             .unwrap_or("2025-06-18"),
                         "capabilities": { "tools": { "listChanged": false } },
-                        "serverInfo": { "name": "o7", "title": "o7", "version": "2.0.0" },
+                        "serverInfo": { "name": "ghost", "title": "Ghost ADE", "version": "2.0.0" },
                         "instructions": if read { READ_INSTRUCTIONS } else { INSTRUCTIONS },
                     }
                 }));
@@ -139,7 +139,7 @@ fn rights(link: &str) -> Result<Link, String> {
         return Err(reply
             .get("text")
             .and_then(Value::as_str)
-            .unwrap_or("o7 refused this link.")
+            .unwrap_or("Ghost refused this link.")
             .to_owned());
     }
     Ok(Link {
@@ -153,17 +153,18 @@ fn rights(link: &str) -> Result<Link, String> {
     })
 }
 
-/// One request to the running o7's door, and its answer.
+/// One request to the running Ghost's door, and its answer.
 fn door(request: Value) -> Result<Value, String> {
     let away = || {
-        "o7 is not running on this computer, or its remote access is off. Open o7 and turn remote access on in Settings, then try again.".to_owned()
+        "Ghost is not running on this computer, or its remote access is off. Open Ghost and turn remote access on in Settings, then try again.".to_owned()
     };
     if request["link"].as_str().is_none_or(str::is_empty) {
         return Err(
-            "Set O7_LINK to this bot link's address, from o7: Settings, Remote access.".into(),
+            "Set GHOST_LINK to this bot link's address, from Ghost: Settings, Remote access."
+                .into(),
         );
     }
-    let root = o7_core::paths::DataRoot::resolve().map_err(|_| away())?;
+    let root = ghost_core::paths::DataRoot::resolve().map_err(|_| away())?;
     let file = std::fs::read(root.root().join("door.json")).map_err(|_| away())?;
     let door = serde_json::from_slice::<Value>(&file).map_err(|_| away())?;
     let port = door
@@ -174,7 +175,7 @@ fn door(request: Value) -> Result<Value, String> {
     let key = door
         .get("key")
         .and_then(Value::as_str)
-        .and_then(o7_remote::crypto::decode::<32>)
+        .and_then(ghost_remote::crypto::decode::<32>)
         .ok_or_else(away)?;
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let mut stream =
@@ -187,10 +188,10 @@ fn door(request: Value) -> Result<Value, String> {
             .map_err(|_| away())?
             .take(4 * 1024 * 1024),
     );
-    // The door proves it is this run's o7 before the token is sent: whatever else might hold the
-    // port when o7 is not running cannot.
-    let challenge = o7_remote::crypto::random::<16>().map_err(|_| away())?;
-    let hello = json!({ "op": "hello", "challenge": o7_remote::crypto::encode(&challenge) });
+    // The door proves it is this run's Ghost before the token is sent: whatever else might hold the
+    // port when Ghost is not running cannot.
+    let challenge = ghost_remote::crypto::random::<16>().map_err(|_| away())?;
+    let hello = json!({ "op": "hello", "challenge": ghost_remote::crypto::encode(&challenge) });
     stream
         .write_all(format!("{hello}\n").as_bytes())
         .map_err(|_| away())?;
@@ -204,13 +205,13 @@ fn door(request: Value) -> Result<Value, String> {
                 .and_then(Value::as_str)
                 .map(str::to_owned)
         })
-        .is_some_and(|proof| o7_remote::crypto::door_proven(&key, &challenge, &proof));
+        .is_some_and(|proof| ghost_remote::crypto::door_proven(&key, &challenge, &proof));
     if !proven {
-        return Err("Something other than o7 answered at its door; nothing was sent. Open o7 and try again.".into());
+        return Err("Something other than Ghost answered at its door; nothing was sent. Open Ghost and try again.".into());
     }
     let mut bytes = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
     if bytes.len() > MAX_LINE {
-        return Err("This call is larger than o7 takes.".into());
+        return Err("This call is larger than Ghost takes.".into());
     }
     bytes.push(b'\n');
     let _ = stream.set_read_timeout(Some(CALL_TIMEOUT));
@@ -218,8 +219,8 @@ fn door(request: Value) -> Result<Value, String> {
     let mut line = String::new();
     reader
         .read_line(&mut line)
-        .map_err(|_| "o7 did not answer in time.".to_owned())?;
-    serde_json::from_str(&line).map_err(|_| "o7 did not answer in time.".to_owned())
+        .map_err(|_| "Ghost did not answer in time.".to_owned())?;
+    serde_json::from_str(&line).map_err(|_| "Ghost did not answer in time.".to_owned())
 }
 
 /// The relay's tool list as a link of this level and set is shown it: a tool or an argument

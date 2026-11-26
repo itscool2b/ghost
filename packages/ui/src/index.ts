@@ -1,9 +1,9 @@
 /**
- * @o7/ui: the Aura design system shared by the desktop app and o7.codes.
+ * @ghost/ui: the Aura design system shared by the desktop app and onghost.dev.
  *
  * Consumed as TypeScript source (no build step). Import the stylesheets once at the app root:
- *   import "@o7/ui/fonts.css";
- *   import "@o7/ui/tokens.css";
+ *   import "@ghost/ui/fonts.css";
+ *   import "@ghost/ui/tokens.css";
  */
 
 export {

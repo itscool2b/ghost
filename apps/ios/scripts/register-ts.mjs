@@ -5,7 +5,7 @@
 import { registerHooks } from "node:module";
 import { load, resolve } from "./ts-hooks.mjs";
 
-const KEY = Symbol.for("o7.ios.ts-hooks");
+const KEY = Symbol.for("ghost.ios.ts-hooks");
 if (!globalThis[KEY]) {
   globalThis[KEY] = true;
   registerHooks({ resolve, load });

@@ -1,4 +1,4 @@
-import { squirclePath } from "@o7/ui";
+import { squirclePath } from "@ghost/ui";
 import {
   type CSSProperties,
   type HTMLAttributes,

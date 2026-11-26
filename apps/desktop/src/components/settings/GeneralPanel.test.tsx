@@ -181,7 +181,7 @@ describe("Settings' General defaults", () => {
 
   it("says once why Sounds cannot play where the window makes no sound, and waits", () => {
     const notice =
-      "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart o7.";
+      "Audio and video are off here: GStreamer's base and good plugins are missing. Install gst-plugins-base and gst-plugins-good, then restart Ghost.";
     const saved = {
       cold_start: false,
       notice: null,

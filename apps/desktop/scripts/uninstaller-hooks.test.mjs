@@ -58,22 +58,22 @@ test("the bundle builds only the NSIS installer on Windows, with the hooks and s
 });
 
 test("the hooks run the Rust cleanup and keep Tauri from deleting the data folder whole", () => {
-  has(hooks, `ExecWait '"\${program}" --uninstall-cleanup $O7CleanupFlags' $R9`);
-  has(hooks, `!insertmacro O7_CLEANUP "$INSTDIR${SEP}${BIN}.exe"`);
+  has(hooks, `ExecWait '"\${program}" --uninstall-cleanup $GhostCleanupFlags' $R9`);
+  has(hooks, `!insertmacro GHOST_CLEANUP "$INSTDIR${SEP}${BIN}.exe"`);
   has(hooks, "StrCpy $DeleteAppDataCheckboxState 0");
   // Updates and the uninstall an installer runs before installing keep the data.
-  has(hooks, `\${If} $UpdateMode = 1\n    StrCpy $O7DeleteData 0`);
-  has(hooks, `\${If} $EXEDIR == $INSTDIR\n    StrCpy $O7DeleteData 0`);
+  has(hooks, `\${If} $UpdateMode = 1\n    StrCpy $GhostDeleteData 0`);
+  has(hooks, `\${If} $EXEDIR == $INSTDIR\n    StrCpy $GhostDeleteData 0`);
   has(hooks, `\${GetOptions} $CMDLINE "/KEEPDATA" $R9`);
   // A quiet uninstall never shows a dialog.
-  has(hooks, `\${OrIf} \${Silent}\n      StrCpy $O7CleanupFlags ""`);
-  // Still running: Tauri's own check closes o7, then a copy of the program cleans up. Its
+  has(hooks, `\${OrIf} \${Silent}\n      StrCpy $GhostCleanupFlags ""`);
+  // Still running: Tauri's own check closes Ghost, then a copy of the program cleans up. Its
   // check is inserted once per section, since its labels come from the line number.
   assert.ok(!hooks.includes("!insertmacro CheckIfAppIsRunning"));
-  has(hooks, `CopyFiles /SILENT "$INSTDIR${SEP}${BIN}.exe" "$PLUGINSDIR${SEP}o7-cleanup.exe"`);
+  has(hooks, `CopyFiles /SILENT "$INSTDIR${SEP}${BIN}.exe" "$PLUGINSDIR${SEP}ghost-cleanup.exe"`);
   has(
     hooks,
-    `\${If} $O7CleanupLater = 1\n    !insertmacro O7_CLEANUP "$PLUGINSDIR${SEP}o7-cleanup.exe"`,
+    `\${If} $GhostCleanupLater = 1\n    !insertmacro GHOST_CLEANUP "$PLUGINSDIR${SEP}ghost-cleanup.exe"`,
   );
   // The exit codes the hooks read are the Rust ones.
   const rust = readFileSync(resolve(tauri, "src/uninstall.rs"), "utf8");
@@ -93,11 +93,11 @@ test("a link registration an earlier version left is removed only when it is thi
     `\${If} $R9 == "$${SEP}"$INSTDIR${SEP}${BIN}.exe$${SEP}" $${SEP}"%1$${SEP}""\n    DeleteRegKey SHCTX "${key}"`,
   );
   // It runs before the cleanup reads its own result from the same register.
-  assert.ok(hooks.indexOf(`DeleteRegKey SHCTX "${key}"`) < hooks.indexOf("$O7CleanupLater = 1"));
+  assert.ok(hooks.indexOf(`DeleteRegKey SHCTX "${key}"`) < hooks.indexOf("$GhostCleanupLater = 1"));
 });
 
 test("the checkbox keeps the data, and every other string is Tauri's", () => {
-  has(english, `LangString deleteAppData \${LANG_ENGLISH} "Keep my o7 data`);
+  has(english, `LangString deleteAppData \${LANG_ENGLISH} "Keep my Ghost data`);
   assert.ok(keys(english).length >= 20);
 });
 
@@ -129,39 +129,48 @@ test("the custom English file defines every string the pinned CLI's does", {
   assert.deepEqual(keys(english).sort(), keys(text.slice(start, end)).sort());
 });
 
-test("an update from auracode retires auracode's install, and only that", () => {
-  const start = hooks.indexOf("!macro O7_RETIRE_AURACODE");
+test("an update from o7 or from auracode retires that install, and only that", () => {
+  const start = hooks.indexOf("!macro GHOST_RETIRE OLDNAME OLDID");
+  assert.notEqual(start, -1, "the retire step is one macro, used for each earlier name");
   const retire = hooks.slice(start, hooks.indexOf("!macroend", start));
-  // It runs after the install, from the hook Tauri's template inserts there.
-  has(hooks, "!macro NSIS_HOOK_POSTINSTALL\n  !insertmacro O7_RETIRE_AURACODE\n!macroend");
-  // Only the default per-user folder, only with auracode's program in it, never o7's own folder.
-  has(retire, `StrCpy $R7 "$LOCALAPPDATA${SEP}auracode"`);
+  // It runs after the install, from the hook Tauri's template inserts there: once for each
+  // earlier name, the newest first.
+  has(
+    hooks,
+    '!macro NSIS_HOOK_POSTINSTALL\n  !insertmacro GHOST_RETIRE "o7" "codes.o7.desktop"\n  !insertmacro GHOST_RETIRE "auracode" "si.auracode.desktop"\n!macroend',
+  );
+  // Only the default per-user folder, only with the earlier program in it, never Ghost's own.
+  has(retire, `StrCpy $R7 "$LOCALAPPDATA${SEP}\${OLDNAME}"`);
   assert.equal([...retire.matchAll(/RMDir/g)].length, 1, "one folder is deleted");
   has(retire, "RMDir /r $R3\n");
-  // What is deleted is the default folder, made full, and only with auracode's program in it,
-  // LOCALAPPDATA known, and o7 neither in it nor under it.
+  // What is deleted is the default folder, made full, and only with the earlier program in it,
+  // LOCALAPPDATA known, and Ghost neither in it nor under it.
   const guard = retire.slice(retire.indexOf("${If} $LOCALAPPDATA"), retire.indexOf("RMDir"));
-  has(guard, `\${If} $LOCALAPPDATA != ""\n    \${AndIf} \${FileExists} "$R7${SEP}auracode.exe"`);
+  has(guard, `\${If} $LOCALAPPDATA != ""\n    \${AndIf} \${FileExists} "$R7${SEP}\${OLDNAME}.exe"`);
   has(guard, "GetFullPathName $R3 $R7\n      GetFullPathName $R2 $INSTDIR");
   has(guard, `\${If} $R2 != $R3\n      \${AndIf} $R8 != "$R3${SEP}"`);
   assert.doesNotMatch(retire, /ReadRegStr \$R[37]/, "the folder never comes from the registry");
   assert.doesNotMatch(retire, /RMDir[^\n]*\$R5/, "an install found elsewhere keeps its files");
-  // Shortcuts: o7's in place of auracode's; a taskbar pin is retargeted, not removed.
+  // Shortcuts: Ghost's in place of the earlier ones; a taskbar pin is retargeted, not removed.
   has(
     retire,
     `CreateShortcut "$SMPROGRAMS${SEP}\${PRODUCTNAME}.lnk" "$INSTDIR${SEP}\${MAINBINARYNAME}.exe"`,
   );
   has(retire, `!insertmacro SetShortcutTarget $R6 "$INSTDIR${SEP}\${MAINBINARYNAME}.exe"`);
-  // auracode's records go; its data is never named.
+  // The earlier records go; its data is never named.
   has(
     retire,
-    `DeleteRegKey HKCU "Software${SEP}Microsoft${SEP}Windows${SEP}CurrentVersion${SEP}Uninstall${SEP}auracode"`,
+    `DeleteRegKey HKCU "Software${SEP}Microsoft${SEP}Windows${SEP}CurrentVersion${SEP}Uninstall${SEP}\${OLDNAME}"`,
   );
   for (const line of retire.split("\n").filter((text) => /^\s*(Delete|RMDir)\b/.test(text)))
-    assert.doesNotMatch(line, /si\.auracode/, `auracode's data folder is not touched: ${line}`);
+    assert.doesNotMatch(
+      line,
+      /OLDID|si\.auracode|codes\.o7/,
+      `an earlier data folder is not touched: ${line}`,
+    );
   assert.doesNotMatch(
     retire,
     /uninstall\.exe/,
-    "auracode's uninstaller, which deletes data, never runs",
+    "the earlier uninstaller, which deletes data, never runs",
   );
 });

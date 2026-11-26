@@ -4,7 +4,7 @@
     "repo": "handy-computer/parakeet-tdt_ctc-110m-gguf",
     "revision": "1c3f0d5378fdd358905cc410a93ed9e64f52d170",
     "license": "CC-BY-4.0",
-    "attribution": "Parakeet TDT-CTC 110M (https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) was developed by the NVIDIA NeMo and Suno.ai teams and is licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). o7 bundles handy-computer's GGUF conversion of it, quantized to Q6_K, without further changes. The conversion's NOTICE records how it differs from the original.",
+    "attribution": "Parakeet TDT-CTC 110M (https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) was developed by the NVIDIA NeMo and Suno.ai teams and is licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). Ghost bundles handy-computer's GGUF conversion of it, quantized to Q6_K, without further changes. The conversion's NOTICE records how it differs from the original.",
     "files": [
       {
         "name": "LICENSE",
@@ -21,7 +21,7 @@
     "repo": "handy-computer/parakeet-ultra-gguf",
     "revision": "a1539be1b849ea7463b88343e5277b373d0c4ea9",
     "license": "CC-BY-4.0",
-    "attribution": "Parakeet Ultra (https://huggingface.co/moondream/parakeet-ultra) is by Moondream. It is a further-trained version of Parakeet TDT 0.6B v3 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), developed by NVIDIA, and both are licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). o7 does not carry this model: when a person asks for it in Settings, o7 fetches handy-computer's GGUF conversion of it, quantized to Q4_K_M, from Hugging Face, and uses it without changes. The conversion's NOTICE records how it differs from the original.",
+    "attribution": "Parakeet Ultra (https://huggingface.co/moondream/parakeet-ultra) is by Moondream. It is a further-trained version of Parakeet TDT 0.6B v3 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), developed by NVIDIA, and both are licensed under the Creative Commons Attribution 4.0 International license (https://creativecommons.org/licenses/by/4.0/). Ghost does not carry this model: when a person asks for it in Settings, Ghost fetches handy-computer's GGUF conversion of it, quantized to Q4_K_M, from Hugging Face, and uses it without changes. The conversion's NOTICE records how it differs from the original.",
     "files": [
       {
         "name": "LICENSE",
@@ -38,7 +38,7 @@
     "repo": "handy-computer/silero-vad-v6.2-gguf",
     "revision": "a9b2d61c20ae4ddf3644edb34969e8185a485448",
     "license": "MIT",
-    "attribution": "Silero VAD (https://github.com/snakers4/silero-vad) is by the Silero Team and is licensed under the MIT license. o7 bundles handy-computer's GGUF conversion of it without further changes. The conversion's NOTICE records how it differs from the original.",
+    "attribution": "Silero VAD (https://github.com/snakers4/silero-vad) is by the Silero Team and is licensed under the MIT license. Ghost bundles handy-computer's GGUF conversion of it without further changes. The conversion's NOTICE records how it differs from the original.",
     "files": [
       {
         "name": "LICENSE",
@@ -55,7 +55,7 @@
     "repo": "gradium/phonon-31m-en",
     "revision": "8f7a37c94a4c58b04c8287300c53f11d2e208eae",
     "license": "Apache-2.0",
-    "attribution": "Phonon 31M (https://huggingface.co/gradium/phonon-31m-en) is by Gradium. Its weights, tokenizer and voice are released under the Apache License 2.0. It builds on Pocket TTS and the Mimi codec, developed by Kyutai. o7 bundles the 8-bit weights, the configuration, the tokenizer and the model's own voice as Gradium publishes them, without changes, and runs them with Gradium's ptts runtime.",
+    "attribution": "Phonon 31M (https://huggingface.co/gradium/phonon-31m-en) is by Gradium. Its weights, tokenizer and voice are released under the Apache License 2.0. It builds on Pocket TTS and the Mimi codec, developed by Kyutai. Ghost bundles the 8-bit weights, the configuration, the tokenizer and the model's own voice as Gradium publishes them, without changes, and runs them with Gradium's ptts runtime.",
     "covers": ["config.json", "tokenizer.json", "default-voice.safetensors"],
     "files": [
       {
@@ -69,7 +69,7 @@
     "repo": "gradium/phonon-voices",
     "revision": "0ee17205f254b5abc43b266c8a0f215565c352f7",
     "license": "Apache-2.0",
-    "attribution": "The voices are from Gradium's catalogue for Phonon (https://huggingface.co/gradium/phonon-voices), whose model card releases them under the Apache License 2.0. o7 bundles the catalogue's English voices as Gradium publishes them, without changes, and takes each voice's name and description from the catalogue. The catalogue ships no license file of its own; the Apache 2.0 text here is the one Gradium ships with the model.",
+    "attribution": "The voices are from Gradium's catalogue for Phonon (https://huggingface.co/gradium/phonon-voices), whose model card releases them under the Apache License 2.0. Ghost bundles the catalogue's English voices as Gradium publishes them, without changes, and takes each voice's name and description from the catalogue. The catalogue ships no license file of its own; the Apache 2.0 text here is the one Gradium ships with the model.",
     "covers_prefix": "voices/",
     "files": [
       {

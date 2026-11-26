@@ -164,7 +164,7 @@ jobs:
         if: ${{ !cancelled() && env.BROWSER != 'none' && steps.js.outcome == 'success' }}
         timeout-minutes: 60
         run: |
-          pnpm --filter @o7/desktop exec playwright install --with-deps chromium webkit
+          pnpm --filter @ghost/desktop exec playwright install --with-deps chromium webkit
           failed=0
           IFS=';' read -r -a checks <<< "$BROWSER"
           for check in "${checks[@]}"; do
@@ -175,7 +175,7 @@ jobs:
             *) echo "::error::Not a browser check: ${args[0]}"; failed=1; continue ;;
             esac
             echo "::group::${check}"
-            if ! pnpm --filter @o7/desktop "${args[@]}"; then
+            if ! pnpm --filter @ghost/desktop "${args[@]}"; then
               echo "::error::${check} failed"
               failed=1
             fi
@@ -189,13 +189,13 @@ jobs:
         timeout-minutes: 45
         env:
           APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
-        run: pnpm --filter @o7/desktop tauri build --debug --no-bundle
+        run: pnpm --filter @ghost/desktop tauri build --debug --no-bundle
 
       - name: Smoke runs of the real app
         if: ${{ !cancelled() && steps.app.outcome == 'success' }}
         timeout-minutes: 20
         run: |
-          binary=target/debug/o7
+          binary=target/debug/ghost
           if [ "$RUNNER_OS" = Windows ]; then binary="$binary.exe"; fi
           # Linux has no display on the runner: a virtual one, at the window's default size.
           display=()

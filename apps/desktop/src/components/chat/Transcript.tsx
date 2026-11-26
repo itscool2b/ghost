@@ -1,4 +1,4 @@
-import { prefersReducedMotion } from "@o7/ui";
+import { prefersReducedMotion } from "@ghost/ui";
 import {
   type ReactNode,
   useCallback,
@@ -222,8 +222,8 @@ export function Transcript({
         {state.skipped > 0 ? (
           <p className="chat-marker">
             {state.skipped === 1
-              ? "1 entry was written by a newer o7 and can't be shown."
-              : `${state.skipped} entries were written by a newer o7 and can't be shown.`}
+              ? "1 entry was written by a newer Ghost and can't be shown."
+              : `${state.skipped} entries were written by a newer Ghost and can't be shown.`}
           </p>
         ) : null}
       </div>

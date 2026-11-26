@@ -1,4 +1,4 @@
-# o7.codes
+# onghost.dev
 
 React Router 7 interface that follows the system appearance, prerendered to static HTML. Cloudflare serves `build/client`.
 `entry.server.tsx` is build-time React rendering only; the server output is removed by `ssr:false`.
@@ -9,14 +9,14 @@ browser with a computer through the relay in `apps/relay` ([remote-sessions.md](
 ## Local checks
 
 ```powershell
-corepack pnpm --filter @o7/web typecheck
-corepack pnpm --filter @o7/web test
-corepack pnpm --filter @o7/web test:browser
-corepack pnpm --filter @o7/web dev
+corepack pnpm --filter @ghost/web typecheck
+corepack pnpm --filter @ghost/web test
+corepack pnpm --filter @ghost/web test:browser
+corepack pnpm --filter @ghost/web dev
 ```
 
 Browser checks use owned headless Chromium and WebKit and block external requests
-(`pnpm --filter @o7/web test:browser chromium` runs one engine; Playwright's WebKit does not
+(`pnpm --filter @ghost/web test:browser chromium` runs one engine; Playwright's WebKit does not
 start on Arch Linux, which lacks the Ubuntu libraries it is built against). They cover
 dark and light with the system, desktop/mobile overflow, keyboard focus, the agents' chips at every
 width (complete, in view, still), as toggle buttons and with the chosen one's mark, the six feature
@@ -27,7 +27,7 @@ the skip link and verifies keyboard activation. Real Safari/macOS acceptance rem
 
 React Router 7.18.4 supports TypeScript through version 6 in its peer contract, so this package pins
 TypeScript 6.0.3 locally. The desktop/workspace compiler remains unchanged. The website uses the
-shared Geist font package and semantic tokens from `@o7/ui`.
+shared Geist font package and semantic tokens from `@ghost/ui`.
 
 ## Reference evidence
 
@@ -49,7 +49,7 @@ live window, the field and the list of views still.
 
 The assets-only `wrangler.toml` remains available. The separate [Rust website Worker](../web-worker/README.md)
 embeds the same public build for ordinary code deployment without an Assets upload. It is deployed
-at [o7.codes](https://o7.codes) and [preview.o7.codes](https://preview.o7.codes).
+at [onghost.dev](https://onghost.dev) and [preview.onghost.dev](https://preview.onghost.dev).
 Downloads are not published. Production styling deploys automatically from main after merge through Cloudflare Workers Builds;
 verify the deployment against the merged commit. Deploy only one website implementation per route
 and rebuild from the final integrated source. The generated `_headers` supplies a hash-based CSP

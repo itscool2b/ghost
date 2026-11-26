@@ -5,7 +5,7 @@ import { Popover } from "./Popover";
 const MB = 1_048_576;
 
 /**
- * A newer o7, offered at the foot of the sidebar (owner, 18 November 2026: "an update button
+ * A newer Ghost, offered at the foot of the sidebar (owner, 18 November 2026: "an update button
  * pops up for every merge, and if u click it updates"). Nothing shows while the app is current.
  * When Rust's own check has found a newer version, an Update pill appears beside the bell; it
  * opens the version, what changed and one button, Update and restart, which downloads the
@@ -32,13 +32,13 @@ export function AppUpdate({
         : phase === "restart_required"
           ? "Restart"
           : "Update";
-  const version = status.version ? `o7 ${status.version}` : "A newer o7";
+  const version = status.version ? `Ghost ${status.version}` : "A newer Ghost";
   return (
     <Popover
       className="app-update"
-      label="Update o7"
+      label="Update Ghost"
       triggerLabel={`${word}: ${version} is available`}
-      tip="Update o7"
+      tip="Update Ghost"
       trigger={
         <span className="app-update-pill" data-testid="app-update" data-phase={phase}>
           <ArrowDownToLine size={14} aria-hidden="true" />
@@ -69,7 +69,7 @@ export function AppUpdate({
       ) : null}
       {phase === "installing" ? (
         <p className="app-update-note" role="status">
-          Installing. o7 restarts by itself.
+          Installing. Ghost restarts by itself.
         </p>
       ) : null}
       {status.message ? (
@@ -87,7 +87,7 @@ export function AppUpdate({
           <p className="app-update-note">
             {working > 0
               ? `${working === 1 ? "1 chat is" : `${working} chats are`} working. The restart stops ${working === 1 ? "it" : "them"}, and ${working === 1 ? "it picks" : "they pick"} up where ${working === 1 ? "it was" : "they were"}. Drafts are saved first.`
-              : "o7 restarts once. Chats pick up where they were, and drafts are saved first."}
+              : "Ghost restarts once. Chats pick up where they were, and drafts are saved first."}
           </p>
           <button
             type="button"

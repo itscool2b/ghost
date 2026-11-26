@@ -1,4 +1,4 @@
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import { useEffect, useRef, useState } from "react";
 import type {
   AgentEntry,

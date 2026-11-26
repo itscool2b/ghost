@@ -96,7 +96,7 @@ export async function checkRemote(browser, url, out, engine) {
     assert.equal(await code.locator("rect").getAttribute("fill"), "white");
     assert.equal(await code.locator("path").getAttribute("fill"), "black");
     const link = dialog.getByRole("textbox", { name: "Pairing link" });
-    assert.match(await link.inputValue(), /^https:\/\/o7\.codes\/remote#h{22}\.p{11}\.k{43}$/);
+    assert.match(await link.inputValue(), /^https:\/\/onghost\.dev\/remote#h{22}\.p{11}\.k{43}$/);
     assert.equal(await link.getAttribute("readonly"), "");
     assert.match(
       await dialog.getByTestId("remote-pairing-time").textContent(),
@@ -180,26 +180,26 @@ export async function checkRemote(browser, url, out, engine) {
     const address = bot.getByRole("textbox", { name: "Bot address" });
     assert.match(
       await address.inputValue(),
-      /^https:\/\/o7\.codes\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43}$/,
+      /^https:\/\/onghost\.dev\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43}$/,
     );
     await bot.getByText("Add a custom connector").waitFor();
     await bot.getByText("works like a password").waitFor();
     // The dialog says whether the assistant has reached this computer yet.
     await bot.getByText("Waiting for Research bot's first call", { exact: false }).waitFor();
-    // Then o7's skill, at the site's own address.
+    // Then Ghost's skill, at the site's own address.
     assert.equal(
-      await bot.getByRole("textbox", { name: "o7's skill" }).inputValue(),
-      "https://o7.codes/skill.md",
+      await bot.getByRole("textbox", { name: "Ghost's skill" }).inputValue(),
+      "https://onghost.dev/skill.md",
     );
-    // An assistant on this computer can use o7's own helper instead, with the same address.
+    // An assistant on this computer can use Ghost's own helper instead, with the same address.
     await bot.getByText("If your assistant runs on this computer").click();
     assert.match(
       await bot.getByRole("textbox", { name: "Command" }).inputValue(),
-      /^"C:\\Users\\you\\AppData\\Local\\o7\\o7\.exe" --o7-bot-helper$/,
+      /^"C:\\Users\\you\\AppData\\Local\\Ghost\\ghost\.exe" --ghost-bot-helper$/,
     );
     assert.match(
       await bot.getByRole("textbox", { name: "Environment" }).inputValue(),
-      /^O7_LINK=https:\/\/o7\.codes\/api\/remote\/v1\/mcp\//,
+      /^GHOST_LINK=https:\/\/onghost\.dev\/api\/remote\/v1\/mcp\//,
     );
     await settled(page);
     assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
@@ -225,12 +225,12 @@ export async function checkRemote(browser, url, out, engine) {
     await linked.getByRole("button", { name: "Call back, Research bot" }).click();
     const telling = page.getByRole("dialog", { name: "Tell Research bot when a chat is done" });
     await telling
-      .getByText("o7 sends only to the address you give here", { exact: false })
+      .getByText("Ghost sends only to the address you give here", { exact: false })
       .waitFor();
     const kinds = telling.getByRole("group", { name: "Its assistant" });
     assert.equal(await kinds.getByRole("radio", { name: "Another" }).isChecked(), true);
     await kinds.getByRole("radio", { name: "Hermes" }).check();
-    await telling.getByText("hermes webhook subscribe o7", { exact: false }).waitFor();
+    await telling.getByText("hermes webhook subscribe ghost", { exact: false }).waitFor();
     await kinds.getByRole("radio", { name: "Grok Bot" }).check();
     await telling
       .getByText("Its Webhook section shows POST to and key", { exact: false })
@@ -276,12 +276,12 @@ export async function checkRemote(browser, url, out, engine) {
       [
         "Hermes",
         "Lines for Hermes' config",
-        /^mcp_servers:\n {2}o7:\n {4}url: "https:\/\/o7\.codes\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43}"\n {4}timeout: 300$/,
+        /^mcp_servers:\n {2}ghost:\n {4}url: "https:\/\/onghost\.dev\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43}"\n {4}timeout: 300$/,
       ],
       [
         "OpenClaw",
         "Command for OpenClaw",
-        /^openclaw mcp add o7 --url https:\/\/o7\.codes\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43} --transport streamable-http --timeout 300$/,
+        /^openclaw mcp add ghost --url https:\/\/onghost\.dev\/api\/remote\/v1\/mcp\/h{22}\/b{11}\.t{43} --transport streamable-http --timeout 300$/,
       ],
     ]) {
       await page.getByRole("button", { name: "Link a bot", exact: true }).click();
@@ -312,13 +312,13 @@ export async function checkRemote(browser, url, out, engine) {
     await page.getByText("iPhone (Safari)", { exact: true }).waitFor();
     await page.getByText("Last seen 7 min ago", { exact: true }).waitFor();
     await page.getByText("Grok Bot", { exact: true }).waitFor();
-    // o7 for iPhone says which app it is, whether it hears from this computer and when it last
+    // Ghost for iPhone says which app it is, whether it hears from this computer and when it last
     // did, and wears the phone by its kind: its name is one the name's guess would not take for
     // a phone.
     const iphone = page.locator(".settings-row", { hasText: "Travel" });
     await iphone
       .getByText(
-        "Connected now · o7 for iPhone 1.0 · Notifications on · Last notification 5 min ago",
+        "Connected now · Ghost for iPhone 1.0 · Notifications on · Last notification 5 min ago",
         { exact: true },
       )
       .waitFor();
@@ -326,7 +326,7 @@ export async function checkRemote(browser, url, out, engine) {
     await iphone.getByRole("button", { name: "Send test notification, Travel" }).waitFor();
     // A browser says nothing of an app or notifications; its name still chooses its glyph.
     const safari = page.locator(".settings-row", { hasText: "iPhone (Safari)" });
-    assert.equal(await safari.getByText("o7 for iPhone", { exact: false }).count(), 0);
+    assert.equal(await safari.getByText("Ghost for iPhone", { exact: false }).count(), 0);
     assert.equal(await safari.getByText("Notifications", { exact: false }).count(), 0);
     assert.equal(await safari.getByRole("button", { name: /^Send test notification/ }).count(), 0);
     assert.equal(await safari.locator("svg.lucide-smartphone").count(), 1, "the name's glyph");
@@ -373,7 +373,7 @@ export async function checkRemote(browser, url, out, engine) {
     assert.equal((await calls()).at(-1), "test-notification:device-app");
     await iphone
       .getByText(
-        "Connected now · o7 for iPhone 1.0 · Notifications on · Last notification just now",
+        "Connected now · Ghost for iPhone 1.0 · Notifications on · Last notification just now",
         { exact: true },
       )
       .waitFor();
@@ -409,7 +409,10 @@ export async function checkRemote(browser, url, out, engine) {
     assert.deepEqual((await new AxeBuilder({ page }).analyze()).violations, []);
     await create.click();
     const hookAddress = making.getByRole("textbox", { name: "Automation address" });
-    assert.match(await hookAddress.inputValue(), /^https:\/\/o7\.codes\/api\/remote\/v1\/hook\//);
+    assert.match(
+      await hookAddress.inputValue(),
+      /^https:\/\/onghost\.dev\/api\/remote\/v1\/hook\//,
+    );
     assert.equal((await calls()).at(-1), "create-automation:New issues:project-api");
     await page.screenshot({ path: resolve(out, `${engine}-${colorScheme}-remote-automation.png`) });
     await making.getByRole("button", { name: "Done" }).click();

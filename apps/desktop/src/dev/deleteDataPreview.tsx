@@ -1,10 +1,10 @@
 /**
- * Development-only: Settings' "Delete all o7 data" on a synthetic review. No file, key,
+ * Development-only: Settings' "Delete all Ghost data" on a synthetic review. No file, key,
  * worktree or process is touched; applying only records the call.
  *
  *   ?preview=delete-data             Windows, nothing unsaved
  *   ?preview=delete-data-worktrees   Windows, two worktrees with unsaved work
- *   ?preview=delete-data-macos       macOS, with "Also move o7 to the Trash"
+ *   ?preview=delete-data-macos       macOS, with "Also move Ghost to the Trash"
  *   &case=fail                       applying fails (the review is used up)
  */
 import { StrictMode, useState } from "react";
@@ -62,7 +62,7 @@ function review(mode: Mode): DataCleanupReview {
           },
           {
             kind: "temporary",
-            path: "C:\\Users\\you\\AppData\\Local\\Temp\\o7-0.2.0-updater-k3d9",
+            path: "C:\\Users\\you\\AppData\\Local\\Temp\\Ghost-0.2.0-updater-k3d9",
             bytes: 9_437_184,
           },
         ],
@@ -72,8 +72,8 @@ function review(mode: Mode): DataCleanupReview {
             {
               path: worktree("4f1c2a9b7e01"),
               repository,
-              branch: "aura/fix-login-redirect",
-              summary: "3 uncommitted files, 1 commit only on aura/fix-login-redirect",
+              branch: "ghost/fix-login-redirect",
+              summary: "3 uncommitted files, 1 commit only on ghost/fix-login-redirect",
               unsaved: true,
             },
             {
@@ -88,13 +88,13 @@ function review(mode: Mode): DataCleanupReview {
       {
         path: worktree("c7e5a1d08b32"),
         repository,
-        branch: "aura/update-readme",
+        branch: "ghost/update-readme",
         summary: "Nothing unsaved",
         unsaved: false,
       },
     ],
     secure_store: mac ? "the macOS keychain" : "Windows Credential Manager",
-    app_bundle: mac ? "/Applications/o7.app" : null,
+    app_bundle: mac ? "/Applications/Ghost.app" : null,
   };
 }
 

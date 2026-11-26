@@ -3,8 +3,8 @@ use crate::{
     error::{AppError, AppErrorCode},
     state::AppState,
 };
-use o7_core::mcp::Command;
-use o7_protocol::mcp::*;
+use ghost_core::mcp::Command;
+use ghost_protocol::mcp::*;
 use tauri::State;
 
 #[tauri::command]
@@ -76,7 +76,7 @@ pub async fn shared_mcp_import(
             "The shared MCP import exceeds 256 KB.",
         ));
     }
-    let document: McpExport=serde_json::from_str(&document).map_err(|_|AppError::new(AppErrorCode::InvalidArgument,"Use an Aura shared MCP JSON export. Native imports need a reviewed portable definition."))?;
+    let document: McpExport=serde_json::from_str(&document).map_err(|_|AppError::new(AppErrorCode::InvalidArgument,"Use a Ghost shared MCP JSON export. Native imports need a reviewed portable definition."))?;
     Ok(state
         .sessions()?
         .shared_mcp(Command::Import { expected, document })

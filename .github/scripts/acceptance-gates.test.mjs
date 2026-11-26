@@ -37,9 +37,9 @@ test("every desktop acceptance script runs directly or through a checked aggrega
       for (const match of source.matchAll(/["'](check-[\w-]+\.mjs)["']/gu)) include(match[1]);
     }
   }
-  for (const match of ci.matchAll(/@o7\/desktop\s+exec node scripts\/(check-[^\s]+\.mjs)/gu))
+  for (const match of ci.matchAll(/@ghost\/desktop\s+exec node scripts\/(check-[^\s]+\.mjs)/gu))
     include(match[1]);
-  for (const match of ci.matchAll(/@o7\/desktop\s+(check:[\w-]+)/gu)) {
+  for (const match of ci.matchAll(/@ghost\/desktop\s+(check:[\w-]+)/gu)) {
     const command = desktop.scripts[match[1]];
     assert.ok(command, `Missing package command ${match[1]}`);
     const file = /^node scripts\/(check-[\w-]+\.mjs)$/u.exec(command);
@@ -61,7 +61,7 @@ test("browser gates have explicit deadlines and retain standalone evidence", () 
       !step
         .split(/\r?\n/u)
         .some((line) =>
-          /^[ \t]*(?:run:[ \t]*)?pnpm --filter @o7\/(?:desktop|web) (?:check:|exec node scripts\/check-|test:browser)/u.test(
+          /^[ \t]*(?:run:[ \t]*)?pnpm --filter @ghost\/(?:desktop|web) (?:check:|exec node scripts\/check-|test:browser)/u.test(
             line,
           ),
         )
@@ -87,13 +87,13 @@ test("browser gates have explicit deadlines and retain standalone evidence", () 
 test("the app is local-only: no account crate, feature, encrypted store or API build remains", () => {
   const workspace = read("Cargo.toml");
   assert.doesNotMatch(workspace, /aura-sync|apps\/api/u);
-  assert.doesNotMatch(read("crates/o7-core/Cargo.toml"), /account-sync|sqlcipher|aura-sync/u);
+  assert.doesNotMatch(read("crates/ghost-core/Cargo.toml"), /account-sync|sqlcipher|aura-sync/u);
   assert.doesNotMatch(
     read("apps/desktop/src-tauri/Cargo.toml"),
     /account-sync|aura-sync|deep-link/u,
   );
   assert.doesNotMatch(read("Cargo.lock"), /name = "openssl-src"/u);
-  assert.doesNotMatch(ci, /sqlcipher|account-sync|@o7\/api|@auracode\/api|encrypted_storage/u);
+  assert.doesNotMatch(ci, /sqlcipher|account-sync|@ghost\/api|@auracode\/api|encrypted_storage/u);
   for (const workflow of [ci, build, read(".github/workflows/publish.yml")])
     assert.doesNotMatch(workflow, /select-native-perl|vendored OpenSSL/u);
   // The checkpoint comparison keeps its own job, on the systems its baseline supports.
@@ -109,14 +109,14 @@ test("CI uses supported Intel macOS runners without changing universal packaging
 
 test("unsigned packages use exact bindings and need no release secret or updater artifact", () => {
   const bindings = build.indexOf('export-bindings.sh check "$RUNNER_TEMP/bindings-build"');
-  const bundle = build.indexOf('pnpm --filter @o7/desktop bundle --target "$BUNDLE_TARGET"');
+  const bundle = build.indexOf('pnpm --filter @ghost/desktop bundle --target "$BUNDLE_TARGET"');
   assert.ok(
     bindings >= 0 && bundle > bindings,
     "Check exact generated bindings before bundling the frontend",
   );
   assert.doesNotMatch(
     build,
-    /--signed-updater|secrets\.|TAURI_SIGNING_PRIVATE_KEY|O7_UPDATER_PUBLIC_KEY/u,
+    /--signed-updater|secrets\.|TAURI_SIGNING_PRIVATE_KEY|GHOST_UPDATER_PUBLIC_KEY/u,
   );
   assert.match(build, /APPLE_SIGNING_IDENTITY=-/u);
   for (const target of [
@@ -147,7 +147,7 @@ test("Windows uses a pinned external bridge, matching runtime and separate evide
     .find((step) => step.includes("node .github/scripts/webdriver-smoke.mjs"));
   assert.ok(external, "The full-app WebDriver gate must not be replaced by embedded smoke");
   assert.match(external, /timeout-minutes: 8/u);
-  assert.match(external, /target\/debug\/o7\.exe/u);
+  assert.match(external, /target\/debug\/ghost\.exe/u);
   assert.match(ci, /path: \|\s+\$\{\{ runner\.temp \}\}\/webdriver-evidence/u);
   assert.match(ci, /node --test [^\n]*webdriver-smoke\.test\.mjs/u);
 });

@@ -3,8 +3,8 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import type {
   ChatSummary,
+  GhostEvent,
   ManagedWorktree,
-  O7Event,
   QueuedPrompt,
   TerminalChunk,
   WorktreeSetupAttempt,
@@ -58,7 +58,7 @@ export function mountSetupRecoveryPreview(container: HTMLElement) {
           : { reason: "held", after: "error" }
         : null,
     });
-  const publish = (events: O7Event[] = []) => {
+  const publish = (events: GhostEvent[] = []) => {
     const all = [...events, ev.session(info())];
     receive?.(frame(chat.id, sequence, all));
     sequence += all.length;
@@ -73,7 +73,7 @@ export function mountSetupRecoveryPreview(container: HTMLElement) {
     }
   };
   const holdQueue = () => {
-    const events: O7Event[] = [];
+    const events: GhostEvent[] = [];
     queue = queue.map((row) => {
       if (row.held) return row;
       events.push(ev.lifecycle(row.prompt_id, "queued", row.preview, true));
@@ -215,7 +215,7 @@ export function mountSetupRecoveryPreview(container: HTMLElement) {
     chat_id: "never-saved",
     source: "C:/fixture/source",
     path: "C:/fixture/retained",
-    branch: "aura/retained",
+    branch: "ghost/retained",
     base_commit: "a".repeat(40),
     state: "recovery_required",
     detail: "The chat could not be saved and rollback retained changed files.",

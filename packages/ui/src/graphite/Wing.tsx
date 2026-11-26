@@ -63,7 +63,7 @@ export interface WingProps {
 }
 
 /**
- * The o7 logo as something alive: the same wing, whose eyes blink now and then and can look
+ * The Ghost logo as something alive: the same wing, whose eyes blink now and then and can look
  * toward the pointer, or wherever its owner sets `--look-x` and `--look-y` (each from -1 to 1).
  * Filled, the eyes are holes cut by a mask, so they show whatever is behind the wing; in line,
  * the outline and the eyes are stroked. Always decorative: whatever shows it names the app in

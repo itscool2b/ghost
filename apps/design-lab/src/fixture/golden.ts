@@ -21,7 +21,7 @@ export const GOLDEN_TURN_ID = "turn-orb-pacing";
 
 const PACING = "packages/ui/src/orb/pacing.ts";
 const PACING_TEST = "packages/ui/src/orb/pacing.test.ts";
-const TEST_COMMAND = "pnpm --filter @o7/ui test pacing";
+const TEST_COMMAND = "pnpm --filter @ghost/ui test pacing";
 
 /** The files the golden turn edits, in the order it first edits them. */
 export const GOLDEN_EDITED_FILES: readonly string[] = [PACING, PACING_TEST];
@@ -102,7 +102,7 @@ const testLine = ([suite, name, ms]: (typeof TEST_NAMES)[number]): string =>
 
 const TERMINAL_HEAD = [
   "",
-  `> @o7/ui@0.0.0 test`,
+  `> @ghost/ui@0.0.0 test`,
   "> vitest run pacing",
   "",
   ` ${runBadge} ${cyan("v5.0.5 ")}${gray("packages/ui")}`,

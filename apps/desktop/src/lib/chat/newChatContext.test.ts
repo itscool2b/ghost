@@ -151,7 +151,7 @@ describe("project new-chat context", () => {
     expect(chosenMatch(matches, "unrelated")?.folder_id).toBe("b");
     expect(chosenMatch({ ...matches, matches: [] }, "draft")).toBeNull();
     expect(
-      chosenMatch({ ...matches, worktree: { branch: "aura/x", source: "/code/src" } }, "draft"),
+      chosenMatch({ ...matches, worktree: { branch: "ghost/x", source: "/code/src" } }, "draft"),
     ).toBeNull();
     expect(chosenMatch(null, "draft")).toBeNull();
   });

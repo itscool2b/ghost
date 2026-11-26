@@ -185,10 +185,12 @@ async function inspect(engine, launcher) {
       // A failure says why, beside the button that asked.
       await last.click();
       await page.locator('[data-testid="read-aloud"][data-state="speaking"]').waitFor();
-      await page.evaluate(() => window.speechFixture.fail("o7 found no speakers or headphones."));
+      await page.evaluate(() =>
+        window.speechFixture.fail("Ghost found no speakers or headphones."),
+      );
       const alert = page.getByTestId("read-aloud-error");
       await alert.waitFor();
-      assert.equal(await alert.textContent(), "o7 found no speakers or headphones.");
+      assert.equal(await alert.textContent(), "Ghost found no speakers or headphones.");
       assert.equal(await last.getAttribute("data-state"), "idle");
       assert.ok(
         (await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0,
@@ -286,7 +288,7 @@ async function inspect(engine, launcher) {
       await page.goto(`${url}/?preview=settings&page=voice&speech=missing`);
       await page
         .getByTestId("read-aloud-settings")
-        .getByText("This build of o7 is missing its voice model.", { exact: false })
+        .getByText("This build of Ghost is missing its voice model.", { exact: false })
         .waitFor();
       assert.equal(await page.getByRole("combobox", { name: "Voice" }).count(), 0);
       await page.goto(`${url}/?preview=settings&page=voice&speech=unsupported`);

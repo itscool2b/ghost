@@ -1,5 +1,5 @@
-import type { AgentBrandId } from "@o7/ui";
-import { AGENT_BRANDS } from "@o7/ui";
+import type { AgentBrandId } from "@ghost/ui";
+import { AGENT_BRANDS } from "@ghost/ui";
 import type { CSSProperties, ReactNode } from "react";
 import { SpriteMark } from "./Sprite";
 

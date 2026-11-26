@@ -16,7 +16,7 @@ export interface UniversalSettings {
   readonly browser?: BrowserStore;
 }
 
-/** What an agent can do in the browser, in a person's words. The tool names are o7's. */
+/** What an agent can do in the browser, in a person's words. The tool names are Ghost's. */
 const AGENT_TOOLS: readonly (readonly [string, string])[] = [
   ["browser_navigate", "Open a page"],
   ["browser_snapshot", "Read a page"],
@@ -35,8 +35,8 @@ const AGENT_TOOLS: readonly (readonly [string, string])[] = [
 ];
 
 /**
- * Browser use, the universal plugin: o7's own, for every agent (owner, 9 November 2026). It
- * comes with o7 and cannot be added or removed, only turned off, which turns it off for
+ * Browser use, the universal plugin: Ghost's own, for every agent (owner, 9 November 2026). It
+ * comes with Ghost and cannot be added or removed, only turned off, which turns it off for
  * every agent and takes it out of the app. It is Settings > Browser (owner, 10 November 2026),
  * which says outright that its tools are exposed to every agent, and which ones.
  */
@@ -89,7 +89,7 @@ export function UniversalPlugins({ prefs, os, browser = nativeBrowserStore }: Un
               <div>
                 <strong>Exposed to every AI agent</strong>
                 <span>
-                  Every agent you chat with gets these tools from o7, including agents you add
+                  Every agent you chat with gets these tools from Ghost, including agents you add
                   later. Nothing to install. Terminal chats and agents on another computer do not
                   get them. Turn Browser use off and they are gone for every agent.
                 </span>

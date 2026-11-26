@@ -1,10 +1,10 @@
 # Start screen aircraft
 
-o7's start screen shows one American aircraft, a different one at each launch
+Ghost's start screen shows one American aircraft, a different one at each launch
 (`apps/desktop/src/components/chat/LaunchArt.tsx`). The ten pictures in
 `apps/desktop/src/components/chat/launch-art/` are the ten images the owner supplied on
 17 November 2026 as `american_aviation_ascii.zip` ("delete all of those and just replace them with
-these images"): aircraft drawn in text characters, ten JPEG files of 1168 by 784 pixels. o7
+these images"): aircraft drawn in text characters, ten JPEG files of 1168 by 784 pixels. Ghost
 did not fetch or generate them, and this file records only what was received: their origin and
 terms are the owner's to state.
 

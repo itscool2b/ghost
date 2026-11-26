@@ -6,7 +6,7 @@ import {
   getBrand,
   type OrbState,
   usePrefersReducedMotion,
-} from "@o7/ui";
+} from "@ghost/ui";
 import { LucideProvider } from "lucide-react";
 import { motion } from "motion/react";
 import {

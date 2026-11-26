@@ -39,7 +39,7 @@ export function installFixture(): InstallApi {
         revision: "synthetic",
         timeout_seconds: 600,
         notices: [
-          "Installs the integration's last verified version into npm's global prefix. npm uses its existing settings; o7 does not read them.",
+          "Installs the integration's last verified version into npm's global prefix. npm uses its existing settings; Ghost does not read them.",
           "Closing the terminal or reaching ten minutes stops this owned installation. A partial package may require another installation attempt.",
           "Sign-in is a separate action. A successful command still needs a fresh agent version check.",
         ],

@@ -149,7 +149,7 @@ try {
         await page
           .getByLabel("Text of AGENTS.md")
           .inputValue()
-          .then((v) => v.startsWith("# o7")),
+          .then((v) => v.startsWith("# Ghost")),
         true,
       );
       const review = page.getByRole("button", { name: "Review changes", exact: true });

@@ -235,7 +235,7 @@ export class TerminalChatRuntime {
       if (quiet || Date.now() - started >= FIRST_INPUT_WAIT_MS) break;
     }
     if (this.#snapshot.state.state !== "running") return;
-    // Rust already dropped every control character (o7_drivers::terminal::typed_text), so the
+    // Rust already dropped every control character (ghost_drivers::terminal::typed_text), so the
     // text cannot end the paste early and act as keys. It is pasted, never sent: the person reads
     // it and presses Enter, so no prompt on screen (a folder-trust question, say) is answered
     // for them.

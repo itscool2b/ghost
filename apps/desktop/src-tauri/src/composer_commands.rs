@@ -9,7 +9,7 @@ use crate::{
 pub async fn composer_draft(
     state: State<'_, AppState>,
     chat_id: String,
-) -> Result<o7_protocol::composer::ComposerDraft, AppError> {
+) -> Result<ghost_protocol::composer::ComposerDraft, AppError> {
     Ok(state.sessions()?.composer_draft(&chat_id).await?)
 }
 
@@ -25,7 +25,7 @@ pub async fn composer_save_draft(
         .composer_save_draft(&chat_id, input)
         .await?)
 }
-use o7_protocol::{
+use ghost_protocol::{
     composer::{ComposerAttachment, ComposerInput, FileMention},
     session::PromptAck,
 };
@@ -36,8 +36,8 @@ use tauri::{AppHandle, Manager as _, State};
 pub async fn chat_message_images(
     state: State<'_, AppState>,
     chat_id: String,
-    context: o7_protocol::composer::ChatImageContext,
-) -> Result<Vec<o7_protocol::composer::ChatImage>, AppError> {
+    context: ghost_protocol::composer::ChatImageContext,
+) -> Result<Vec<ghost_protocol::composer::ChatImage>, AppError> {
     Ok(state
         .sessions()?
         .chat_message_images(&chat_id, context)
@@ -49,9 +49,9 @@ pub async fn chat_message_images(
 pub async fn chat_image_preview(
     state: State<'_, AppState>,
     chat_id: String,
-    source: o7_protocol::composer::ChatImageSource,
+    source: ghost_protocol::composer::ChatImageSource,
     full: bool,
-) -> Result<o7_protocol::composer::ChatImagePreview, AppError> {
+) -> Result<ghost_protocol::composer::ChatImagePreview, AppError> {
     Ok(state
         .sessions()?
         .chat_image_preview(&chat_id, source, full)
@@ -65,7 +65,7 @@ pub async fn composer_steer(
     chat_id: String,
     expected_turn_id: String,
     input: ComposerInput,
-) -> Result<o7_protocol::composer::SteeringAck, AppError> {
+) -> Result<ghost_protocol::composer::SteeringAck, AppError> {
     let sessions = state.sessions()?;
     Ok(sessions
         .composer_steer(&chat_id, expected_turn_id, input)
@@ -78,7 +78,7 @@ pub async fn project_file_preview(
     state: State<'_, AppState>,
     chat_id: String,
     path: String,
-) -> Result<o7_protocol::composer::ProjectFilePreview, AppError> {
+) -> Result<ghost_protocol::composer::ProjectFilePreview, AppError> {
     Ok(state
         .sessions()?
         .project_file_preview(&chat_id, path)

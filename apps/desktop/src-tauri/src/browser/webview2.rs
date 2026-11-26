@@ -658,7 +658,7 @@ pub(super) async fn press(
         held_defs.push(definition);
     }
     let (key, code, vk, text) = key_definition(main)
-        .ok_or_else(|| BrowserError::Invalid(format!("{main} is not a key o7 knows.")))?;
+        .ok_or_else(|| BrowserError::Invalid(format!("{main} is not a key Ghost knows.")))?;
     let modifiers = modifier_bits(
         &held_defs
             .iter()

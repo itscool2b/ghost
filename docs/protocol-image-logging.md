@@ -16,7 +16,7 @@ This applies to new log records and recognized image shapes. It does not rewrite
 or infer binary data hidden inside arbitrary prose. Saved image attachments follow their separate
 profile storage policy.
 
-Verification: all 198 `o7-process` library tests and Clippy with warnings denied pass on Windows
+Verification: all 198 `ghost-process` library tests and Clippy with warnings denied pass on Windows
 x64. Regression coverage includes reordered object keys, all cut positions within payloads,
 escaped key names, ordinary text/metadata, credentials, and actual on-disk log output for image
 records above the four MiB parse limit.

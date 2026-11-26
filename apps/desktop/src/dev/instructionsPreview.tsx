@@ -70,7 +70,7 @@ export function mountInstructionsPreview(container: HTMLElement, mode: string): 
             : scenario === "review"
               ? {
                   kind: "review",
-                  text: "# auracode\n\nRust for every backend piece; React and TypeScript for interfaces.\n\n## Commands\n\n- `pnpm lint`, `pnpm typecheck` and `pnpm test` before every commit.\n- `cargo test -p o7-config` for configuration changes.\n- `node scripts/check-instructions.mjs` after changing the Instructions page.\n\n## Style\n\n- Plain sentences. No em dashes.\n- Keep functions small and name things plainly.\n",
+                  text: "# auracode\n\nRust for every backend piece; React and TypeScript for interfaces.\n\n## Commands\n\n- `pnpm lint`, `pnpm typecheck` and `pnpm test` before every commit.\n- `cargo test -p ghost-config` for configuration changes.\n- `node scripts/check-instructions.mjs` after changing the Instructions page.\n\n## Style\n\n- Plain sentences. No em dashes.\n- Keep functions small and name things plainly.\n",
                 }
               : undefined
         }

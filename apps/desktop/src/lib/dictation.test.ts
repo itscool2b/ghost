@@ -333,10 +333,10 @@ describe("the larger model's row", () => {
     },
   });
 
-  it("says that o7 fetches it by itself, until the person has said no", () => {
+  it("says that Ghost fetches it by itself, until the person has said no", () => {
     const coming = largerDetail(model("absent", { automatic: true }), { state: "idle" });
     expect(coming).toMatch(/^Parakeet Ultra makes about 40% fewer mistakes/);
-    expect(coming).toContain("o7 downloads it by itself, once: 486 MB from Hugging Face.");
+    expect(coming).toContain("Ghost downloads it by itself, once: 486 MB from Hugging Face.");
     // After a no the row offers it and promises nothing.
     const offer = largerDetail(model("absent"), { state: "idle" });
     expect(offer).not.toContain("by itself");
@@ -367,7 +367,7 @@ describe("the larger model's row", () => {
     expect(largerDetail(model("downloading"), { state: "verifying" })).toBe(
       "Checking the download.",
     );
-    // A download this page did not start, o7's own included: the core says how far it has come.
+    // A download this page did not start, Ghost's own included: the core says how far it has come.
     expect(largerDetail(model("downloading", { received: 243_140_048 }), { state: "idle" })).toBe(
       "Downloading Parakeet Ultra: 243 of 486 MB.",
     );

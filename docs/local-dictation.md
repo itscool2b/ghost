@@ -9,7 +9,7 @@ them install it").
 Larger models were measured on 22 November 2026 (owner: "do hella research on the best voice to
 text model and change it"). The best of them, Parakeet Ultra, makes about 40% fewer errors and
 hears 24 more languages. It is too large to ship inside the app, so it is a one-time download
-that o7 makes by itself shortly after it starts (owner, 22 November 2026, asked whether it should
+that Ghost makes by itself shortly after it starts (owner, 22 November 2026, asked whether it should
 be one click or automatic: "Automatically pls"), and that Settings > Voice shows and can refuse:
 [The larger model](#the-larger-model). [Why the built-in model is
 small](#why-the-built-in-model-is-small) has the comparison and the reason.
@@ -40,22 +40,22 @@ word fade, caret pulse or waveform slide.
 
 ## The larger model
 
-o7 fetches Parakeet Ultra by itself: a first look one minute after it starts, then one every
+Ghost fetches Parakeet Ultra by itself: a first look one minute after it starts, then one every
 quarter of an hour for as long as the model is wanted and not here, so a computer that was
 offline gets it once it is not. It is a 486 MB download from Hugging Face, made once; a download
 that was cut short continues from what arrived. Dictation works without it, on the built-in
 model, and uses the larger one from the next recording after it arrives.
 
-Settings > Voice > Larger model is where a person sees this and says no. Before o7 has started,
-the row says what the model is and that o7 downloads it by itself, with Cancel. While it arrives
+Settings > Voice > Larger model is where a person sees this and says no. Before Ghost has started,
+the row says what the model is and that Ghost downloads it by itself, with Cancel. While it arrives
 the row counts the megabytes, with Cancel. Once it is here the Dictation row names it and its
 languages, and the row offers Remove, which deletes it and returns to the built-in model.
 
-Cancel and Remove are a no that o7 keeps: it writes an empty file, `larger-model.declined`,
+Cancel and Remove are a no that Ghost keeps: it writes an empty file, `larger-model.declined`,
 beside the model, and never starts the download by itself while that file is there. The row then
 offers Download (Continue, where part of the model was kept), which takes the no back.
 
-o7 does not start the download by itself:
+Ghost does not start the download by itself:
 
 - after a no, as above;
 - onto a disk that would be left with less than 2 GiB free (it looks again each quarter of an
@@ -64,7 +64,7 @@ o7 does not start the download by itself:
 - again in the same run, after a download whose file was not the pinned one or that the disk
   would not take (a failed connection is tried again; a wrong file is not fetched over and over);
 - in a development build, where each scratch data folder would fetch its own copy
-  (`O7_DICTATION_AUTOMATIC=1` turns it on there to test it; `=0` turns it off in any build);
+  (`GHOST_DICTATION_AUTOMATIC=1` turns it on there to test it; `=0` turns it off in any build);
 - in a smoke launch.
 
 It does not know whether a connection is metered: a computer tethered to a phone fetches the
@@ -99,7 +99,7 @@ Audio lives only in memory and is zeroed when the recording ends: at most a 12 s
 the phrase in progress (at most 20 s) and the last 30 s of settled phrases. No audio or transcript
 is written to disk or logged; transcribe.cpp's and ggml's native logging is turned off before the
 first model loads. Dictating makes no network request (the one request this feature makes is
-the larger model's download from Hugging Face, once, which o7 starts by itself unless the person
+the larger model's download from Hugging Face, once, which Ghost starts by itself unless the person
 said no; it carries no audio and no text, and Hugging Face sees it as any download, with the
 computer's network address), and no account, API key, cloud speech service,
 Python or external executable is involved. The finished text becomes a normal draft and follows
@@ -108,10 +108,10 @@ the draft's usual persistence.
 ## Why the built-in model is small
 
 The question: the most accurate speech to text that is still quick on an ordinary machine's
-processor, with punctuation and capitals, under a licence o7 can ship, in the engine o7 already
+processor, with punctuation and capitals, under a licence Ghost can ship, in the engine Ghost already
 has (transcribe.cpp runs about seventy models, so the engine was not the limit).
 
-Measured here on 22 November 2026, each model through o7's own live pipeline (voice detection,
+Measured here on 22 November 2026, each model through Ghost's own live pipeline (voice detection,
 live passes, the finishing pass): 100 utterances of LibriSpeech test-other (hard read speech), 100
 of AMI headset meetings (spontaneous speech, 4 to 20 s, 8 words or more), and 30 prompts a
 developer would dictate, spoken by read aloud's voices. Word error rate after one normalizer for
@@ -151,7 +151,7 @@ weights, and it is the weakest of the family in noise).
 **Why it is not built in.** It was, for one merge (#170), and the release was refused before it
 was published: with a 486 MB model inside, the macOS package is about 570 MB and the AppImage about
 610 MB, and every installed copy accepts an update package of at most 512 MiB
-(`MAX_PACKAGE` in `src-tauri/src/updater.rs`; `o7-release` holds the same line). Those copies
+(`MAX_PACKAGE` in `src-tauri/src/updater.rs`; `ghost-release` holds the same line). Those copies
 could never have updated again. And where it did fit (Windows, 519 MB), every update would have
 downloaded the model again, since an update is the whole installer. So the model that ships stays
 small, and the large one arrives once, outside the installer: [The larger
@@ -163,9 +163,9 @@ machine.
 
 To run the comparison again: `scripts/dictation-bench-audio.mjs` builds the two real-speech sets
 (it needs ffmpeg), `the_voices_speak_into_fixture_audio_for_dictation_to_hear` with
-`O7_SPEECH_WAV_TEXTS=scripts/dictation-bench-prompts.txt` speaks the prompts,
-`bundled_models_transcribe_fixture_audio_live` runs a model over a set (`O7_DICTATION_MODELS`,
-`O7_DICTATION_ASR`, `O7_DICTATION_THREADS`), and `scripts/dictation-bench-score.mjs` scores its
+`GHOST_SPEECH_WAV_TEXTS=scripts/dictation-bench-prompts.txt` speaks the prompts,
+`bundled_models_transcribe_fixture_audio_live` runs a model over a set (`GHOST_DICTATION_MODELS`,
+`GHOST_DICTATION_ASR`, `GHOST_DICTATION_THREADS`), and `scripts/dictation-bench-score.mjs` scores its
 output.
 
 ## How it works
@@ -270,7 +270,7 @@ is no longer needed.
 
 ## Verification
 
-- `cargo test -p o7-desktop --lib dictation`: capture, conversion, voice detection, live
+- `cargo test -p ghost-desktop --lib dictation`: capture, conversion, voice detection, live
   agreement, settling, the finishing window, the pacing (a slow model is read less often and in
   shorter phrases, finishing skips a pass that would be slow or redundant), zeroing, operation
   ownership, the model pins, and the larger model's download (it gets its name only when whole
@@ -279,7 +279,7 @@ is no longer needed.
   takes it back, a model already here is not fetched, a disk that would be left short is left
   alone, a development build fetches nothing, a failed connection is tried again and a wrong
   file is not) (31 tests). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
-  every 16 kHz mono WAV in `O7_DICTATION_FIXTURE_DIR` as the microphone would deliver it, and
+  every 16 kHz mono WAV in `GHOST_DICTATION_FIXTURE_DIR` as the microphone would deliver it, and
   prints the live updates, timing and final text (`-- --ignored --nocapture`).
 - `vitest run src/lib/dictation.test.ts`: the controller (live text, the bounded waveform, finishing,
   cancelling, late results, kept words, failures) and insertion at the selection.
@@ -293,8 +293,8 @@ is no longer needed.
   Remove, a failure, a copy with nowhere to keep a model, Settings' search, and axe; and for a
   copy that fetches it by itself: the row saying so before it starts, a download the page did
   not start counting up, Cancel before and during it as a no that holds, and Remove as one too.
-- Natively, on Windows x64 (debug app with `O7_DICTATION_AUTOMATIC=1`, fresh scratch data
-  folders), 22 November 2026, with nothing pressed: the row said o7 downloads the model by
+- Natively, on Windows x64 (debug app with `GHOST_DICTATION_AUTOMATIC=1`, fresh scratch data
+  folders), 22 November 2026, with nothing pressed: the row said Ghost downloads the model by
   itself, the download began about a minute after launch, the row counted it in, and the
   Dictation row named Parakeet Ultra (the whole file in about 10 s on this connection). Remove
   left only `larger-model.declined`, and after a restart nothing was fetched in 85 s. Download

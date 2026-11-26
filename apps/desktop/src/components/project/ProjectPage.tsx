@@ -1,4 +1,4 @@
-import { PixelLoader, StatusDot } from "@o7/ui/graphite";
+import { PixelLoader, StatusDot } from "@ghost/ui/graphite";
 import {
   ArrowUpRight,
   Bot,
@@ -1135,7 +1135,7 @@ function Routines({
       <div className="project-section-head">
         <p className="project-lead">
           A prompt the coordinator is sent again and again, for work that never ends: watching pull
-          requests, a daily tidy-up. Routines run only while o7 is open.
+          requests, a daily tidy-up. Routines run only while Ghost is open.
         </p>
         <button
           type="button"

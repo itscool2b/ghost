@@ -21,7 +21,7 @@ const variant = new URLSearchParams(location.search).get("accounts");
 const fixture = createAccountsFixture(
   variant === "none" || variant === "unavailable" ? [] : ["Work"],
   variant === "unavailable"
-    ? { unavailable: "This computer has no secure storage o7 can keep account tokens in." }
+    ? { unavailable: "This computer has no secure storage Ghost can keep account tokens in." }
     : variant === "nocapture"
       ? { tokenOutput: "missing" }
       : variant === "code"

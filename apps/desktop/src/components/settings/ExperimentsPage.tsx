@@ -40,10 +40,10 @@ export function ExperimentsPage({ prefs }: { readonly prefs: Preferences }) {
           project's own folders, in its own Git worktree where the folder is a repository, with the
           access level your new chats get; the coordinator cannot raise it, and a worker cannot
           start workers. Only you pause, resume or change the brief, and only you and the
-          coordinator record decisions. At most 4 workers work at once, and o7 pauses a project
-          whose coordinator was sent 60 reports and routines in an hour. Routines run only while o7
-          is open. Devices and bots you paired see these chats as the chats they are, and get no
-          project tools.
+          coordinator record decisions. At most 4 workers work at once, and Ghost pauses a project
+          whose coordinator was sent 60 reports and routines in an hour. Routines run only while
+          Ghost is open. Devices and bots you paired see these chats as the chats they are, and get
+          no project tools.
         </p>
       </details>
     </>

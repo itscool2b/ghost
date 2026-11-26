@@ -1,6 +1,6 @@
 /**
  * Writes the pixel geometry goldens the Swift port is tested against,
- * apps/ios/O7Kit/Tests/O7MarksTests/PixelGoldens.generated.swift, by running the desktop's own
+ * apps/ios/GhostKit/Tests/GhostMarksTests/PixelGoldens.generated.swift, by running the desktop's own
  * pixels.ts: the loader's cells, the done check and the centred dot at every size a loader or a
  * mark can take, and the loader's frames.
  *
@@ -20,7 +20,7 @@ import {
 import { emit, finish, repo, swiftHeader, swiftString } from "./lib.mjs";
 
 const SCRIPT = "node apps/ios/scripts/write-pixel-goldens.mts";
-const OUTPUT = repo("apps/ios/O7Kit/Tests/O7MarksTests/PixelGoldens.generated.swift");
+const OUTPUT = repo("apps/ios/GhostKit/Tests/GhostMarksTests/PixelGoldens.generated.swift");
 
 /** PixelLoader clamps to 8...128 and AgentMark to 12...256: cover both. */
 const SIZES = { from: 8, through: 256 } as const;

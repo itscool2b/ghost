@@ -1,7 +1,7 @@
 import type { StressConfig } from "../bindings";
 
 /**
- * Stress-view settings in the `O7_STRESS` format: `orbs=24,rate=200,aura=1,seconds=0`.
+ * Stress-view settings in the `GHOST_STRESS` format: `orbs=24,rate=200,aura=1,seconds=0`.
  *
  * Rust parses the environment variable at launch and passes the result in `app_info`. The stress
  * view shows its current settings in the same format (copy them to reproduce a run) and accepts
@@ -87,7 +87,7 @@ export function parseStressConfig(input: string): StressParse {
   return { ok: true, config };
 }
 
-/** Back in the `O7_STRESS` format, e.g. for a copyable launch command. */
+/** Back in the `GHOST_STRESS` format, e.g. for a copyable launch command. */
 export function formatStressConfig(config: StressConfig): string {
   return `orbs=${config.orbs},rate=${config.rate},aura=${config.aura ? 1 : 0},seconds=${config.seconds}`;
 }

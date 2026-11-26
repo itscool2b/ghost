@@ -1,4 +1,4 @@
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import { useEffect, useId, useRef, useState } from "react";
 import type { McpActionResult, McpDefinition, McpSessionAction, McpSnapshot } from "../../bindings";
 import { errorMessage } from "../../lib/errors";
@@ -405,7 +405,7 @@ export function SharedMcpPanel({
         >
           <p>
             Portable definitions include credential names only. Authentication values stay on this
-            device. Imported definitions retain their Aura IDs and scopes.
+            device. Imported definitions retain their Ghost IDs and scopes.
           </p>
           {document.mode === "import" ? (
             <label className="shared-mcp-field">
@@ -416,7 +416,7 @@ export function SharedMcpPanel({
                 aria-label="Import format"
                 onChange={(e) => setNativeImport(e.currentTarget.value === "native")}
               >
-                <option value="aura">Aura portable definitions</option>
+                <option value="aura">Ghost portable definitions</option>
                 <option value="native">Native mcpServers JSON</option>
               </Select>
             </label>

@@ -175,7 +175,7 @@ importers:
 
   apps/design-lab:
     dependencies:
-      '@o7/ui':
+      '@ghost/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -221,7 +221,7 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@o7/ui':
+      '@ghost/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-virtual':
@@ -292,6 +292,8 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
+  apps/ios: {}
+
   apps/relay:
     devDependencies:
       '@cloudflare/workers-types':
@@ -309,7 +311,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@o7/ui':
+      '@ghost/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       react:
@@ -346,6 +348,12 @@ importers:
       vite:
         specifier: 8.3.5
         version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
+
+  apps/web-builds-alias:
+    dependencies:
+      '@ghost/web':
+        specifier: workspace:*
+        version: link:../web
 
   apps/web-worker:
     devDependencies:

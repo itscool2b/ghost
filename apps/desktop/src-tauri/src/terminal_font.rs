@@ -1,4 +1,4 @@
-//! The font the person's own terminal app draws with, so o7's terminals look like it (owner,
+//! The font the person's own terminal app draws with, so Ghost's terminals look like it (owner,
 //! 17 November 2026: the terminal should be "the default terminal of the system itself").
 //!
 //! Read-only and best effort. The terminal is the one the person set as their default (`TERMINAL`,
@@ -65,7 +65,7 @@ pub async fn terminal_system_font(
     })
 }
 
-fn env_vars(vars: &o7_process::EnvMap) -> BTreeMap<String, String> {
+fn env_vars(vars: &ghost_process::EnvMap) -> BTreeMap<String, String> {
     vars.iter()
         .filter_map(|(name, value)| {
             Some((

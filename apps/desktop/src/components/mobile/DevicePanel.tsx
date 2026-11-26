@@ -1,5 +1,5 @@
 import "./mobile.css";
-import { AgentMark } from "@o7/ui/graphite";
+import { AgentMark } from "@ghost/ui/graphite";
 import {
   Camera,
   ChevronLeft,
@@ -341,8 +341,8 @@ function HeldDevice({
               aria-label="AXe download progress"
             />
             <p data-testid="device-tool">
-              Downloading AXe, which o7 drives the simulator with: {megabytes(tool.received_mb)} of{" "}
-              {megabytes(tool.total_mb)}.
+              Downloading AXe, which Ghost drives the simulator with: {megabytes(tool.received_mb)}{" "}
+              of {megabytes(tool.total_mb)}.
             </p>
           </>
         ) : null}
@@ -596,9 +596,9 @@ function Chooser({
         <>
           <h2>Set up Android</h2>
           <p>
-            The Device pane shows a real Android phone beside the chat, for you and your agent. o7
-            downloads Android's emulator from Google into its own folder. It needs about 8 GB of
-            disk space.
+            The Device pane shows a real Android phone beside the chat, for you and your agent.
+            Ghost downloads Android's emulator from Google into its own folder. It needs about 8 GB
+            of disk space.
           </p>
           <button
             type="button"

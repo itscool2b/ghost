@@ -1,33 +1,33 @@
 //! The startup sequence: data root, device identity, active profile, the profile's owner lock,
 //! profile database.
 //!
-//! [`boot`] never fails and never panics. Repairs o7-core made on the way (a recreated device
+//! [`boot`] never fails and never panics. Repairs ghost-core made on the way (a recreated device
 //! identity, a quarantined database, a migration) become notices; the first step that cannot
 //! complete becomes the fatal error the UI shows on its error screen, with the data path, instead
 //! of the app crashing before a window exists.
 //!
-//! The data root is o7-core's [`DataRoot::resolve`] and nothing else ([`startup`]): the folder in
-//! `O7_DATA_DIR`, or `codes.o7.desktop` in the local app data folder
-//! (`codes.o7.desktop.dev` for a development build, so a build from a working copy never opens
+//! The data root is ghost-core's [`DataRoot::resolve`] and nothing else ([`startup`]): the folder in
+//! `GHOST_DATA_DIR`, or `dev.onghost.desktop` in the local app data folder
+//! (`dev.onghost.desktop.dev` for a development build, so a build from a working copy never opens
 //! the installed app's data). The CLI resolves the same one, so both always open the same profile.
 //! Tauri's path API is not consulted: its `app_data_dir()` is Roaming AppData on Windows, which
 //! managed machines copy between PCs, and `device.json` and the databases must never travel. Its
 //! `app_local_data_dir()` is an installed build's default root, because tauri.conf.json's
-//! identifier is o7-core's `APP_IDENTIFIER` (`config_checks.rs` holds them together), so the
+//! identifier is ghost-core's `APP_IDENTIFIER` (`config_checks.rs` holds them together), so the
 //! WebView data Tauri keeps there on Windows and Linux sits beside ours. Any other folder gets the
 //! WebView data inside it (`LaunchOptions::webview_data_dir`).
 //!
 //! One process runs a profile's sessions, so startup takes the profile's owner lock
 //! ([`ProfileOwner`]) between opening the profile and opening its database. A second launch with the
-//! same data folder gets the error screen, saying another o7 runs with that profile.
+//! same data folder gets the error screen, saying another Ghost runs with that profile.
 
 use std::path::PathBuf;
 
-use o7_core::device::{DeviceIdentity, DeviceLoad};
-use o7_core::owner::ProfileOwner;
-use o7_core::paths::DataRoot;
-use o7_core::profile::{Profile, ProfileMeta, Profiles};
-use o7_core::store::{OpenOutcome, Salvage, Store};
+use ghost_core::device::{DeviceIdentity, DeviceLoad};
+use ghost_core::owner::ProfileOwner;
+use ghost_core::paths::DataRoot;
+use ghost_core::profile::{Profile, ProfileMeta, Profiles};
+use ghost_core::store::{OpenOutcome, Salvage, Store};
 use serde::Serialize;
 
 use crate::integrity;
@@ -53,7 +53,7 @@ pub struct DbInfo {
 /// A database repair whose notice the user has not dismissed yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recovery {
-    /// Where o7-core moved the damaged database, exactly as
+    /// Where ghost-core moved the damaged database, exactly as
     /// [`OpenOutcome::RecoveredFromCorruption`] reported it: the only path the shell ever hands
     /// back to [`Store::acknowledge_recovery`]. The page cannot name one.
     pub quarantined: String,
@@ -68,7 +68,7 @@ pub struct Booted {
     pub data_dir: Option<PathBuf>,
     pub device: Option<DeviceIdentity>,
     pub profile: Option<ProfileMeta>,
-    /// The active profile's folder (`ProfileMeta` and this make an `o7_core::profile::Profile`).
+    /// The active profile's folder (`ProfileMeta` and this make a `ghost_core::profile::Profile`).
     pub profile_dir: Option<PathBuf>,
     pub store: Option<Store>,
     /// This process owns the profile's sessions while this lives. Taken before the store opened;
@@ -90,13 +90,13 @@ pub struct Booted {
     pub fatal: Option<String>,
 }
 
-/// Runs the startup sequence on the data root o7-core resolves: the one the app uses.
+/// Runs the startup sequence on the data root ghost-core resolves: the one the app uses.
 pub fn startup() -> Booted {
     boot(DataRoot::resolve())
 }
 
 /// Runs the startup sequence on `root`.
-pub fn boot(root: o7_core::Result<DataRoot>) -> Booted {
+pub fn boot(root: ghost_core::Result<DataRoot>) -> Booted {
     boot_selected(root, None)
 }
 
@@ -106,7 +106,7 @@ pub(crate) fn boot_profile(root: DataRoot, profile: Profile) -> Booted {
     boot_selected(Ok(root), Some(profile))
 }
 
-fn boot_selected(root: o7_core::Result<DataRoot>, selected: Option<Profile>) -> Booted {
+fn boot_selected(root: ghost_core::Result<DataRoot>, selected: Option<Profile>) -> Booted {
     let preparing = selected.is_some();
     let mut booted = Booted {
         data_dir: None,
@@ -135,7 +135,7 @@ fn boot_selected(root: o7_core::Result<DataRoot>, selected: Option<Profile>) -> 
         Ok(load) => {
             if let DeviceLoad::Recreated { backup, .. } = &load {
                 booted.notices.push(format!(
-                    "This device's identity file was damaged, so o7 created a new one. The old file was kept at {}.",
+                    "This device's identity file was damaged, so Ghost created a new one. The old file was kept at {}.",
                     backup.display()
                 ));
             }
@@ -166,8 +166,8 @@ fn boot_selected(root: o7_core::Result<DataRoot>, selected: Option<Profile>) -> 
             tracing::info!(open_ms, "opened the profile database");
             if preparing && info.unclean_shutdown {
                 match store.check_integrity() {
-                    Ok(o7_core::store::Integrity::Ok) => {}
-                    Ok(o7_core::store::Integrity::Damaged { .. }) => {
+                    Ok(ghost_core::store::Integrity::Ok) => {}
+                    Ok(ghost_core::store::Integrity::Damaged { .. }) => {
                         booted.fatal = Some("The selected profile needs database recovery. Existing data was preserved.".into());
                         return booted;
                     }
@@ -224,10 +224,9 @@ pub(crate) fn boot_next(root: &DataRoot) -> Booted {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         let booted = boot(Ok(root.clone()));
-        let in_use = booted
-            .fatal
-            .as_deref()
-            .is_some_and(|fatal| fatal.starts_with("o7 is already running with the profile in "));
+        let in_use = booted.fatal.as_deref().is_some_and(|fatal| {
+            fatal.starts_with("Ghost is already running with the profile in ")
+        });
         if !in_use || Instant::now() >= deadline {
             return booted;
         }
@@ -236,30 +235,30 @@ pub(crate) fn boot_next(root: &DataRoot) -> Booted {
     }
 }
 
-/// The notice for a database o7-core had to repair: how much of it the new database holds, and
+/// The notice for a database ghost-core had to repair: how much of it the new database holds, and
 /// where the damaged original is, since whatever the copy lacks is only there.
 pub fn recovery_notice(quarantined: &str, salvage: &Salvage) -> String {
     match salvage {
         Salvage::Complete => format!(
-            "Your database was damaged, so o7 rebuilt it. Nothing was lost; the damaged copy was kept at {quarantined}."
+            "Your database was damaged, so Ghost rebuilt it. Nothing was lost; the damaged copy was kept at {quarantined}."
         ),
         Salvage::Partial { tables } if !tables.is_empty() => format!(
-            "Your database was damaged, so o7 rebuilt it from what it could still read. Some records could not be read ({}); the damaged copy was kept at {quarantined}.",
+            "Your database was damaged, so Ghost rebuilt it from what it could still read. Some records could not be read ({}); the damaged copy was kept at {quarantined}.",
             tables.join(", ")
         ),
         Salvage::Partial { .. } => format!(
-            "Your database was damaged, so o7 rebuilt it from what it could still read. Some records could not be read; the damaged copy was kept at {quarantined}."
+            "Your database was damaged, so Ghost rebuilt it from what it could still read. Some records could not be read; the damaged copy was kept at {quarantined}."
         ),
         Salvage::Nothing => format!(
-            "Your database was damaged and nothing in it could be read, so o7 started a fresh one. The damaged copy was kept at {quarantined}."
+            "Your database was damaged and nothing in it could be read, so Ghost started a fresh one. The damaged copy was kept at {quarantined}."
         ),
     }
 }
 
 impl Booted {
-    fn fail(mut self, step: &str, error: &o7_core::CoreError) -> Booted {
+    fn fail(mut self, step: &str, error: &ghost_core::CoreError) -> Booted {
         tracing::error!(%error, step, "startup could not complete");
-        // o7-core's messages are complete sentences; keep them verbatim.
+        // ghost-core's messages are complete sentences; keep them verbatim.
         self.fatal = Some(error.to_string());
         self
     }
@@ -271,7 +270,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use o7_core::paths::DATA_DIR_ENV;
+    use ghost_core::paths::DATA_DIR_ENV;
 
     use crate::test_support::run_child;
 
@@ -313,11 +312,11 @@ mod tests {
         assert!(booted.device.is_some());
         assert_eq!(
             booted.profile.as_ref().map(|p| p.id.as_str()),
-            Some(o7_core::profile::LOCAL_PROFILE_ID)
+            Some(ghost_core::profile::LOCAL_PROFILE_ID)
         );
         let db = booted.db.expect("db info");
         assert_eq!(db.outcome, OpenOutcome::Created);
-        assert_eq!(db.schema_version, o7_core::store::SCHEMA_VERSION);
+        assert_eq!(db.schema_version, ghost_core::store::SCHEMA_VERSION);
         assert!(booted.store.is_some());
     }
 
@@ -462,7 +461,7 @@ mod tests {
 
         let booted = boot_next(&root);
         let fatal = booted.fatal.expect("fatal error");
-        assert!(fatal.contains("newer version of o7"), "{fatal}");
+        assert!(fatal.contains("newer version of Ghost"), "{fatal}");
         assert!(booted.store.is_none());
         assert_eq!(
             booted.integrity_check, None,
@@ -490,10 +489,10 @@ mod tests {
         let second = boot(Ok(root.clone()));
         let fatal = second.fatal.clone().expect("refused");
         assert!(
-            fatal.starts_with("o7 is already running with the profile in "),
+            fatal.starts_with("Ghost is already running with the profile in "),
             "{fatal}"
         );
-        assert!(fatal.contains("O7_DATA_DIR"), "{fatal}");
+        assert!(fatal.contains("GHOST_DATA_DIR"), "{fatal}");
         assert!(second.store.is_none(), "the database was not opened");
         assert!(second.owner.is_none());
         assert!(
@@ -523,9 +522,9 @@ mod tests {
 
     #[test]
     fn no_data_folder_at_all_is_fatal() {
-        let booted = boot(Err(o7_core::CoreError::NoDataDir));
+        let booted = boot(Err(ghost_core::CoreError::NoDataDir));
         let fatal = booted.fatal.expect("fatal error");
-        assert!(fatal.contains("O7_DATA_DIR"), "{fatal}");
+        assert!(fatal.contains("GHOST_DATA_DIR"), "{fatal}");
         assert_eq!(booted.data_dir, None);
         assert_eq!(booted.recovery, None);
         assert_eq!(booted.integrity_check, None);
@@ -536,15 +535,15 @@ mod tests {
         root.join("device.json").is_file()
             && root
                 .join("profiles")
-                .join(o7_core::profile::LOCAL_PROFILE_ID)
+                .join(ghost_core::profile::LOCAL_PROFILE_ID)
                 .join("aura.db")
                 .is_file()
     }
 
     /// Marks a re-executed copy of the test binary; holds the root that child should start in.
-    const CHILD_EXPECTS: &str = "O7_DESKTOP_TEST_EXPECTED_ROOT";
+    const CHILD_EXPECTS: &str = "GHOST_DESKTOP_TEST_EXPECTED_ROOT";
 
-    /// The app starts exactly where o7-core (and so the CLI) resolves, `O7_DATA_DIR`
+    /// The app starts exactly where ghost-core (and so the CLI) resolves, `GHOST_DATA_DIR`
     /// included, which is what lets a smoke run start in a throwaway folder.
     #[test]
     fn startup_uses_the_data_root_aura_core_resolves() {
@@ -572,15 +571,15 @@ mod tests {
 
     /// Marks the child of the next test; holds its throwaway home folder.
     #[cfg(not(windows))]
-    const CHILD_HOME: &str = "O7_DESKTOP_TEST_THROWAWAY_HOME";
+    const CHILD_HOME: &str = "GHOST_DESKTOP_TEST_THROWAWAY_HOME";
 
-    /// Without `O7_DATA_DIR` the app starts in its default folder in the local app data
-    /// folder: `codes.o7.desktop`, the folder Tauri's `app_local_data_dir()` names, for an
-    /// installed build, and `codes.o7.desktop.dev` for this development build. The child gets a
+    /// Without `GHOST_DATA_DIR` the app starts in its default folder in the local app data
+    /// folder: `dev.onghost.desktop`, the folder Tauri's `app_local_data_dir()` names, for an
+    /// installed build, and `dev.onghost.desktop.dev` for this development build. The child gets a
     /// throwaway home folder, which is what the local app data folder is built from on macOS and
     /// Linux, so it boots there instead of in the user's real data. Windows looks its known
     /// folders up without the environment, so this cannot run there without touching real data;
-    /// o7-core's tests pin the local (never roaming) folder there.
+    /// ghost-core's tests pin the local (never roaming) folder there.
     #[cfg(not(windows))]
     #[test]
     fn startup_without_an_override_uses_the_local_app_data_folder() {
@@ -597,7 +596,7 @@ mod tests {
             assert_eq!(booted.fatal, None);
             assert_eq!(
                 booted.data_dir,
-                Some(local_app_data(Path::new(&home)).join(o7_core::paths::DEFAULT_FOLDER))
+                Some(local_app_data(Path::new(&home)).join(ghost_core::paths::DEFAULT_FOLDER))
             );
             return;
         }
@@ -610,12 +609,14 @@ mod tests {
                     .env(CHILD_HOME, home.path())
                     .env("HOME", home.path())
                     .env_remove("XDG_DATA_HOME")
-                    .env_remove(DATA_DIR_ENV)
-                    .env_remove(o7_core::paths::LEGACY_DATA_DIR_ENV);
+                    .env_remove(DATA_DIR_ENV);
+                for name in ghost_core::paths::LEGACY_DATA_DIR_ENVS {
+                    child.env_remove(name);
+                }
             },
         );
         assert!(started_in(
-            &local_app_data(home.path()).join(o7_core::paths::DEFAULT_FOLDER)
+            &local_app_data(home.path()).join(ghost_core::paths::DEFAULT_FOLDER)
         ));
     }
 }

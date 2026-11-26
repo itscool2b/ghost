@@ -3,7 +3,7 @@ import type { WorkspaceSnapshot } from "../bindings";
 import { chatSummary } from "./chat/testing";
 import { launchChats, launchWorkspace, NO_LAUNCH_LISTS, readLaunchLists } from "./launchCache";
 
-const project = { id: "p1", name: "o7", color: null, folders: [], created_at: 1, updated_at: 1 };
+const project = { id: "p1", name: "Ghost", color: null, folders: [], created_at: 1, updated_at: 1 };
 const entry = (id: string) => ({
   chat: chatSummary(id, { status: "running", needs_attention: true }),
   project_id: "p1",
@@ -45,7 +45,7 @@ describe("the sidebar kept from the last launch", () => {
   it("reads a workspace back with its chats at rest", () => {
     const kept = JSON.stringify({ projects: [project], chats: [entry("a")] });
     const workspace = launchWorkspace(kept);
-    expect(workspace?.projects.map((item) => item.name)).toEqual(["o7"]);
+    expect(workspace?.projects.map((item) => item.name)).toEqual(["Ghost"]);
     expect(workspace?.chats.map((item) => [item.chat.id, item.chat.status])).toEqual([
       ["a", "stopped"],
     ]);

@@ -1,5 +1,5 @@
 /**
- * The o7 logo: a flying wing seen from above, with two eyes, drawn from the owner's artwork
+ * The Ghost logo: a flying wing seen from above, with two eyes, drawn from the owner's artwork
  * (docs/design/brand/logo-source.png) as straight edges with rounded corners. The outline and the
  * eyes are separate paths so the eyes can move on their own; together they are one even-odd shape
  * whose holes are the eyes.

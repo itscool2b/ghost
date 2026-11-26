@@ -1,0 +1,358 @@
+{
+  "events": [
+    {
+      "type": "status",
+      "data": "spawning"
+    },
+    {
+      "type": "status",
+      "data": "initializing"
+    },
+    {
+      "type": "status",
+      "data": "opening"
+    },
+    {
+      "type": "status",
+      "data": "configuring"
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:anthropic/claude-sonnet-4.5",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "ask",
+        "native_mode": "default",
+        "auto_answer": {
+          "type": "never"
+        },
+        "note": "Hermes asks before it edits files. Shell commands go to its own safety check first, which can run harmless ones without asking."
+      }
+    },
+    {
+      "type": "status",
+      "data": "ready"
+    },
+    {
+      "type": "ready",
+      "data": {
+        "native_session_id": "<SESSION_1>",
+        "agent_name": "hermes-agent",
+        "agent_version": "0.22.5",
+        "capabilities": {
+          "images": true,
+          "steer": false,
+          "interrupt": true,
+          "resume": true,
+          "fork": false,
+          "rewind": false,
+          "set_model": true,
+          "set_effort": false,
+          "permissions": true,
+          "plans": true,
+          "usage": true,
+          "limits": false,
+          "slash_commands": true,
+          "add_dirs": false,
+          "autonomy_levels": [
+            "full_auto",
+            "auto_edit",
+            "ask"
+          ]
+        },
+        "resumed": {
+          "type": "new"
+        },
+        "spawn_id": "019a0000-0000-7000-8000-0000000000a1",
+        "replay": null
+      }
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:openai/gpt-5-mini",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "accept_edits",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:openai/gpt-5-mini",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "autonomy",
+      "data": {
+        "requested": "ask",
+        "native_mode": "accept_edits",
+        "auto_answer": {
+          "type": "never"
+        },
+        "note": "You picked the Accept Edits mode by hand, so Ghost asks before every action. Choose an autonomy level to hand control back."
+      }
+    },
+    {
+      "type": "options",
+      "data": [
+        {
+          "id": "mode",
+          "name": "Mode",
+          "description": null,
+          "category": "mode",
+          "kind": {
+            "type": "select",
+            "current": "default",
+            "choices": [
+              {
+                "value": "default",
+                "name": "Default",
+                "description": "Ask before edits.",
+                "group": null
+              },
+              {
+                "value": "accept_edits",
+                "name": "Accept Edits",
+                "description": "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+                "group": null
+              },
+              {
+                "value": "dont_ask",
+                "name": "Don't Ask",
+                "description": "Auto-allow file edits for this session except sensitive paths.",
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        },
+        {
+          "id": "model",
+          "name": "Model",
+          "description": null,
+          "category": "model",
+          "kind": {
+            "type": "select",
+            "current": "openrouter:openai/gpt-5-mini",
+            "choices": [
+              {
+                "value": "openrouter:anthropic/claude-sonnet-4.5",
+                "name": "anthropic/claude-sonnet-4.5",
+                "description": null,
+                "group": null
+              },
+              {
+                "value": "openrouter:openai/gpt-5-mini",
+                "name": "openai/gpt-5-mini",
+                "description": null,
+                "group": null
+              }
+            ]
+          },
+          "pending": null
+        }
+      ]
+    },
+    {
+      "type": "status",
+      "data": "closing"
+    }
+  ],
+  "replies": [
+    {
+      "set_option": "model",
+      "reply": {
+        "ok": null
+      }
+    },
+    {
+      "set_option": "mode",
+      "reply": {
+        "ok": null
+      }
+    },
+    {
+      "set_autonomy": "ask",
+      "reply": {
+        "ok": {
+          "requested": "ask",
+          "native_mode": "default",
+          "auto_answer": {
+            "type": "never"
+          },
+          "note": "Hermes asks before it edits files. Shell commands go to its own safety check first, which can run harmless ones without asking."
+        }
+      }
+    }
+  ],
+  "exit": {
+    "type": "closed"
+  }
+}

@@ -16,7 +16,7 @@ export function isolatedEnvironment(source, root) {
   const env = { ...source };
   for (const name of Object.keys(env)) {
     if (
-      /^(O7_|AURACODE_|WEBVIEW2_|TAURI_|CLAUDE_CONFIG_DIR$|CODEX_HOME$|PI_CODING_AGENT_DIR$|HOME$|USERPROFILE$|APPDATA$|LOCALAPPDATA$|XDG_CONFIG_HOME$)/i.test(
+      /^(GHOST_|O7_|AURACODE_|WEBVIEW2_|TAURI_|CLAUDE_CONFIG_DIR$|CODEX_HOME$|PI_CODING_AGENT_DIR$|HOME$|USERPROFILE$|APPDATA$|LOCALAPPDATA$|XDG_CONFIG_HOME$)/i.test(
         name,
       )
     )
@@ -24,7 +24,7 @@ export function isolatedEnvironment(source, root) {
   }
   return {
     ...env,
-    O7_DATA_DIR: join(root, "data"),
+    GHOST_DATA_DIR: join(root, "data"),
     HOME: join(root, "home"),
     USERPROFILE: join(root, "home"),
     APPDATA: join(root, "home", "AppData", "Roaming"),
@@ -208,10 +208,10 @@ export async function captureDesktop(path) {
     "$bitmap = New-Object System.Drawing.Bitmap $b.Width, $b.Height",
     "$graphics = [System.Drawing.Graphics]::FromImage($bitmap)",
     "$graphics.CopyFromScreen($b.Left, $b.Top, 0, 0, $bitmap.Size)",
-    "$bitmap.Save($env:O7_DESKTOP_CAPTURE, [System.Drawing.Imaging.ImageFormat]::Png)",
+    "$bitmap.Save($env:GHOST_DESKTOP_CAPTURE, [System.Drawing.Imaging.ImageFormat]::Png)",
   ].join("; ");
   const child = spawn("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
-    env: { ...process.env, O7_DESKTOP_CAPTURE: path },
+    env: { ...process.env, GHOST_DESKTOP_CAPTURE: path },
     windowsHide: true,
     stdio: "ignore",
   });
@@ -233,20 +233,20 @@ export async function captureDesktop(path) {
  */
 async function webviewEvidence(path, roots) {
   const script = [
-    "$names = 'o7.exe', 'msedgewebview2.exe', 'msedgedriver.exe'",
+    "$names = 'ghost.exe', 'msedgewebview2.exe', 'msedgedriver.exe'",
     "$processes = Get-CimInstance Win32_Process | Where-Object { $names -contains $_.Name } |",
     "  Select-Object ProcessId, ParentProcessId, Name, CommandLine",
-    "$ports = $env:O7_EVIDENCE_ROOTS -split ';' | Where-Object { $_ -and (Test-Path $_) } |",
+    "$ports = $env:GHOST_EVIDENCE_ROOTS -split ';' | Where-Object { $_ -and (Test-Path $_) } |",
     "  ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -Force -Filter DevToolsActivePort -ErrorAction SilentlyContinue } |",
     "  Select-Object FullName, LastWriteTimeUtc",
     "@{ processes = @($processes); ports = @($ports) } | ConvertTo-Json -Depth 4 |",
-    "  Set-Content -LiteralPath $env:O7_EVIDENCE_PATH -Encoding utf8",
+    "  Set-Content -LiteralPath $env:GHOST_EVIDENCE_PATH -Encoding utf8",
   ].join("\n");
   const child = spawn("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
     env: {
       ...process.env,
-      O7_EVIDENCE_PATH: path,
-      O7_EVIDENCE_ROOTS: roots.join(";"),
+      GHOST_EVIDENCE_PATH: path,
+      GHOST_EVIDENCE_ROOTS: roots.join(";"),
     },
     windowsHide: true,
     stdio: "ignore",

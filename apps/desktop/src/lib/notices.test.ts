@@ -16,7 +16,7 @@ const INFO: AppInfo = {
   glass: "none",
   launch: { type: "normal" },
   notices: ["Your data was upgraded from version 1 to 2."],
-  recovery_notice: "Your database was damaged, so o7 rebuilt it.",
+  recovery_notice: "Your database was damaged, so Ghost rebuilt it.",
   fatal: null,
   media: true,
   media_notice: null,
@@ -25,7 +25,7 @@ const INFO: AppInfo = {
 describe("notices that arrive after startup", () => {
   it("are added to what startup reported, and nothing else changes", () => {
     const sweep =
-      "o7 stopped 2 agent processes left running by an earlier session that ended unexpectedly.";
+      "Ghost stopped 2 agent processes left running by an earlier session that ended unexpectedly.";
     const later = { ...INFO, notices: [...INFO.notices, sweep], recovery_notice: null };
     const merged = withLateNotices(INFO, later);
     expect(merged.notices).toEqual([...INFO.notices, sweep]);

@@ -61,7 +61,7 @@ pub async fn chat_export_markdown(
             .dialog()
             .file()
             .set_title("Export saved chat as Markdown")
-            .set_file_name("auracode-chat.md")
+            .set_file_name("ghost-chat.md")
             .add_filter("Markdown", &["md"])
             .set_can_create_directories(true);
         if let Some(window) = app.get_webview_window(window::MAIN_WINDOW) {

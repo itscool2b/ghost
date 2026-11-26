@@ -20,11 +20,12 @@ async function visit(path) {
   }
 }
 await visit(fileURLToPath(root));
-// connect-src names the relay, which answers under the site's own address. wss://auracode.si is
-// the address the site had until 19 November 2026: the remote page is still served there for
-// phones paired before the move, and it goes when that page does (apps/web-worker/src/lib.rs).
+// connect-src names the relay, which answers under the site's own address. wss://o7.codes and
+// wss://auracode.si are the addresses the site had before (until 26 and 19 November 2026): the
+// remote page is still served there for phones paired before a move, and each goes when that
+// page does (apps/web-worker/src/lib.rs).
 const content =
-  `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n  Content-Security-Policy: default-src 'self'; script-src 'self' ${[...hashes].join(" ")}; connect-src 'self' wss://o7.codes wss://preview.o7.codes wss://auracode.si; frame-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\n\n/remote*\n  Cache-Control: no-store\n  X-Robots-Tag: noindex, nofollow\n` +
+  `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n  Content-Security-Policy: default-src 'self'; script-src 'self' ${[...hashes].join(" ")}; connect-src 'self' wss://onghost.dev wss://preview.onghost.dev wss://o7.codes wss://auracode.si; frame-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\n\n/remote*\n  Cache-Control: no-store\n  X-Robots-Tag: noindex, nofollow\n` +
   ["/", "/download*", "/privacy*", "/terms*", "/changelog*", "/remote*", "/third-party-notices*"]
     .map((path) => `\n${path}\n  Content-Security-Policy: frame-ancestors 'none'\n`)
     .join("");

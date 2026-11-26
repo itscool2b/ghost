@@ -191,7 +191,7 @@ export async function checkDictation(browser, url, out, engine) {
 
       await open("missing");
       await mic.click();
-      await page.getByRole("alert").filter({ hasText: "Reinstall o7" }).waitFor();
+      await page.getByRole("alert").filter({ hasText: "Reinstall Ghost" }).waitFor();
       assert.equal(await retry.count(), 1);
 
       await open("unsupported");

@@ -10,7 +10,7 @@ export interface WorktreeOptions {
   readonly mode: FolderMode;
   /** A local branch to start from; `null` starts from the folder's current branch. */
   readonly startBranch: string | null;
-  /** The branch name the person typed; `null` keeps the generated `aura/...` name. */
+  /** The branch name the person typed; `null` keeps the generated `ghost/...` name. */
   readonly branch: string | null;
   readonly bringChanges: boolean;
   readonly runSetup: boolean;

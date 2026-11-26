@@ -1,4 +1,4 @@
-//! What the panel asks of the browser. Pages never reach these: they are o7's own window's
+//! What the panel asks of the browser. Pages never reach these: they are Ghost's own window's
 //! commands, and a guest page has no Tauri IPC at all.
 
 use std::sync::Arc;
@@ -249,20 +249,20 @@ pub async fn browser_agent_call(
     })
 }
 
-/// Opens an address outside o7: a web page in the system's browser, or another program's
+/// Opens an address outside Ghost: a web page in the system's browser, or another program's
 /// link a page asked for (`mailto:`, `vscode:`), after the person chose to.
 #[tauri::command]
 #[specta::specta]
 pub async fn browser_open_outside(app: tauri::AppHandle, url: String) -> Result<(), AppError> {
     if !outside_allowed(&url) {
-        return Err(BrowserError::Invalid("o7 does not open that kind of link.".into()).into());
+        return Err(BrowserError::Invalid("Ghost does not open that kind of link.".into()).into());
     }
     app.opener().open_url(url, None::<&str>).map_err(|error| {
         BrowserError::Unavailable(format!("The link could not open: {error}")).into()
     })
 }
 
-/// The other programs' links o7 hands to the system, after the person chose to: mail and
+/// The other programs' links Ghost hands to the system, after the person chose to: mail and
 /// calls, and the editors and team apps people work with. Anything else (Windows has handlers
 /// that run commands without a prompt) stays a link the person can copy.
 const OUTSIDE: &[&str] = &[

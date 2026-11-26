@@ -1,18 +1,18 @@
 # Usage counts
 
-How many people downloaded o7, and how many copies of it run. Two counters, both anonymous, both
+How many people downloaded Ghost, and how many copies of it run. Two counters, both anonymous, both
 kept only as daily totals.
 
 ## What is counted
 
-- **Downloads.** The download page's buttons link to `o7.codes/get/<tag>/<file>`. The site Worker
+- **Downloads.** The download page's buttons link to `onghost.dev/get/<tag>/<file>`. The site Worker
   (`apps/web-worker/src/count.rs`) adds one to that day's `download` row for the file's platform and
   version, then answers 302 to the file on GitHub. Only the six installer names the Publish
   workflow makes are accepted, with a tag that matches their version; anything else is 404 and
   nothing is counted. Robots (search engines, link previews, requests with no user agent) are sent
   on but not counted, and so is `HEAD`. If counting fails, the download still works.
 - **Copies that ran.** Each released stable build, when its automatic update check runs, calls
-  `o7.codes/api/count?os=…&arch=…&version=…&first=0|1` at most once per US Eastern day
+  `onghost.dev/api/count?os=…&arch=…&version=…&first=0|1` at most once per US Eastern day
   (`apps/desktop/src-tauri/src/usage_count.rs`). The site adds one to that day's `ran` row, and to
   `installed` when `first=1` (the copy had never counted itself). It answers with the seconds to
   the next Eastern midnight, which the app keeps in `counted.json` in its data folder. Turning off

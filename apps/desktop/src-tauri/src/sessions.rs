@@ -3,7 +3,7 @@
 //! question while saving is paused and its signals, and the answers of the folder picker and "Show
 //! log".
 //!
-//! Everything here is glue over o7-core's [`SessionManager`]. The parts with decisions in them are
+//! Everything here is glue over ghost-core's [`SessionManager`]. The parts with decisions in them are
 //! written against small seams ([`QuitHost`], [`SignalHost`], [`Outside`], plain closures), so their
 //! tests drive them with fakes instead of a running app.
 //!
@@ -32,21 +32,21 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use o7_agents::Detector;
-use o7_core::chatstore::ChatStore;
-use o7_core::profile::Profile;
-use o7_core::session::{
+use ghost_agents::Detector;
+use ghost_core::chatstore::ChatStore;
+use ghost_core::profile::Profile;
+use ghost_core::session::{
     FrameSink, ManagerDeps, ManagerLimits, SessionManager, SessionTimings, ShutdownSummary,
     SinkGone, StatusSink,
 };
-use o7_drivers::driver::DriverFactory;
-use o7_drivers::factory::StandardDriverFactory;
-use o7_process::{
+use ghost_drivers::driver::DriverFactory;
+use ghost_drivers::factory::StandardDriverFactory;
+use ghost_process::{
     EnvResolver, EnvResolverConfig, LeftoverRegistry, LogFactory, ProcessSpawner, Redactor,
     RetentionPolicy, Spawner, SweepReport, sweep_stale,
 };
-use o7_protocol::EventBatch;
-use o7_protocol::session::{ChatStatusUpdate, PauseReason, StorageState, StorageStatus};
+use ghost_protocol::EventBatch;
+use ghost_protocol::session::{ChatStatusUpdate, PauseReason, StorageState, StorageStatus};
 use tauri::ipc::Channel;
 use tauri::webview::PageLoadEvent;
 use tokio::runtime::Handle;
@@ -269,7 +269,7 @@ impl std::fmt::Debug for ChatRuntime {
     }
 }
 
-/// The parts of the chat runtime that reach outside o7: the login shell, agent probes and
+/// The parts of the chat runtime that reach outside Ghost: the login shell, agent probes and
 /// adapter installs, real processes, agent drivers. Tests pass their own.
 #[derive(Clone)]
 pub struct Outside {
@@ -305,7 +305,7 @@ impl Outside {
 
     /// The real detector, processes and drivers over `env`: the catalog's agents with their
     /// adapters in `<data root>/adapters` (detection starts in the background once `env`
-    /// resolves), processes registered in `registry`, and the drivers o7 ships (the ACP
+    /// resolves), processes registered in `registry`, and the drivers Ghost ships (the ACP
     /// driver and the demo agent's). [`Outside::real`] passes the login shell's resolver; a test
     /// passes a fixed env whose `PATH` finds no agent, so nothing it starts reaches a real one.
     pub fn over_env(
@@ -330,7 +330,7 @@ impl Outside {
     }
 }
 
-/// `<data root>/run`: one leftover registry file per running o7 process.
+/// `<data root>/run`: one leftover registry file per running Ghost process.
 pub const RUN_DIR: &str = "run";
 
 /// `<data root>/adapters`: the npm adapters, one folder per package version.
@@ -440,9 +440,9 @@ pub(crate) fn start_profile_chats(
         }
     });
     let worktrees =
-        o7_core::gitworkspaces::GitWorkspaces::new(&profile, env.clone(), registry.clone());
+        ghost_core::gitworkspaces::GitWorkspaces::new(&profile, env.clone(), registry.clone());
     let checkpoints =
-        o7_core::checkpoints::Checkpoints::new(&profile, env.clone(), registry.clone());
+        ghost_core::checkpoints::Checkpoints::new(&profile, env.clone(), registry.clone());
     let manager = SessionManager::new(ManagerDeps {
         worktrees: Some(worktrees),
         checkpoints: Some(checkpoints),
@@ -461,11 +461,11 @@ pub(crate) fn start_profile_chats(
     });
     // Added agent accounts keep their tokens in secure storage and their names in a plain file.
     let tokens = crate::agent_account_commands::ProfileTokens::open()
-        .map(|tokens| Arc::new(tokens) as Arc<dyn o7_core::agent_accounts::TokenVault>);
+        .map(|tokens| Arc::new(tokens) as Arc<dyn ghost_core::agent_accounts::TokenVault>);
     // Usage percentages and reset times only.
     manager.persist_agent_usage(&profile.dir.join("agent-usage.json"));
     manager.set_agent_accounts(Some(Arc::new(
-        o7_core::agent_accounts::AgentAccountsStore::open(&profile.dir, tokens),
+        ghost_core::agent_accounts::AgentAccountsStore::open(&profile.dir, tokens),
     )));
     Some(ChatRuntime {
         store,
@@ -496,11 +496,11 @@ pub fn sweep_notice(report: &SweepReport) -> Option<String> {
     match report.killed.len() {
         0 => None,
         1 => Some(
-            "o7 stopped 1 agent process left running by an earlier session that ended unexpectedly."
+            "Ghost stopped 1 agent process left running by an earlier session that ended unexpectedly."
                 .into(),
         ),
         n => Some(format!(
-            "o7 stopped {n} agent processes left running by an earlier session that ended unexpectedly."
+            "Ghost stopped {n} agent processes left running by an earlier session that ended unexpectedly."
         )),
     }
 }
@@ -526,9 +526,9 @@ pub struct Quit {
     phase: Mutex<QuitPhase>,
     store_closed: AtomicBool,
     /// The person already agreed to stop everything (the data cleanup's review): the next quit
-    /// does not ask again. Cleared when o7 keeps running.
+    /// does not ask again. Cleared when Ghost keeps running.
     confirmed: AtomicBool,
-    /// Signals since o7 last kept running: the second one exits at once.
+    /// Signals since Ghost last kept running: the second one exits at once.
     signals: AtomicU32,
 }
 
@@ -580,7 +580,7 @@ impl Quit {
         self.store_closed.load(Ordering::Acquire)
     }
 
-    /// Counts a signal; returns how many arrived since o7 last kept running, this one
+    /// Counts a signal; returns how many arrived since Ghost last kept running, this one
     /// included.
     pub fn count_signal(&self) -> u32 {
         self.signals
@@ -589,7 +589,7 @@ impl Quit {
     }
 
     /// The next quit stops agents and terminals without asking: the person already agreed in a
-    /// review that said so (Settings' "Delete all o7 data").
+    /// review that said so (Settings' "Delete all Ghost data").
     pub fn confirm_ahead(&self) {
         self.confirmed.store(true, Ordering::Release);
     }
@@ -604,7 +604,7 @@ impl Quit {
         self.finish();
     }
 
-    /// The user kept o7 open: the flow is over, so a later signal starts a new one instead
+    /// The user kept Ghost open: the flow is over, so a later signal starts a new one instead
     /// of counting as the second signal of this one.
     fn keep_running(&self) {
         *lock(&self.phase) = QuitPhase::Running;
@@ -670,7 +670,7 @@ pub struct QuitQuestion {
 }
 
 /// The question to ask before quitting with `storage`, if any: only a paused store with unsaved
-/// data loses something when o7 quits.
+/// data loses something when Ghost quits.
 pub fn quit_question(storage: &StorageStatus) -> Option<QuitQuestion> {
     let StorageState::Paused { reason, .. } = &storage.state else {
         return None;
@@ -680,16 +680,16 @@ pub fn quit_question(storage: &StorageStatus) -> Option<QuitQuestion> {
     }
     let message = match reason {
         PauseReason::DiskFull => {
-            "o7 can't save its latest messages because the disk is full. If you quit now, they are lost."
+            "Ghost can't save its latest messages because the disk is full. If you quit now, they are lost."
         }
         PauseReason::Busy => {
-            "o7 can't save its latest messages because its database is busy. If you quit now, they are lost."
+            "Ghost can't save its latest messages because its database is busy. If you quit now, they are lost."
         }
     };
     Some(QuitQuestion {
         message: message.into(),
         quit: "Quit anyway".into(),
-        keep: "Keep o7 open".into(),
+        keep: "Keep Ghost open".into(),
     })
 }
 
@@ -707,7 +707,7 @@ pub fn quit_question_with_work(storage: &StorageStatus, active: usize) -> Option
                 question = Some(QuitQuestion {
                     message: work,
                     quit: "Stop agents and quit".into(),
-                    keep: "Keep o7 open".into(),
+                    keep: "Keep Ghost open".into(),
                 })
             }
         }
@@ -718,7 +718,7 @@ pub fn quit_question_with_work(storage: &StorageStatus, active: usize) -> Option
 /// How a quit flow ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuitOutcome {
-    /// The user kept o7 open; the window is back and the next exit request starts over.
+    /// The user kept Ghost open; the window is back and the next exit request starts over.
     Kept,
     /// Everything stopped and the app was asked to exit with the request's code.
     Exited {
@@ -731,7 +731,7 @@ pub enum QuitOutcome {
 
 /// The quit flow first drains owned file/vendor work without closing storage, keeping the app open
 /// on timeout. Once drained: when saving is paused with unsaved data or work is active, ask first,
-/// in the window, which comes forward for it (keeping o7 open ends the quit); then hide the
+/// in the window, which comes forward for it (keeping Ghost open ends the quit); then hide the
 /// window, stop every session within 8 s, commit and close the store within 5 s, delete the
 /// registry file, and exit with `code`. The next exit request passes ([`Quit::on_exit_requested`]).
 ///
@@ -781,7 +781,7 @@ pub async fn run_quit(quit: &Quit, host: &impl QuitHost, code: i32) -> QuitOutco
                 question = Some(QuitQuestion {
                     message,
                     quit: "Close terminals and quit".into(),
-                    keep: "Keep o7 open".into(),
+                    keep: "Keep Ghost open".into(),
                 })
             }
         }
@@ -795,7 +795,7 @@ pub async fn run_quit(quit: &Quit, host: &impl QuitHost, code: i32) -> QuitOutco
                 question = Some(QuitQuestion {
                     message: message.into(),
                     quit: "Quit anyway".into(),
-                    keep: "Keep o7 open".into(),
+                    keep: "Keep Ghost open".into(),
                 })
             }
         }
@@ -806,7 +806,7 @@ pub async fn run_quit(quit: &Quit, host: &impl QuitHost, code: i32) -> QuitOutco
     {
         host.show_window();
         quit.keep_running();
-        tracing::info!("kept o7 open after the quit question");
+        tracing::info!("kept Ghost open after the quit question");
         return QuitOutcome::Kept;
     }
     host.hide_window();
@@ -897,7 +897,7 @@ impl QuitHost for AppQuitHost<'_> {
 
     fn terminal_cleanup_blocked(&self) {
         use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-        self.app.dialog().message("A project terminal's process cleanup could not be confirmed. o7 stayed open and kept its folder protected. Review owned-process recovery before retrying quit.").title("Terminal cleanup needs attention").buttons(MessageDialogButtons::Ok).show(|_|{});
+        self.app.dialog().message("A project terminal's process cleanup could not be confirmed. Ghost stayed open and kept its folder protected. Review owned-process recovery before retrying quit.").title("Terminal cleanup needs attention").buttons(MessageDialogButtons::Ok).show(|_|{});
     }
 
     async fn wait_owned_work(&self, deadline: Duration) -> bool {
@@ -906,12 +906,12 @@ impl QuitHost for AppQuitHost<'_> {
 
     fn owned_work_blocked(&self) {
         use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-        self.app.dialog().message("A folder operation, configuration copy, or agent update is still finishing. o7 has stayed open to preserve that work. Try quitting again when it finishes.")
+        self.app.dialog().message("A folder operation, configuration copy, or agent update is still finishing. Ghost has stayed open to preserve that work. Try quitting again when it finishes.")
             .title("Work is still finishing").buttons(MessageDialogButtons::Ok).show(|_| {});
     }
     async fn flush_drafts(&self) -> bool {
         use tauri::{Emitter as _, Listener as _};
-        let token = o7_core::ids::new_id();
+        let token = ghost_core::ids::new_id();
         let expected = token.clone();
         let (reply, answer) = tokio::sync::oneshot::channel();
         let reply = Mutex::new(Some(reply));
@@ -970,7 +970,7 @@ impl QuitHost for AppQuitHost<'_> {
         use tauri::{Emitter as _, Listener as _};
         // The window comes forward and asks with its own dark dialog, Keep open focused.
         crate::window::focus_main(self.app);
-        let token = o7_core::ids::new_id();
+        let token = ghost_core::ids::new_id();
         let (shown_tx, shown) = tokio::sync::oneshot::channel();
         let (answer_tx, answer) = tokio::sync::oneshot::channel();
         let shown_tx = Mutex::new(Some(shown_tx));
@@ -1042,7 +1042,7 @@ impl QuitHost for AppQuitHost<'_> {
 
 impl AppQuitHost<'_> {
     /// The fallback when the window cannot ask: the system dialog, Keep open first and default, so
-    /// Enter, Esc and closing it all keep o7 open; only the quit button quits.
+    /// Enter, Esc and closing it all keep Ghost open; only the quit button quits.
     async fn ask_natively(&self, question: QuitQuestion) -> bool {
         use tauri_plugin_dialog::{DialogExt as _, MessageDialogButtons, MessageDialogKind};
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1050,7 +1050,7 @@ impl AppQuitHost<'_> {
         self.app
             .dialog()
             .message(question.message)
-            .title("o7")
+            .title("Ghost")
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom(
                 question.keep,
@@ -1063,8 +1063,8 @@ impl AppQuitHost<'_> {
         match rx.await {
             Ok(quit) => quit,
             Err(_) => {
-                // The dialog never answered: keeping o7 open loses nothing.
-                tracing::warn!("the quit question was not answered; keeping o7 open");
+                // The dialog never answered: keeping Ghost open loses nothing.
+                tracing::warn!("the quit question was not answered; keeping Ghost open");
                 false
             }
         }
@@ -1089,7 +1089,7 @@ fn token_of(payload: &str) -> Option<String> {
 
 /// The in-app question's outcome: `None` when it was not sent or the page did not show it within
 /// `within` (not loaded, hung), so the system dialog asks; otherwise the choice, waited for as long
-/// as it takes. An answer channel that closes without a choice keeps o7 open.
+/// as it takes. An answer channel that closes without a choice keeps Ghost open.
 pub async fn ask_in_app(
     sent: bool,
     shown: tokio::sync::oneshot::Receiver<()>,
@@ -1106,7 +1106,7 @@ pub async fn ask_in_app(
 }
 
 /// The system dialog's buttons are Keep (first, the default) and the quit label: only that label
-/// quits. Closing the dialog, Esc and Enter keep o7 open.
+/// quits. Closing the dialog, Esc and Enter keep Ghost open.
 pub fn native_quit_choice(
     result: &tauri_plugin_dialog::MessageDialogResult,
     quit_label: &str,
@@ -1124,7 +1124,7 @@ pub fn exit_last_resort(quit: &Quit, chats: &ChatRuntime) -> bool {
         return false;
     }
     if !chats.store.shutdown_blocking(EXIT_STORE_DEADLINE) {
-        tracing::warn!("the chat store could not save everything before o7 exited");
+        tracing::warn!("the chat store could not save everything before Ghost exited");
     }
     quit.mark_store_closed();
     true
@@ -1146,7 +1146,7 @@ pub trait SignalHost: Send + Sync + 'static {
 
 /// What one signal does: the first starts the quit flow, any later one (the flow is running) kills
 /// every agent, closes the store within 1 s and exits with 128 plus the signal's number. Keeping
-/// o7 open at the flow's question starts the count over. Returns the exit code of a hard
+/// Ghost open at the flow's question starts the count over. Returns the exit code of a hard
 /// exit.
 pub fn on_signal(quit: &Quit, host: &impl SignalHost, number: i32) -> Option<i32> {
     if quit.count_signal() == 1 {
@@ -1237,7 +1237,7 @@ impl SignalHost for AppSignals {
             && !state.quit.store_closed()
             && !chats.store.shutdown_blocking(EXIT_STORE_DEADLINE)
         {
-            tracing::warn!("the chat store could not save everything before o7 exited");
+            tracing::warn!("the chat store could not save everything before Ghost exited");
         }
     }
 
@@ -1333,11 +1333,11 @@ pub fn is_plain_id(id: &str) -> bool {
 #[cfg(test)]
 pub(crate) mod testing {
     use super::*;
-    use o7_agents::FixedAgent;
-    use o7_drivers::testing::ScriptedDriverFactory;
-    use o7_process::testing::FakeSpawner;
-    use o7_process::{EnvMap, EnvSource, ResolvedEnv};
-    use o7_protocol::session::Availability;
+    use ghost_agents::FixedAgent;
+    use ghost_drivers::testing::ScriptedDriverFactory;
+    use ghost_process::testing::FakeSpawner;
+    use ghost_process::{EnvMap, EnvSource, ResolvedEnv};
+    use ghost_protocol::session::Availability;
 
     /// Nothing that reaches outside: a fixed env, the demo agent through a fixed detector, fake
     /// processes, no drivers.
@@ -1357,7 +1357,7 @@ pub(crate) mod testing {
             warnings: Vec::new(),
             resolved_at_ms: 0,
         });
-        let mock = o7_agents::get("mock").expect("the demo agent").clone();
+        let mock = ghost_agents::get("mock").expect("the demo agent").clone();
         let detector = Detector::fixed(vec![FixedAgent::new(
             mock,
             Availability::Ready {
@@ -1385,8 +1385,8 @@ pub(crate) mod testing {
 mod tests {
     use std::sync::atomic::AtomicUsize;
 
-    use o7_core::paths::DataRoot;
-    use o7_core::store::OpenOutcome;
+    use ghost_core::paths::DataRoot;
+    use ghost_core::store::OpenOutcome;
     use tauri::ipc::InvokeResponseBody;
 
     use super::*;
@@ -1396,8 +1396,8 @@ mod tests {
         EventBatch {
             chat_id: chat.into(),
             seq_start: seq,
-            events: vec![o7_protocol::O7Event::Notice {
-                level: o7_protocol::NoticeLevel::Info,
+            events: vec![ghost_protocol::GhostEvent::Notice {
+                level: ghost_protocol::NoticeLevel::Info,
                 message: format!("frame {seq}"),
             }],
         }
@@ -1453,7 +1453,7 @@ mod tests {
             StatusChannelSink::new(recording(&seen, &fail), "main", pages.for_status("main"));
         let update = ChatStatusUpdate {
             chat_id: "c1".into(),
-            status: o7_protocol::SessionStatus::Ready,
+            status: ghost_protocol::SessionStatus::Ready,
             needs_attention: false,
             title: None,
             updated_at: 1,
@@ -1512,7 +1512,7 @@ mod tests {
             |label: &str| ChannelSink::new(recording(&seen, &fail), label, pages.for_view(label));
         let update = ChatStatusUpdate {
             chat_id: "c1".into(),
-            status: o7_protocol::SessionStatus::Stopped,
+            status: ghost_protocol::SessionStatus::Stopped,
             needs_attention: false,
             title: None,
             updated_at: 0,
@@ -1658,14 +1658,14 @@ mod tests {
         assert_eq!(
             sweep_notice(&report).as_deref(),
             Some(
-                "o7 stopped 1 agent process left running by an earlier session that ended unexpectedly."
+                "Ghost stopped 1 agent process left running by an earlier session that ended unexpectedly."
             )
         );
         report.killed.push((5002, "claude-agent-acp".into()));
         assert_eq!(
             sweep_notice(&report).as_deref(),
             Some(
-                "o7 stopped 2 agent processes left running by an earlier session that ended unexpectedly."
+                "Ghost stopped 2 agent processes left running by an earlier session that ended unexpectedly."
             )
         );
     }
@@ -1696,7 +1696,7 @@ mod tests {
             second
                 .fatal
                 .as_deref()
-                .is_some_and(|fatal| fatal.starts_with("o7 is already running")),
+                .is_some_and(|fatal| fatal.starts_with("Ghost is already running")),
             "the chat store holds the profile: {:?}",
             second.fatal
         );
@@ -1711,7 +1711,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failed_startup_starts_no_chats() {
-        let mut booted = boot(Err(o7_core::CoreError::NoDataDir));
+        let mut booted = boot(Err(ghost_core::CoreError::NoDataDir));
         assert!(testing::start(&mut booted).is_none());
         assert!(booted.fatal.is_some());
     }
@@ -1967,7 +1967,7 @@ mod tests {
 
     /// The window's own dialog answers when the page shows it in time, however long the choice
     /// takes; a page that never shows it, or a question that could not be sent, falls back to the
-    /// system dialog; a page that goes away mid-question keeps o7 open.
+    /// system dialog; a page that goes away mid-question keeps Ghost open.
     #[tokio::test(start_paused = true)]
     async fn the_quit_question_asks_in_the_window_and_falls_back_to_the_system_dialog() {
         use tokio::sync::oneshot;
@@ -1988,7 +1988,7 @@ mod tests {
         answer_tx.send(false).unwrap();
         assert_eq!(ask_in_app(true, shown, answer, within).await, Some(false));
 
-        // Shown, then the page is gone without a choice: keep o7 open.
+        // Shown, then the page is gone without a choice: keep Ghost open.
         let (shown_tx, shown) = oneshot::channel();
         let (answer_tx, answer) = oneshot::channel::<bool>();
         shown_tx.send(()).unwrap();
@@ -2018,7 +2018,7 @@ mod tests {
         let quit = "Stop agents and quit";
         assert!(native_quit_choice(&Result::Custom(quit.into()), quit));
         for kept in [
-            Result::Custom("Keep o7 open".into()),
+            Result::Custom("Keep Ghost open".into()),
             Result::Cancel,
             Result::Ok,
             Result::Yes,
@@ -2135,7 +2135,7 @@ mod tests {
 
     #[tokio::test]
     async fn quit_asks_when_paused() {
-        // Keep o7 open: the window comes back, nothing stops, and quitting starts over.
+        // Keep Ghost open: the window comes back, nothing stops, and quitting starts over.
         let quit = Quit::default();
         assert_eq!(quit.on_exit_requested(), ExitRequest::StartQuit);
         let host = FakeHost::new(paused(PauseReason::DiskFull, 4096), false);
@@ -2144,7 +2144,7 @@ mod tests {
             host.calls(),
             [
                 Call::Ask(
-                    "o7 can't save its latest messages because the disk is full. If you quit now, they are lost."
+                    "Ghost can't save its latest messages because the disk is full. If you quit now, they are lost."
                         .into()
                 ),
                 Call::Show,
@@ -2275,7 +2275,7 @@ mod tests {
         );
         let question = quit_question(&paused(PauseReason::DiskFull, 10)).expect("asks");
         assert_eq!(question.quit, "Quit anyway");
-        assert_eq!(question.keep, "Keep o7 open");
+        assert_eq!(question.keep, "Keep Ghost open");
     }
 
     /// This instance's leftover registry files in `run`: `<pid>-<start>.json` (spec 3.5).
@@ -2402,7 +2402,7 @@ mod tests {
         );
     }
 
-    /// Keeping o7 open at the quit question ends that flow: the next signal, however much
+    /// Keeping Ghost open at the quit question ends that flow: the next signal, however much
     /// later, starts a new one rather than exiting at once and losing the unsaved data the
     /// question protected. A second signal during the new flow still exits at once.
     #[tokio::test]
@@ -2432,10 +2432,10 @@ mod tests {
 
     /// Marks the re-executed copy of the test binary that receives real signals.
     #[cfg(unix)]
-    const SIGNAL_CHILD: &str = "O7_DESKTOP_TEST_SIGNAL_CHILD";
+    const SIGNAL_CHILD: &str = "GHOST_DESKTOP_TEST_SIGNAL_CHILD";
 
     /// Real signals, in a child copy of the test binary: once the handlers are installed, SIGTERM
-    /// asks for the quit flow; after the user keeps o7 open, SIGHUP asks for it again; and
+    /// asks for the quit flow; after the user keeps Ghost open, SIGHUP asks for it again; and
     /// SIGINT during that flow exits with 130 after killing the agents and closing the store. A
     /// child, because a handled SIGINT would stop Ctrl+C from ending the test run itself.
     #[cfg(unix)]
@@ -2479,7 +2479,7 @@ mod tests {
             send("TERM");
             wait_for(1).await;
             assert_eq!(*lock(&host.calls), ["request_exit"]);
-            // The quit question was answered with Keep o7 open.
+            // The quit question was answered with Keep Ghost open.
             quit.keep_running();
             send("HUP");
             wait_for(2).await;

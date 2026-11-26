@@ -1,8 +1,8 @@
-// `VERSION` is the version o7 is published as: three numbers, `major.minor.patch`, chosen by the
+// `VERSION` is the version Ghost is published as: three numbers, `major.minor.patch`, chosen by the
 // pull request that changes the app (owner, 23 November 2026). A big feature raises the minor
 // number and sets the patch to 0 (0.2.4 to 0.3.0); a small change or a fix raises the patch
 // (0.2.4 to 0.2.5). Every published version must be newer than the last, or installed copies
-// would never be offered it (docs/developing-in-o7.md, "Version").
+// would never be offered it (docs/developing-in-ghost.md, "Version").
 //
 //   node .github/scripts/check-version.mjs [folder]   the format, and against main when the
 //                                                      branch changes the app (pnpm lint)

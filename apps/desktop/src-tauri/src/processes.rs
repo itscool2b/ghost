@@ -3,7 +3,7 @@
 //! agent tree. Never the agent itself (the chat's own Stop keeps its session consistent) and never
 //! anything else on the system.
 
-use o7_process::tree::{Snapshot, StopError, TreeProcess};
+use ghost_process::tree::{Snapshot, StopError, TreeProcess};
 use serde::Serialize;
 use tauri::State;
 
@@ -26,7 +26,7 @@ pub struct ChatProcesses {
     pub chat_id: String,
     pub agents: Vec<AgentProcesses>,
     /// The latest record of each task, oldest first (at most 64).
-    pub tasks: Vec<o7_protocol::tasks::BackgroundTask>,
+    pub tasks: Vec<ghost_protocol::tasks::BackgroundTask>,
 }
 
 /// One agent process and everything it started, the agent first, then nearest first.
@@ -44,7 +44,7 @@ pub struct ProcessRow {
     /// Its parent, when that parent is in the same agent's tree.
     pub parent: Option<u32>,
     pub name: String,
-    /// Masked and cut short ([`o7_process::tree::mask_command`]).
+    /// Masked and cut short ([`ghost_process::tree::mask_command`]).
     pub command: Option<String>,
     pub started_ms: Option<f64>,
     pub cpu_ms: Option<f64>,
@@ -132,7 +132,7 @@ pub async fn process_stop(
     tauri::async_runtime::spawn_blocking(move || {
         let mut last = StopError::NotInTree;
         for control in &controls {
-            match o7_process::tree::stop(control, pid) {
+            match ghost_process::tree::stop(control, pid) {
                 Ok(_) => return Ok(()),
                 Err(StopError::NotInTree) => {}
                 Err(error) => last = error,

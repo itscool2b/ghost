@@ -1,5 +1,5 @@
 /**
- * `?motion=reduce` for the whole lab. @o7/ui (Orb, AuraField) and Motion read the OS setting
+ * `?motion=reduce` for the whole lab. @ghost/ui (Orb, AuraField) and Motion read the OS setting
  * through `matchMedia`, which a URL cannot change, so the lab wraps `matchMedia`: queries for
  * prefers-reduced-motion get a stand-in list that also matches while the URL forces reduced motion,
  * and fires `change` when either flips. Other queries pass straight through.

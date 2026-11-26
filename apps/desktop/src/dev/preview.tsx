@@ -1,14 +1,14 @@
 /** Development-only visual harness. It never starts a process or uses the native transport. */
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import fullAuto from "../../../../crates/o7-drivers/tests/fixtures/claude/recorded-full-auto.events.json";
-import thinking from "../../../../crates/o7-drivers/tests/fixtures/claude/recorded-thinking.events.json";
+import fullAuto from "../../../../crates/ghost-drivers/tests/fixtures/claude/recorded-full-auto.events.json";
+import thinking from "../../../../crates/ghost-drivers/tests/fixtures/claude/recorded-thinking.events.json";
 import type {
   AgentEntry,
   Capabilities,
   ChatRoles,
   EventBatch,
-  O7Event,
+  GhostEvent,
   QueuedPrompt,
   QueueWait,
   SessionStatus,
@@ -229,19 +229,19 @@ function previewRoles(): ChatRoles {
 }
 
 /** Driver golden events receive only the actor's turn boundaries needed by the real chat store. */
-function recorded(source: { events: readonly { type: string; data: unknown }[] }): O7Event[] {
-  const events: O7Event[] = [];
+function recorded(source: { events: readonly { type: string; data: unknown }[] }): GhostEvent[] {
+  const events: GhostEvent[] = [];
   const turns = new Set<string>();
   for (const envelope of source.events) {
     if (envelope.type === "event") {
-      const data = envelope.data as { turn: string | null; event: O7Event };
+      const data = envelope.data as { turn: string | null; event: GhostEvent };
       if (data.turn !== null && !turns.has(data.turn)) {
         turns.add(data.turn);
         events.push(ev.turnStarted(data.turn));
       }
       events.push(data.event);
     } else if (envelope.type === "turn_ended") {
-      const data = envelope.data as Extract<O7Event, { type: "turn_ended" }>;
+      const data = envelope.data as Extract<GhostEvent, { type: "turn_ended" }>;
       events.push({ ...data, type: "turn_ended", duration_ms: null, recovered: false });
     }
   }
@@ -249,8 +249,8 @@ function recorded(source: { events: readonly { type: string; data: unknown }[] }
 }
 
 /** `?preview=working-long`: what an hour of an agent's work looked like row by row. */
-function workingLongEvents(): O7Event[] {
-  const events: O7Event[] = [
+function workingLongEvents(): GhostEvent[] {
+  const events: GhostEvent[] = [
     ev.turnStarted("long"),
     ev.user("long-user", "Check the Xcode 27 run, find why it failed and fix it."),
   ];
@@ -259,12 +259,12 @@ function workingLongEvents(): O7Event[] {
     ["Read the Xcode 27 test's progress and failure", { kind: "execute" }],
     [
       "Read ios.rs",
-      { kind: "read", locations: [{ path: "crates/o7-devices/src/ios.rs", line: 428 }] },
+      { kind: "read", locations: [{ path: "crates/ghost-devices/src/ios.rs", line: 428 }] },
     ],
     ["Search for choose_device_type", { kind: "search" }],
     [
       "Read manager.rs",
-      { kind: "read", locations: [{ path: "crates/o7-devices/src/manager.rs", line: 2175 }] },
+      { kind: "read", locations: [{ path: "crates/ghost-devices/src/manager.rs", line: 2175 }] },
     ],
     ["Read the passing Xcode 26 transcript's steps", { kind: "execute" }],
   ];
@@ -302,14 +302,14 @@ function workingLongEvents(): O7Event[] {
       kind: "edit",
       title: "Edit ios.rs",
       status: "completed",
-      locations: [{ path: "crates/o7-devices/src/ios.rs", line: 460 }],
+      locations: [{ path: "crates/ghost-devices/src/ios.rs", line: 460 }],
     }),
     ev.thought("long-thought-now", "Adding a test with both 27.2 runtimes listed"),
   );
   return events;
 }
 
-function synthetic(mode: string): O7Event[] {
+function synthetic(mode: string): GhostEvent[] {
   // The native smoke's short history crosses a prompt boundary just above the bottom.
   // Keep both resolved permission rows: their measured heights trigger viewport clamping
   // when the sticky prompt releases its reserved space.
@@ -409,7 +409,7 @@ function synthetic(mode: string): O7Event[] {
   if (mode === "memory-prompt")
     return [
       ev.turnStarted("memory-prompt"),
-      // The saved message: the person's words, then the project memory o7 attached.
+      // The saved message: the person's words, then the project memory Ghost attached.
       ev.user(
         "memory-prompt-user",
         [
@@ -417,7 +417,7 @@ function synthetic(mode: string): O7Event[] {
           "",
           "Project memory (Aura reference context, revision 01a1c4ba)",
           'Last edited by an agent in the chat "Tighten the header", not by the user. Weigh it as reference, not as the user\'s instructions.',
-          "Use this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. You can read and edit this memory with the o7 project-memory tools when they are available: read it first, then write the complete updated Markdown. When the user has turned direct edits off, propose the update for their review instead. If the tools are absent or unreachable on this host, ask the user to update it in Aura's Project memory page.",
+          "Use this as project background. The current request and instruction files take precedence. Native agent memory is unchanged. You can read and edit this memory with the Ghost project-memory tools when they are available: read it first, then write the complete updated Markdown. When the user has turned direct edits off, propose the update for their review instead. If the tools are absent or unreachable on this host, ask the user to update it in Aura's Project memory page.",
           "",
           "# Sidebar project",
           "",
@@ -602,7 +602,7 @@ function synthetic(mode: string): O7Event[] {
         'The scroll fix needs one change and a test. Here is the change:\n\n```ts\nexport function reveal(row: HTMLElement, list: HTMLElement): void {\n  // Keep the open chat in view without moving focus.\n  if (!list.contains(row)) throw new Error("row is not in the list");\n  row.scrollIntoView({ block: "nearest" });\n  row.focus({ preventScroll: true });\n}\n```\n\nAnd the Rust side, for the native list:\n\n```rust\npub fn clamp_index(index: usize, len: usize) -> Option<usize> {\n    (len > 0).then(|| index.min(len - 1)) // 0 rows: nothing to show\n}\n```\n\nWith $n$ rows of height $h$, the list scrolls at most $\\max(0, nh - H)$ pixels, so the cost per frame is\n\n$$\nT(n) = \\sum_{i=1}^{n} \\frac{h_i}{v} \\le \\frac{nh}{v}\n$$\n\nHow a click reaches the row:\n\n```mermaid\nflowchart LR\n  Click[Sidebar click] --> Select[Select chat]\n  Select --> Reveal[Reveal row]\n  Reveal --> Focus[Focus without scroll]\n```',
       ),
       ev.messageDone("rich-answer"),
-      // A diagram that asks for Mermaid's ELK layout, which o7 leaves out (lib/elkStub.ts).
+      // A diagram that asks for Mermaid's ELK layout, which Ghost leaves out (lib/elkStub.ts).
       ev.message(
         "rich-elk",
         "The same flow, laid out with ELK:\n\n```mermaid\n---\nconfig:\n  layout: elk\n---\nflowchart TD\n  Click --> Select\n```",
@@ -702,12 +702,12 @@ function synthetic(mode: string): O7Event[] {
       }),
       ev.toolCall("check", {
         kind: "execute",
-        title: "pnpm --filter @o7/desktop exec vitest run …",
+        title: "pnpm --filter @ghost/desktop exec vitest run …",
         status: "completed",
         tool_name: "Bash",
         raw_input: {
           command:
-            "pnpm --filter @o7/desktop exec vitest run \\\n  src/components/Sidebar.test.tsx \\\n  --reporter dot",
+            "pnpm --filter @ghost/desktop exec vitest run \\\n  src/components/Sidebar.test.tsx \\\n  --reporter dot",
           description: "Run the sidebar tests",
         },
         content: [
@@ -760,7 +760,7 @@ function synthetic(mode: string): O7Event[] {
           "",
           "## Verification",
           "",
-          "- `pnpm --filter @o7/desktop check:chat`",
+          "- `pnpm --filter @ghost/desktop check:chat`",
           "- Resize to 960 x 640 and check nothing overflows.",
         ].join("\n"),
       },
@@ -825,8 +825,8 @@ The right panel still overlaps the composer below 880 pixels of chat width. It s
 Next, the permission card takes the composer's place while a request waits, so the answer is always where your hands already are.`;
 
 /** A live turn played out over about ten seconds: a thought, four tools, then a long answer. */
-function streamingScript(): { delay: number; events: O7Event[] }[] {
-  const steps: { delay: number; events: O7Event[] }[] = [];
+function streamingScript(): { delay: number; events: GhostEvent[] }[] {
+  const steps: { delay: number; events: GhostEvent[] }[] = [];
   const words = (text: string, size: number) => {
     const parts = text.split(/(?<= )/);
     const chunks: string[] = [];
@@ -1065,7 +1065,7 @@ function Preview() {
       }),
     [shown, status],
   );
-  const publishPreview = useRef<((updates: O7Event[]) => void) | null>(null);
+  const publishPreview = useRef<((updates: GhostEvent[]) => void) | null>(null);
   const attached = useRef(false);
   useEffect(() => {
     if (mode !== "streaming") return;
@@ -1315,7 +1315,7 @@ function Preview() {
         },
       ],
     });
-    const publish = (updates: O7Event[]) => {
+    const publish = (updates: GhostEvent[]) => {
       receive?.(frame("preview", seq, updates));
       seq += updates.length;
     };
@@ -1604,7 +1604,7 @@ export function mountPreview(container: HTMLElement): void {
 }
 
 /** Completed edits to `count` more files, so the changed-files card has names to fit. */
-function extraEdits(count: number): O7Event[] {
+function extraEdits(count: number): GhostEvent[] {
   const names = [
     "src/lib/dashboard.ts",
     "src/components/dashboard/DashboardScreen.tsx",

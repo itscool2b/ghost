@@ -1,4 +1,4 @@
-import { setMotionPreference } from "@o7/ui";
+import { setMotionPreference } from "@ghost/ui";
 import {
   type AgentEntry,
   type ConfigChoice,

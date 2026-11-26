@@ -1,0 +1,88 @@
+[package]
+name = "ghost-core"
+description = "Device identity, the app data layout, profiles, the per-profile SQLite store, and the chat session manager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+ghost-agents.workspace = true
+ghost-config.workspace = true
+ghost-drivers.workspace = true
+ghost-process.workspace = true
+ghost-protocol.workspace = true
+base64 = "0.22.1"
+dirs.workspace = true
+futures.workspace = true
+# Fallible (io::Result) instead of panicking when the OS refuses, so a broken hostname lookup
+# degrades to "This device" rather than taking the app down.
+hostname = "0.4.2"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+rusqlite.workspace = true
+rusqlite_migration.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Content addresses of blobs and the hashes of agent replies.
+sha2.workspace = true
+same-file = "1.0.6"
+specta.workspace = true
+# Only for the `#[specta(type = specta_typescript::Number)]` marker on Unix-ms fields: specta's
+# TypeScript exporter rejects `i64` otherwise. Pure Rust, no Tauri.
+specta-typescript.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net"] }
+tracing.workspace = true
+uuid.workspace = true
+tempfile.workspace = true
+# Directory-relative operations keep checkpoint reads/reverts inside the selected folder during
+# concurrent path changes, including symlink and Windows reparse-point traversal.
+cap-std = "4.0.3"
+cap-fs-ext = "4.0.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Detect the object store's filesystem before selecting Git's durable batch flush strategy.
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+# The ACL calls that make `profiles\` private to the user (fsutil::restrict_to_owner). Raw bindings,
+# already in the tree through tempfile and dirs, rather than the heavier `windows` crate.
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+# The session manager's tests run on fake processes and scripted drivers. `replay` is unused here:
+# through feature unification it makes every `--workspace` test and clippy run (CI's included)
+# compile, lint and run ghost-drivers' replay harness and its tests.
+ghost-drivers = { workspace = true, features = ["testing", "replay"] }
+ghost-process = { workspace = true, features = ["testing"] }
+tempfile.workspace = true
+# Paused time makes idle eviction, flush timers and stop deadlines deterministic.
+tokio = { workspace = true, features = ["test-util"] }
+
+[[bin]]
+# The same fake CLI source runs the full core Plugin library path in temporary homes.
+name = "ghost-plugin-testbin"
+path = "../ghost-agents/src/bin/ghost-agents-testbin.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "ghost-memory-helper"
+path = "src/bin/ghost-memory-helper.rs"
+test = false
+bench = false
+
+[lints]
+workspace = true

@@ -1,8 +1,0 @@
-{"d":"note","note":{"text":"The agent cannot continue the session (-32002): a new session, Fresh with the agent's message, and the notice."}}
-{"d":"note","note":{"start":{"agent_id":"acp-agent","dialect":"generic","resume":"<SESSION_1>","autonomy":"full_auto","desired":{},"spawn_id":"019a0000-0000-7000-8000-0000000000a1"}}}
-{"d":"out","msg":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false,"session":{"notices":{},"configOptions":{"boolean":{}}},"auth":{"terminal":true}},"clientInfo":{"name":"auracode","title":"auracode","version":"0.0.0-replay"}}}}
-{"d":"in","msg":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"acp-agent","title":"ACP Agent","version":"1.0.0"}}}}
-{"d":"out","msg":{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"<SESSION_1>","cwd":"<CWD>","mcpServers":[]}}}
-{"d":"in","msg":{"jsonrpc":"2.0","id":2,"error":{"code":-32002,"message":"Resource not found: <SESSION_1>"}}}
-{"d":"out","msg":{"jsonrpc":"2.0","id":3,"method":"session/new","params":{"cwd":"<CWD>","mcpServers":[]}}}
-{"d":"in","msg":{"jsonrpc":"2.0","id":3,"result":{"sessionId":"<SESSION_2>"}}}
