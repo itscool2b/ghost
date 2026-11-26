@@ -1252,11 +1252,24 @@ async function inspect(engine, launcher) {
     );
     const scrollSurface = page.getByTestId("transcript");
     await scrollSurface.hover();
-    await page.mouse.wheel(0, -250);
-    await page.waitForFunction(
-      (bottom) => document.querySelector('[data-testid="transcript"]').scrollTop < bottom - 100,
-      boundary[0].top,
-    );
+    // WebKit on Linux animates a wheel's scroll, and the prompt returning as the end is left
+    // moves the content under it, which ends that animation early: how far one notch gets
+    // depends on the machine (41px and 102px were both measured). A hand gives another notch.
+    let away = false;
+    for (let notch = 0; notch < 4 && !away; notch++) {
+      await page.mouse.wheel(0, -250);
+      away = await page
+        .waitForFunction(
+          (bottom) => document.querySelector('[data-testid="transcript"]').scrollTop < bottom - 100,
+          boundary[0].top,
+          { timeout: 2_000 },
+        )
+        .then(
+          () => true,
+          () => false,
+        );
+    }
+    assert.ok(away, `${engine}: the wheel did not scroll the transcript up from its end`);
     const boundaryPrompt = page.getByTestId("sticky-prompt");
     await boundaryPrompt.waitFor();
     assert.equal(
