@@ -1292,12 +1292,27 @@ async function inspect(engine, launcher) {
       const box = node.getBoundingClientRect();
       return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     });
-    await page.mouse.wheel(0, 2000);
+    // Further notches for the same reason as above: WebKit's animated scroll ends early when the
+    // prompt's header changes on the way, so one notch may stop short of the end.
+    const atEnd = (timeout) =>
+      page.waitForFunction(
+        () => {
+          const node = document.querySelector('[data-testid="transcript"]');
+          return Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) < 2;
+        },
+        undefined,
+        { timeout },
+      );
     try {
-      await page.waitForFunction(() => {
-        const node = document.querySelector('[data-testid="transcript"]');
-        return Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) < 2;
-      });
+      let back = false;
+      for (let notch = 0; notch < 5 && !back; notch++) {
+        await page.mouse.wheel(0, 2000);
+        back = await atEnd(2_000).then(
+          () => true,
+          () => false,
+        );
+      }
+      if (!back) await atEnd(5_000);
     } catch (cause) {
       const geometry = await page.evaluate((pointer) => {
         const node = document.querySelector('[data-testid="transcript"]');
