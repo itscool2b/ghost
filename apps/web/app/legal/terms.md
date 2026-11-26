@@ -1,18 +1,20 @@
 **Operator:** BASH.AI LLC, a Florida limited liability company (“BASH.AI,” “we,” “us,” or “our”)
 
-**Effective date:** November 25, 2026
+**Effective date:** November 26, 2026
 
 **Contact:** [bashllc25@gmail.com](mailto:bashllc25@gmail.com)
 
+These Terms apply from November 26, 2026 to anyone who first accepts them on or after that date. If you accepted an earlier version of our Terms (including under the name o7), this version applies to you from the earlier of the day you accept it in the App and December 26, 2026; until then, the earlier version continues to apply to you, as described in Section 16.
+
 These Terms of Service (the “Terms”) govern your access to and use of:
 
-- the official compiled Ghost desktop application (the “App”);
-- the website at [https://onghost.dev](https://onghost.dev) and related pages (the “Site”); and
+- the official compiled Ghost ADE desktop application and the official Ghost for iPhone app (each, and together, the “App”), including copies released under the earlier names o7 and AuraCode;
+- the website at [https://onghost.dev](https://onghost.dev) and related pages, including the former addresses o7.codes and auracode.si, which redirect to it (the “Site”); and
 - optional hosted services we operate in connection with Ghost, including the remote-access relay, download and usage-count endpoints, and related interfaces (together with the App and the Site, the “Services”).
 
-Ghost is a free, local-first desktop application that lets you run coding agents you choose, side by side, on your own computer. There is no Ghost account and no paid tier. The product was previously known as AuraCode and was associated with the domain auracode.si.
+Ghost ADE (“Ghost”) is a free, local-first desktop application that lets you run coding agents you choose, side by side, on your own computer. Ghost for iPhone is an optional companion app that pairs with Ghost on your computer. There is no Ghost account and no paid tier. The product was previously known as o7, at the domain o7.codes, until November 26, 2026, and before that as AuraCode, at the domain auracode.si, until November 19, 2026. Both former domains now redirect to the Site. References in these Terms to Ghost include those earlier names.
 
-The source code for Ghost is separately available under the MIT License at [https://github.com/itscool2b/ghost](https://github.com/itscool2b/ghost). These Terms do not replace the MIT License for rights in that source code. They do govern your use of the official App binaries and of our hosted Services.
+The source code for Ghost is separately available under the MIT License at [https://github.com/itscool2b/ghost](https://github.com/itscool2b/ghost) (formerly itscool2b/o7). These Terms do not replace the MIT License for rights in that source code. They do govern your use of the official App binaries and of our hosted Services.
 
 A website’s domain suffix does not determine your legal rights or our jurisdiction. These Terms do.
 
@@ -38,7 +40,9 @@ We do not knowingly provide the Services to children under 13. If you believe a 
 
 **No account; no payments.** There is no Ghost account, no sign-in to Ghost, and no paid tier. We do not process payments for the App.
 
-**Hosted pieces and third-party downloads.** The Site and the optional remote-access relay are hosted by Cloudflare. The App may also contact, as described in the Privacy Policy: GitHub (for Ghost update checks and downloads, an optional pinned tool used to drive the iPhone simulator on a Mac, and some agent version lookups); Hugging Face (for an optional on-device speech model); Google at dl.google.com (for optional Android device setup) and, if you type a search in the in-app browser, Google Search; the npm registry; Homebrew; and the Agent Client Protocol registry (for version lookups of agents you have installed).
+**Ghost for iPhone.** Ghost for iPhone is an optional app that pairs with Ghost on your computer through remote access (Section 7) to follow and steer its chats, start work, answer requests, view changes and screens, and send photos to a chat. It does nothing on its own: your computer decides what the iPhone may see and do. It may be distributed through Apple’s TestFlight beta service or the App Store, and if you get it that way, Section 19 also applies. A TestFlight build is a pre-release build and may be incomplete, change, or stop working at any time. If you turn on its notifications, they are delivered through Apple Push Notification service, as described in the Privacy Policy. Face ID or your passcode, if you turn it on in the app, is checked by your iPhone; we never receive your biometric data.
+
+**Hosted pieces and third-party downloads.** The Site and the optional remote-access relay are hosted by Cloudflare. The App may also contact, as described in the Privacy Policy: GitHub (for Ghost update checks and downloads, an optional pinned tool used to drive the iPhone simulator on a Mac, and some agent version lookups); Hugging Face (for an optional on-device speech model); Apple (through the relay, to deliver notifications to Ghost for iPhone if you turn them on); Google at dl.google.com (for optional Android device setup) and, if you type a search in the in-app browser, Google Search; the npm registry; Homebrew; and the Agent Client Protocol registry (for version lookups of agents you have installed).
 
 **Preview and signing status.** Official installers may be unsigned by a platform publisher and may not be notarized. Your operating system may warn you or refuse to open the App until you approve it. You should compare the downloaded file’s SHA-256 checksum with the value published on the download page before installing. We may change supported systems, signing status, and known limitations in release notes.
 
@@ -52,7 +56,7 @@ The App also periodically looks up newer versions of agents you have installed. 
 
 Subject to these Terms, we grant you a personal, non-exclusive, non-transferable, non-sublicensable, revocable license to download, install, and run the official compiled App on devices you own or control, solely in accordance with these Terms.
 
-This license does not give you any right to our trademarks, service marks, trade names, logos, or domain names, including “Ghost,” “onghost.dev,” “AuraCode,” or “auracode.si,” except for the limited, nominative use needed to describe the unmodified official App.
+This license does not give you any right to our trademarks, service marks, trade names, logos, or domain names, including “Ghost,” “Ghost ADE,” “Ghost for iPhone,” “onghost.dev,” “o7,” “o7.codes,” “AuraCode,” or “auracode.si,” except for the limited, nominative use needed to describe the unmodified official App.
 
 ### 4.2 Source code (MIT)
 
@@ -118,6 +122,8 @@ A bot-link address that is unused for 90 days stops working until you renew it. 
 
 **Your controls.** You can remove a paired device, a bot link, or an automation in Settings to end its access. You can renew a bot link or automation as described above. You can also forget a computer from a paired browser’s page. You are responsible for who you pair or link, for who has an automation address, for safeguarding those credentials, and for all remote, automated, and unattended actions taken with them.
 
+**Former addresses.** Pairings, bot links, and automations belong to the address at which they were made. After your App updates to the Ghost name, pair your phone and link your assistants again at onghost.dev; links made at o7.codes or auracode.si do not carry over. For a limited time, the relay also answers at those former addresses so that copies of the App that have not yet updated can connect. We may stop answering at a former address at any time.
+
 We may suspend or limit the relay or other hosted Services to protect the Services, other users, or third parties, or if we believe you have violated these Terms.
 
 ## 8. Acceptable use
@@ -142,7 +148,7 @@ Some marks may be used while permission from the owner is still being handled. W
 
 Your use of a third-party agent, model, hosting provider, device platform, or assistant is subject to that party’s terms and privacy policy, including, where you accept it, Google’s Android SDK license. We are not responsible for third-party services, their availability, their handling of your data, or their output.
 
-Cloudflare, GitHub, Hugging Face, Google, the npm registry, Homebrew, and the Agent Client Protocol registry provide infrastructure or files the App or Site may contact. Their terms and privacy policies apply to their processing of your requests, including your IP address. Sites you or an agent visit in the in-app browser, and Google Search if you run a search there, likewise apply their own terms.
+Cloudflare, GitHub, Hugging Face, Google, Apple, the npm registry, Homebrew, and the Agent Client Protocol registry provide infrastructure or files the App or Site may contact. Their terms and privacy policies apply to their processing of your requests, including your IP address. Sites you or an agent visit in the in-app browser, and Google Search if you run a search there, likewise apply their own terms.
 
 ## 10. Disclaimer of warranties
 
@@ -191,7 +197,7 @@ We respect intellectual property rights and expect you to do the same. You may n
 
 If you believe content on the Site or in the hosted Services infringes your copyright, you may send a notice that complies with the Digital Millennium Copyright Act to:
 
-**DMCA designated agent:** BASH.AI LLC  
+**DMCA designated agent:** BASH.AI LLC, Attn: DMCA Agent  
 **Email:** [bashllc25@gmail.com](mailto:bashllc25@gmail.com)
 
 Your notice should include: (1) your physical or electronic signature; (2) identification of the copyrighted work claimed to have been infringed; (3) identification of the material that is claimed to be infringing and information reasonably sufficient to locate it; (4) your contact information; (5) a statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law; and (6) a statement, under penalty of perjury, that the information in the notice is accurate and that you are the copyright owner or authorized to act on the owner’s behalf.
@@ -202,17 +208,17 @@ This Section is a notice procedure for the Site and hosted Services. It does not
 
 ## 15. Termination
 
-You may stop using the Services at any time by uninstalling the App, turning off remote access, removing paired devices, bot links, and automations, and ceasing to use the Site.
+You may stop using the Services at any time by uninstalling the App (including Ghost for iPhone), turning off remote access, removing paired devices, bot links, and automations, and ceasing to use the Site.
 
 We may suspend or terminate your access to the hosted Services, or stop offering all or part of the Services, at any time, including if we reasonably believe you have violated these Terms, if we are required to do so by law, or if we discontinue the Services.
 
-The license in Section 4.1 ends when these Terms terminate. Rights in the source code under the MIT License continue according to that license. Sections that by their nature should survive, including Sections 5 through 14 and 16 through 18, survive termination.
+The license in Section 4.1 ends when these Terms terminate. Rights in the source code under the MIT License continue according to that license. Sections that by their nature should survive, including Sections 5 through 14 and 16 through 19, survive termination.
 
 ## 16. Changes
 
 We may change these Terms from time to time. We will post the updated Terms on the Site and update the effective date. For material changes, we will also show an in-app notice.
 
-Material changes take effect 30 days after we post them on the Site, or earlier if you accept the updated Terms in the App. Changes that are not material, and changes we make to comply with law, take effect when posted, or on a later date we state. If you do not agree to the updated Terms, you must stop using the Services and uninstall the App. Your continued use after the updated Terms become effective constitutes acceptance.
+For anyone who already accepted an earlier version, material changes take effect 30 days after we post them on the Site, or earlier if you accept the updated Terms in the App. For anyone who first accepts the Terms after an update is posted, the updated Terms apply from that acceptance. Changes that are not material, and changes we make to comply with law, take effect when posted, or on a later date we state. If you do not agree to the updated Terms, you must stop using the Services and uninstall the App. Your continued use after the updated Terms become effective constitutes acceptance.
 
 ## 17. Governing law and venue
 
@@ -232,7 +238,7 @@ If you are a consumer, you may have additional rights under the laws of your sta
 
 **Assignment.** You may not assign these Terms without our prior written consent. We may assign these Terms to an affiliate or in connection with a merger, reorganization, or sale of assets. These Terms bind and benefit permitted successors and assigns.
 
-**No third-party beneficiaries.** These Terms do not create third-party beneficiary rights, except that our members, managers, officers, directors, employees, agents, licensors, and suppliers may rely on Sections 10 through 12.
+**No third-party beneficiaries.** These Terms do not create third-party beneficiary rights, except that our members, managers, officers, directors, employees, agents, licensors, and suppliers may rely on Sections 10 through 12, and except that Apple and its subsidiaries are third-party beneficiaries as stated in Section 19.
 
 **Relationship.** These Terms do not create a partnership, joint venture, employment, or agency relationship.
 
@@ -240,7 +246,22 @@ If you are a consumer, you may have additional rights under the laws of your sta
 
 **Language.** We provide these Terms in English. If we later provide a translation, the English version controls to the extent permitted by law.
 
-## 19. Contact
+## 19. Additional terms for Ghost for iPhone
+
+This Section applies if you obtain Ghost for iPhone from Apple’s App Store or through Apple’s TestFlight service. If this Section conflicts with the rest of these Terms, this Section controls for Ghost for iPhone.
+
+- **Agreement is with us, not Apple.** These Terms are between you and BASH.AI LLC only, and not with Apple Inc. (“Apple”). We, not Apple, are solely responsible for Ghost for iPhone and its content. Nothing in these Terms provides usage rules that conflict with the Apple Media Services Terms and Conditions or, for TestFlight builds, Apple’s TestFlight Terms and Conditions.
+- **Scope of license.** Your license to Ghost for iPhone under Section 4.1 is a non-transferable license to use it on Apple-branded products that you own or control, as permitted by the Usage Rules in the Apple Media Services Terms and Conditions, except that it may be accessed and used by other accounts associated with you through Family Sharing or volume purchasing. Your rights in the source code under the MIT License are unaffected.
+- **Maintenance and support.** We are solely responsible for any maintenance and support of Ghost for iPhone, as stated in these Terms or as required by law. Apple has no obligation whatsoever to provide maintenance or support for it.
+- **Warranty.** We are solely responsible for any product warranties, whether express or implied by law, to the extent not effectively disclaimed in Section 10. If Ghost for iPhone fails to conform to an applicable warranty, you may notify Apple, and Apple will refund the purchase price, if any, to you (Ghost for iPhone is free, so that amount is zero). To the maximum extent permitted by law, Apple has no other warranty obligation with respect to Ghost for iPhone, and any other claims, losses, liabilities, damages, costs, or expenses attributable to a failure to conform to a warranty are our responsibility, subject to Sections 10 and 11.
+- **Product claims.** We, not Apple, are responsible for addressing any claims by you or a third party relating to Ghost for iPhone or your possession or use of it, including (i) product liability claims; (ii) any claim that it fails to conform to an applicable legal or regulatory requirement; and (iii) claims arising under consumer protection, privacy, or similar laws. These Terms do not limit our liability to you beyond what applicable law permits.
+- **Intellectual property claims.** If a third party claims that Ghost for iPhone or your possession and use of it infringes that third party’s intellectual property rights, we, not Apple, are solely responsible for the investigation, defense, settlement, and discharge of that claim.
+- **Legal compliance.** You represent and warrant that (i) you are not located in a country that is subject to a U.S. Government embargo, or that has been designated by the U.S. Government as a “terrorist supporting” country; and (ii) you are not listed on any U.S. Government list of prohibited or restricted parties.
+- **Questions and complaints.** Direct any questions, complaints, or claims about Ghost for iPhone to BASH.AI LLC at the contact details in Section 20.
+- **Third-party terms.** You must comply with applicable third-party terms when you use Ghost for iPhone, for example your wireless data service agreement and Apple’s terms.
+- **Apple as third-party beneficiary.** Apple and Apple’s subsidiaries are third-party beneficiaries of these Terms as they apply to Ghost for iPhone. When you accept these Terms, Apple will have the right (and will be deemed to have accepted the right) to enforce them against you as a third-party beneficiary.
+
+## 20. Contact
 
 BASH.AI LLC  
 [bashllc25@gmail.com](mailto:bashllc25@gmail.com)

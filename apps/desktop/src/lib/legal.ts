@@ -7,10 +7,12 @@
  */
 
 /**
- * The documents' effective date. Raise it, with the date in `apps/web/app/legal/*.md`, when either
- * changes materially: every copy then shows the notice once more.
+ * The documents' version: their effective date, and a number after it when a second version takes
+ * effect the same day (version 2 of 26 November 2026 followed that morning's change by hours).
+ * Change it, with the date in `apps/web/app/legal/*.md`, when either document changes materially:
+ * every copy then shows the notice once more, and its OK is the acceptance the documents speak of.
  */
-export const LEGAL_VERSION = "2026-11-26";
+export const LEGAL_VERSION = "2026-11-26.2";
 /** The same date as people read it. */
 export const LEGAL_DATE = "November 26, 2026";
 

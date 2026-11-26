@@ -4,9 +4,11 @@
 
 **Contact:** [bashllc25@gmail.com](mailto:bashllc25@gmail.com)
 
-This Privacy Policy describes how personal information is handled in connection with the Ghost desktop application (the “App”), the website at [https://onghost.dev](https://onghost.dev) (the “Site”), and the optional remote-access relay and related hosted endpoints (together with the App and the Site, the “Services”).
+This policy applies from November 26, 2026 to anyone who first accepts it on or after that date. If you accepted an earlier version (including under the name o7), this version applies to you from the earlier of the day you accept it in the App and December 26, 2026; until then, the earlier version continues to apply to you, as described in Section 12.
 
-Ghost is a free, local-first app. There is no Ghost account, no sign-in, and no payment. Your chats, projects, and settings are stored on your computer. We do not receive a copy of them as part of ordinary local use.
+This Privacy Policy describes how personal information is handled in connection with the Ghost ADE desktop application and the Ghost for iPhone app (each, and together, the “App”), the website at [https://onghost.dev](https://onghost.dev), including the former addresses o7.codes and auracode.si, which redirect to it (the “Site”), and the optional remote-access relay and related hosted endpoints (together with the App and the Site, the “Services”).
+
+Ghost ADE (“Ghost”) is a free, local-first app. It was called o7, at o7.codes, until November 26, 2026, and AuraCode, at auracode.si, until November 19, 2026; this policy also covers copies of the App that still carry those names. There is no Ghost account, no sign-in, and no payment. Your chats, projects, and settings are stored on your computer. We do not receive a copy of them as part of ordinary local use.
 
 This policy is meant to be read with our Terms of Service at [https://onghost.dev/terms](https://onghost.dev/terms).
 
@@ -93,7 +95,7 @@ Sites the in-app browser visits can see your IP address and may receive cookies 
 
 ### 4.6 Website visits and download counts (to the Site, then GitHub)
 
-Cloudflare hosts the Site and the relay. The Site and the Worker that serves it do not set cookies. We do not include advertising analytics, and Cloudflare’s own page analytics are turned off for onghost.dev. The Site’s content security policy does not allow third-party scripts.
+Cloudflare hosts the Site and the relay. The Site and the Worker that serves it do not set cookies. We do not include advertising analytics, and Cloudflare’s own page analytics are turned off for onghost.dev, and the former addresses o7.codes and auracode.si only redirect to onghost.dev. The Site’s content security policy does not allow third-party scripts. Cloudflare’s network adds a standard Network Error Logging header to the Site’s responses, so a browser that supports it may send Cloudflare a report if a connection to the Site fails; Cloudflare handles those reports under its own terms and privacy policy, and we do not receive them.
 
 A download button on the Site passes through the Site on the way to the file on GitHub so we can count downloads. We keep only how many downloads there were each day, for each system and version. The download-count record we keep does not include an address, a cookie, or anything else about who downloaded. Robots such as search engines, link previews, and requests with no user agent are not counted. The file itself is served from GitHub, which can see the download request, including your IP address.
 
@@ -104,6 +106,8 @@ When you visit the Site or use hosted endpoints, Cloudflare can see your IP addr
 Remote access is off until you turn it on in Settings. It lets a browser you pair, a bot you link, or an automation you create reach the chats on your computer, or start a task, through a relay on the Site. It uses pairing links, device keys, and secret addresses, not an account.
 
 A paired browser, bot link, or automation is scoped to one workspace: the profile that was open when you created it. Opening another workspace ends the session for the first workspace.
+
+A pairing or link belongs to the address at which it was made. After your App updates to the Ghost name, pairings and links made at o7.codes or auracode.si do not carry over and must be made again at onghost.dev. For a limited time, the relay also answers at those former addresses, so that copies of the App that have not yet updated can connect. Every address reaches the same relay, which handles information as this policy describes.
 
 **What the relay stores.** For each computer that uses the relay, the relay stores:
 
@@ -117,6 +121,7 @@ The relay stores no chats. A room no computer has connected to for thirty days f
 
 **What the relay can read in transit.**
 
+- Ghost for iPhone’s messages, including photos and screen views, are sealed between that iPhone and your computer in the same way as a paired browser’s.
 - A paired browser’s messages are sealed between that browser and your computer. The relay forwards them and cannot read them, change them, reorder them, or replay them. It could drop messages or refuse service.
 - A bot’s calls use HTTPS to the relay. The relay can read those calls and answers as they pass, including tool requests, returned chat content, and any pictures a permitted bot asks for (for example a view of a chat’s browser tab or emulator, not a phone on a cable). The bot’s own service can also see that traffic. A bot-link token is part of the bot’s address and is sent with those calls.
 - If you create an automation, the relay receives webhook requests at that address and can read the payload in transit. The relay does not store the payload as a chat. The sender is told only whether a task started, was refused, or could not run because the computer is away.
@@ -149,7 +154,20 @@ Ghost for iPhone, Ghost’s app for iPhone, pairs with your computer through rem
 
 **Retention and your controls.** Your computer keeps a notification token until you turn notifications off in Ghost for iPhone, remove the device in Settings, or Apple reports that the token no longer works. You can also turn notifications for Ghost off in the iPhone’s Settings. Removing the device in Settings deletes its tokens and notification choices from your computer.
 
-### 4.9 Third-party agents and assistants
+### 4.9 Ghost for iPhone: pairing, camera, photos, and Face ID
+
+Ghost for iPhone has no account. It pairs with a computer by reading the pairing code or link the computer shows, and keeps each computer’s device key in the iPhone’s keychain, on that iPhone only, together with the list of computers you paired. When it pairs, it tells your computer the name you give the phone, the app’s version, and the iPhone’s model, which your computer keeps with that device’s other remote-access records. Forgetting a computer in the app deletes its key from the iPhone, and the computer stops accepting it.
+
+- **Camera.** If you allow it, the app uses the camera to scan a pairing code and to take photos you choose to send to a chat. It does not record or upload anything else from the camera.
+- **Photos.** Photos you pick from your library or take with the camera are sent only when you send them, to the computer you are using, over the sealed channel described in Section 4.7. Each is sent as a JPEG of limited size, without its location. The computer checks each photo and adds it to the chat on your computer; the relay cannot read it. An unfinished upload is discarded by the computer after ten minutes.
+- **Screen views and chat content.** What the app shows (chats, changes, diffs, and pictures of a chat’s browser page or device) comes from your computer over the same sealed channel. The app keeps what its widgets and Live Activity show, as described in Section 4.8.
+- **Face ID.** If you turn on Face ID or passcode checks in the app, your iPhone performs the check and tells the app only whether it succeeded. We never receive your face data, fingerprint, or passcode.
+- **No analytics.** Ghost for iPhone contains no advertising, analytics, or tracking code, and it does not send usage counts.
+- **Apple.** If you get the app from the App Store or through TestFlight, Apple processes information about your download, installation, and (for TestFlight) your feedback and crash reports you choose to share, under Apple’s own terms and privacy policy. Apple may make crash reports and feedback you share through TestFlight available to us; we use them only to fix and improve the app.
+
+You can change camera, photo, notification, and Face ID permissions at any time in the iPhone’s Settings, and you can delete the app to remove everything it keeps on the iPhone.
+
+### 4.10 Third-party agents and assistants
 
 Agents you choose run through their own harnesses and authentication. Their providers receive information according to their own services and policies. That can include source code, prompts, file contents, and other work you allow the agent to access. Ghost does not read, store, or proxy your agent credentials. Keys and configuration for MCP servers you add stay on your computer.
 
@@ -170,7 +188,7 @@ If you are in a jurisdiction that requires a legal basis for processing (includi
 
 - **Legitimate interests**, for operating the Site, keeping aggregate usage and download totals, looking up newer versions of installed agents so the App can tell you an update is available, securing the Services, and answering requests, where those interests are not overridden by your rights;
 - **Performance of a contract**, or steps at your request before a contract, when we provide the Services under the Terms of Service (including the optional relay if you turn it on);
-- **Consent**, where we ask for it or where you clearly enable an optional feature that sends data (for example turning on remote access, linking a bot, creating an automation, configuring a call-back, turning on notifications in Ghost for iPhone, accepting Android setup, starting an iPhone simulator that fetches a tool, or leaving automatic update checks and the speech-model download enabled). You can withdraw that consent by turning the feature off, as described in this policy; and
+- **Consent**, where we ask for it or where you clearly enable an optional feature that sends data (for example turning on remote access, linking a bot, creating an automation, configuring a call-back, turning on notifications in Ghost for iPhone, allowing Ghost for iPhone to use the camera or sending photos from it, accepting Android setup, starting an iPhone simulator that fetches a tool, or leaving automatic update checks and the speech-model download enabled). You can withdraw that consent by turning the feature off, as described in this policy; and
 - **Legal obligation**, when we must process information to comply with law.
 
 ## 6. Retention
@@ -179,6 +197,7 @@ If you are in a jurisdiction that requires a legal basis for processing (includi
 - **Daily usage and download totals** are stored as aggregates (day, event, platform, version, and count). They do not include your IP address or an identifier for your copy. We keep them to understand historical use of the App. The Site’s database has no automatic deletion date for those aggregate rows.
 - **Relay records** (owner mark, last connection time, bot-token hashes, and link level) are forgotten thirty days after the computer last connected. The times of recent notifications kept for rate limits are no longer used after an hour, are deleted when the next notification is sent, and are forgotten with the rest of the room’s data.
 - **Notification tokens** for Ghost for iPhone stay on your computer until you turn notifications off, remove the device, or Apple reports that the token no longer works. Apple may hold an undelivered notification for up to one hour.
+- **Ghost for iPhone’s device keys and list of computers** stay on the iPhone until you forget a computer in the app or delete the app. Photos you send become part of the chat on your computer and are kept like any other chat content; an unfinished upload is discarded after ten minutes.
 - **Pairing links** are short-lived and are designed to live in the computer’s memory, to be used once, and to expire after a short period (currently ten minutes).
 - **Bot-link and automation addresses** that are unused for 90 days stop working until you renew them. Renewing issues a new address and retires the old one at once.
 - **Messages we receive if you email us** are kept as long as needed to handle your request and for our ordinary business, tax, and legal records, after which we delete or de-identify them.
@@ -192,7 +211,7 @@ We disclose information only as follows:
 
 - **Service providers and hosts**, in particular Cloudflare, which hosts the Site and the relay and processes IP addresses and request metadata to provide that hosting, security, and related infrastructure.
 - **Third parties your device contacts directly** when you use a feature: GitHub (Ghost update checks and downloads, an optional iPhone-simulator tool, some agent version lookups, and pull-request polling you enable); Hugging Face (optional speech-model download); Google (optional Android SDK download, and Google Search if you run a search in the in-app browser); the npm registry, Homebrew, and the Agent Client Protocol registry (agent version lookups, and agent installs or updates you start); sites you or an agent visit in the in-app browser; and any agent or assistant provider you use. Those parties process information under their own policies.
-- **Apple**, if you turn on notifications in Ghost for iPhone: the relay passes each sealed notification and the iPhone’s notification token to Apple Push Notification service, which delivers it under Apple’s own terms and privacy policy. Apple cannot read the sealed content.
+- **Apple**, if you turn on notifications in Ghost for iPhone: the relay passes each sealed notification and the iPhone’s notification token to Apple Push Notification service, which delivers it under Apple’s own terms and privacy policy. Apple cannot read the sealed content. If you get Ghost for iPhone from the App Store or through TestFlight, Apple also processes information about that download and use under its own policy, as described in Section 4.9.
 - **Legal and safety disclosures**, if we believe in good faith that disclosure is required by law, necessary to protect the Services or someone’s rights or safety, or needed in connection with a merger, acquisition, or transfer of the business (in which case we would take steps we consider reasonable to keep this policy’s protections in place or to notify you of a change).
 - **At your direction**, including when you enable remote access, link a bot, create an automation, configure a call-back, or turn on notifications in Ghost for iPhone.
 
@@ -208,7 +227,7 @@ Where a law requires a transfer mechanism for personal information that is trans
 
 ## 9. Your rights and requests
 
-Your most direct controls are on your computer: you can delete local data, turn off automatic update checks for Ghost (which also turns off daily usage counts), cancel or remove the speech-model download, turn Mobile off, and turn off remote access or remove paired devices, bot links, and automations. On the iPhone, you can turn notifications off in Ghost for iPhone or in the iPhone’s Settings. Agent version lookups described in Section 4.2 are separate from the Ghost update-check setting.
+Your most direct controls are on your computer: you can delete local data, turn off automatic update checks for Ghost (which also turns off daily usage counts), cancel or remove the speech-model download, turn Mobile off, and turn off remote access or remove paired devices, bot links, and automations. On the iPhone, you can turn notifications off in Ghost for iPhone or in the iPhone’s Settings, change camera, photo, and Face ID permissions in the iPhone’s Settings, forget a computer in the app, or delete the app. Agent version lookups described in Section 4.2 are separate from the Ghost update-check setting.
 
 Depending on where you live, you may also have rights under laws such as the EU or UK GDPR or the California CCPA/CPRA, which may include the right to:
 
@@ -251,7 +270,7 @@ Please compare published SHA-256 checksums before installing, treat remote-acces
 
 We may update this Privacy Policy from time to time. We will post the updated policy on the Site and update the effective date. For material changes, we will also show an in-app notice.
 
-Material changes take effect 30 days after we post them on the Site, or earlier if you accept the updated policy in the App. Changes that are not material, and changes we make to comply with law, take effect when posted, or on a later date we state. If you do not agree, you should stop using the Services and uninstall the App.
+For anyone who already accepted an earlier version, material changes take effect 30 days after we post them on the Site, or earlier if you accept the updated policy in the App. For anyone who first accepts the policy after an update is posted, the updated policy applies from that acceptance. Changes that are not material, and changes we make to comply with law, take effect when posted, or on a later date we state. If you do not agree, you should stop using the Services and uninstall the App.
 
 ## 13. Contact
 
