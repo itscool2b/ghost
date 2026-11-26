@@ -3,64 +3,64 @@
     "channel": "stable",
     "signed": true,
     "publisher_signed": false,
-    "version": "0.6.0",
-    "pub_date": "2026-11-25T14:01:52-05:00",
-    "notes": "The Privacy Policy changed, so o7 shows its notice with both links once more.\nA large, detailed image you add to a chat no longer fails for being too big.\nRemote access had work under the hood.\nPairing more than one device is quicker.",
-    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/SHA256SUMS",
+    "version": "0.8.2",
+    "pub_date": "2026-11-26T15:33:26-05:00",
+    "notes": "The Terms of Service and Privacy Policy have a new version, so Ghost shows its notice with both links once more.\nThe picture of your agents shows a tick on each connected agent's line.\no7 is now Ghost ADE, at onghost.dev.\nThe message box and dialogs are tidier.\no7 has a new look called Main.\nRemote access in Settings reads more simply.",
+    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/SHA256SUMS",
     "downloads": [
       {
         "kind": "macos_universal_dmg",
         "label": "macOS · Apple silicon and Intel",
         "requirements": "macOS 13.3 or newer",
-        "file": "o7_0.6.0_universal.dmg",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/o7_0.6.0_universal.dmg",
-        "sha256": "bef0206c3a6035c2a0788118d9d0cd30399a0bc2b63c446522269244e35e81aa",
-        "bytes": 240755721
+        "file": "Ghost_0.8.2_universal.dmg",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/Ghost_0.8.2_universal.dmg",
+        "sha256": "8488ed09d993ed7f00dbc849e7924bc2c34840fa4d18cf153ea73840503a7bd6",
+        "bytes": 240738677
       },
       {
         "kind": "windows_x64_nsis",
         "label": "Windows · x64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "o7_0.6.0_x64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/o7_0.6.0_x64-setup.exe",
-        "sha256": "70772af80fd1786323fe77b69b083f41f2a65acbb6c90c6c2c648a5d6b96b00c",
-        "bytes": 194703633
+        "file": "Ghost_0.8.2_x64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/Ghost_0.8.2_x64-setup.exe",
+        "sha256": "f187d4bdc5179f30326dff3228d02fb31bf04ba8133f28299ae2f039a765db9b",
+        "bytes": 194776178
       },
       {
         "kind": "windows_arm64_nsis",
         "label": "Windows · ARM64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "o7_0.6.0_arm64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/o7_0.6.0_arm64-setup.exe",
-        "sha256": "d88576421a7a52058438eb537fbc8ce5feac72a5f42609457ae360e2a1351bce",
-        "bytes": 192209831
+        "file": "Ghost_0.8.2_arm64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/Ghost_0.8.2_arm64-setup.exe",
+        "sha256": "c4532cf37b165704bf246c07f7865ead9afec3c76cd4748ca755566dc07b44d8",
+        "bytes": 192269460
       },
       {
         "kind": "linux_x64_appimage",
         "label": "Linux · AppImage",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7_0.6.0_amd64.AppImage",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/o7_0.6.0_amd64.AppImage",
-        "sha256": "45a40652374d0f5aed030fd125b9ba68ed6546f47787c03b19856336f28b8450",
-        "bytes": 291224056
+        "file": "Ghost_0.8.2_amd64.AppImage",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/Ghost_0.8.2_amd64.AppImage",
+        "sha256": "fc81b9147c76761d9087e126b347dc29aef0c8c7a25f8cbe7fefdad3fa6ad2cf",
+        "bytes": 291207672
       },
       {
         "kind": "linux_x64_deb",
         "label": "Linux · Debian and Ubuntu",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7_0.6.0_amd64.deb",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/o7_0.6.0_amd64.deb",
-        "sha256": "2d531d4c2ea422727f36cb3d2637ab43f5e253990b43d7a8b8ee398583fd8bf7",
-        "bytes": 209570164
+        "file": "Ghost_0.8.2_amd64.deb",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/Ghost_0.8.2_amd64.deb",
+        "sha256": "7b7c57548c60aba388eae82ad2c50738852a47ee65cc25fd1120bdb82ed0d5ed",
+        "bytes": 209558364
       },
       {
         "kind": "linux_x64_rpm",
         "label": "Linux · Fedora and other RPM systems",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "o7-0.6.0-1.x86_64.rpm",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.6.0/o7-0.6.0-1.x86_64.rpm",
-        "sha256": "37fd8c092a3a76d58b96ee455cd26cde1d4885d787a1951325922e9541f90ad8",
-        "bytes": 209573863
+        "file": "Ghost-0.8.2-1.x86_64.rpm",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.8.2/Ghost-0.8.2-1.x86_64.rpm",
+        "sha256": "a0244ed89affe4fade73b77817b222f3376c2fb726e5d8239a1ad0e6ab61ffb0",
+        "bytes": 209569722
       }
     ]
   }
