@@ -40,15 +40,15 @@ const PLATFORMS: readonly { name: string; detail: string; glyph: ReactNode }[] =
 export function GetIt() {
   return (
     <section className="section getit" id="download" aria-labelledby="getit-title">
-      <div className="inner two-col">
+      <div className="wrap two-col">
         <div className="two-col-head">
           <h2 id="getit-title" className="title">
-            Download o7
+            Download o7. <span className="tone">Free, with no account.</span>
           </h2>
           <p className="lead">
             {PUBLISHED
-              ? "Free for Windows, macOS and Linux. No account needed."
-              : "Free for Windows, macOS and Linux, with no account needed. Installers are on the way."}
+              ? "For Windows, macOS and Linux. Each installer is listed with its checksum."
+              : "For Windows, macOS and Linux. Installers are on the way."}
           </p>
         </div>
         <ul className="getit-rows">

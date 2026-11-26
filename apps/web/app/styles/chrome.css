@@ -1,10 +1,11 @@
 /* ------------------------------------------------------------------------------- header */
 
 /*
- * The bar dot.com has: the wordmark, the page's sections beside it in 13px medium words, and the
- * primary Download pill at the right. It stays at the top over the page's colour at 85% and a 12px
- * blur, with no rule under it, and keeps its place across page navigations (view transitions).
- * Under 1024px the sections fold into a menu behind a quiet disc beside a 40px Download.
+ * The bar: the wordmark, the page's sections beside it in grey 14px words that take the ink under
+ * the hand, the repository and the primary Download pill at the right. It stays at the top over
+ * the page's colour and a 12px blur, and one hairline draws under it once the page has moved. It
+ * keeps its place across page navigations (view transitions). Under 1024px the sections fold into
+ * a menu behind a quiet disc beside a 40px Download.
  */
 .site-nav {
   position: sticky;
@@ -24,16 +25,32 @@
   position: absolute;
   inset: 0;
   z-index: -1;
+  border-bottom: 1px solid var(--s-line);
   background-color: var(--s-nav);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   pointer-events: none;
 }
 
+/* At the very top the bar has no rule; it draws in over the first 64px of scroll. */
+@supports (animation-timeline: scroll()) {
+  .site-nav::before {
+    animation: nav-rule linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 64px;
+  }
+}
+
+@keyframes nav-rule {
+  from {
+    border-bottom-color: transparent;
+  }
+}
+
 .nav-bar {
   display: flex;
   align-items: center;
-  gap: 40px;
+  gap: 32px;
   height: 100%;
 }
 
@@ -56,18 +73,17 @@
   display: inline-flex;
   align-items: center;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 10px;
   border-radius: 999px;
-  color: var(--s-ink);
-  font-size: 13px;
-  line-height: 19.5px;
-  font-weight: 500;
+  color: var(--s-soft);
+  font-size: 14px;
+  line-height: 20px;
   text-decoration: none;
-  transition: background-color 150ms var(--s-swift);
+  transition: color 150ms var(--s-swift);
 }
 
 .nav-links a:hover {
-  background-color: var(--s-quiet);
+  color: var(--s-ink);
 }
 
 .nav-end {
@@ -249,8 +265,8 @@
 /* ------------------------------------------------------------------------------- footer */
 
 /*
- * dot.com's foot: a hairline across the column (a gutter wider than the words, as its own is),
- * the wordmark and one small line at left, a dotted rule, and columns of 13px links.
+ * The foot: a hairline across the column, the wordmark and one small line at left, and columns of
+ * grey 13px links that take the ink under the hand.
  */
 .site-footer {
   padding: 0;
@@ -295,12 +311,11 @@
   line-height: 16px;
 }
 
-/* The link columns sit at the right of a dotted rule, spread over the room dot.com's five take. */
+/* The link columns sit at the right of the column. */
 .footer-links {
   display: flex;
   flex: 1;
   justify-content: flex-end;
-  border-left: 1px dotted var(--s-line);
 }
 
 .footer-cols {
@@ -327,7 +342,7 @@
 }
 
 .footer-col a {
-  color: var(--s-ink);
+  color: var(--s-soft);
   font-size: 13px;
   line-height: 21px;
   text-decoration: none;
@@ -335,7 +350,7 @@
 }
 
 .footer-col a:hover {
-  color: var(--s-soft);
+  color: var(--s-ink);
 }
 
 @media (max-width: 1023px) {

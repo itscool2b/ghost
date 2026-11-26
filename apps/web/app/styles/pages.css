@@ -1,11 +1,11 @@
 /*
- * Inner pages, in the home page's language (dot.com's): a two-tone title at the statement's size
- * (ink, then grey on its own line) that stands on its own, a grey line under it, and flat cards a
- * step off the page with 24px corners. Nothing sits above a title.
+ * Inner pages, in the home page's language: a two-tone title (ink, then grey on its own line)
+ * that stands on its own, a grey line under it, and flat cards a step off the page with one
+ * hairline. Nothing sits above a title.
  */
 .page {
   position: relative;
-  padding: 112px 0 var(--s-section);
+  padding: 88px 0 var(--s-section);
 }
 
 .page-column {
@@ -55,7 +55,7 @@
   font-size: 48px;
   line-height: 52px;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.034em;
   text-wrap: balance;
 }
 

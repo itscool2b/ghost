@@ -17,20 +17,33 @@ import { SiteFooter } from "./footer";
 import { SiteHeader } from "./header";
 
 export function Layout({ children }: { children: ReactNode }) {
-  // The site follows the system appearance (dark unless the system asks for light), with no
-  // switch and nothing stored.
   const path = useLocation().pathname;
-  // The remote page is a tool that fills the screen: it has no site header or footer.
+  // The remote page is a tool that fills the screen: it has no site header or footer, and it
+  // wears the paired computer's own theme and appearance.
   const tool = path === "/remote" || path.startsWith("/remote/");
   return (
-    <html lang="en" className="g-root">
+    // The site is always dark (owner, 25 November 2026): pinned on the root, so the shared tokens
+    // do not turn light under a light system, with no switch and nothing stored.
+    <html
+      lang="en"
+      className="g-root"
+      data-theme={tool ? undefined : "dark"}
+      // The hashed boot script marks the root as scripted before React arrives.
+      suppressHydrationWarning
+    >
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="color-scheme" content="dark light" />
-        {/* The browser's own bars take the page's colour in each appearance. */}
-        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        <meta name="color-scheme" content={tool ? "dark light" : "dark"} />
+        {/* The browser's own bars take the page's colour. */}
+        {tool ? (
+          <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+        ) : null}
+        <meta
+          name="theme-color"
+          content="#0a0a0a"
+          media={tool ? "(prefers-color-scheme: dark)" : undefined}
+        />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

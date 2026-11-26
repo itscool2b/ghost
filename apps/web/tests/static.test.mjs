@@ -39,15 +39,21 @@ test("every built file is one the website Worker accepts", async () => {
     assert.match(path, served, `${path}: unsupported file type`);
   }
 });
-test("public pages are prerendered to follow the system appearance without JavaScript", async () => {
+test("public pages are prerendered dark, whole without JavaScript", async () => {
   for (const path of ["", "download/", "privacy/", "terms/", "changelog/"]) {
     const html = await readFile(new URL(`${path}index.html`, root), "utf8");
-    // Nothing pins an appearance: the stylesheet follows prefers-color-scheme.
-    assert.doesNotMatch(html, /<html[^>]*data-theme=/);
-    assert.match(html, /<meta name="color-scheme" content="dark light"/);
+    // The site is always dark: pinned on the root, so the shared tokens never turn light, and
+    // the browser is told the page has one scheme.
+    assert.match(html, /<html[^>]*data-theme="dark"/, path);
+    assert.match(html, /<meta name="color-scheme" content="dark"/, path);
+    assert.doesNotMatch(html, /prefers-color-scheme: light/, path);
     assert.match(html, /<main/);
     assert.match(html, /<h1/);
   }
+  // The remote page wears the paired computer's own theme, so nothing is pinned there.
+  const remote = await readFile(new URL("remote/index.html", root), "utf8");
+  assert.doesNotMatch(remote, /<html[^>]*data-theme=/);
+  assert.match(remote, /<meta name="color-scheme" content="dark light"/);
   const downloads = await readFile(new URL("download/index.html", root), "utf8");
   assert.match(downloads, /macOS/);
   assert.match(downloads, /Windows/);
@@ -86,28 +92,21 @@ test("public pages are prerendered to follow the system appearance without JavaS
     assert.doesNotMatch(downloads, /These installers are unsigned/);
     assert.doesNotMatch(downloads, /o7 updates itself/);
   }
-  await access(new URL("images/desktop-light.png", root));
-  for (const theme of ["light", "dark"])
-    for (const width of [480, 960, 1440, 2240])
-      await access(new URL(`images/desktop-${theme}-${width}.webp`, root));
   const home = await readFile(new URL("index.html", root), "utf8");
-  // The real app in the page's appearance: the dark capture under a dark system, else the light.
-  assert.match(
-    home,
-    /<picture[^>]*><source[^>]*media="\(prefers-color-scheme: dark\)"[^>]*type="image\/webp"/,
-  );
-  for (const theme of ["light", "dark"])
-    assert.ok(
-      home.includes(
-        `/images/desktop-${theme}-480.webp 480w, /images/desktop-${theme}-960.webp 960w, /images/desktop-${theme}-1440.webp 1440w`,
-      ),
-      theme,
-    );
-  // The frame is the page's 1232px column; a phone crops it to the chat pane at 179% (home.css).
-  assert.match(
-    home,
-    /sizes="\(max-width: 639px\) calc\(179vw - 57px\), \(max-width: 1279px\) calc\(100vw - 48px\), 1232px"/,
-  );
+  // The app on the page is drawn in HTML, so the page ships no screenshot of it, and its one
+  // picture, the hero's field, is whole without scripts: an SVG drawn when the page was built.
+  assert.doesNotMatch(home, /<picture|<img\b/);
+  assert.match(home, /<svg class="stage-field"[^>]*aria-hidden="true"/);
+  assert.equal((home.match(/<canvas class="stage-canvas" aria-hidden="true">/g) ?? []).length, 3);
+  // Every part of the page is in the markup: the six parts of the app with their words, the
+  // nine agents and the eight tiles, none of them waiting on a script.
+  assert.equal((home.match(/class="explorer-item"/g) ?? []).length, 6);
+  assert.equal((home.match(/class="roster-agent"/g) ?? []).length, 9);
+  assert.equal((home.match(/class="tile"/g) ?? []).length, 8);
+  // No label stands over a heading (no eyebrows): each chapter's head is its heading and one
+  // paragraph, nothing else.
+  for (const [, head] of home.matchAll(/<div class="chapter-head">([\s\S]*?)<\/div>/g))
+    assert.match(head, /^<h2 [^>]*class="title">[\s\S]*<\/h2><p class="lead">[\s\S]*<\/p>$/);
 });
 test("the changelog page lists every pull request in CHANGELOG.md, newest first", async () => {
   const source = await readFile(new URL("../../../CHANGELOG.md", import.meta.url), "utf8");
@@ -126,10 +125,11 @@ test("the changelog page lists every pull request in CHANGELOG.md, newest first"
     [...html.matchAll(/<time dateTime="(\d{4}-\d{2}-\d{2})"/gi)].map((match) => match[1]),
     days,
   );
-  // The home page shows the three newest days as cards, each leading to its day on this page.
+  // The home page shows the three newest days on a timeline, each leading to its day on this
+  // page.
   const home = await readFile(new URL("index.html", root), "utf8");
   assert.deepEqual(
-    [...home.matchAll(/class="card news-card" href="\/changelog#day-(\d{4}-\d{2}-\d{2})"/g)].map(
+    [...home.matchAll(/class="timeline-day" href="\/changelog#day-(\d{4}-\d{2}-\d{2})"/g)].map(
       (match) => match[1],
     ),
     days.slice(0, 3),
@@ -188,7 +188,7 @@ test("the site is for a local app: no account pages, and no page offers one", as
     const text =
       path === "changelog/"
         ? html.replace(/<main[\s\S]*<\/main>/, "")
-        : html.replace(/<ul class="inner news-grid">[\s\S]*?<\/ul>/, "");
+        : html.replace(/<ol class="timeline">[\s\S]*?<\/ol>/, "");
     assert.doesNotMatch(text, /Sign in|Sign up|Create (?:your |an )?account|[Ii]nvit/, path);
     assert.doesNotMatch(text, /open.source|Choose a plan|Subscribe now/i, path);
   }
@@ -208,10 +208,10 @@ test("third-party notices are emitted and linked from every page footer", async 
   assert.match(text, /react-router/);
   assert.doesNotMatch(text, /SQLCipher|openssl-src/);
   const page = await readFile(new URL("third-party-notices/index.html", root), "utf8");
-  // It follows the system appearance as the site does, without a script.
-  assert.match(page, /color-scheme:light dark/);
-  assert.match(page, /--notice-bg:#ffffff/);
-  assert.match(page, /prefers-color-scheme:dark\)\{html\{--notice-bg:#0a0a0a/);
+  // It is always dark, as the site is, without a script.
+  assert.match(page, /color-scheme:dark;/);
+  assert.match(page, /--notice-bg:#0a0a0a/);
+  assert.doesNotMatch(page, /prefers-color-scheme/);
   assert.doesNotMatch(page, /<script/);
   const home = await readFile(new URL("index.html", root), "utf8");
   assert.match(home, /<a href="\/third-party-notices">Notices<\/a>/);
