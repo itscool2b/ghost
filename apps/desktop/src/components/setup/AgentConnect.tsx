@@ -113,12 +113,14 @@ export function AgentConnect({ agents }: { readonly agents: readonly ConnectAgen
                 />
               ) : null}
               {agent.state === "connected" ? (
-                <g
-                  className="agent-connect-check"
-                  transform={`translate(${middle.x - 7} ${middle.y - 7})`}
-                >
-                  <circle cx={7} cy={7} r={7} />
-                  <Check x={3} y={3} width={8} height={8} strokeWidth={3} />
+                // Two groups: the outer one puts the tick on the line, the inner one is what
+                // lands. A CSS animation of `transform` replaces an element's own transform
+                // attribute, so with both on one group every tick landed in the picture's corner.
+                <g transform={`translate(${middle.x - 7} ${middle.y - 7})`}>
+                  <g className="agent-connect-check">
+                    <circle cx={7} cy={7} r={7} />
+                    <Check x={3} y={3} width={8} height={8} strokeWidth={3} />
+                  </g>
                 </g>
               ) : null}
             </g>
