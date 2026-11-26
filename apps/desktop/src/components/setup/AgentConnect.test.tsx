@@ -33,4 +33,21 @@ describe("the agents joined to Ghost", () => {
     expect(html).toContain('aria-label="9 of 10 agents connected to Ghost."');
     expect(html.match(/class="agent-connect-tile"/g)).toHaveLength(CONNECT_SHOWN);
   });
+
+  it("puts each tick on its own line, on a group the landing animation does not move", () => {
+    const agents = ["one", "two", "three"].map((id) => ({
+      id,
+      name: id,
+      state: "connected" as const,
+    }));
+    const html = renderToStaticMarkup(<AgentConnect agents={agents} />);
+    // The animated group carries no place of its own: a CSS animation of `transform` would
+    // replace it, which once drew every tick in the picture's corner.
+    expect(html).not.toMatch(/class="agent-connect-check"[^>]*transform=/);
+    const places = [
+      ...html.matchAll(/<g transform="translate\(([^)]+)\)"><g class="agent-connect-check">/g),
+    ].map((match) => match[1]);
+    expect(places).toHaveLength(3);
+    expect(new Set(places).size).toBe(3);
+  });
 });

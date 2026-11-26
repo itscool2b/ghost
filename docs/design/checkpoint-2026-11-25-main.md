@@ -47,7 +47,7 @@ Seen in browser fixtures with the Main palette, in dark and in light unless note
 | `settings`, `settings&page=remote&remote=on`, `setup`, `launch` (dark) | Navigation, cards of rows, the setup card |
 | `settled#palette` (dark) | Scope pills, rows, the highlight |
 
-Not looked at in this pass, and so not claimed: Plugins and MCP, Instructions, Project memory, the Agents page, accounts, the tour, the canvas and the find bar. They take the foundation's primitives and tokens but nobody opened them.
+Not looked at in this pass, and so not claimed: Plugins and MCP, Instructions, Project memory, the Agents page, accounts, the tour, the canvas and the find bar. They take the foundation's primitives and tokens but nobody opened them. They were opened afterwards: see "The surfaces not opened before", below.
 
 Checked by tests: the desktop's 1,030 unit tests, typecheck and the style lint locally; the browser suites on GitHub, whose results are in the pull request. One measurement shaped a decision: the first foundation run failed its accessibility scan on the Dashboard, where tertiary text at `#909090` measured 4.49:1 on a lit card, so the tertiary grey went back to `#959595`.
 
@@ -66,3 +66,24 @@ One thing the walk found is not the page's: on the new address Cloudflare adds i
 Not seen: the remote page's chat screen, sheets and requests (the fixture stands in for the list only), and the site on a real phone.
 
 Not seen natively: the window's caption and material. Their colours did not change (`--g-window` and `--g-fg-2` are as they were, and the Rust test that pins them to the caption still holds), so nothing native was expected to move. The next approved build is the first real window with Main.
+
+## The surfaces not opened before (26 November 2026)
+
+Steps 2 to 4 left eight surfaces unopened. They were opened after the rename to Ghost, in browser fixtures with the Main palette, each in dark and in light at 1440 by 900:
+
+| State | What was looked at |
+| --- | --- |
+| `plugins`, `plugins-update`, `plugins-failed`, `plugins-mcp` | The agents' rail and its open row, an agent's page with its sections and two-column rows, the update notice, a failed listing in red, a shared server's card with its switch and pills |
+| `instructions`, `instructions-per-agent`, `instructions-conflict`, `instructions-review` | The text's well and its foot, the file tabs, the dialog that chooses the shared text, the save dialog with its diff |
+| `project-memory`, with one project and with two, and `settings&page=memory` | The switch's card, the brief with its byte meter, Discard beside a disabled Save, the notes' rows |
+| `agents`, `settings&page=agents`, `agents-installing` | The picture of agents joined to the wing, the roster's rows and their states, the install dialog with its terminal |
+| `accounts`, `accounts&accounts=unavailable` | Usage bars in ink, a limit reached in its warning colour, Use and Remove, Add account and why it can be off |
+| `tour&offer`, `tour&go` | The offer's card, a stop's card with the ring round its control and the wing beside it |
+| `canvas`, opened from the message box and drawn on | The toolbar's groups, the colours, the dot grid, Talk and Add drawing |
+| `settled` with the find bar open on a word | The bar, its count, the marked words and the current one |
+
+One thing was wrong, and it was older than Main: in the picture of agents joined to the wing, on the Agents page and in setup, every connected agent's tick was drawn in the picture's top corner, one on another. The tick's group had its place as a transform attribute and its landing as a CSS animation of `transform`, and the animation replaces the attribute. The place is on an outer group now, a test holds it there, and the ticks sit on their lines in both appearances.
+
+Left as it is: the find bar floats over the transcript, so with the transcript at its start it covers the top edge of the first message.
+
+Nothing else on these surfaces needed changing: they wear the foundation's rows, cards, pills, fields and dialogs as the rest of the app does.
