@@ -11,6 +11,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-26
 
+- The message box and dialogs are tidier. The message box's menus now open above it, so they never cover what you are typing, and queued messages and background tasks sit on a small tray behind its top edge. The New project dialog is rebuilt, dialogs open ready to type, and the dashboard's line edits calendar is black and white like the rest of the look. A chat you stop now also stays stopped: if its agent was working when you opened the chat, o7 started it again a second later, and reverting files kept asking you to stop it first. ([#219](https://github.com/itscool2b/o7/pull/219))
 - o7 has a new look called Main. It is a calm black, white and grey look with thinner icons, smaller headings and tighter rows, and it is now the theme o7 opens in. Each chat in the sidebar shows its agent's mark and how long ago it last moved, and the message box is cleaner. If you chose another theme, it is kept. You can pick Main in Settings > Appearance. ([#218](https://github.com/itscool2b/o7/pull/218))
 
 ## 2026-11-25
