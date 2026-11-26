@@ -10,7 +10,6 @@
     "apps/desktop/src-tauri/Cargo.toml": "20be9b046c5081c3f12e0f2b2a95b31027d7612d10cb7862c4410d42e1d18618",
     "apps/ios/package.json": "39e6b92528ee30d092e968cc4b87061fa65900095311d3cc56a535325366b718",
     "apps/relay/package.json": "d245a1f42e59210498075c6a9c9fa52f0eec0f3042b6ed7b20266decd88a0942",
-    "apps/web-builds-alias/package.json": "6625df3428043493bab8b7efc40e8da7b21cbb6209e8681d66f5e5230edc5eec",
     "apps/web-worker/Cargo.toml": "f4a92d1fc5b3e0fa46b93bd89d344a70be14aef04bb79f353b4f487d369a51e9",
     "apps/web-worker/package.json": "2b97017469da6496c45488ae695d7550fc9629e5fd6f3860856f61a77fb14462",
     "apps/web/package.json": "7b3ea7fd48a08975cec5282264447e7149d87e89eaa04b757ec0e4f735805df5",
@@ -25,7 +24,7 @@
     "crates/ghost-release/Cargo.toml": "69b34e328e5928bc8da2457025b05c846bba4fd70019f8b55fce5ef891251769",
     "crates/ghost-remote/Cargo.toml": "a585579fc41901f7a8dfda8d2f7108099133cf314f25dc1ea17f9b73897427e3",
     "packages/ui/package.json": "01dc29689b64582c647c9696a20f94bdcc810ddeac6671442dba7b101da7f31b",
-    "pnpm-lock.yaml": "efce6b82528ff6aea44606fc2fe7b6fe32b713ebc523313556196eade75cd932",
+    "pnpm-lock.yaml": "ec7f8ef72bf00a4e2e49190eb30aa58c83202e987d551c06d59d8cf5ccff4039",
     "third-party/models.json": "86823e00ae9b863c74eee067e833792869e50d0359709ee381bd24d0a8108eda",
     "third-party/overrides.json": "2d4bae7744b98a2d1fb5c2d465867d0d4a5c78321fc7c5a048ab116ff168c948"
   },

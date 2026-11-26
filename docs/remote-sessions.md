@@ -484,7 +484,7 @@ phone: neither the relay nor Apple can read it. The parts are `crates/ghost-remo
 
 | Part | Where | What it does |
 |---|---|---|
-| Relay | `apps/relay` (Worker `o7-relay`, route `onghost.dev/api/remote/*`) | One Durable Object per computer holds its host socket and the sockets of browsers and Ghost for iPhone, and forwards between them. Serves MCP to bots. |
+| Relay | `apps/relay` (Worker `ghost-relay`, route `onghost.dev/api/remote/*`) | One Durable Object per computer holds its host socket and the sockets of browsers and Ghost for iPhone, and forwards between them. Serves MCP to bots. |
 | Service | `crates/ghost-remote` | Pairing links, devices and bot links (`registry.rs`), the sealed channel (`crypto.rs`), one session per browser or app (`host.rs`, `host/session.rs`, what only the app asks for in `host/app.rs`, and its staged photos in `host/uploads.rs`), notifications for the app (sealed in `push.rs`, sent from `host/notify.rs`), bot tools (`bot.rs`, `render.rs`), the socket (`relay.rs`). |
 | App | `apps/desktop/src-tauri/src/remote.rs` | Starts the service, gives it the open profile's chats through the same lease a window's commands take, and exposes the commands Settings uses. |
 | Settings page | `apps/desktop/src/components/settings/RemotePanel.tsx` | The switch, devices, bots, and the two dialogs that show a secret once. |
