@@ -416,26 +416,31 @@
   border-color: var(--g-red);
 }
 
-/* Segmented control: a recessed pill track with one raised segment (4.3). */
+/*
+ * Segmented control (4.3): a pill outlined by one hairline, with the chosen segment a flat step of
+ * ink inside it. No filled track and no raised thumb, so a row of them reads as words, not as a
+ * slab. 32px outside, 28px segments 2px in.
+ */
 .g-segmented {
-  --g-segment-on-bg: var(--g-glass-raised);
+  --g-segment-on-bg: var(--g-glass-control-hover);
   --g-segment-on-fg: var(--g-fg-1);
   --g-segment-on-ring: transparent;
   display: inline-flex;
   align-items: center;
   gap: 2px;
   box-sizing: border-box;
-  height: 32px;
+  height: var(--g-control-lg);
   padding: 2px;
   border-radius: var(--g-radius-pill);
-  background-color: var(--g-glass-control);
-  box-shadow: none;
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
 }
 
+/* Kept for its callers: the quiet form is now the only one. */
 .g-segmented-quiet {
-  --g-segment-on-bg: var(--g-glass-raised);
+  --g-segment-on-bg: var(--g-glass-control-hover);
   --g-segment-on-fg: var(--g-fg-1);
-  --g-segment-on-ring: var(--g-glass-rim);
+  --g-segment-on-ring: transparent;
 }
 
 .g-segment {
@@ -444,16 +449,16 @@
   justify-content: center;
   gap: 6px;
   box-sizing: border-box;
-  height: 28px;
-  padding: 0 12px;
+  height: var(--g-control);
+  padding: 0 10px;
   border: 0;
   border-radius: var(--g-radius-pill);
   background-color: transparent;
-  color: var(--g-fg-2);
+  color: var(--g-fg-3);
   font-family: var(--g-sans);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
-  font-weight: var(--g-weight-medium);
+  font-weight: var(--g-weight-regular);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -478,10 +483,9 @@
   [data-active]
 ) {
   background-color: var(--g-segment-on-bg);
-  box-shadow:
-    var(--g-shadow-control),
-    inset 0 0 0 1px var(--g-segment-on-ring);
+  box-shadow: inset 0 0 0 1px var(--g-segment-on-ring);
   color: var(--g-segment-on-fg);
+  font-weight: var(--g-weight-medium);
 }
 
 /* Switch on a native checkbox: <input type="checkbox" role="switch" class="g-switch"> */

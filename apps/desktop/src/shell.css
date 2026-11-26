@@ -333,17 +333,6 @@
 /* ---------- Controls (4.1, 4.2) ---------- */
 
 /*
- * Graphite's strong segmented control on the app's grid, as Settings draws its own: a 36px track
- * (an input's height) with the 28px segments 4px in. The picker's quiet effort track keeps its
- * 32px with 24px levels (6.10).
- */
-.g-segmented {
-  height: 36px;
-  padding: var(--g-space-4);
-  gap: var(--g-space-4);
-}
-
-/*
  * Buttons are Graphite's .g-button everywhere (soft, primary, outline, ghost, danger; 24, 28, 32,
  * 36; .g-button-icon for icons). One app rule only: icons never shrink. A disabled button keeps its
  * shape on any layer by itself, since its fill is a step of ink, not a surface colour.
