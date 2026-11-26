@@ -29,8 +29,11 @@
   --g-green: #3dd68c;
   --g-red: #ff5c5c;
   --g-red-hover: #ff7a7a;
-  /* The Dashboard's AI line edits: the busiest days' squares, the quieter ones a share of it. */
-  --g-heat: #1a8cff;
+  /*
+   * The Dashboard's AI line edits: the busiest days' squares, the quieter ones a share of it. Ink
+   * since Main (a blue before): the calendar is the theme's own colour at five strengths.
+   */
+  --g-heat: var(--g-fg-1);
   --g-diff-hunk: #0f0f0f;
   --g-selection: #333333;
   --g-focus: #d4d4d4;
@@ -327,7 +330,7 @@
   --g-green: #166534;
   --g-red: #b91c1c;
   --g-red-hover: #991b1b;
-  --g-heat: #0f6fe0;
+  --g-heat: var(--g-fg-1);
   --g-diff-hunk: #f6f6f6;
   --g-selection: #e1e1e1;
   --g-focus: #6e6e6e;
@@ -431,7 +434,7 @@
     --g-green: #166534;
     --g-red: #b91c1c;
     --g-red-hover: #991b1b;
-    --g-heat: #0f6fe0;
+    --g-heat: var(--g-fg-1);
     --g-diff-hunk: #f6f6f6;
     --g-selection: #e1e1e1;
     --g-focus: #6e6e6e;

@@ -1,8 +1,15 @@
-/* The Git workspace dialog: the large dialog (shell.css, `.g-dialog`), its parts as glass wells. */
+/* The Git workspace dialog: the large dialog (shell.css, `.g-dialog`), its parts as wells. */
 
-.git-repository,
-/* Rimmed, with no fill of their own: on the frosted dialog any fill takes red error text under
-   4.5:1. */
+/* Where the chat works: a flat card, as a project's folders are. */
+.git-repository {
+  padding: var(--g-space-12) var(--g-space-16);
+  border-radius: var(--g-radius-12);
+  background-color: var(--g-glass-card);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+}
+
+/* What is about to change and what came of it: rimmed, with no fill, so their warnings and
+   errors keep the dialog's own contrast. */
 .git-review,
 .git-result {
   padding: var(--g-space-16);
@@ -171,6 +178,22 @@
   margin-bottom: 0;
 }
 
+/* A sentence in a section's form is spaced by the form's gap alone, like its fields. */
+.git-section form > p {
+  margin: 0;
+  color: var(--g-fg-2);
+}
+
+/* A section that is itself a form: the form's gap spaces its parts, so their own margins go. */
+form.git-section {
+  gap: var(--g-space-12);
+}
+
+form.git-section > :is(h3, p, fieldset, .ui-field, .git-actions) {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .git-help {
   margin: calc(var(--g-space-8) * -1) 0 0;
   color: var(--g-fg-3);
@@ -211,6 +234,12 @@
   justify-content: flex-end;
   gap: var(--g-space-8);
   margin-top: var(--g-space-16);
+}
+
+/* A section's own action starts on its text's edge, under the sentence it acts on. */
+.git-section > .git-actions {
+  justify-content: flex-start;
+  margin-top: 0;
 }
 
 .git-review dl {
@@ -394,7 +423,7 @@
   line-height: var(--g-leading-meta);
 }
 
-/* The tear line (3.5): dashed 8 on, 8 off. */
+/* One hairline over the foot, as every other dialog section has (a dashed rule before Main). */
 .git-footer::before {
   content: "";
   position: absolute;
@@ -402,8 +431,7 @@
   right: 0;
   left: 0;
   height: 1px;
-  background-image: linear-gradient(90deg, var(--g-line-strong) 50%, transparent 0);
-  background-size: 16px 1px;
+  background-color: var(--g-line);
 }
 
 .git-pr-body {
