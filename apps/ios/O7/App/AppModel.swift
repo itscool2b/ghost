@@ -66,7 +66,7 @@ final class AppModel {
         settings.themeOverride.map { Look(theme: $0, appearance: settings.appearance ?? "system") }
             ?? selected.map { computer in
                 Look(theme: computer.look.theme, appearance: settings.appearance ?? computer.look.appearance)
-            } ?? Look(theme: "claude", appearance: settings.appearance ?? "system")
+            } ?? Look(theme: "aura", appearance: settings.appearance ?? "system")
     }
 
     // MARK: Life

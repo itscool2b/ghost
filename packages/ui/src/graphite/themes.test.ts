@@ -195,7 +195,7 @@ describe("Desktop themes", () => {
   it("leaves Graphite's own palette as Aura", () => {
     // Aura is the base: no themes.css block, the TypeScript mirror unchanged.
     expect(themesFile).not.toContain('data-palette="aura"');
-    expect(BASE_COLORS.dark.bg).toBe("#161616");
+    expect(BASE_COLORS.dark.bg).toBe("#131313");
   });
 
   it("contains no em dash", () => {

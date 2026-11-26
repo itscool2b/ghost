@@ -77,7 +77,8 @@
 }
 
 /*
- * Workspace tabs sit in a glass track; the active view is a raised, lit pill.
+ * The panel's tabs are words in a row: no track around them. The open one is a flat step of ink,
+ * the rest grey until the hand is on them.
  */
 .context-panel-tabs {
   display: inline-flex;
@@ -85,23 +86,19 @@
   align-items: center;
   gap: var(--g-space-2);
   min-width: 0;
-  height: 32px;
+  height: var(--g-control);
   box-sizing: border-box;
-  padding: var(--g-space-2);
-  border-radius: var(--g-radius-pill);
-  background-color: var(--g-glass-control);
-  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
 }
 
 .context-panel-tabs button {
   display: inline-flex;
   align-items: center;
   gap: var(--g-space-6);
-  height: 28px;
-  padding: 0 var(--g-space-12);
+  height: var(--g-control);
+  padding: 0 var(--g-space-8);
   border-radius: var(--g-radius-pill);
-  color: var(--g-fg-2);
-  font-weight: var(--g-weight-medium);
+  color: var(--g-fg-3);
+  font-weight: var(--g-weight-regular);
   white-space: nowrap;
   transition:
     background-color var(--g-dur-fast) var(--g-ease),
@@ -111,16 +108,15 @@
 
 @media (hover: hover) {
   .context-panel-tabs button:hover {
+    background-color: var(--g-glass-control);
     color: var(--g-fg-1);
   }
 }
 
 .context-panel-tabs button[aria-selected="true"] {
-  background-color: var(--g-glass-raised);
-  box-shadow:
-    var(--g-shadow-control),
-    inset 0 0 0 1px var(--g-glass-rim);
+  background-color: var(--g-glass-control-hover);
   color: var(--g-fg-1);
+  font-weight: var(--g-weight-medium);
 }
 
 .context-panel-tabs small {

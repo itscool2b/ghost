@@ -1060,6 +1060,8 @@ function Preview() {
         folder_state: shown === "missing-worktree" ? "missing" : "ok",
         status,
         needs_attention: shown === "permission",
+        // A real time, so the sidebar's row shows how long ago the chat last moved.
+        updated_at: Date.now() - 4 * 60_000,
       }),
     [shown, status],
   );
@@ -1518,6 +1520,7 @@ function Preview() {
               folder: chat.folder,
               agent_name: "Codex",
               agent_id: "codex",
+              updated_at: Date.now() - 3 * 3_600_000,
             }),
           ]}
           error={null}

@@ -14,7 +14,7 @@ describe("Settings' theme gallery", () => {
     const names = [...html.matchAll(/class="settings-theme-label">([^<]+)</g)].map(
       (match) => match[1],
     );
-    expect(names).toEqual(["Aura", ...THEMES.map((theme) => theme.name)]);
+    expect(names).toEqual(["Main", ...THEMES.map((theme) => theme.name)]);
     // The mark beside each name is hidden, so a screen reader hears "Claude Code", not
     // "Claude Code, Idle Claude Code".
     expect(html.match(/class="settings-theme-mark" aria-hidden="true"/g)).toHaveLength(10);

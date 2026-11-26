@@ -39,22 +39,23 @@
   --ui-pane-outline: none;
 
   /*
-   * The message box, as the Grok Bot app draws it: the raised layer at radius 18 with one faint
-   * edge, lifted off the pane by the soft inline shadow in light and by the edge alone in dark.
-   * Focus steps the edge up and nothing else: no coloured ring (owner, 9 November 2026), since
-   * the caret already says where typing goes. Every theme takes it from its own layers.
+   * The message box: the raised layer at radius 20 with one faint edge, lifted off the pane by the
+   * soft inline shadow in light and by the edge alone in dark. Focus steps the edge up and nothing
+   * else: no coloured ring (owner, 9 November 2026), since the caret already says where typing
+   * goes. Every theme takes it from its own layers.
    */
-  --ui-composer-radius: var(--g-radius-18);
+  --ui-composer-radius: var(--g-radius-20);
   --ui-composer-fill: var(--g-glass-pop);
   --ui-composer-shadow: inset 0 0 0 1px var(--g-glass-rim), var(--g-shadow-inline);
   --ui-composer-shadow-focus: inset 0 0 0 1px var(--g-glass-rim-strong), var(--g-shadow-inline);
 
   /*
-   * Paper and the ink on it, for the sent message (the Grok Bot app's light block on a dark
-   * window): the theme's ink a step toward its page, with the page's colour for the words. Set
-   * here, on the root, because the block redefines the text tokens for what sits inside it.
+   * Paper and the ink on it, for the sent message: in dark a soft step of the theme's ink over the
+   * pane (10%, quieter than the Grok Bot app's 18, so a long thread is not striped with grey
+   * blocks), with the ink itself for the words. Set here, on the root, because the block redefines
+   * the text tokens for what sits inside it.
    */
-  --ui-paper: color-mix(in srgb, var(--g-fg-1) 16%, var(--g-glass-layer));
+  --ui-paper: color-mix(in srgb, var(--g-fg-1) 10%, var(--g-glass-layer));
   --ui-paper-ink: var(--g-fg-1);
 
   /*
@@ -94,12 +95,12 @@
 }
 
 /*
- * The sent message, as the Grok Bot app sets it: a soft step of ink in dark, solid ink in light
- * with the page's colour for its words.
+ * The sent message in light: the same soft step of ink as in dark, a little fainter on white (7%),
+ * with the ink for its words. Solid black blocks (the Grok Bot app's own) striped a long thread.
  */
 :root[data-theme="light"] {
-  --ui-paper: var(--g-fg-1);
-  --ui-paper-ink: var(--g-bg);
+  --ui-paper: color-mix(in srgb, var(--g-fg-1) 7%, var(--g-glass-layer));
+  --ui-paper-ink: var(--g-fg-1);
 }
 
 /*

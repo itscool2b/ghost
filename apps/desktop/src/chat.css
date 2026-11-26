@@ -149,10 +149,11 @@
 }
 
 /*
- * The Grok Bot app's sent message: right-aligned paper with ink on it, one even 16px radius and no
- * ring. Paper is the theme's own ink a step toward its page, and the words take the page's colour,
- * so every theme and both appearances invert by themselves. What sits inside the block (Show all,
- * a mention, a file's name) reads from the same ink through the tokens redefined here.
+ * The sent message: right-aligned paper with ink on it, one even 16px radius and no ring. Paper is
+ * a soft step of the theme's own ink over the pane in dark and the ink itself in light, where the
+ * words take the page's colour, so every theme and both appearances work by themselves. What sits
+ * inside the block (Show all, a mention, a file's name) reads from the same ink through the tokens
+ * redefined here.
  */
 .chat-user {
   --g-fg-1: var(--ui-paper-ink);
@@ -164,7 +165,7 @@
   --g-glass-rim: color-mix(in srgb, var(--ui-paper-ink) 14%, transparent);
   --g-glass-rim-strong: color-mix(in srgb, var(--ui-paper-ink) 22%, transparent);
   padding: var(--g-space-8) var(--g-space-12);
-  border-radius: var(--g-radius-18);
+  border-radius: var(--g-radius-16);
   background-color: var(--ui-paper);
   color: var(--ui-paper-ink);
   font-size: var(--g-text-chat);
@@ -3229,12 +3230,12 @@
 /* ---------- Composer (6.9) ---------- */
 
 /*
- * The Grok Bot app's message box: the message on top, one row of controls under it. At most four
- * controls show besides the box: attach, the agent chip, Stop while a turn runs, and the send
- * pill (Send, or Queue with Steer beside it while a turn runs). The attach glyph and the text
- * share one left edge (x 16 inside the box); Send sits as far in from the right.
+ * The message box (owner, 25 November 2026: "more clean, like Synara"): the message on top with
+ * room for two lines, one calm row of controls under it. Every control in the row is bare at rest,
+ * 28px, and takes a fill only under the hand; Send alone is filled, a 28px disc of ink. The plus
+ * and the text share one left edge (x 16 inside the box); Send sits as far in from the right.
  *
- * The box is the raised layer at radius 18 with one faint edge (ui-tokens.css); focus steps the
+ * The box is the raised layer at radius 20 with one faint edge (ui-tokens.css); focus steps the
  * edge up and draws no coloured ring (owner, 9 November 2026). Nothing glows (owner, 2 November
  * 2026), and nothing moves along the edge while the agent works (owner, 6 November 2026).
  */
@@ -3265,9 +3266,9 @@
 
 .chat-composer .g-textarea {
   width: 100%;
-  min-height: 48px;
+  min-height: 56px;
   max-height: 240px;
-  padding: var(--g-space-12) var(--g-space-16) var(--g-space-8);
+  padding: var(--g-space-12) var(--g-space-16) var(--g-space-6);
   border: 0;
   border-radius: var(--ui-composer-radius) var(--ui-composer-radius) 0 0;
   background: transparent;
@@ -3291,25 +3292,24 @@
 .chat-composer-controls {
   display: flex;
   align-items: center;
-  gap: var(--g-space-4);
-  min-height: 32px;
+  gap: var(--g-space-2);
+  min-height: var(--g-control);
   padding: 0 var(--g-space-8) var(--g-space-8);
 }
 
 /*
  * Attach and the microphone: 28px ghost circles, the height of every control in the row (owner,
- * 4 November 2026: the filled pills read as heavy; only Send is filled).
+ * 4 November 2026: the filled pills read as heavy; only Send is filled). Bare at rest.
  */
 .chat-composer-attach {
   display: grid;
   flex: none;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--g-control);
+  height: var(--g-control);
   border-radius: var(--g-radius-pill);
-  /* A disc of its own at rest, as the Grok Bot app's "+" is. */
-  background-color: var(--g-glass-control);
-  color: var(--g-fg-2);
+  background-color: transparent;
+  color: var(--g-fg-3);
   transition:
     background-color var(--g-dur-micro) var(--g-ease),
     color var(--g-dur-micro) var(--g-ease);
@@ -3317,7 +3317,7 @@
 
 @media (hover: hover) {
   .chat-composer-attach:hover:not(:disabled) {
-    background-color: var(--g-glass-control-hover);
+    background-color: var(--g-glass-control);
     color: var(--g-fg-1);
   }
 }
@@ -3333,17 +3333,17 @@
 
 /*
  * "+" (owner, 23 November 2026: a simpler message box): files, images and the canvas in one menu,
- * where a paperclip and a pen sat side by side. The disc is Attach's; open, it holds the pressed
- * step and its plus turns to a cross.
+ * where a paperclip and a pen sat side by side. Bare at rest like its neighbours; open, it holds
+ * the pressed step and its plus turns to a cross.
  */
 .chat-add-popover > summary {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--g-control);
+  height: var(--g-control);
   border-radius: var(--g-radius-pill);
-  background-color: var(--g-glass-control);
-  color: var(--g-fg-2);
+  background-color: transparent;
+  color: var(--g-fg-3);
   cursor: pointer;
   list-style: none;
   transition:
@@ -3361,13 +3361,13 @@
 
 @media (hover: hover) {
   .chat-add-popover > summary:hover {
-    background-color: var(--g-glass-control-hover);
+    background-color: var(--g-glass-control);
     color: var(--g-fg-1);
   }
 }
 
 .chat-add-popover[open]:not([data-closing]) > summary {
-  background-color: var(--g-glass-control-active);
+  background-color: var(--g-glass-control-hover);
   color: var(--g-fg-1);
 }
 
@@ -3408,11 +3408,11 @@
 }
 
 /*
- * Send and Stop: 32px discs. The solid disc is always what Enter or Esc does next; with nothing to
- * send it stays a faint disc of ink (the primary's disabled step), as the Grok Bot app's does.
+ * Send and Stop: 28px discs, the row's own height. The solid disc is always what Enter or Esc does
+ * next; with nothing to send it stays a faint disc of ink (the primary's disabled step).
  */
 .chat-send {
-  --g-button-h: 32px;
+  --g-button-h: var(--g-control);
   border-radius: var(--g-radius-pill);
 }
 
@@ -3428,12 +3428,12 @@
 }
 
 .chat-force-stop {
-  --g-button-h: 32px;
+  --g-button-h: var(--g-control);
 }
 
 /*
- * While a turn runs, Steer and Queue are one 32px pill: Steer in words, Queue as the white disc,
- * both 24px and 4px in, on the grid.
+ * While a turn runs, Steer and Queue are one 28px pill: Steer in words, Queue as the white disc,
+ * both 24px and 2px in.
  */
 .chat-send-group {
   display: inline-flex;
@@ -3442,9 +3442,9 @@
 }
 
 .chat-send-group[data-split] {
-  gap: var(--g-space-4);
-  padding: var(--g-space-4);
-  background-color: var(--g-glass-control-hover);
+  gap: var(--g-space-2);
+  padding: var(--g-space-2);
+  background-color: var(--g-glass-control);
   box-shadow: inset 0 0 0 1px var(--g-glass-rim);
 }
 
@@ -3598,7 +3598,7 @@
   align-items: center;
   gap: var(--g-space-8);
   width: 100%;
-  height: 32px;
+  height: var(--g-row);
   padding: 0 var(--g-space-8);
   border-radius: var(--g-radius-10);
   color: var(--g-fg-1);
@@ -3632,7 +3632,7 @@
 /* The highlight is the focus in a menu; secondary text steps up to stay legible on it. */
 .chat-slash button:is([data-active="true"], :hover),
 .composer-mentions button:is(.is-active, :hover) {
-  background-color: var(--g-glass-control-active);
+  background-color: var(--g-glass-control-hover);
 }
 
 .chat-slash button:is([data-active="true"], :hover) .ui-muted {
@@ -3962,7 +3962,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   align-items: center;
   gap: var(--g-space-12);
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   padding: var(--g-space-4) var(--g-space-8);
   box-shadow: inset 0 1px var(--g-line);
 }
@@ -3970,10 +3970,10 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 .chat-picker-thinking > h3 {
   flex: none;
   margin: 0;
-  color: var(--g-fg-2);
+  color: var(--g-fg-3);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
-  font-weight: var(--g-weight-medium);
+  font-weight: var(--g-weight-regular);
 }
 
 .chat-picker-thinking > .ui-field {
@@ -4002,7 +4002,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 
 /* Six one-line rows: a folded list never scrolls; an opened one does, inside this frame. */
 .chat-model-scroll {
-  max-height: 204px;
+  max-height: 192px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -4014,14 +4014,14 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   overflow: visible;
 }
 
-/* A part's name (Grok's "Voice"): 13/20 500 in fg-2, sentence case. */
+/* A part's name: one quiet line in fg-3, sentence case, so the rows under it lead. */
 :is(.chat-picker-models, .chat-picker-agents) > h3 {
   margin: 0;
-  padding: var(--g-space-4) var(--g-space-8);
-  color: var(--g-fg-2);
-  font-size: var(--g-text-ui);
-  line-height: var(--g-leading-ui);
-  font-weight: var(--g-weight-medium);
+  padding: var(--g-space-6) var(--g-space-8) var(--g-space-2);
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  font-weight: var(--g-weight-regular);
 }
 
 /* "More models": a quiet row at the list's end that opens the rest in place. */
@@ -4029,7 +4029,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   display: flex;
   align-items: center;
   gap: var(--g-space-6);
-  min-height: 32px;
+  min-height: var(--g-row);
   padding: 0 var(--g-space-8);
   border-radius: var(--g-radius-10);
   color: var(--g-fg-2);
@@ -4048,7 +4048,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 
 @media (hover: hover) {
   .chat-picker-more:hover {
-    background-color: var(--g-glass-control-hover);
+    background-color: var(--g-glass-control);
     color: var(--g-fg-1);
   }
 }
@@ -4079,7 +4079,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 .picker-choices {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-4);
+  gap: var(--g-space-2);
   min-width: 0;
   max-height: 264px;
   margin: 0;
@@ -4090,7 +4090,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   scrollbar-color: var(--g-line-strong) transparent;
 }
 
-/* Rows (Vercel's plain menu rows): 36px agents, 44px models with their one-line description. */
+/* Rows: 32px agents, 40px choices that carry a line of description under their name. */
 .chat-agent-choices > button,
 .picker-choices:not([data-layout]) > button {
   position: relative;
@@ -4098,7 +4098,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   align-items: center;
   gap: var(--g-space-8);
   min-width: 0;
-  min-height: 36px;
+  min-height: 32px;
   padding: var(--g-space-4) var(--g-space-8);
   border-radius: var(--g-radius-10);
   color: var(--g-fg-2);
@@ -4109,7 +4109,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 }
 
 .picker-choices:not([data-layout]) > button {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .picker-choice-copy {
@@ -4138,7 +4138,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 
 @media (hover: hover) {
   :is(.chat-agent-choices, .picker-choices:not([data-layout])) > button:hover:not(:disabled) {
-    background-color: var(--g-glass-control-hover);
+    background-color: var(--g-glass-control);
   }
 }
 
@@ -4254,13 +4254,13 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   background-color: var(--g-surface-2);
 }
 
-/* Models: one 32px line each, the name and then its description beside it, a tone quieter. */
+/* Models: one 30px line each, the name and then its description beside it, a tone quieter. */
 .picker-choices.picker-choices-lines {
   gap: var(--g-space-2);
 }
 
 .picker-choices.picker-choices-lines > button {
-  min-height: 32px;
+  min-height: var(--g-row);
   padding: 0 var(--g-space-8);
 }
 
@@ -4289,7 +4289,7 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
 }
 
 .chat-picker-agents > .chat-agent-choices > button {
-  min-height: 32px;
+  min-height: var(--g-row);
 }
 
 .chat-picker-agents > .chat-agent-choices > .chat-picker-empty {

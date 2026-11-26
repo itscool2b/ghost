@@ -65,16 +65,18 @@ impl TextSizePreference {
     pub const NAMES: [&'static str; 2] = ["compact", "comfortable"];
 }
 
-/// The desktop's theme: Aura's own neutral palette, or one per supported agent (owner,
+/// The desktop's theme: Main, o7's own neutral palette, or one per supported agent (owner,
 /// 3 November 2026). It belongs to the profile on this device, like appearance, and works in both
-/// appearances. Claude Code's is the default (owner, 4 November 2026): a profile that never chose
-/// one, or a file from a newer build that names a theme this build lacks, reads as it
-/// ([`fill_defaults`]). A saved choice, Aura included, is kept.
+/// appearances. Main is the default (owner, 25 November 2026; Claude Code's was from 4 November):
+/// a profile that never chose one, or a file from a newer build that names a theme this build
+/// lacks, reads as it ([`fill_defaults`]). Main is saved as `aura`, the name this palette had
+/// before it was Main, so files written by earlier builds still read. A saved choice is kept,
+/// except the one move [`meet_main`] makes.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemePreference {
-    Aura,
     #[default]
+    Aura,
     Claude,
     Codex,
     Grok,
@@ -317,11 +319,33 @@ pub enum SetupAction {
     },
 }
 
+/// The default look's number once a file has met Main.
+const MAIN_LOOK: u32 = 1;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Record {
     version: u32,
     boot_seen: bool,
+    /// Which default look this file has met: 0 before Main, [`MAIN_LOOK`] since. It is the
+    /// file's own, not a preference, so the interface never sees it. A build from before Main
+    /// ignores it.
+    #[serde(default)]
+    look: u32,
     preferences: SetupPreferences,
+}
+
+/// Moves a file from before Main onto it, once. Until Main, Claude Code's theme was the default
+/// and every save wrote it out, so a saved `claude` cannot tell a choice from a default: such a
+/// profile takes the new default. A profile on any other theme chose it, and keeps it. Choosing
+/// Claude Code's theme afterwards saves it beside the raised number, so it stays.
+fn meet_main(mut record: Record) -> Record {
+    if record.look < MAIN_LOOK {
+        if record.preferences.theme == ThemePreference::Claude {
+            record.preferences.theme = ThemePreference::Aura;
+        }
+        record.look = MAIN_LOOK;
+    }
+    record
 }
 
 impl Default for Record {
@@ -329,6 +353,7 @@ impl Default for Record {
         Self {
             version: VERSION,
             boot_seen: false,
+            look: MAIN_LOOK,
             preferences: SetupPreferences {
                 revision: 0,
                 step: SetupStep::Welcome,
@@ -385,7 +410,7 @@ impl OnboardingStore {
                     return Err(SetupError::NewerVersion);
                 }
                 match serde_json::from_value::<Record>(fill_defaults(value)) {
-                    Ok(record) if record.version == VERSION => record,
+                    Ok(record) if record.version == VERSION => meet_main(record),
                     _ => {
                         let moved = quarantine_file(&path)?;
                         notice = Some(format!(
@@ -595,7 +620,7 @@ fn fill_defaults(mut value: serde_json::Value) -> serde_json::Value {
     {
         *step = serde_json::Value::String("project".into());
     }
-    // No theme yet, or one a newer build added: the default, Claude Code's.
+    // No theme yet, or one a newer build added: the default, Main.
     let default_theme = || serde_json::to_value(ThemePreference::default()).unwrap_or_default();
     let theme = preferences.entry("theme").or_insert_with(default_theme);
     if !theme
@@ -901,7 +926,62 @@ mod tests {
     }
 
     #[test]
-    fn themes_default_to_claude_keep_a_saved_choice_and_survive_reopening() {
+    fn a_profile_on_the_earlier_default_moves_to_main_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("onboarding.json");
+        // Saved before Main: Claude Code's theme was the default and every save wrote it out.
+        std::fs::write(
+            &path,
+            br#"{"version":1,"boot_seen":true,"preferences":{"revision":2,"step":"project","motion":"full","appearance":"dark","theme":"claude","completed":true,"first_project_id":null}}"#,
+        )
+        .unwrap();
+        let store = OnboardingStore::open(dir.path()).unwrap();
+        assert_eq!(
+            store.preferences().theme,
+            ThemePreference::Aura,
+            "moved to Main"
+        );
+        assert_eq!(
+            store.preferences().appearance,
+            AppearancePreference::Dark,
+            "kept"
+        );
+        // Choosing Claude Code's theme again is a choice, and it stays.
+        store
+            .apply(
+                2,
+                SetupAction::Theme {
+                    value: ThemePreference::Claude,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            OnboardingStore::open(dir.path())
+                .unwrap()
+                .preferences()
+                .theme,
+            ThemePreference::Claude,
+            "moved once only"
+        );
+        // A theme someone picked before Main is theirs to keep.
+        std::fs::write(
+            &path,
+            br#"{"version":1,"boot_seen":true,"preferences":{"revision":2,"step":"project","motion":"full","appearance":"dark","theme":"hermes","completed":true,"first_project_id":null}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            OnboardingStore::open(dir.path())
+                .unwrap()
+                .preferences()
+                .theme,
+            ThemePreference::Hermes
+        );
+        // A new profile starts on Main and has nothing to move.
+        assert_eq!(Record::default().look, MAIN_LOOK);
+    }
+
+    #[test]
+    fn themes_default_to_main_keep_a_saved_choice_and_survive_reopening() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
             dir.path().join("onboarding.json"),
@@ -911,18 +991,18 @@ mod tests {
         let store = OnboardingStore::open(dir.path()).unwrap();
         assert_eq!(
             store.preferences().theme,
-            ThemePreference::Claude,
-            "a profile that never chose a theme reads as Claude Code's"
+            ThemePreference::Aura,
+            "a profile that never chose a theme reads as Main"
         );
         let next = store
             .apply(
                 2,
                 SetupAction::Theme {
-                    value: ThemePreference::Aura,
+                    value: ThemePreference::Codex,
                 },
             )
             .unwrap();
-        assert_eq!(next.preferences.theme, ThemePreference::Aura);
+        assert_eq!(next.preferences.theme, ThemePreference::Codex);
         assert_eq!(
             next.preferences.appearance,
             AppearancePreference::Dark,
@@ -933,10 +1013,10 @@ mod tests {
                 .unwrap()
                 .preferences()
                 .theme,
-            ThemePreference::Aura,
-            "a saved Aura is kept"
+            ThemePreference::Codex,
+            "a saved choice is kept"
         );
-        assert_eq!(Record::default().preferences.theme, ThemePreference::Claude);
+        assert_eq!(Record::default().preferences.theme, ThemePreference::Aura);
         // Every name round-trips as serde writes it.
         for name in ThemePreference::NAMES {
             let value: ThemePreference = serde_json::from_value(serde_json::json!(name)).unwrap();
@@ -954,7 +1034,7 @@ mod tests {
         let reopened = OnboardingStore::open(dir.path()).unwrap();
         let snapshot = reopened.snapshot().unwrap();
         assert!(snapshot.notice.is_none(), "{:?}", snapshot.notice);
-        assert_eq!(snapshot.preferences.theme, ThemePreference::Claude);
+        assert_eq!(snapshot.preferences.theme, ThemePreference::Aura);
         assert_eq!(snapshot.preferences.appearance, AppearancePreference::Light);
         // So does an editor from a newer build; a known one is kept.
         for (saved, expected) in [

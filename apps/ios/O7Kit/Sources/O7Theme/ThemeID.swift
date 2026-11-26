@@ -1,13 +1,13 @@
 import Foundation
 
-/// How the app looks: one of the computer's themes in an appearance. The default look is Claude
-/// Code following the system.
+/// How the app looks: one of the computer's themes in an appearance. The default look is Main
+/// (the case `aura`, its saved name) following the system.
 extension ThemeID {
     /// The theme the app takes when it knows nothing better.
-    public static let `default`: ThemeID = .claude
+    public static let `default`: ThemeID = .aura
 
     /// The theme for any string: an id as the computer sends it (`oh_my_pi`, also `oh-my-pi` or
-    /// `OH_MY_PI`) or a theme's name (`Claude Code`). Anything else is Claude Code.
+    /// `OH_MY_PI`) or a theme's name (`Claude Code`). Anything else is the default, Main.
     public init(lenient value: String) {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = String(text.lowercased().map { $0 == "-" || $0 == " " ? "_" : $0 })

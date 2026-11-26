@@ -45,7 +45,7 @@ struct SnapshotProvider: TimelineProvider {
 enum WidgetLook {
     static func palette(_ snapshot: SharedSnapshot) -> Palette {
         let first = snapshot.computers.first
-        let theme = first?.theme.flatMap(ThemeID.init(rawValue:)) ?? .claude
+        let theme = first?.theme.flatMap(ThemeID.init(rawValue:)) ?? .default
         return Palettes.palette(theme, dark: first?.dark ?? true)
     }
 

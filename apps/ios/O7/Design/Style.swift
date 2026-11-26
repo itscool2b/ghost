@@ -62,8 +62,8 @@ extension EnvironmentValues {
 }
 
 extension O7Style {
-    /// Claude Code, dark: o7's default until a computer says otherwise.
-    static let fallback = O7Style.make(theme: .claude, dark: true)
+    /// Main, dark: o7's default until a computer says otherwise.
+    static let fallback = O7Style.make(theme: .default, dark: true)
 
     /// The style of a computer's look, resolved against the phone's own appearance.
     static func of(_ look: Look, systemDark: Bool) -> O7Style {

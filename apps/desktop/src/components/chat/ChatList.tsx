@@ -1,4 +1,4 @@
-import { PixelLoader, StatusDot } from "@o7/ui/graphite";
+import { AgentMark, PixelLoader, StatusDot } from "@o7/ui/graphite";
 import {
   Bot,
   ChevronDown,
@@ -20,7 +20,7 @@ import type {
   ProjectSummary,
   WorkspaceSnapshot,
 } from "../../bindings";
-import { folderStateLabel, statusWord } from "../../lib/chat/present";
+import { folderStateLabel, shortAgo, statusWord } from "../../lib/chat/present";
 import { commandKey, Keys } from "./Keys";
 
 export function projectsOf(
@@ -157,6 +157,16 @@ export function useArrivals(ids: readonly string[] | null): ReadonlySet<string> 
   return arrived;
 }
 
+/** The time now, to the minute: the rows' "4m" and "2h" move on without a render a second. */
+function useMinute(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
 /**
  * The sidebar's navigation (Grok's order): Search and New chat, the chats waiting on you, then the
  * projects with their chats, and a quiet "Archived chats" row at the end, like Grok's "See all".
@@ -226,6 +236,7 @@ export function ChatList({
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const [sectionFolded, setSectionFolded] = useState(false);
   const search = useRef<HTMLInputElement>(null);
+  const now = useMinute();
   const all = chats ?? [];
   const arrived = useArrivals(chats === null ? null : chats.map((chat) => chat.id));
   const unanswered = opening && error === null;
@@ -554,10 +565,9 @@ export function ChatList({
                                 onSelect={onSelect}
                                 shortcut={visible.indexOf(chat.id)}
                                 member={members?.get(chat.id)}
+                                pinned={membership.get(chat.id)?.pinned === true}
+                                now={now}
                               />
-                              {membership.get(chat.id)?.pinned ? (
-                                <Pin className="chat-pin-mark" size={10} aria-label="Pinned" />
-                              ) : null}
                               {onChatOptions ? (
                                 <button
                                   type="button"
@@ -615,12 +625,19 @@ function FoldedState({ chats }: { readonly chats: readonly ChatSummary[] }) {
   return null;
 }
 
+/**
+ * One chat: its agent's mark in the gutter, its title, and at the end either what it asks of you
+ * (a volt dot, a red dot, the loader while it works) or, when it asks nothing, how long ago it
+ * last moved. A pinned chat shows its pin before that.
+ */
 function ChatRow({
   chat,
   selected,
   onSelect,
   shortcut = -1,
   member,
+  pinned = false,
+  now,
 }: {
   readonly chat: ChatSummary;
   readonly selected: boolean;
@@ -629,12 +646,16 @@ function ChatRow({
   readonly member?: CoordinationMember;
   /** The row's place among the visible chats: the first nine open with Ctrl+1 to Ctrl+9. */
   readonly shortcut?: number;
+  readonly pinned?: boolean;
+  /** The time the rows' ages are counted from. */
+  readonly now: number;
 }) {
   const folder = folderStateLabel(chat.folder_state);
   const label = chat.needs_attention
     ? "Waiting for your answer"
     : (folder ?? statusWord(chat.status));
   const running = chat.status === "running" || chat.status === "starting";
+  const age = shortAgo(chat.updated_at, now);
   return (
     <button
       type="button"
@@ -653,6 +674,10 @@ function ChatRow({
       }
       onClick={() => onSelect(chat.id)}
     >
+      {/* The tooltip and the title name the agent; the mark is for the eye. */}
+      <span className="chat-row-mark" aria-hidden="true">
+        <AgentMark agent={chat.agent_id} size={16} />
+      </span>
       <span className="chat-row-title" data-testid="chat-row-title">
         {member ? (
           <span className="chat-row-role" aria-hidden="true">
@@ -661,6 +686,7 @@ function ChatRow({
         ) : null}
         {chat.title ?? "New chat"}
       </span>
+      {pinned ? <Pin className="chat-pin-mark" size={10} aria-label="Pinned" /> : null}
       {chat.needs_attention ? (
         <span className="chat-row-status">
           <StatusDot tone="volt" label={label} />
@@ -672,6 +698,10 @@ function ChatRow({
       ) : running ? (
         <span className="chat-row-status">
           <PixelLoader size={12} tempo="tool" label={label} />
+        </span>
+      ) : age ? (
+        <span className="chat-row-time" aria-hidden="true">
+          {age}
         </span>
       ) : null}
     </button>

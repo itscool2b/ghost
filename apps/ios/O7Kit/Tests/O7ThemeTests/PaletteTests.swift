@@ -25,7 +25,7 @@ struct RGBATests {
 
     @Test("mixes as CSS color-mix in sRGB and composites source over")
     func mixing() {
-        // The desktop's paper for Claude Code dark: fg-1 16% into the pane.
+        // An ink mixed 16% into a pane, as CSS color-mix does it.
         let paper = RGBA(hex: 0xf5f1e8).mixed(0.16, into: RGBA(hex: 0x21201d)).quantized
         #expect(paper == RGBA(hex: 0x43413d))
         let half = RGBA(hex: 0xffffff, alpha: 0.5).over(RGBA(hex: 0x000000)).quantized
@@ -49,27 +49,27 @@ struct RGBATests {
 
 @Suite("Themes")
 struct ThemeTests {
-    @Test("lists the desktop's themes, Aura first")
+    @Test("lists the desktop's themes, Main first")
     func order() {
         #expect(ThemeID.allCases.map(\.rawValue) == [
             "aura", "claude", "codex", "grok", "pi", "antigravity", "cursor", "opencode", "oh_my_pi", "hermes",
         ])
-        #expect(ThemeID.aura.name == "Aura")
+        #expect(ThemeID.aura.name == "Main")
         #expect(ThemeID.aura.agent == nil)
         #expect(ThemeID.ohMyPi.name == "oh-my-pi")
         #expect(ThemeID.ohMyPi.agent == "oh-my-pi")
-        #expect(ThemeID.default == .claude)
+        #expect(ThemeID.default == .aura)
     }
 
-    @Test("reads any string, falling back to Claude Code")
+    @Test("reads any string, falling back to Main")
     func lenient() {
         #expect(ThemeID(lenient: "codex") == .codex)
         #expect(ThemeID(lenient: " Hermes ") == .hermes)
         #expect(ThemeID(lenient: "oh-my-pi") == .ohMyPi)
         #expect(ThemeID(lenient: "OH_MY_PI") == .ohMyPi)
         #expect(ThemeID(lenient: "Grok Build") == .grok)
-        #expect(ThemeID(lenient: "solarized") == .claude)
-        #expect(ThemeID(lenient: "") == .claude)
+        #expect(ThemeID(lenient: "solarized") == .aura)
+        #expect(ThemeID(lenient: "") == .aura)
         #expect(Appearance(lenient: "Dark") == .dark)
         #expect(Appearance(lenient: "dim") == .system)
     }
@@ -83,7 +83,7 @@ struct ThemeTests {
         let decoded = try JSONDecoder().decode(
             [Look].self, from: Data(#"[{"theme":"oh_my_pi","appearance":"light"},{"theme":7,"appearance":"x"}]"#.utf8)
         )
-        #expect(decoded == [Look(theme: .ohMyPi, appearance: .light), Look(theme: .claude, appearance: .system)])
+        #expect(decoded == [Look(theme: .ohMyPi, appearance: .light), Look(theme: .aura, appearance: .system)])
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let encoded = try encoder.encode(Look(theme: .ohMyPi, appearance: .dark))
@@ -105,12 +105,12 @@ struct ThemeTests {
         #expect(Palettes.palette(.codex, appearance: .dark, systemIsDark: false).isDark)
     }
 
-    @Test("keeps Graphite's own values as Aura and lays each theme over it")
+    @Test("keeps the base palette's own values as Main and lays each theme over it")
     func values() {
         let auraDark = Palettes.palette(.aura, dark: true)
-        #expect(auraDark.page == RGBA(hex: 0x161616))
-        #expect(auraDark.pane == RGBA(hex: 0x161616))
-        #expect(auraDark.raised == RGBA(hex: 0x1f1f1f))
+        #expect(auraDark.page == RGBA(hex: 0x131313))
+        #expect(auraDark.pane == RGBA(hex: 0x131313))
+        #expect(auraDark.raised == RGBA(hex: 0x1b1b1b))
         #expect(auraDark.window == RGBA(hex: 0x0e0e0e))
         let claudeDark = Palettes.palette(.claude, dark: true)
         #expect(claudeDark.page == RGBA(hex: 0x191817))
@@ -129,19 +129,16 @@ struct ThemeTests {
         }
         // The brand plate is set once, in dark; light keeps Graphite's.
         #expect(Palettes.palette(.codex, dark: true).brandPlate == RGBA(hex: 0x20252c))
-        #expect(Palettes.palette(.codex, dark: false).brandPlate == RGBA(hex: 0x252525))
+        #expect(Palettes.palette(.codex, dark: false).brandPlate == RGBA(hex: 0x212121))
     }
 
     @Test("sets the paper as the desktop's sent message")
     func paper() {
         for palette in Palettes.all {
-            if palette.isDark {
-                #expect(palette.paper == palette.fg1.mixed(0.16, into: palette.pane).quantized)
-                #expect(palette.onPaper == palette.fg1)
-            } else {
-                #expect(palette.paper == palette.fg1)
-                #expect(palette.onPaper == palette.page)
-            }
+            // A soft step of the ink over the pane, fainter on a light one, with the ink for the words.
+            let share = palette.isDark ? 0.1 : 0.07
+            #expect(palette.paper == palette.fg1.mixed(share, into: palette.pane).quantized)
+            #expect(palette.onPaper == palette.fg1)
         }
     }
 

@@ -94,7 +94,7 @@ async function inspect(engine, launcher) {
             animation: style.animationName,
           };
         });
-      assert.equal(bar.row, 32);
+      assert.equal(bar.row, 30);
       assert.equal(bar.filter, "none");
       assert.equal(bar.backdrop, "none");
       assert.equal(bar.shadow, "none");
