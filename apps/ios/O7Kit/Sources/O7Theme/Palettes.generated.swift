@@ -227,7 +227,7 @@ extension Palettes {
         lineStrong: RGBA(hex: 0x6b6b6b),
         fg1: RGBA(hex: 0xf5f5f5),
         fg2: RGBA(hex: 0xababab),
-        fg3: RGBA(hex: 0x909090),
+        fg3: RGBA(hex: 0x959595),
         fg4: RGBA(hex: 0x666666),
         primary: RGBA(hex: 0xf5f5f5),
         primaryHover: RGBA(hex: 0xe0e0e0),
