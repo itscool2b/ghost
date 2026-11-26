@@ -188,6 +188,40 @@ window; the seen stops are `tour_seen` in the profile's setup preferences
 is the shared `Wing` (`packages/ui`), which the website flies too. On the desktop it flies only in
 setup and the tour ([design/visual-language.md](design/visual-language.md)).
 
+## Looks
+
+The rule (owner, 25 November 2026, after ordering the Main styling pass): **every feature, and
+every addition to the website, ships looking as good as the rest of the product, in the same
+pull request.** "Every future feature needs to look as breathtaking as the product." Nothing
+ships that only works. It holds for every surface: the desktop app, the website, the remote
+page, the iPhone app, and the parts that are easy to skip (dialogs, menus, empty states, loading
+states, errors).
+
+What the look is: [design/visual-language.md](design/visual-language.md), "Main". What it was
+measured against: [design/reference-audit.md](design/reference-audit.md).
+
+Before a change that people can see is merged:
+
+1. **Build it from what exists.** Colours, sizes, radii, type and durations come from the tokens
+   (`packages/ui/src/graphite/tokens.css`, `apps/desktop/src/ui-tokens.css`) and controls from the
+   shared primitives (`graphite.css`). A one-off value is a second look. `pnpm lint` refuses raw
+   colours, spacing, radii, type sizes, weights and durations in the desktop's stylesheets.
+2. **Design every state**: empty, loading, error, long text, a narrow window (960 by 640 for the
+   desktop, 320 wide for the website).
+3. **Both appearances and a second theme.** Light is not dark inverted, and a theme changes every
+   colour: look at both, and at one agent's theme.
+4. **Keyboard and focus.** Everything is reachable, and focus shows.
+5. **Motion has a still form.** Anything that moves stays whole and readable under reduced
+   motion.
+6. **Look at it.** Open the state in a `?preview=` fixture (or the website's dev server) in o7's
+   own browser and compare it with the references. A change that was never seen drawn is not
+   finished, whatever its tests say.
+7. **On the website**: dark, complete without JavaScript, still under reduced motion, no sideways
+   scroll.
+
+The tour stop and the changelog line below are part of the same habit: a feature is introduced
+and announced when it lands, and it looks finished when it lands.
+
 ## Version
 
 `VERSION` (three numbers, `major.minor.patch`) is the version o7 is published as. A pull request

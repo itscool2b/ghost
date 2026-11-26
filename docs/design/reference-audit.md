@@ -1,8 +1,51 @@
 # Reference audit
 
-Status: these reference observations support Halo, the 1 November 2026 styling pass, and the website rebuilds of 10 and 17 November 2026. They await the owner's visual lock. The website follows the system appearance and the desktop keeps System, Light and Dark. The observations do not establish visual approval or complete product parity.
+Status: the current references are those of Main, the styling pass of 25 November 2026, in the first section. Everything after it supported earlier passes (Halo on 1 November, the website rebuilds of 10 and 17 November) and is kept as the record of where today's details came from. The observations do not establish visual approval or complete product parity.
 
-## dot.com, 17 November 2026 (current)
+## Main, 25 November 2026 (current)
+
+The owner asked for "the greatest styling pass of all time": a default look for the desktop called Main, a new website, and the remote page to match. For the desktop the models are the Grok Bot desktop app, audited below on 17 November, and the Synara ADE. For the website: polar.sh ("look how clean and sleek"), linear.app, ghost.ai ("the attention to detail is awesome") and x.ai/bot. Every page was walked from top to bottom in o7's own browser, section by section, at the owner's word ("make sure u actually scroll through the whole landing pages"), with computed styles read from the page. Nothing of any of them ships: no code, font, icon, artwork or copy.
+
+### Synara (the desktop's second model)
+
+Synara is a desktop workspace for coding agents (trysynara.com). The owner believes the program is unsafe and asked that it never be installed or run, so its look was read from its public pictures and from the stylesheet in its public repository, as text.
+
+- **Palette.** Dark is one near-black (`#0e0e0e`) with `#f5f5f5` ink; a card is that black plus 1% white, and fills and borders are white at 4 to 5%. Light is `#fcfcfc` with borders at 5% black. Colour appears only where it means something: diff counts, a status dot, an agent's mark.
+- **Shape.** A 10px base radius (6, 8, 10, 14, 18, 22); the sent message 16px; the message box 19px, with a tray behind its top edge a few pixels larger; the content block inset 3px with a half-pixel hairline.
+- **Type and controls.** A system grotesque at about 13px with a mono face for code. Buttons 24, 28 and 32px, flat, no shadows. Icons 14 to 16px in a thin stroke, at 80%.
+- **Rows.** The thread list is dense: the agent's mark, the title, then project, pull request and branch in grey on a second line.
+- **Transcript.** "Worked for 25s" folded on a hairline, answers unframed, a row of tiny ghost icons and a time under each answer, a soft right-aligned bubble for what was sent, and a card listing the files a turn edited with their counts, Undo and Review.
+- **Message box.** A tall soft rectangle: the words on top, one row of bare controls under them (a plus, the access level, a context ring, the model with its effort, a microphone) and a round Send. Notices sit in a tray tucked behind its top edge. The command menu is a panel above it, the box's own width: icon, name, grey description, the command at the right.
+- **Settings.** A sidebar with a search field, a page title with one line under it, and one bordered card of hairline rows with the control at the right of each.
+- **Its own website** is weaker than its app, as the owner said, with one idea worth keeping: each feature is shown as one crisp fragment of the real interface over the rest of the app drawn as grey skeleton bars.
+
+Taken for Main: the inkier dark layers, the thin icon stroke, three control heights and a 30px row, the agent's mark on every chat row, the soft sent message, the message box's bare controls and its tray, quiet menus with grey descriptions on the row, and hairline cards of rows. Not taken: its icon rail and thread tabs (a change of structure, not of look), its second line of Git details on a row (fewer chats would fit), its rectangular buttons (o7 keeps the Grok Bot app's pills), its orange accent.
+
+### polar.sh
+
+- **Page.** Near-black (`#0a0a0a`), one ink and one grey, hairlines, and no colour at all except meaning (one red figure in a table).
+- **Type.** One grotesque at weight 400 even in headings, and small: the first heading 36/45, section headings 30/41, the closing line 48/60, grey leads about 26px. Every heading is two-tone: its first line in ink, the continuation in grey.
+- **Hero.** The two-tone heading at the left edge, one pill, then a stage: a monochrome, grainy field of slow dunes on a canvas with a product card standing on it, and beside it a statement and a list of features that changes what the card shows.
+- **Chapters.** Each is a hairline, a name at left with the heading and a grey lead at right (the right column starts at half the width), a full-width stage with the product on it, then smaller cards. The stages are one texture in different tones.
+- **Details.** Cells divided by hairlines with thin line diagrams; square cards of generative line bursts; a code panel with line numbers; a five by two grid of tiles whose corners are ticks, not borders; pricing as nested panels; a finale of letters moving on a canvas; a footer with the logo large at left and four groups of links.
+- **Motion.** Canvases and a few CSS animations. Nothing takes over the scroll.
+
+### linear.app
+
+- **Page.** `#08090a` with a hairline under the header. The first heading is at the left edge, 64/64 at weight 510 with -0.022em tracking, over a grey 17px lead; the product window is drawn in HTML and runs off the right and bottom edges.
+- **Statement.** One 40px paragraph whose first sentence is ink and the rest grey, then three isometric line drawings in cells split by hairlines.
+- **Chapters.** A 48px two-line title at left, a 26px lead at right; an overlapping composition of real interface that fades into the page at its edges (a thread over a board, a chart over a timeline, agent windows side by side, an issue list over a split diff); a row of feature names that open; a full-width hairline. Colour lives only inside the product.
+- **Changelog** as a horizontal timeline of dots on a hairline, the newest marked. Motion is quiet: a typing caret, hover states.
+
+### ghost.ai
+
+- **Cinema.** Full-viewport scenes alternating dark and light, fine grain over everything, one rendered object as the subject.
+- **Scroll sequences.** Long pinned passages carry the story: the object opens into a pale blueprint and one part at a time comes into focus with a callout while every other label goes soft; a three-step story whose three tabs sit at the foot with only the current one sharp; a grid-paper stage where a segmented thumb slides between groups as the page moves.
+- **Finish.** Hairline tables, counters, an exact grid visible as lines, a wordmark pressed into a brushed sheet at the foot.
+
+Taken for the website: polar.sh's skeleton, restraint, two-tone headings and stages; Linear's product compositions that fade into the page; one scroll sequence in ghost.ai's manner, with focus as its motion; x.ai/bot's live app window, kept from the page below. Not taken: numbered kickers and uppercase labels (no eyebrows), square corners (o7 is pills), video (the site's Worker serves none), any colour that does not mean something.
+
+## dot.com, 17 November 2026 (superseded by Main for the website's look)
 
 The owner found the 10 November copy wanting ("The website looks trash too ... use the browser for .com, and essentially copy that as well ... keep using this logo ... everything needs to just be on point"). dot.com still redirects to x.ai/bot ("AI teammates that finish the work | Grok Bot"), but the page has changed since 10 November: a statement with a row of bots and a film now follow the hero, the features are six equal cards, and guides sit where the news was. It loaded in plain headless Playwright Chromium (no stealth or evasion; it served the page with no challenge), so this time it was captured and measured in both appearances (`colorScheme`) at 1440, 1024, 768 and 390 wide: full-page screenshots, computed styles of every text and box read with `page.evaluate`, the hero's entrance sampled every 40ms, the header and every section watched while scrolling, and the phone menu opened. Its cookie banner was never clicked; it was removed from the local copy of the page for the screenshots. The captures stay outside the repository.
 
