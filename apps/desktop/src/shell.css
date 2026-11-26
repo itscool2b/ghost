@@ -2441,13 +2441,12 @@ details.setup-install-review[open] > summary::before {
 }
 
 .palette-scopes > button {
-  height: 28px;
+  height: var(--g-control);
   padding: 0 var(--g-space-12);
   border-radius: var(--g-radius-pill);
-  color: var(--g-fg-2);
+  color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
-  font-weight: var(--g-weight-medium);
   transition:
     background-color var(--g-dur-fast) var(--g-ease),
     color var(--g-dur-fast) var(--g-ease);
@@ -2459,10 +2458,11 @@ details.setup-install-review[open] > summary::before {
   }
 }
 
-/* The chosen scope is a surface-3 pill, like the panel's tabs; white stays for primary actions. */
+/* The chosen scope is a flat step of ink, like the panel's tabs; white stays for primary actions. */
 .palette-scopes > button[aria-pressed="true"] {
-  background-color: var(--g-surface-3);
+  background-color: var(--g-glass-control-hover);
   color: var(--g-fg-1);
+  font-weight: var(--g-weight-medium);
 }
 
 .palette-scopes label {
@@ -2489,9 +2489,9 @@ details.setup-install-review[open] > summary::before {
   display: flex;
   align-items: center;
   gap: var(--g-space-12);
-  min-height: 48px;
-  padding: var(--g-space-6) var(--g-space-12);
-  border-radius: var(--g-radius-8);
+  min-height: 44px;
+  padding: var(--g-space-4) var(--g-space-12);
+  border-radius: var(--g-radius-10);
   color: var(--g-fg-3);
   cursor: default;
 }
@@ -2503,7 +2503,7 @@ details.setup-install-review[open] > summary::before {
 /* The highlight and a 2px rail are the focus inside the list (3.7). */
 .palette-results > [aria-selected="true"] {
   position: relative;
-  background-color: var(--g-surface-3);
+  background-color: var(--g-glass-control-hover);
   color: var(--g-fg-2);
 }
 
