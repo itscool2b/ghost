@@ -16,6 +16,7 @@ import {
   pendingLabel,
   permissionResolutionLabel,
   questionResolutionLabel,
+  shortAgo,
   slashQuery,
   statusWord,
   tokensLabel,
@@ -268,5 +269,29 @@ describe("the slash menu", () => {
       "remodel",
     ]);
     expect(matchingCommands(commands, "zz")).toEqual([]);
+  });
+});
+
+describe("a chat row's time", () => {
+  const now = Date.UTC(2026, 10, 25, 12, 0, 0);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  it("is as short as the row can hold", () => {
+    expect(shortAgo(now - 20_000, now)).toBe("now");
+    expect(shortAgo(now - 4 * minute, now)).toBe("4m");
+    expect(shortAgo(now - 59 * minute, now)).toBe("59m");
+    expect(shortAgo(now - 2 * hour, now)).toBe("2h");
+    expect(shortAgo(now - 3 * day, now)).toBe("3d");
+    expect(shortAgo(now - 15 * day, now)).toBe("2w");
+    expect(shortAgo(now - 90 * day, now)).toBe("Aug 27");
+  });
+
+  it("says nothing for a time that is missing, and never runs backwards", () => {
+    expect(shortAgo(0, now)).toBe("");
+    expect(shortAgo(1, now)).toBe("");
+    expect(shortAgo(Number.NaN, now)).toBe("");
+    expect(shortAgo(now + 5 * minute, now)).toBe("now");
   });
 });

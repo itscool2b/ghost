@@ -525,9 +525,10 @@ details.setup-install-review[open] > summary::before {
 /* ---------- Sidebar (6.2) ---------- */
 
 /*
- * Grok's sidebar on black: the logo and the collapse toggle in the top band, Search and New chat,
- * then the projects with their chats, and the agents and the account at the foot. Every row is
- * 32px with its icon or dot at x 20 and its words at x 44, so the column has one left edge.
+ * The sidebar on the window's colour: the collapse toggle in the top band, Search and New chat,
+ * then the projects with their chats, and the logo, the bell and Settings at the foot. Every row
+ * is 30px (--g-row) with its icon, dot or agent mark at x 20 and its words at x 44, so the column
+ * has one left edge, and rows sit 2px apart: a dense list that still reads as separate rows.
  */
 .chat-sidebar {
   position: relative;
@@ -557,7 +558,7 @@ details.setup-install-review[open] > summary::before {
 .chat-nav-actions {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-4);
+  gap: var(--g-space-2);
 }
 
 /*
@@ -577,7 +578,7 @@ details.setup-install-review[open] > summary::before {
   align-items: center;
   gap: var(--g-space-8);
   width: 100%;
-  height: 32px;
+  height: var(--g-row);
   padding: 0 var(--g-space-8);
   border-radius: var(--g-radius-10);
   color: var(--g-fg-2);
@@ -607,8 +608,8 @@ details.setup-install-review[open] > summary::before {
  * placeholder's tone. It is still a button that opens search, so the rail keeps its icon.
  */
 .chat-nav-action[data-field] {
-  margin-bottom: var(--g-space-4);
-  background-color: var(--g-glass-control);
+  margin-bottom: var(--g-space-6);
+  background-color: var(--g-glass-card);
   box-shadow: inset 0 0 0 1px var(--g-glass-rim);
   color: var(--g-fg-3);
 }
@@ -725,7 +726,7 @@ details.setup-install-review[open] > summary::before {
   display: flex;
   align-items: center;
   gap: var(--g-space-6);
-  height: 32px;
+  height: 28px;
   margin: 0;
   padding: 0 var(--g-space-4) 0 var(--g-space-8);
   color: var(--g-fg-3);
@@ -787,7 +788,7 @@ details.setup-install-review[open] > summary::before {
 .chat-attention {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-4);
+  gap: var(--g-space-2);
 }
 
 .chat-attention .chat-section-title {
@@ -827,7 +828,7 @@ details.setup-install-review[open] > summary::before {
 .chat-project-section {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-4);
+  gap: var(--g-space-2);
 }
 
 .chat-sidebar-empty {
@@ -873,7 +874,8 @@ details.setup-install-review[open] > summary::before {
 .chat-skeleton > li {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: var(--g-row);
+  margin-top: var(--g-space-2);
   padding: 0 var(--g-space-8) 0 var(--g-space-32);
 }
 
@@ -930,7 +932,7 @@ details.setup-install-review[open] > summary::before {
 .chat-projects {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-8);
+  gap: var(--g-space-6);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -949,7 +951,7 @@ details.setup-install-review[open] > summary::before {
 
 .chat-project-new {
   position: absolute;
-  top: 4px;
+  top: 3px;
   right: 32px;
   color: var(--g-fg-3);
 }
@@ -1025,15 +1027,22 @@ details.setup-install-review[open] > summary::before {
 .chat-chats {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-4);
-  margin: var(--g-space-4) 0 0;
+  gap: var(--g-space-2);
+  margin: var(--g-space-2) 0 0;
   padding: 0;
   list-style: none;
 }
 
-/* A chat's words start under its project's name (x 44). */
-.chat-row {
-  padding-left: var(--g-space-32);
+/*
+ * A chat's agent mark sits in the gutter, on the project dot's axis (x 20), and its words start
+ * under its project's name (x 44).
+ */
+.chat-row-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
 }
 
 /*
@@ -1075,7 +1084,7 @@ details.setup-install-review[open] > summary::before {
 
 .chat-row-menu {
   position: absolute;
-  top: 4px;
+  top: 3px;
   right: 4px;
   background-color: transparent;
   opacity: 0;
@@ -1119,18 +1128,25 @@ details.setup-install-review[open] > summary::before {
   height: 12px;
 }
 
-/* The row's trailing status gives way to its menu (6.2). */
-.chat-row-container:is(:hover, :focus-within):has(> .chat-row-menu) .chat-row-status {
-  visibility: hidden;
+/* How long ago the chat last moved, where a status would be: quiet figures at the row's end. */
+.chat-row-time {
+  flex: none;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  font-variant-numeric: tabular-nums;
 }
 
-/* The pin sits in the gutter, on the project dot's axis (x 20). */
+/* A pinned chat's pin, before its status or time. */
 .chat-pin-mark {
-  position: absolute;
-  top: 11px;
-  left: 11px;
+  flex: none;
   color: var(--g-fg-3);
-  pointer-events: none;
+}
+
+/* What trails the row gives way to its menu (6.2). */
+.chat-row-container:is(:hover, :focus-within):has(> .chat-row-menu)
+  :is(.chat-row-status, .chat-row-time, .chat-pin-mark) {
+  visibility: hidden;
 }
 
 /* Grok's "See all": a quiet line that opens the archived chats. */
@@ -1635,7 +1651,7 @@ details.setup-install-review[open] > summary::before {
 
 @media (hover: hover) {
   .chat-popover > summary:hover {
-    background-color: var(--g-glass-control-hover);
+    background-color: var(--g-glass-control);
     color: var(--g-fg-1);
   }
 }
@@ -1652,7 +1668,7 @@ details.setup-install-review[open] > summary::before {
   color: var(--g-fg-1);
 }
 
-/* Popovers are the raised layer, as the Grok Bot app's menus: radius 16, one faint edge and its shadow. */
+/* Popovers are the raised layer, like every menu: radius 14, one faint edge and its shadow. */
 .chat-popover-panel {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -1668,7 +1684,7 @@ details.setup-install-review[open] > summary::before {
   overflow: auto;
   /* The ring is an inset hairline, so the panel's content starts on the grid. */
   border: 0;
-  border-radius: var(--g-radius-16);
+  border-radius: var(--g-radius-14);
   background-color: var(--ui-menu-fill);
   box-shadow:
     inset 0 0 0 1px var(--g-glass-rim),

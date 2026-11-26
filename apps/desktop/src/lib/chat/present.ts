@@ -40,6 +40,24 @@ export function statusWord(status: SessionStatus): string {
   }
 }
 
+/**
+ * How long ago a chat last moved, as short as a sidebar row can hold: "now", "4m", "2h", "3d",
+ * "5w", then the month and day. Empty for a time that is missing or not a real one, so a row
+ * shows nothing rather than a date in 1970.
+ */
+export function shortAgo(at: number, now: number): string {
+  if (!Number.isFinite(at) || at < Date.UTC(2020, 0, 1)) return "";
+  const minutes = Math.floor(Math.max(0, now - at) / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 56) return `${Math.floor(days / 7)}w`;
+  return new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 /** `null` for a folder that is fine. */
 export function folderStateLabel(state: FolderState): string | null {
   switch (state) {

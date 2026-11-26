@@ -6,7 +6,7 @@
  *     dark, as the stylesheet does.
  *   - Every other theme lays themeTokens() (themes.ts) over Aura for each appearance, as
  *     themes.css does on the desktop.
- *   - The sent message's paper comes from apps/desktop/src/ui-tokens.css: in dark, fg-1 mixed 16%
+ *   - The sent message's paper comes from apps/desktop/src/ui-tokens.css: in dark, fg-1 mixed 10%
  *     into the pane with fg-1 words; in light, solid fg-1 with the page's colour for the words.
  *
  *   node apps/ios/scripts/write-palettes.mts          write the file
@@ -182,9 +182,9 @@ const FIELDS: readonly Field[] = [
   ),
   {
     name: "paper",
-    doc: "The sent message's bubble: fg-1 mixed 16% into the pane in dark, solid fg-1 in light.",
+    doc: "The sent message's bubble: fg-1 mixed 10% into the pane in dark, solid fg-1 in light.",
     derive: (color, appearance) =>
-      appearance === "dark" ? mix(color("fg-1"), 0.16, color("glass-layer")) : color("fg-1"),
+      appearance === "dark" ? mix(color("fg-1"), 0.1, color("glass-layer")) : color("fg-1"),
   },
   {
     name: "onPaper",

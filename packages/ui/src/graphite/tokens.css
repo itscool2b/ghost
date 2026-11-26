@@ -1,23 +1,25 @@
-/* Aura visual system. Graphite names remain compatibility aliases.
+/* o7's visual system. These values are Main, the default look (owner, 25 November 2026): a neutral
+ * palette of one ink on three near-black layers in dark and three near-white ones in light. The
+ * --g-* names are historical ("Graphite") and stay as they are.
  * Solid text, shared semantic states, and explicit or system appearance.
  * tokens.ts mirrors both palettes; tests verify parity and contrast.
  */
 
 :root {
-  --g-brand-plate: #252525;
-  --g-bg: #161616;
-  --g-surface-1: #1b1b1b;
-  --g-surface-2: #1f1f1f;
-  --g-surface-3: #252525;
-  --g-surface-4: #2b2b2b;
-  --g-line-faint: #232323;
-  --g-line: #2c2c2c;
+  --g-brand-plate: #212121;
+  --g-bg: #131313;
+  --g-surface-1: #171717;
+  --g-surface-2: #1b1b1b;
+  --g-surface-3: #212121;
+  --g-surface-4: #272727;
+  --g-line-faint: #1f1f1f;
+  --g-line: #282828;
   --g-line-strong: #6b6b6b;
   --g-fg-1: #f5f5f5;
   --g-fg-2: #ababab;
-  --g-fg-3: #959595;
+  --g-fg-3: #8e8e8e;
   --g-fg-4: #666666;
-  --g-on-light: #161616;
+  --g-on-light: #131313;
   --g-primary: #f5f5f5;
   --g-primary-hover: #e0e0e0;
   --g-primary-active: #cccccc;
@@ -29,7 +31,7 @@
   --g-red-hover: #ff7a7a;
   /* The Dashboard's AI line edits: the busiest days' squares, the quieter ones a share of it. */
   --g-heat: #1a8cff;
-  --g-diff-hunk: #121212;
+  --g-diff-hunk: #0f0f0f;
   --g-selection: #333333;
   --g-focus: #d4d4d4;
   --g-code-fg: #d4d4d4;
@@ -61,20 +63,20 @@
   --g-project-clay: #a88e80;
   --g-shade-near: #080808;
   --g-shade-far: #121212;
-  --g-hover: #232323;
-  --g-selected: #2b2b2b;
+  --g-hover: #1f1f1f;
+  --g-selected: #272727;
   --g-outline: #6b6b6b;
-  --g-overlay: #1f1f1f;
+  --g-overlay: #1b1b1b;
   --g-warning: #e6cc6e;
   --g-warning-tint: #2a2517;
   --g-green-tint: #14251b;
   --g-red-tint: #2d191d;
   --g-on-danger: #18181b;
-  --g-code-bg: #1b1b1b;
-  --g-terminal-bg: #161616;
+  --g-code-bg: #171717;
+  --g-terminal-bg: #131313;
   --g-terminal-fg: #d4d4d4;
   --g-terminal-cursor: #f5f5f5;
-  --g-terminal-cursor-text: #161616;
+  --g-terminal-cursor-text: #131313;
   --g-terminal-selection: #333333;
   --g-color-scheme: dark;
   --g-volt-tint: rgb(212 212 212 / 0.12);
@@ -86,15 +88,16 @@
   --g-shadow: 0 12px 32px rgb(0 0 0 / 0.32);
 
   /*
-   * Halo glass. Translucent layers sit over the native window material (Mica, Acrylic, vibrancy,
-   * Liquid Glass) or, with no material, over the opaque --g-window. Text sits on a layer, on the
-   * window tint, or on an opaque surface, never on bare material.
+   * The layers. Solid, one step apart: the window under the sidebar, the pane, and what is raised
+   * (the message box, menus, dialogs). "glass" in these names is historical; nothing is
+   * translucent. Fills and edges are the ink at set strengths. Text sits on a layer, on the window
+   * tint, or on an opaque surface, never on bare window material.
    */
   --g-window: #0e0e0e;
   --g-window-tint: rgb(14 14 14 / 0.6);
-  --g-glass-layer: #161616;
-  --g-glass-bar: #161616;
-  --g-glass-pop: #1f1f1f;
+  --g-glass-layer: #131313;
+  --g-glass-bar: #131313;
+  --g-glass-pop: #1b1b1b;
   --g-glass-raised: rgb(245 245 245 / 0.1);
   --g-glass-card: rgb(245 245 245 / 0.04);
   --g-glass-control: rgb(245 245 245 / 0.06);
@@ -108,9 +111,9 @@
   /* Dark draws no shadows, as the Grok Bot app: edges and tone carry depth. A list entry, so it composes. */
   --g-shadow-control: 0 0 #0000;
   --g-shadow-primary: none;
-  --g-shadow-layer: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --g-shadow-layer: 0 0 0 1px rgb(255 255 255 / 0.06);
   /* The layer shadow's hairline alone, for an outline where a shadow is too costly. */
-  --g-ring-layer: rgb(255 255 255 / 0.04);
+  --g-ring-layer: rgb(255 255 255 / 0.06);
   --g-shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.07), 0 16px 40px -12px rgb(0 0 0 / 0.55);
   /*
    * What lifts an inline surface (the message box) off its pane: nothing in dark, where the edge
@@ -147,16 +150,19 @@
   --g-leading-chat: 22px;
   --g-text-meta: 12px;
   --g-leading-meta: 16px;
-  /* Headings on the Grok Bot app's scale: 17/24, 22/28 and 26/32, each a little tighter. */
-  --g-text-heading: 17px;
+  /*
+   * Headings sit one step under the Grok Bot app's (17, 22 and 26): 16/24, 20/28 and 24/32, each
+   * tighter as it grows. Main keeps the interface small and lets weight and tone carry rank.
+   */
+  --g-text-heading: 16px;
   --g-leading-heading: 24px;
-  --g-tracking-heading: -0.008em;
-  --g-text-title: 22px;
+  --g-tracking-heading: -0.01em;
+  --g-text-title: 20px;
   --g-leading-title: 28px;
-  --g-tracking-title: -0.012em;
-  --g-text-display: 26px;
+  --g-tracking-title: -0.015em;
+  --g-text-display: 24px;
   --g-leading-display: 32px;
-  --g-tracking-display: -0.015em;
+  --g-tracking-display: -0.02em;
   --g-text-code: 13px;
   --g-leading-code: 20px;
   --g-text-code-inline: 0.9em; /* inline code, relative to the sentence around it */
@@ -214,8 +220,27 @@
   --g-radius-14: 14px;
   --g-radius-16: 16px;
   --g-radius-18: 18px;
+  --g-radius-20: 20px;
   --g-radius-22: 22px;
   --g-radius-pill: 999px;
+
+  /*
+   * Icons are Lucide's, drawn thinner than its own 2 (owner, 25 November 2026: icons as fine as
+   * Synara's). The number is in the icon's own 24-unit grid, so 1.5 is one pixel at 16px; icons of
+   * 14px and under take a little more, or they turn grey instead of thin. graphite.css applies it
+   * to every icon that asks for no stroke of its own.
+   */
+  --g-icon-stroke: 1.5;
+  --g-icon-stroke-small: 1.75;
+
+  /*
+   * Control heights: 24 for inline actions, 28 for toolbars and the message box, 32 for forms and
+   * dialogs. A row in a list or a menu is 30.
+   */
+  --g-control-sm: 24px;
+  --g-control: 28px;
+  --g-control-lg: 32px;
+  --g-row: 30px;
 
   /* Layout */
   --g-web-max: 1200px;
