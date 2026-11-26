@@ -1,7 +1,7 @@
 # Normal code deployment, with the public prerender output embedded by Rust at build time.
 # The one binding is COUNTS, the D1 database of the site's counters (src/count.rs, schema.sql):
 # no Assets, R2, email, secrets or other API bindings.
-name = "o7-web-local"
+name = "ghost-web-local"
 main = "build/index.js"
 compatibility_date = "2026-10-26"
 workers_dev = false
@@ -20,7 +20,7 @@ database_name = "o7-counts-local"
 database_id = "00000000-0000-0000-0000-000000000000"
 
 [env.production]
-name = "o7-web"
+name = "ghost-web"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
 # onghost.dev is a custom domain: Cloudflare keeps its DNS record and certificate. The two routes
 # are the addresses the site had before (o7.codes until 26 November 2026, auracode.si until
@@ -39,7 +39,7 @@ database_name = "o7-counts"
 database_id = "beaf6cff-cda8-4e44-aaa8-5d46b0188fbb"
 
 [env.preview]
-name = "o7-web-preview"
+name = "ghost-web-preview"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
 # preview.onghost.dev is a custom domain: Cloudflare keeps its DNS record and certificate.
 routes = [{ pattern = "preview.onghost.dev", custom_domain = true }]

@@ -93,7 +93,7 @@ Sites the in-app browser visits can see your IP address and may receive cookies 
 
 ### 4.6 Website visits and download counts (to the Site, then GitHub)
 
-Cloudflare hosts the Site and the relay. The Site and the Worker that serves it do not set cookies. We do not include advertising analytics, and Cloudflare’s own page analytics are turned off for o7.codes. The Site’s content security policy does not allow third-party scripts.
+Cloudflare hosts the Site and the relay. The Site and the Worker that serves it do not set cookies. We do not include advertising analytics, and Cloudflare’s own page analytics are turned off for onghost.dev. The Site’s content security policy does not allow third-party scripts.
 
 A download button on the Site passes through the Site on the way to the file on GitHub so we can count downloads. We keep only how many downloads there were each day, for each system and version. The download-count record we keep does not include an address, a cookie, or anything else about who downloaded. Robots such as search engines, link previews, and requests with no user agent are not counted. The file itself is served from GitHub, which can see the download request, including your IP address.
 

@@ -419,31 +419,26 @@ rules or build settings):
   copied to `GHOST_UPDATER_PUBLIC_KEY`, which the workflows now read; the two earlier variables
   stay until no workflow run from before could need them.
 
-Not done, because each takes access the rename did not have (the Cloudflare API with zone rules,
-DNS and Workers Builds). Until then the site works, with these differences from o7.codes:
+Done later the same day, once the owner had signed in to the Cloudflare API (the rename itself
+had only Wrangler's sign-in). Each was copied from what o7.codes has and checked live:
 
-- **Injected analytics are not turned off for the new zone.** Cloudflare adds its analytics
-  script to every page there. The page's security policy refuses it, so nothing is collected and
-  the browser's console records the refusal. Make the same rule o7.codes has (ruleset phase
-  `http_config_settings`, `set_config` with `disable_rum: true` for `onghost.dev` and
-  `preview.onghost.dev`), then change the privacy page's sentence to name the new address: it
-  still says the analytics are off for o7.codes, which is the zone it is true of.
-- **The relay has no rate limit at the new address.** Make the rule o7.codes has (phase
+- **No injected analytics.** Ruleset `6ab62b9ab69f44759f786d18109c5ad5`, phase
+  `http_config_settings`, turns Cloudflare's own page analytics off for `onghost.dev` and
+  `preview.onghost.dev`. Before it, Cloudflare added its script to every page and the page's
+  security policy refused it. The privacy page names the new address since.
+- **The relay's rate limit.** Ruleset `e08127d5573147ad83dfc4d91126ac73`, phase
   `http_ratelimit`: a path starting `/api/remote/` gets at most 60 requests in 10 seconds from
-  one address and Cloudflare location, then is refused for 10 seconds).
-- **The domain does not yet say that it sends no mail.** Add `_dmarc` as `v=DMARC1; p=reject;`
-  and the apex SPF `v=spf1 -all`, as o7.codes has.
-- **Always Use HTTPS is not on for the new zone.** `http://onghost.dev/` answers with the page
-  instead of a redirect (checked on 26 November 2026). No browser asks for it: `.dev` is on the
-  browsers' own HTTPS-only list. Turn the zone setting on all the same, as o7.codes has it, for
-  everything that is not a browser.
-- **The Workers keep their o7 names** (`o7-web`, `o7-web-preview`, `o7-relay`,
-  `o7-relay-preview`), and the site's build triggers still build the site as `@o7/web`: a
-  trigger belongs to a Worker by name and keeps its build command in Cloudflare.
-  `apps/web-builds-alias` is a package of that name whose one script builds `@ghost/web`, so the
-  triggers work as they are. To finish: rename the Workers (or move their routes and triggers to
-  new ones, as on 19 November), change the triggers' build command to `@ghost/web`, change the
-  names in the three `wrangler.toml` files, and delete `apps/web-builds-alias`.
+  one address and Cloudflare location, then is refused for 10 seconds.
+- **The domain says that it sends no mail.** `_dmarc` is `v=DMARC1; p=reject;` and the apex SPF
+  is `v=spf1 -all`.
+- **Always Use HTTPS is on.** `http://onghost.dev/` answers 301 to the same page over TLS.
+- **The Workers are `ghost-web`, `ghost-web-preview`, `ghost-relay` and
+  `ghost-relay-preview`**, renamed in place (`PATCH /accounts/{account}/workers/workers/{id}`
+  with a new `name`). A Worker renamed so keeps its id, its routes and custom domains, its
+  bindings, its Durable Objects with what they hold, and its build triggers, so nothing had to
+  be copied or moved as on 19 November. The site's three build triggers now build `@ghost/web`,
+  and `apps/web-builds-alias`, the package that stood in for the old name, is gone. The D1
+  databases keep their names (`o7-counts`, `o7-counts-preview`): a database cannot be renamed.
 
 **Do not let o7.codes or auracode.si lapse while any copy from before a move is still in use**,
 for the reasons given above for auracode.si: whoever registers the domain next would answer that

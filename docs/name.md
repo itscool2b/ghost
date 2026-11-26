@@ -38,8 +38,8 @@ for anything a program reads.
   `TERM_PROGRAM=ghost`; a debug bundle starts "Ghost debug bundle v1". These still said
   `auracode` until this rename.
 - **The phone app**: Ghost for iPhone, `dev.onghost.mobile`, with the link scheme `ghost://`.
-- **The site**: onghost.dev, served by the same four Workers as before. They keep their o7
-  names for now (below).
+- **The site**: onghost.dev, served by the same four Workers as before, renamed in place:
+  `ghost-web`, `ghost-web-preview`, `ghost-relay` and `ghost-relay-preview`.
 
 ## A copy from before a rename
 
@@ -112,15 +112,6 @@ Renaming one would make an updated app stop recognising what it wrote before.
 | `o7-counts`, `o7-counts-preview` | the site's counter databases | a D1 database cannot be renamed; the counts would start from zero in a new one |
 | `auracode://` | a link scheme earlier versions registered | the uninstaller would not find and remove it |
 | auracode.si, o7.codes | the addresses before onghost.dev | copies from before a move lose remote access (infra/README.md) |
-
-Three more stay only until Cloudflare is changed with them, which takes access the rename did not
-have (infra/README.md, "Everything is Ghost"):
-
-| Name | Where | Until |
-|---|---|---|
-| `o7-web`, `o7-web-preview`, `o7-relay`, `o7-relay-preview` | the Workers' names, in the `wrangler.toml` files | the site's build triggers, which belong to a Worker by its name, are moved with them |
-| `@o7/web` | `apps/web-builds-alias`, a package whose only script builds `@ghost/web` | those triggers' build command, which is kept in Cloudflare and names the site's package, is changed |
-| "page analytics are turned off for o7.codes" | one sentence of the privacy page | the new zone has the rule that turns them off there too; until then the page's own security policy keeps the script from running |
 
 Also kept: dated history (older changelog entries, `docs/progress.md`, design notes, spikes and
 benchmarks), recorded agent sessions in test fixtures (all but the client's name in the line the

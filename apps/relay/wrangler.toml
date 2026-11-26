@@ -6,7 +6,7 @@
 # `wrangler secret put APNS_KEY --env <env>`, and APNS_KEY_ID and APNS_TEAM_ID below. Push is off
 # while any of the three is empty.
 # Default bindings are local-only. Production requires explicit --env production.
-name = "o7-relay-local"
+name = "ghost-relay-local"
 main = "src/index.ts"
 compatibility_date = "2026-10-26"
 workers_dev = false
@@ -39,7 +39,7 @@ new_sqlite_classes = ["Apns"]
 enabled = false
 
 [env.production]
-name = "o7-relay"
+name = "ghost-relay"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
 # More specific than the website's own address, so these requests reach this Worker.
 # The other routes and FORMER_ORIGINS are the addresses the site had before (o7.codes until
@@ -76,7 +76,7 @@ tag = "v2"
 new_sqlite_classes = ["Apns"]
 
 [env.preview]
-name = "o7-relay-preview"
+name = "ghost-relay-preview"
 account_id = "5feb14f2fe605875bcf1472f348cb7ed"
 routes = [{ pattern = "preview.onghost.dev/api/remote/*", zone_name = "onghost.dev" }]
 

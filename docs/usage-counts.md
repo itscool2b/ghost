@@ -27,7 +27,7 @@ be done through these addresses.
 
 ## The database
 
-D1 database `o7-counts` (`beaf6cff-cda8-4e44-aaa8-5d46b0188fbb`), bound as `COUNTS` to `o7-web`.
+D1 database `o7-counts` (`beaf6cff-cda8-4e44-aaa8-5d46b0188fbb`), bound as `COUNTS` to `ghost-web`.
 The preview Worker writes to `o7-counts-preview` (`a285ac49-31b4-413a-b5a9-9663d878ea63`), so
 testing never touches the real numbers. Schema: `apps/web-worker/schema.sql`, one table `daily`
 with `day` (US Eastern, `YYYY-MM-DD`), `event` (`download`, `ran`, `installed`), `platform`,
