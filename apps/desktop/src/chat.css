@@ -2015,6 +2015,26 @@
   padding: 0 var(--g-space-16) var(--g-space-16);
 }
 
+/*
+ * The tray (Main, after Synara's message box): what waits beside the message, its background
+ * tasks and its queued messages, sits on a sheet tucked behind the box's top edge. The sheet is a
+ * step narrower than the box and quieter than it, and the box's corners stand over its foot. Two
+ * sheets stack the same way, and a request that takes the box's place stands over them as the box
+ * does. The foot under the box holds nothing: it is padding, there to fill the box's corners.
+ */
+.chat-dock > :is(.chat-tasks, .chat-queue-list) {
+  position: relative;
+  margin: 0 var(--g-space-12) calc((var(--g-space-8) + var(--ui-composer-radius)) * -1);
+  border-radius: var(--g-radius-14) var(--g-radius-14) 0 0;
+  background-color: var(--ui-tray-fill);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+}
+
+/* Whatever follows a sheet is painted over it. */
+.chat-dock > :is(.chat-tasks, .chat-queue-list) ~ * {
+  position: relative;
+}
+
 /* A continuation notice in the dock: the words and their action on one line. */
 .chat-dock > .conversation-notice {
   display: flex;
@@ -2456,18 +2476,14 @@
 }
 
 /*
- * The queue (6.12): one segment over the composer, the same width and radius. "2 queued" on top,
- * then each waiting message on a 32px row with its remove control at the end.
+ * The queue (6.12): a sheet of the tray. "2 queued" on top, then each waiting message on a 28px
+ * row with its remove control at the end.
  */
 .chat-queue-list {
   display: flex;
   flex-direction: column;
-  padding: var(--g-space-4) var(--g-space-8) var(--g-space-8) var(--g-space-16);
-  border-radius: var(--ui-composer-radius);
-  background-color: var(--g-glass-pop);
-  box-shadow:
-    inset 0 0 0 1px var(--g-glass-rim),
-    var(--g-shadow-layer);
+  padding: var(--g-space-2) var(--g-space-4) calc(var(--ui-composer-radius) + var(--g-space-4))
+    var(--g-space-12);
 }
 
 .chat-queue-head {
@@ -2475,11 +2491,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--g-space-8);
-  min-height: 32px;
+  min-height: var(--g-control);
   color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
-  font-weight: var(--g-weight-medium);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2547,7 +2562,7 @@
   display: flex;
   align-items: center;
   gap: var(--g-space-8);
-  min-height: 32px;
+  min-height: var(--g-control);
 }
 
 .chat-queue li > span:first-child {
@@ -3196,6 +3211,7 @@
 }
 
 .chat-app .code-lang {
+  margin: 0;
   color: var(--g-fg-3);
   font-family: var(--g-mono);
   font-size: var(--g-text-meta);
@@ -3641,6 +3657,27 @@
 
 /* ---------- Pickers in the composer (6.10, 6.11) ---------- */
 
+/*
+ * Every menu of the message box opens above the box, on the box's own edge (Main): what can be
+ * added, how freely and in which mode at the left; the account and the model at the right.
+ * Anchored to the box and not to its own control, a menu never covers the words being written,
+ * and the five of them share two edges.
+ */
+.chat-composer .chat-popover {
+  position: static;
+}
+
+.chat-composer .chat-popover > .chat-popover-panel {
+  right: auto;
+  bottom: calc(100% + var(--g-space-8));
+  left: 0;
+}
+
+.chat-composer .chat-pickers-end .chat-popover > .chat-popover-panel {
+  right: 0;
+  left: auto;
+}
+
 .chat-pickers {
   display: flex;
   flex: 1 1 auto;
@@ -3767,17 +3804,22 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   bottom: calc(100% + 8px);
   left: 0;
   width: min(320px, calc(100vw - 80px));
-  padding: var(--g-space-8);
+  padding: var(--g-space-4);
+  gap: var(--g-space-2);
 }
+/* What a menu sets: one quiet line and its sentence, not a heading (Main). */
 .chat-control-heading {
-  padding: var(--g-space-8);
+  padding: var(--g-space-8) var(--g-space-8) var(--g-space-6);
 }
 .chat-control-heading > strong {
-  font-size: var(--g-text-ui);
+  display: block;
+  color: var(--g-fg-2);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
   font-weight: var(--g-weight-medium);
 }
 .chat-control-heading > p {
-  margin: var(--g-space-4) 0;
+  margin: var(--g-space-2) 0 0;
   color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
@@ -3856,7 +3898,8 @@ details.chat-workflow-plan:not([open]) > summary:not(:hover) {
   bottom: calc(100% + 8px);
   left: 0;
   width: min(320px, calc(100vw - 80px));
-  padding: var(--g-space-8);
+  padding: var(--g-space-4);
+  gap: var(--g-space-2);
 }
 .chat-account-actions {
   display: flex;
