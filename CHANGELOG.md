@@ -9,6 +9,10 @@ adds its own line in the same pull request; see "Changelog" in
 [docs/developing-in-o7.md](docs/developing-in-o7.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-26
+
+- o7 has a new look called Main. It is a calm black, white and grey look with thinner icons, smaller headings and tighter rows, and it is now the theme o7 opens in. Each chat in the sidebar shows its agent's mark and how long ago it last moved, and the message box is cleaner. If you chose another theme, it is kept. You can pick Main in Settings > Appearance. ([#218](https://github.com/itscool2b/o7/pull/218))
+
 ## 2026-11-25
 
 - Remote access in Settings reads more simply: the pairing dialog says to scan the code with your phone's camera, or open the link in the browser of the device you want to pair. ([#217](https://github.com/itscool2b/o7/pull/217))
