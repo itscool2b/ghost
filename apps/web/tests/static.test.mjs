@@ -204,7 +204,10 @@ test("the site is for a local app: no account pages, and no page offers one", as
   const terms = await readFile(new URL("terms/index.html", root), "utf8");
   assert.match(terms, /Governing law and venue/);
   // No blank of the drafts is published.
-  assert.doesNotMatch(terms + privacy, /\[(mailing address|phone number|effective date|DMCA agent)/);
+  assert.doesNotMatch(
+    terms + privacy,
+    /\[(mailing address|phone number|effective date|DMCA agent)/,
+  );
   // The line under each title gives the date the document itself gives: the Terms' line once
   // stayed a day behind its text.
   for (const [name, page] of [
