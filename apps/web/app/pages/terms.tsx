@@ -12,7 +12,7 @@ export const meta = () => [
 
 export default function Terms() {
   return (
-    <Page title="Terms of Service." lead="Effective November 25, 2026.">
+    <Page title="Terms of Service." lead="Effective November 26, 2026.">
       <article className="prose">
         <Legal source={source} />
         <a className="text-link" href="/privacy">

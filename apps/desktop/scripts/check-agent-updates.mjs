@@ -46,7 +46,7 @@ export async function checkAgentUpdates(browser, url, out, engine) {
       await legal.waitFor({ state: "detached" });
       assert.equal(
         await page.evaluate(() => localStorage.getItem("o7.legal.accepted")),
-        "2026-11-26",
+        "2026-11-26.2",
       );
 
       // New releases wait behind the bell: nothing floats over the pane, the bell has its dot.

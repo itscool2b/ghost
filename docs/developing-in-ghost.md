@@ -293,10 +293,13 @@ is set in ink and the rest of the line follows it as the body.
 BASH.AI LLC publishes Ghost's Terms of Service and Privacy Policy (owner, 25 November 2026). Their
 text is `apps/web/app/legal/terms.md` and `privacy.md`, shown at onghost.dev/terms and /privacy;
 change them only with the owner's approved wording. In the app, `apps/desktop/src/lib/legal.ts`
-holds their effective date (`LEGAL_VERSION`). Setup's Welcome page says that continuing accepts
+holds their version (`LEGAL_VERSION`: the effective date, with a number after it when a second
+version takes effect the same day). Setup's Welcome page says that continuing accepts
 them, and a copy that has not accepted the current version shows one notice with both links until
 OK (both documents promise an in-app notice for material changes). For a material change, update
-the documents' date and `LEGAL_VERSION` together in the same pull request. Settings > About links
+the documents' date and `LEGAL_VERSION` together in the same pull request. The owner's files
+arrive with a top heading (`# Terms of Service`); the pages draw their own title, so leave that
+one line out and change nothing else. Settings > About links
 both and carries the copyright line, as the website's footer does. `LICENSE`, the workspace's
 `authors` and the bundle's copyright name BASH.AI LLC; third-party notices keep their own.
 Previews count as having accepted; `&legal=new` shows the notice.

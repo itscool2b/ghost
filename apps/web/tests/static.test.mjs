@@ -204,7 +204,20 @@ test("the site is for a local app: no account pages, and no page offers one", as
   const terms = await readFile(new URL("terms/index.html", root), "utf8");
   assert.match(terms, /Governing law and venue/);
   // No blank of the drafts is published.
-  assert.doesNotMatch(terms + privacy, /\[(mailing address|effective date|DMCA agent)/);
+  assert.doesNotMatch(
+    terms + privacy,
+    /\[(mailing address|phone number|effective date|DMCA agent)/,
+  );
+  // The line under each title gives the date the document itself gives: the Terms' line once
+  // stayed a day behind its text.
+  for (const [name, page] of [
+    ["terms", terms],
+    ["privacy", privacy],
+  ]) {
+    const stated = /<strong>Effective date:<\/strong> ([A-Z][a-z]+ \d{1,2}, \d{4})/.exec(page)?.[1];
+    assert.ok(stated, `${name} states its effective date`);
+    assert.ok(page.includes(`Effective ${stated}.`), `${name}'s title line says ${stated}`);
+  }
 });
 test("third-party notices are emitted and linked from every page footer", async () => {
   const text = await readFile(new URL("third-party-notices.txt", root), "utf8");
