@@ -408,14 +408,15 @@
   cursor: not-allowed;
 }
 
+/* A field's label is quiet: grey and regular, so what the field holds is the brightest thing. */
 .ui-field {
   display: flex;
   flex-direction: column;
-  gap: var(--g-space-8);
-  color: var(--g-fg-1);
+  gap: var(--g-space-6);
+  color: var(--g-fg-2);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
-  font-weight: var(--g-weight-medium);
+  font-weight: var(--g-weight-regular);
 }
 
 .ui-row {
@@ -1757,7 +1758,7 @@ details.setup-install-review[open] > summary::before {
 /* ---------- Dialogs (4.6, 6.19) ---------- */
 
 /*
- * Every dialog is the shared .g-dialog, the raised layer at radius 18: sm 440 (the base), .g-dialog-md 560,
+ * Every dialog is the shared .g-dialog, the raised layer at radius 20: sm 440 (the base), .g-dialog-md 560,
  * .g-dialog-lg 760, a 16px viewport margin on every side, the title and close button in
  * .g-dialog-header. Long content scrolls the whole dialog. The rim is an inset hairline, so the
  * content starts 24px in, on the grid.
@@ -1800,6 +1801,40 @@ details.setup-install-review[open] > summary::before {
   justify-content: flex-end;
   gap: var(--g-space-8);
   padding-top: var(--g-space-8);
+}
+
+/*
+ * One filled control says what Enter does (Main): beside a primary or a red pill, every other
+ * action in the row is a ghost, bare until the hand is on it. A row with no such answer (a lone
+ * Close, a list's own buttons) keeps the soft pill, so there is still a button to see.
+ */
+.g-dialog
+  :is(footer, .g-dialog-actions, .setup-actions):has(> :is(.g-button-primary, .g-button-danger))
+  > .g-button:not(.g-button-primary, .g-button-danger, .g-button-outline) {
+  background-color: transparent;
+  color: var(--g-fg-2);
+}
+
+.g-dialog
+  :is(footer, .g-dialog-actions, .setup-actions):has(> :is(.g-button-primary, .g-button-danger))
+  > .g-button:not(.g-button-primary, .g-button-danger, .g-button-outline):disabled {
+  color: var(--g-fg-4);
+}
+
+@media (hover: hover) {
+  .g-dialog
+    :is(footer, .g-dialog-actions, .setup-actions):has(> :is(.g-button-primary, .g-button-danger))
+    > .g-button:not(.g-button-primary, .g-button-danger, .g-button-outline):hover:not(:disabled) {
+    background-color: var(--g-glass-control);
+    color: var(--g-fg-1);
+  }
+}
+
+.g-dialog
+  :is(footer, .g-dialog-actions, .setup-actions):has(> :is(.g-button-primary, .g-button-danger))
+  > .g-button:not(.g-button-primary, .g-button-danger, .g-button-outline):active:not(:disabled) {
+  background-color: var(--g-glass-control-hover);
+  color: var(--g-fg-1);
 }
 
 /* The section's hairline is drawn inset, so its content starts 16px down, on the grid. */
@@ -1870,65 +1905,284 @@ details.setup-install-review[open] > summary::before {
   cursor: pointer;
 }
 
-.chat-project-folders {
-  padding: var(--g-space-12) var(--g-space-16);
-  border-radius: var(--g-radius-12);
-  background-color: var(--g-surface-1);
-  box-shadow: inset 0 0 0 1px var(--g-line);
-}
+/* ---------- The project dialog (New project, Project settings) ---------- */
 
-.chat-project-folders > div {
+/*
+ * A short form in the medium dialog. The name and its colour share the first line; the folders are
+ * one card of hairline rows with how to add one under it; what new chats start with sits side by
+ * side. The dialog ends on one line: what was removed before at the left, the two answers at the
+ * right.
+ */
+.project-identity {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--g-space-8);
-  margin-bottom: var(--g-space-12);
+  gap: var(--g-space-12) var(--g-space-16);
 }
 
-.chat-project-folders > div > span {
-  display: flex;
-  flex-direction: column;
+.project-identity > .ui-field {
+  flex: 1 1 240px;
   min-width: 0;
 }
 
-/* Clone a repository sits beside Choose folder: the other way to give a new project its folder. */
-.chat-project-clone {
-  margin-left: var(--g-space-8);
-}
-
-.chat-project-folders small {
-  color: var(--g-fg-3);
-  font-size: var(--g-text-meta);
-  line-height: var(--g-leading-meta);
-  word-break: break-all;
-}
-
+/* The four tones: a quiet legend over a row of discs as tall as the field beside it. */
 .chat-color-choices {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--g-space-12);
+  flex: none;
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
 .chat-color-choices legend {
-  margin-bottom: var(--g-space-8);
-  color: var(--g-fg-1);
-  font-weight: var(--g-weight-medium);
+  margin-bottom: var(--g-space-6);
+  padding: 0;
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
 }
 
-.chat-color-choices label {
+.chat-color-choices > div {
   display: flex;
   align-items: center;
+  gap: var(--g-space-2);
+  height: var(--g-control-lg);
+}
+
+/* Each tone is a 24px target around a 14px disc. The radio covers it, unseen. */
+.chat-color-choices label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--g-control-sm);
+  height: var(--g-control-sm);
+}
+
+.g-dialog .chat-color-choices input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* The chosen tone wears a ring of its own colour, a gap of the dialog's layer between them. */
+.chat-color-choices span {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--g-radius-pill);
+  background-color: currentColor;
+  box-shadow:
+    0 0 0 2px var(--g-glass-pop),
+    0 0 0 3.5px transparent;
+  transition: box-shadow var(--g-dur-fast) var(--g-ease);
+}
+
+.chat-color-choices input:checked + span {
+  box-shadow:
+    0 0 0 2px var(--g-glass-pop),
+    0 0 0 3.5px currentColor;
+}
+
+.chat-color-choices input:focus-visible + span {
+  outline: 2px solid var(--g-focus);
+  outline-offset: 5px;
+}
+
+@media (hover: hover) {
+  .chat-color-choices label:hover input:not(:checked) + span {
+    box-shadow:
+      0 0 0 2px var(--g-glass-pop),
+      0 0 0 3.5px color-mix(in srgb, currentColor 45%, transparent);
+  }
+}
+
+/* The folders read as a field: the same quiet label, then what it holds. */
+.chat-project-folders {
+  display: flex;
+  flex-direction: column;
   gap: var(--g-space-6);
+}
+
+.chat-project-folders > h3 {
+  margin: 0;
+  color: var(--g-fg-2);
+  font-weight: var(--g-weight-regular);
+}
+
+.project-folder-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--g-radius-10);
+  background-color: var(--g-glass-card);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  list-style: none;
+}
+
+/* A folder: its name with what can be done to it on one line, where it is under them. */
+.project-folder-list > li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--g-space-2) var(--g-space-8);
+  padding: var(--g-space-8) var(--g-space-8) var(--g-space-8) var(--g-space-12);
+}
+
+.project-folder-list > li + li {
+  box-shadow: inset 0 1px 0 var(--g-glass-rim);
+}
+
+.project-folder-list > li > svg {
+  color: var(--g-fg-3);
+}
+
+.project-folder-list strong {
+  overflow: hidden;
+  font-weight: var(--g-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--g-space-2);
+}
+
+.project-folder-list small {
+  grid-column: 2 / -1;
+  padding-right: var(--g-space-4);
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  overflow-wrap: anywhere;
+}
+
+/* Only a path is set in mono; words about the folder stay in the interface's face. */
+.project-folder-list small.project-folder-path {
+  font-family: var(--g-mono);
+  font-variant-ligatures: none;
+}
+
+.project-folder-list small.ui-error {
+  color: var(--g-red);
+}
+
+/* A new project's folder, once chosen: where it is, as a field that cannot be typed in. */
+.project-folder-chosen {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--g-space-8);
+  min-height: var(--g-control-lg);
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--g-space-6) var(--g-space-12);
+  border-radius: var(--g-radius-10);
+  background-color: var(--g-glass-card);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
   color: var(--g-fg-2);
 }
 
-.chat-color-choices span {
-  width: 10px;
-  height: 10px;
-  background-color: currentColor;
+.project-folder-chosen > svg {
+  flex: none;
+  margin-top: var(--g-space-2);
+  color: var(--g-fg-3);
+}
+
+.project-folder-chosen > span {
+  min-width: 0;
+  line-height: var(--g-leading-ui);
+  overflow-wrap: anywhere;
+}
+
+/* Choose folder, with Clone a repository beside it: the two ways to give a project its folder. */
+.project-folder-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--g-space-8);
+}
+
+.project-folder-list + .project-folder-add,
+.project-folder-chosen + .project-folder-add {
+  margin-top: var(--g-space-2);
+}
+
+.project-defaults {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--g-space-6) var(--g-space-12);
+}
+
+.project-defaults > small {
+  grid-column: 1 / -1;
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}
+
+@media (max-width: 520px) {
+  .project-defaults {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Removing this project, and the worktrees it left behind: a quiet block under the fields. */
+.project-removal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--g-space-8);
+  padding-top: var(--g-space-16);
+  box-shadow: inset 0 1px 0 var(--g-line);
+}
+
+.project-removal > :is(section, p) {
+  align-self: stretch;
+}
+
+/* Worktrees kept from chats that are gone: the same quiet label as Folders, one line under it. */
+.project-removal > .new-chat-more {
+  padding: 0;
+}
+
+.project-removal > .new-chat-more > h2 {
+  margin: 0;
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+  font-weight: var(--g-weight-regular);
+}
+
+.project-removal > .new-chat-more > p {
+  margin: var(--g-space-2) 0 0;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+}
+
+.project-removal .git-worktrees {
+  margin-top: var(--g-space-8);
+}
+
+/* A ghost's words start on the form's edge, its fill reaching past it under the hand. */
+.project-removal > .g-button,
+.project-removed {
+  margin-left: calc(var(--g-space-8) * -1 - var(--g-space-2));
+}
+
+.g-dialog .project-dialog-foot {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.project-removed {
+  margin-right: auto;
+  color: var(--g-fg-3);
+  font-weight: var(--g-weight-regular);
 }
 
 .chat-color-choices [data-tone="slate"] {

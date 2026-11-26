@@ -174,6 +174,8 @@ export const MODES = [
   "clone-error",
   "new-project",
   "new-project#clone-dialog",
+  // A saved project's settings: its folders as rows, a worktree to review, and its removal.
+  "project-settings",
   "agents-installing",
   // Instructions in Settings: one file, per agent with its file tabs, the choice between
   // different texts, a hand-edited managed copy, size warnings, a save's review, and the

@@ -13,6 +13,16 @@ export function dialogClassName(size: ModalSize, className = ""): string {
 }
 
 /**
+ * Shows a modal dialog with focus on the control it opens for, marked `data-autofocus` (a form's
+ * first field), and not on the close button, where the platform puts it as the first control in
+ * the document. React's own `autoFocus` runs before the dialog is shown, so it cannot do this.
+ */
+export function showDialog(node: HTMLDialogElement): void {
+  node.showModal();
+  node.querySelector<HTMLElement>("[data-autofocus]:not(:disabled)")?.focus();
+}
+
+/**
  * The one dialog shell (visual-language 4.6, 6.19): Graphite's `.g-dialog` on a native modal
  * `<dialog>`, the title and a close button on the first line. Native focus containment and Escape
  * handling; it portals outside the app root.
@@ -39,7 +49,7 @@ export function Modal({
   const label = useId();
   useEffect(() => {
     const node = dialog.current;
-    node?.showModal();
+    if (node) showDialog(node);
     return () => node?.close();
   }, []);
   return createPortal(

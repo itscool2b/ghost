@@ -310,32 +310,72 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * Worktrees are one card of hairline rows, as a project's folders are (shell.css): the branch,
+ * then where it is and what state it is in, in grey under it.
+ */
 .git-worktrees {
-  display: grid;
-  gap: var(--g-space-8);
-  margin: var(--g-space-16) 0 0;
+  display: flex;
+  flex-direction: column;
+  margin: var(--g-space-12) 0 0;
   padding: 0;
+  border-radius: var(--g-radius-10);
+  background-color: var(--g-glass-card);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
   list-style: none;
 }
 
 .git-worktrees > li {
-  padding: var(--g-space-12) var(--g-space-16);
-  border-radius: var(--g-radius-12);
-  background-color: var(--g-glass-control);
-  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--g-space-2) var(--g-space-8);
+  padding: var(--g-space-8) var(--g-space-12);
+}
+
+.git-worktrees > li + li {
+  box-shadow: inset 0 1px 0 var(--g-glass-rim);
 }
 
 .git-worktrees strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
   font-weight: var(--g-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .git-worktrees li > p {
-  color: var(--g-fg-2);
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  overflow-wrap: anywhere;
+}
+
+.git-worktrees .git-actions {
+  grid-column: 1 / -1;
+  margin-top: var(--g-space-6);
+}
+
+/* Where a row has few actions (the lists of kept worktrees), they sit on the branch's line. */
+.git-worktrees-inline > li {
+  padding-right: var(--g-space-8);
+}
+
+.git-worktrees-inline .git-actions {
+  grid-area: 1 / 2;
+  flex-wrap: nowrap;
+  gap: var(--g-space-2);
+  margin-top: 0;
 }
 
 /* A worktree's state, sentence case beside its name: never a caps tag. */
 .git-state {
-  float: right;
   color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);

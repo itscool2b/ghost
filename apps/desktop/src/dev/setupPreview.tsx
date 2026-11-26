@@ -1,7 +1,7 @@
 /** Synthetic UI harness. This module is loaded only by the development preview entry point. */
 import { StrictMode, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { AgentEntry, ProjectSummary, SetupSnapshot } from "../bindings";
+import type { AgentEntry, ManagedWorktree, ProjectSummary, SetupSnapshot } from "../bindings";
 import { ProjectDialog } from "../components/chat/ProjectDialog";
 import { AgentsScreen } from "../components/setup/AgentsScreen";
 import { Onboarding } from "../components/setup/Onboarding";
@@ -16,6 +16,7 @@ import { MobileStore } from "../lib/mobile";
 import { DEFAULT_GENERAL, type SetupApi } from "../lib/setup";
 import { InstallApiContext } from "../lib/setup-actions/api";
 import { WorkspaceStore } from "../lib/workspace";
+import { type WorktreeRecoveryApi, worktreeRecoveryApi } from "../lib/worktreeRecovery";
 import { createAccountsFixture } from "./accountsFixture";
 import { cloneFixture } from "./cloneFixture";
 import { fixtureFolderMatches } from "./folderMatches";
@@ -307,6 +308,60 @@ const api: SetupApi = {
   },
 };
 const projects: ProjectSummary[] = [];
+/**
+ * `?preview=project-settings`: a saved project in its settings. One folder is here, one is not
+ * found on this device, and a worktree whose chat is gone waits for review.
+ */
+const savedProject: ProjectSummary = {
+  id: "project-orbit",
+  name: "Orbit",
+  color: "#8c9c88",
+  default_agent: "codex",
+  default_model: "gpt-5.5-codex",
+  created_at: 0,
+  updated_at: 0,
+  folders: [
+    {
+      id: "folder-orbit",
+      project_id: "project-orbit",
+      display_name: "orbit",
+      path: "C:/fixture/code/orbit",
+      folder_state: "ok",
+      unavailable_reason: null,
+      kind: "git",
+      git_remote_url: null,
+      git_default_branch: "main",
+    },
+    {
+      id: "folder-docs",
+      project_id: "project-orbit",
+      display_name: "orbit-docs",
+      path: null,
+      folder_state: "missing",
+      unavailable_reason: "This folder has not been found on this device.",
+      kind: "local",
+      git_remote_url: null,
+      git_default_branch: null,
+    },
+  ],
+};
+const retained: ManagedWorktree = {
+  id: "worktree-retained",
+  chat_id: "chat-gone",
+  source: "C:/fixture/code/orbit",
+  path: "C:/fixture/worktrees/orbit-sidebar",
+  branch: "o7/sidebar-scan",
+  base_commit: "0000000000000000000000000000000000000000",
+  state: "recovery_required",
+  detail: "A merge into main stopped before it finished.",
+  created_at: 0,
+};
+const recovery: WorktreeRecoveryApi = {
+  ...worktreeRecoveryApi,
+  list: async () => [retained],
+  open: async () => {},
+};
+if (params.get("preview") === "project-settings") projects.push(savedProject);
 const unsupported = async (): Promise<never> => {
   throw new Error("Unavailable in this UI fixture.");
 };
@@ -360,8 +415,8 @@ function Preview() {
   const [view, setView] = useState(
     mode === "agents" || mode === "agents-installing"
       ? "agents"
-      : mode === "new-project"
-        ? "new-project"
+      : mode === "new-project" || mode === "project-settings"
+        ? mode
         : "setup",
   );
   const [restart, setRestart] = useState(false);
@@ -374,6 +429,20 @@ function Preview() {
           transport={transport}
           agents={agents}
           cloneApi={clone.api}
+          onClose={() => setView("done")}
+        />
+      </main>
+    );
+  if (view === "project-settings")
+    return (
+      <main className="setup-shell g-root">
+        <ProjectDialog
+          project={savedProject}
+          store={workspace}
+          transport={transport}
+          agents={agents}
+          recoveryApi={recovery}
+          onInstructions={() => {}}
           onClose={() => setView("done")}
         />
       </main>
@@ -447,6 +516,8 @@ export function mountSetupPreview(container: HTMLElement): void {
       </InstallApiContext.Provider>
     </StrictMode>,
   );
+  // The saved project's worktrees are listed once its chats have loaded.
+  if (mode === "project-settings") void workspace.refresh();
   // `?preview=agents-installing`: Grok Build's reviewed install, started, with npm at work.
   if (mode === "agents-installing")
     void press("Install Grok Build").then(() => press("Start installation"));

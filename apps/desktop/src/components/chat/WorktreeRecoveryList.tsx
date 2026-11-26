@@ -87,7 +87,7 @@ export function WorktreeRecoveryList({
           {error}
         </p>
       ) : null}
-      <ul className="git-worktrees">
+      <ul className="git-worktrees git-worktrees-inline">
         {records.map((record) => (
           <li key={record.id}>
             <strong>{record.branch}</strong>
@@ -108,7 +108,7 @@ export function WorktreeRecoveryList({
               {record.state !== "ready" ? (
                 <button
                   type="button"
-                  className="g-button g-button-28"
+                  className="g-button g-button-24"
                   disabled={busy}
                   onClick={() =>
                     void run(async () => {
@@ -132,7 +132,7 @@ export function WorktreeRecoveryList({
               ) : null}
               <button
                 type="button"
-                className="g-button g-button-ghost g-button-28"
+                className="g-button g-button-ghost g-button-24"
                 disabled={busy}
                 onClick={() => void run(() => api.open(record.id))}
               >
