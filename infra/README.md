@@ -433,6 +433,10 @@ DNS and Workers Builds). Until then the site works, with these differences from 
   one address and Cloudflare location, then is refused for 10 seconds).
 - **The domain does not yet say that it sends no mail.** Add `_dmarc` as `v=DMARC1; p=reject;`
   and the apex SPF `v=spf1 -all`, as o7.codes has.
+- **Always Use HTTPS is not on for the new zone.** `http://onghost.dev/` answers with the page
+  instead of a redirect (checked on 26 November 2026). No browser asks for it: `.dev` is on the
+  browsers' own HTTPS-only list. Turn the zone setting on all the same, as o7.codes has it, for
+  everything that is not a browser.
 - **The Workers keep their o7 names** (`o7-web`, `o7-web-preview`, `o7-relay`,
   `o7-relay-preview`), and the site's build triggers still build the site as `@o7/web`: a
   trigger belongs to a Worker by name and keeps its build command in Cloudflare.
