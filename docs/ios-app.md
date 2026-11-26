@@ -126,3 +126,9 @@ tabs) and Ghost's own solid layers, type and marks for everything inside, in the
   tests run against the computer in a box (pairing, answering, sending, queueing and cancelling
   tonight's work, changes and a diff, renaming, editing a brief, and the accessibility audit).
 - `.github/workflows/ios-app.yml` (by hand): all of the above on GitHub's Macs.
+
+On 26 November 2026 the UI tests do not all pass there. Four fail on the simulator (opening a chat
+and sending, changes and a diff, renaming, and the accessibility audit), and a fifth (answering a
+permission from the Inbox) fails on some runs. They failed before that day too, unseen: the step
+piped `xcodebuild` into `tail` under a shell without `pipefail`, so it passed whatever the tests
+did. The step fails now when they do. GhostKit's tests and the app's build pass.
