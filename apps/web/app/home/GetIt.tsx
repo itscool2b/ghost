@@ -33,9 +33,9 @@ const PLATFORMS: readonly { name: string; detail: string; glyph: ReactNode }[] =
 ];
 
 /**
- * Where to get it, as dot.com sets its downloads: the title and one grey line at left, a row for
- * each system at right. Each row leads to the download page, which carries the installers, their
- * checksums and their status.
+ * Where to get it, set as X Money sets its questions: the heading and one grey line in the left
+ * half, a row for each system in the right half, the first on a panel. Each row leads to the
+ * download page, which carries the installers, their checksums and their status.
  */
 export function GetIt() {
   return (

@@ -1,11 +1,10 @@
-/* ------------------------------------------------------------------------------- header */
+/* ------------------------------------------------------------------------------ sidebar */
 
 /*
- * The bar: the wordmark, the page's sections beside it in grey 14px words that take the ink under
- * the hand, the repository and the primary Download pill at the right. It stays at the top over
- * the page's colour and a 12px blur, and one hairline draws under it once the page has moved. It
- * keeps its place across page navigations (view transitions). Under 1024px the sections fold into
- * a menu behind a quiet disc beside a 40px Download.
+ * X Money's sidebar, from 1024px (header.tsx): fixed at the page's left, the wordmark at its top,
+ * then the page's parts and pages as a list of 14px grey words with the one in view in ink on a
+ * quiet pill that slides to it, and at its foot Download and GitHub. Under 1024px it is a bar
+ * across the top with the wordmark, Download, GitHub's mark and a menu.
  */
 .site-nav {
   position: sticky;
@@ -48,10 +47,13 @@
 }
 
 .nav-bar {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 16px;
+  width: min(100% - 2 * var(--s-gutter), var(--s-max));
   height: 100%;
+  margin: 0 auto;
 }
 
 .nav-home {
@@ -64,26 +66,56 @@
 }
 
 .nav-links {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  position: relative;
+  display: none;
 }
 
 .nav-links a {
-  display: inline-flex;
+  position: relative;
+  z-index: 1;
+  display: flex;
   align-items: center;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: 999px;
   color: var(--s-soft);
   font-size: 14px;
   line-height: 20px;
+  font-weight: 500;
   text-decoration: none;
   transition: color 150ms var(--s-swift);
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-links a[aria-current] {
   color: var(--s-ink);
+}
+
+/*
+ * The quiet pill behind the link in view (header.tsx): it slides from link to link as the page
+ * scrolls. Without scripts the link in view wears its own.
+ */
+.nav-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 32px;
+  border-radius: 999px;
+  background-color: rgb(var(--s-k) / 0.08);
+  opacity: 0;
+  transition:
+    transform 420ms var(--s-glide),
+    opacity 200ms var(--s-swift);
+  pointer-events: none;
+}
+
+.nav-links[data-pill] .nav-pill {
+  opacity: 1;
+}
+
+.nav-links:not([data-pill]) a[aria-current] {
+  background-color: rgb(var(--s-k) / 0.08);
 }
 
 .nav-end {
@@ -97,24 +129,86 @@
   display: none;
 }
 
-/* The public repository: a quiet pill with GitHub's mark before Download (header.tsx). */
+/* The public repository: a quiet pill with GitHub's mark beside Download (header.tsx). */
 .nav-github .github-mark {
   flex: none;
 }
 
-@media (max-width: 1023px) {
+@media (min-width: 1024px) {
+  .site-nav {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--s-side);
+    height: auto;
+  }
+
+  /* The sidebar is the page itself: no colour of its own, no rule, no blur. */
+  .site-nav::before {
+    border-bottom: 0;
+    background-color: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    animation: none;
+  }
+
+  .nav-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    padding: 20px 16px 24px;
+    overflow-y: auto;
+  }
+
+  .nav-home {
+    align-self: flex-start;
+    height: 40px;
+    margin: 0 0 32px;
+    padding: 0 12px;
+  }
+
   .nav-links {
-    display: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav-links a:hover:not([aria-current]) {
+    background-color: rgb(var(--s-k) / 0.04);
+  }
+
+  /* At the sidebar's foot, as X Money's Sign In: Download, and GitHub as its mark on a disc. */
+  .nav-end {
+    gap: 8px;
+    margin: auto 0 0;
+    padding: 24px 4px 0;
   }
 
   .nav-end .btn-sm {
-    height: 40px;
-    padding: 0 18px;
+    height: 32px;
   }
 
-  /* Under 1024px it is GitHub's mark alone, on a 40px disc beside Download. */
   .nav-end .nav-github {
-    width: 40px;
+    width: 32px;
+    padding: 0;
+  }
+
+  .nav-github-text {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .nav-end .btn-sm {
+    height: 36px;
+    padding: 0 16px;
+  }
+
+  /* Under 1024px it is GitHub's mark alone, on a 36px disc beside Download. */
+  .nav-end .nav-github {
+    width: 36px;
     padding: 0;
   }
 
@@ -142,14 +236,14 @@
     display: block;
   }
 
-  /* The menu's button: a quiet disc, 48px (52 on phones), its two bars turning into a cross. */
+  /* The menu's button: a quiet disc, its two bars turning into a cross. */
   .nav-menu-button {
     display: grid;
     place-items: center;
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     border-radius: 999px;
-    background-color: var(--s-quiet);
+    box-shadow: inset 0 0 0 1px var(--s-line-strong);
     color: var(--s-ink);
     list-style: none;
     cursor: pointer;
@@ -182,9 +276,9 @@
   }
 
   /*
-   * The menu is a solid sheet in the page's colour from under the bar to the screen's foot, as
-   * dot.com's covers the page: its sections as 18px rows between hairlines, and Download at the
-   * foot. The page behind it holds still while it is open.
+   * The menu is a solid sheet in the page's colour from under the bar to the screen's foot: its
+   * links as 18px rows between hairlines, and Download at the foot. The page behind it holds
+   * still while it is open.
    */
   .nav-sheet {
     position: fixed;
@@ -192,7 +286,7 @@
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    padding: 16px calc(var(--s-gutter) + 16px) max(24px, env(safe-area-inset-bottom));
+    padding: 16px calc(var(--s-gutter) + 8px) max(24px, env(safe-area-inset-bottom));
     overflow-y: auto;
     background-color: var(--s-bg);
     animation: sheet-in 240ms var(--s-swift) both;
@@ -207,11 +301,15 @@
     align-items: center;
     height: 52px;
     border-bottom: 1px solid var(--s-line);
-    color: var(--s-ink);
+    color: var(--s-soft);
     font-size: 18px;
     line-height: 28px;
     font-weight: 500;
     text-decoration: none;
+  }
+
+  .nav-sheet nav a[aria-current] {
+    color: var(--s-ink);
   }
 
   .nav-sheet nav a:last-child {
@@ -229,13 +327,6 @@
   }
 }
 
-@media (max-width: 639px) {
-  .nav-menu-button {
-    width: 52px;
-    height: 52px;
-  }
-}
-
 @keyframes sheet-in {
   from {
     opacity: 0;
@@ -249,6 +340,7 @@
 
   .nav-menu-bar,
   .nav-cta,
+  .nav-pill,
   .site-nav[data-hero-action] .nav-cta {
     transition: none;
   }
@@ -265,18 +357,21 @@
 /* ------------------------------------------------------------------------------- footer */
 
 /*
- * The foot: a hairline across the column, the wordmark and one small line at left, and columns of
- * grey 13px links that take the ink under the hand.
+ * The foot (owner, 26 November 2026: the one part of the earlier site they liked, so it stays as
+ * it was): a hairline across the column, the wordmark and one small line at left, and columns of
+ * grey 13px links that take the ink under the hand. Under it, X Money's closing picture: the name
+ * drawn very large in one hairline, cut off by the page's foot, drawing itself as it arrives.
  */
 .site-footer {
   padding: 0;
+  overflow: hidden;
 }
 
 .footer-frame {
   box-sizing: border-box;
-  width: min(100%, var(--s-max) + 2 * var(--s-gutter));
+  width: min(100% - 2 * var(--s-gutter), var(--s-max));
   margin: 0 auto;
-  padding: 40px var(--s-gutter) 64px;
+  padding: 40px 0 64px;
   border-top: 1px solid var(--s-line);
 }
 
@@ -322,7 +417,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 32px 48px;
-  width: min(100%, 794px);
+  width: min(100%, 640px);
 }
 
 .footer-heading {
@@ -353,6 +448,51 @@
   color: var(--s-ink);
 }
 
+/*
+ * The name, drawn very large in one hairline of the ink at 22% across the column, its foot cut off
+ * by the page's (X Money closes on its own name this way). Once scripts are in, it draws itself
+ * when it arrives; without them, or where motion is not welcome, it is simply there.
+ */
+.footer-mark {
+  box-sizing: border-box;
+  width: min(100% - 2 * var(--s-gutter), var(--s-max));
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.footer-mark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.footer-mark text {
+  fill: none;
+  stroke: var(--s-art);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  font-family: var(--g-sans);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+html.js .footer-mark[data-reveal] text {
+  stroke-dasharray: 5000;
+  stroke-dashoffset: 5000;
+  transition: stroke-dashoffset 2800ms var(--s-glide);
+}
+
+html.js .footer-mark[data-revealed] text {
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.js .footer-mark[data-reveal] text {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+}
+
 @media (max-width: 1023px) {
   .footer-grid {
     flex-direction: column;
@@ -361,7 +501,6 @@
 
   .footer-links {
     justify-content: flex-start;
-    border-left: 0;
   }
 
   .footer-cols {
@@ -376,10 +515,10 @@
   }
 }
 
-/* The narrowest phones: the wing draws a little smaller so the bar's three things still fit. */
+/* The narrowest phones: the wing draws a little smaller so the bar's things still fit. */
 @media (max-width: 359px) {
   .nav-bar {
-    gap: 12px;
+    gap: 8px;
   }
 
   .nav-home .g-logo {

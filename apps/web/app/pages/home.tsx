@@ -1,14 +1,12 @@
+import { Agents } from "../home/Agents";
 import { Away } from "../home/Away";
-import { Explorer } from "../home/Explorer";
+import { Everything } from "../home/Everything";
 import { Faq } from "../home/Faq";
-import { Finale } from "../home/Finale";
 import { GetIt } from "../home/GetIt";
+import { Handoff } from "../home/Handoff";
 import { Hero } from "../home/Hero";
-import { News } from "../home/News";
-import { Roster } from "../home/Roster";
+import { Showcase } from "../home/Showcase";
 import { AgentSprite } from "../home/Sprite";
-import { Workspace } from "../home/Workspace";
-import { Yours } from "../home/Yours";
 
 export const meta = () => [
   { title: "Ghost ADE · One window for every coding agent" },
@@ -20,26 +18,24 @@ export const meta = () => [
 ];
 
 /**
- * The page in Main's order (docs/design/visual-language.md, "Website composition"): the name over
- * the live app on its stage; every agent in one table; what the app does, one part in view at a
- * time; the rest of the workspace as tiles; Ghost from a phone or an assistant; what stays yours;
- * what shipped as a timeline; where to get it; answers; and the last call over the mark drawn
- * large. Every part after the opening starts on one hairline.
+ * The page in X Money's order, in its dark version (docs/design/visual-language.md, "Website
+ * composition"): the statement over the wing as a solid slab; the live app in a panel; the agents
+ * with New chat's menu; the handoff as one figure among floating pieces of a chat; six parts of the
+ * app in staggered panels and the rest as rows; Ghost from a phone or an assistant; where to get
+ * it; and answers. Every part after the opening starts on one hairline.
  */
 export default function Home() {
   return (
     <main id="main" className="home">
       <AgentSprite />
       <Hero />
-      <Roster />
-      <Explorer />
-      <Workspace />
+      <Showcase />
+      <Agents />
+      <Handoff />
+      <Everything />
       <Away />
-      <Yours />
-      <News />
       <GetIt />
       <Faq />
-      <Finale />
     </main>
   );
 }
