@@ -32,8 +32,10 @@ const COLUMNS: readonly { heading: string; links: readonly { href: string; text:
 ];
 
 /**
- * The footer on every page, as dot.com sets its own: under a hairline, the wordmark with what it
- * stands for at left, then a dotted rule and columns of small links.
+ * The footer on every page (kept as it was: the owner liked it), under a hairline: the wordmark
+ * with what it stands for at left, then columns of small links. Under it, as X Money closes its
+ * pages on its own name, the name drawn very large in one hairline and cut off by the page's foot,
+ * drawing itself as it arrives (enhance.tsx marks it). Decorative: the wordmark above names Ghost.
  */
 export function SiteFooter() {
   return (
@@ -68,6 +70,13 @@ export function SiteFooter() {
             </div>
           </nav>
         </div>
+      </div>
+      <div className="footer-mark" data-reveal="" aria-hidden="true">
+        <svg viewBox="0 40 1000 250" aria-hidden="true" focusable="false">
+          <text x="0" y="330" fontSize="386" textLength="1000" lengthAdjust="spacing">
+            Ghost
+          </text>
+        </svg>
       </div>
     </footer>
   );
