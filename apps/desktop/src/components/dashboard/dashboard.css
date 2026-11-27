@@ -119,9 +119,17 @@
   scrollbar-color: var(--g-line-strong) transparent;
 }
 
-/* Holding focus only to scroll by keys: the cards inside show their own focus. */
-.dashboard-page:focus {
+/*
+ * The board holds focus to scroll by keys. Opened by a click it shows no ring; reached by the
+ * keyboard it shows the focus line inside its edge.
+ */
+.dashboard-page:focus:not(:focus-visible) {
   outline: none;
+}
+
+.dashboard-page:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: -2px;
 }
 
 /* Where motion is not welcome it is simply there, and simply gone. */

@@ -256,7 +256,6 @@ export function Dashboard({
   return createPortal(
     // A click on the dialog itself is a click beside the panel: the dialog fills the window and
     // the panel is the only thing drawn in it.
-    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes it, through onCancel.
     <dialog
       ref={dialog}
       className="g-root dashboard"
@@ -293,8 +292,12 @@ export function Dashboard({
           </div>
           <DialogClose label="Close the Dashboard" onClick={close} />
         </header>
-        {/* Focus starts on the board, so the arrow keys scroll it and Tab reaches its first card. */}
-        <div className="dashboard-page" tabIndex={-1} data-autofocus="">
+        {/*
+         * Focus starts on the board, so the arrow keys scroll it; it is a stop of its own for Tab
+         * too, so a board with nothing to press still scrolls from the keyboard.
+         */}
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must take focus. */}
+        <div className="dashboard-page" tabIndex={0} data-autofocus="">
           {error !== null ? (
             <p role="alert" className="ui-error dashboard-message">
               {error}
