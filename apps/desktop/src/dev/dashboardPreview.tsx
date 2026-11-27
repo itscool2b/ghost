@@ -18,6 +18,7 @@ import type {
   ProcessRow,
 } from "../bindings";
 import { Dashboard } from "../components/dashboard/Dashboard";
+import { useDashboardButton } from "../components/dashboard/useDashboardButton";
 import type { AppStore } from "../lib/chat/appStore";
 import { DashboardCleared } from "../lib/dashboardCleared";
 import type { LineEditsApi } from "../lib/lineEdits";
@@ -280,6 +281,8 @@ function DashboardPreview({
   ...fixtures
 }: Omit<Parameters<typeof Dashboard>[0], "onClose" | "onOpenChat"> & { readonly start: boolean }) {
   const [open, setOpen] = useState(start);
+  // The sidebar's button takes focus back the same way (ChatList.tsx).
+  const button = useDashboardButton(open);
   return (
     <div className="pane-shell g-root">
       <main
@@ -291,6 +294,7 @@ function DashboardPreview({
         }}
       >
         <button
+          ref={button}
           type="button"
           className="g-button g-button-ghost g-button-28"
           data-testid="dashboard-button"

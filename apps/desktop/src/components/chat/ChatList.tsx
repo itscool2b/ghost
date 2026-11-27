@@ -21,6 +21,7 @@ import type {
   WorkspaceSnapshot,
 } from "../../bindings";
 import { folderStateLabel, shortAgo, statusWord } from "../../lib/chat/present";
+import { useDashboardButton } from "../dashboard/useDashboardButton";
 import { commandKey, Keys } from "./Keys";
 
 export function projectsOf(
@@ -216,9 +217,9 @@ export function ChatList({
    * Opens the Dashboard; the row counts the chats whose agent works now, after a volt dot while
    * one needs you.
    */
+  readonly onDashboard?: () => void;
   /** The Dashboard is open over the window (its button says so to assistive technology). */
   readonly dashboardOpen?: boolean;
-  readonly onDashboard?: () => void;
   readonly onProjectSettings?: (project: ProjectSummary) => void;
   readonly onChatOptions?: (chat: ChatSummary) => void;
   readonly archived?: boolean;
@@ -239,6 +240,7 @@ export function ChatList({
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const [sectionFolded, setSectionFolded] = useState(false);
   const search = useRef<HTMLInputElement>(null);
+  const dashboardButton = useDashboardButton(dashboardOpen);
   const now = useMinute();
   const all = chats ?? [];
   const arrived = useArrivals(chats === null ? null : chats.map((chat) => chat.id));
@@ -359,6 +361,7 @@ export function ChatList({
         ) : null}
         {onDashboard ? (
           <button
+            ref={dashboardButton}
             type="button"
             className="chat-nav-action"
             onClick={onDashboard}
