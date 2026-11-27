@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { AGENT_NAMES } from "../agents";
 import { useReducedMotion } from "../motion";
-import { Arrow } from "../ui";
 import { AGENTS, SpriteMark } from "./Sprite";
 
 const agentList = `${AGENT_NAMES.slice(0, -1).join(", ")} and ${AGENT_NAMES.at(-1) ?? ""}`;
@@ -48,10 +47,10 @@ const QUESTIONS: readonly { question: string; answer: string; agents?: boolean }
 const CLOSE = 300;
 
 /**
- * Questions as rows between hairlines, as dot.com sets its FAQs: the heading and a quiet link at
- * left, the questions at right with the first answer open, one open at a time; the plus turns into
- * a cross as its answer slides open. Built on <details>, so every answer opens without JavaScript;
- * the script adds the eased open and close and keeps one row open.
+ * Questions as X Money sets its own: the heading and one pill in the left half, the questions in
+ * the right half with the first answer open, one open at a time; the open question stands on a
+ * panel and its plus turns into a minus as its answer slides open. Built on <details>, so every
+ * answer opens without JavaScript; the script adds the eased open and close and keeps one row open.
  */
 export function Faq() {
   const list = useRef<HTMLDivElement>(null);
@@ -120,10 +119,10 @@ export function Faq() {
       <div className="wrap two-col">
         <div className="two-col-head faq-head">
           <h2 id="faq-title" className="title">
-            Questions. <span className="tone">Answered plainly.</span>
+            Your questions, answered. <span className="tone">Plainly.</span>
           </h2>
-          <a className="text-link faq-link" href="/privacy">
-            Privacy notice <Arrow />
+          <a className="btn btn-primary btn-sm faq-link" href="/privacy">
+            Read the privacy notice
           </a>
         </div>
         <div className="faq-list" ref={list}>

@@ -1,6 +1,5 @@
 import { AGENT_BRANDS, type AgentBrandId } from "@ghost/ui";
 import { SpriteMark } from "./Sprite";
-import { Stage } from "./Stage";
 
 const WAYS: readonly { title: string; text: string }[] = [
   {
@@ -31,15 +30,17 @@ const CHATS: readonly {
 const STATE_WORDS = { needs: "Needs you", working: "Working", done: "Finished" } as const;
 
 /**
- * Ghost from somewhere else: three plain statements at the left, and at the right a phone standing
- * on a stage, showing this computer's chats as the remote page lists them. The phone is drawn in
- * CSS, an illustration of a supported state, hidden from assistive technology.
+ * Ghost from somewhere else, as X Money sets its last part: at the left the heading, a grey
+ * paragraph and three statements between hairlines; at the right a tall panel with a phone close
+ * up, cut off by the panel's edges, showing this computer's chats as the remote page lists them.
+ * The phone is drawn in CSS, an illustration of a supported state, hidden from assistive
+ * technology.
  */
 export function Away() {
   return (
-    <section className="section away" aria-labelledby="away-title">
-      <div className="wrap">
-        <div className="chapter-head">
+    <section className="section split away" aria-labelledby="away-title">
+      <div className="wrap split-grid">
+        <div className="split-text">
           <h2 id="away-title" className="title">
             From anywhere. <span className="tone">Your phone, or your own assistant.</span>
           </h2>
@@ -47,8 +48,6 @@ export function Away() {
             The work happens on your computer. You do not have to be sitting at it to see how it is
             going, answer a question or start the next thing.
           </p>
-        </div>
-        <div className="away-grid">
           <ul className="away-list">
             {WAYS.map((way) => (
               <li key={way.title}>
@@ -57,37 +56,37 @@ export function Away() {
               </li>
             ))}
           </ul>
-          <Stage quiet className="away-stage">
-            <div className="phone" aria-hidden="true">
-              <div className="phone-screen">
-                <p className="phone-bar">
-                  <span className="phone-title">This computer</span>
-                  <span className="phone-live">
-                    <i />
-                    Connected
-                  </span>
-                </p>
-                <ul className="phone-chats">
-                  {CHATS.map((chat) => (
-                    <li key={chat.title} data-state={chat.state}>
-                      <SpriteMark agent={chat.agent} size={22} />
-                      <span className="phone-chat">
-                        <strong>{chat.title}</strong>
-                        <span>
-                          {AGENT_BRANDS[chat.agent].name} · {STATE_WORDS[chat.state]}
-                        </span>
+        </div>
+        <div className="panel split-panel away-panel">
+          <div className="phone" aria-hidden="true">
+            <div className="phone-screen">
+              <p className="phone-bar">
+                <span className="phone-title">This computer</span>
+                <span className="phone-live">
+                  <i />
+                  Connected
+                </span>
+              </p>
+              <ul className="phone-chats">
+                {CHATS.map((chat) => (
+                  <li key={chat.title} data-state={chat.state}>
+                    <SpriteMark agent={chat.agent} size={22} />
+                    <span className="phone-chat">
+                      <strong>{chat.title}</strong>
+                      <span>
+                        {AGENT_BRANDS[chat.agent].name} · {STATE_WORDS[chat.state]}
                       </span>
-                      <i className="phone-dot" />
-                    </li>
-                  ))}
-                </ul>
-                <p className="phone-box">
-                  <span>Message Claude Code</span>
-                  <i className="phone-send" />
-                </p>
-              </div>
+                    </span>
+                    <i className="phone-dot" />
+                  </li>
+                ))}
+              </ul>
+              <p className="phone-box">
+                <span>Message Claude Code</span>
+                <i className="phone-send" />
+              </p>
             </div>
-          </Stage>
+          </div>
         </div>
       </div>
     </section>

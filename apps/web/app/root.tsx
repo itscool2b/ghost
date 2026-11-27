@@ -22,8 +22,9 @@ export function Layout({ children }: { children: ReactNode }) {
   // wears the paired computer's own theme and appearance.
   const tool = path === "/remote" || path.startsWith("/remote/");
   return (
-    // The site is always dark (owner, 25 November 2026): pinned on the root, so the shared tokens
-    // do not turn light under a light system, with no switch and nothing stored.
+    // The site is always dark (owner, 25 November 2026, and again on 26 November: "actually make it
+    // dark mode"): pinned on the root, so the shared tokens do not turn light under a light system,
+    // with no switch and nothing stored.
     <html
       lang="en"
       className="g-root"
@@ -41,7 +42,7 @@ export function Layout({ children }: { children: ReactNode }) {
         ) : null}
         <meta
           name="theme-color"
-          content="#0a0a0a"
+          content={tool ? "#0a0a0a" : "#000000"}
           media={tool ? "(prefers-color-scheme: dark)" : undefined}
         />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -58,7 +59,8 @@ export function Layout({ children }: { children: ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
+      {/* The public pages stand right of the sidebar (header.tsx, base.css). */}
+      <body className={tool ? undefined : "site"}>
         <a href="#main" className="skip">
           Skip to content
         </a>

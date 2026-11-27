@@ -1,10 +1,10 @@
 /*
- * The home page in Main (docs/design/visual-language.md, "Website composition"): an opening at
- * the left edge over the live app on its stage, then chapters that each start on one hairline with
- * a two-tone heading at the left and one grey paragraph at the right. The skeleton and restraint
- * are polar.sh's, the product drawn in HTML is Linear's and dot.com's, and a stage's grain is
- * ghost.ai's (docs/design/reference-audit.md). One ink, one grey, no colour but what means
- * something inside the product, and no glow.
+ * The home page on X Money's frame, in its dark version (docs/design/visual-language.md, "Website
+ * composition"): a statement in the middle over the wing as a solid slab, then parts that each
+ * start on one hairline, set as X Money sets its own: a heading in two lines (ink, then grey), a
+ * small grey paragraph, plain facts between hairlines, and flat square panels a step off the black
+ * page holding the product drawn small. One ink, one grey, no colour but what means something
+ * inside the product, and no glow.
  */
 
 .home {
@@ -13,405 +13,936 @@
 
 /* ---------------------------------------------------------------------------------- hero */
 
-.hero {
-  padding: 88px 0 var(--s-section);
-}
-
-.hero-copy {
+/* The opening, centred: the statement, the wing under it, one grey line and the pills. */
+.hero > .wrap {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  padding: 88px 0 72px;
+  text-align: center;
 }
 
-/* The name in ink and what it is in grey, one heading on two lines, set large and tight. */
 .hero-title {
-  max-width: 920px;
+  max-width: 880px;
   color: var(--s-ink);
-  font-size: clamp(40px, 5.4vw, 68px);
-  line-height: 1.04;
+  font-size: clamp(36px, 2.4vw + 21px, 60px);
+  line-height: 1.06;
   font-weight: 500;
-  letter-spacing: -0.038em;
+  letter-spacing: -0.03em;
 }
 
 .hero-line {
   display: block;
-  text-wrap: balance;
-  animation: line-in 900ms var(--s-expo) both;
 }
 
-.hero-line + .hero-line {
-  animation-delay: 80ms;
+/*
+ * X Money's opening: each word rises from under its own line, tipped back 40 degrees, and settles,
+ * 55ms after the one before (Words.tsx). The line clips a rising word; nothing fades, so a word is
+ * readable or not there yet. The clip leaves room for descenders.
+ */
+.word {
+  display: inline-block;
+  overflow: clip;
+  padding: 0 0.04em 0.14em;
+  margin: 0 -0.04em -0.14em;
+  vertical-align: top;
 }
 
+.word-in {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  animation: word-in 650ms var(--s-flip) calc(120ms + var(--w, 0) * 55ms) both;
+}
+
+@keyframes word-in {
+  from {
+    transform: perspective(800px) translateY(112%) rotateX(-40deg);
+  }
+}
+
+/* Under the wing: one grey line with its point in ink, as X Money says where it is rolling out. */
 .hero-lead {
-  max-width: 560px;
-  margin-top: 28px;
+  max-width: 520px;
   color: var(--s-soft);
-  font-size: 18px;
-  line-height: 29px;
-  text-wrap: pretty;
-  animation: line-in 900ms var(--s-expo) 160ms both;
+  font-size: 15px;
+  line-height: 24px;
+  text-wrap: balance;
+}
+
+.hero-lead > span {
+  color: var(--s-ink);
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 32px;
-  animation: line-in 900ms var(--s-expo) 240ms both;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
 }
 
-/* One line of facts, a small dot between each. */
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  margin: 28px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--s-soft);
-  font-size: 13px;
-  line-height: 20px;
-  animation: line-in 900ms var(--s-expo) 320ms both;
+.hero-actions .github-mark {
+  flex: none;
 }
 
-.hero-facts li + li {
+/* ------------------------------------------------------------------- the wing as a slab */
+
+/*
+ * The opening's object (HeroWing.tsx): twelve copies of the wing 2px apart in depth, the face in
+ * the ink and each one behind it a step darker, so the slab's edge reads as a bevel, its eyes holes
+ * through all of them. It is pitched back 26 degrees so its thickness shows at the trailing edge.
+ * Four nested layers move it: it flies in from far off and banks into place (air), rides the air
+ * (idle), turns toward the pointer (tilt), and holds its pitch (body).
+ */
+.hw3 {
   position: relative;
-  padding-left: 21px;
+  width: min(500px, 76vw);
+  aspect-ratio: 1044 / 440;
+  margin: 56px auto 52px;
+  perspective: 1300px;
 }
 
-.hero-facts li + li::before {
-  content: "";
+.hw3-air,
+.hw3-idle,
+.hw3-tilt,
+.hw3-body {
   position: absolute;
-  top: 9px;
-  left: 9px;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background-color: var(--s-line-strong);
+  inset: 0;
+  transform-style: preserve-3d;
 }
 
-/* The lines arrive by position alone, so the words are readable from the first frame. */
-@keyframes line-in {
-  from {
-    transform: translateY(18px);
-  }
+.hw3-air {
+  animation: hw3-arrive 1800ms var(--s-expo) 150ms both;
 }
 
-.hero-stage {
-  margin-top: 72px;
+.hw3-idle {
+  animation: hw3-idle 8s ease-in-out 1.9s infinite alternate both;
 }
 
-/* The app stands on the field, under a band of open ground, and runs off the stage's foot. */
-.hero-field {
-  padding: 136px 72px 0;
+.hw3-tilt {
+  transform: rotateX(calc(var(--tilt-y, 0) * -10deg)) rotateY(calc(var(--tilt-x, 0) * 18deg));
 }
 
-.hero-detail {
-  position: relative;
-  margin-bottom: -56px;
-  animation: frame-in 1100ms var(--s-expo) 200ms both;
+.hw3-body {
+  transform: rotateX(26deg);
 }
 
-@keyframes frame-in {
-  from {
-    transform: translateY(40px);
-  }
-}
-
-/* The wing flies over the open ground at the stage's top right, hovering in place. */
-.hero-wing {
+.hw3-layer {
   position: absolute;
-  top: 44px;
-  right: 104px;
-  width: 92px;
-  color: var(--s-ink);
-}
-
-.hero-wing-float {
-  display: block;
-  animation: wing-hover 5200ms ease-in-out infinite;
-}
-
-.hero-wing .wing {
-  rotate: calc(var(--look-x, 0) * 5deg);
-}
-
-@keyframes wing-hover {
-  50% {
-    transform: translateY(-4px);
-  }
-}
-
-/* ---------------------------------------------------------------------------------- wing */
-
-/* The logo, alive (Wing.tsx): one shape in the current colour whose eyes blink and look around. */
-.wing {
-  display: block;
+  inset: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
   overflow: visible;
+  transform: translateZ(calc(var(--z) * -2px));
 }
 
-.wing-body {
-  fill: currentColor;
+/* The face keeps its own fill (a light falling toward its nose); the rest darken with depth. */
+.hw3-layer:not([data-face]) path {
+  fill: rgb(calc(214 - var(--z) * 12) calc(214 - var(--z) * 12) calc(214 - var(--z) * 12));
 }
 
-.wing-look {
-  transform: translate(calc(var(--look-x, 0) * 14px), calc(var(--look-y, 0) * 8px));
-}
-
-.wing-eye {
+/* The eyes blink together through every layer: twice, then a long look. */
+.hw3-eye {
   transform-box: fill-box;
-  transform-origin: 50% 70%;
-  animation: wing-blink 5600ms ease-in-out 2400ms infinite;
+  transform-origin: 50% 60%;
+  animation: hw3-blink 7s ease-in-out 2.6s infinite;
 }
 
-/* Two quick blinks, then a long look. */
-@keyframes wing-blink {
+@keyframes hw3-arrive {
+  from {
+    transform: translate3d(0, -48px, -1200px) rotateX(68deg) rotateZ(-18deg);
+  }
+}
+
+@keyframes hw3-idle {
+  from {
+    transform: translateY(5px) rotateY(-8deg) rotateZ(-1.4deg);
+  }
+
+  to {
+    transform: translateY(-7px) rotateY(8deg) rotateZ(1.4deg);
+  }
+}
+
+@keyframes hw3-blink {
   0%,
   3%,
   6%,
-  9%,
   100% {
     transform: none;
   }
 
   1.5%,
-  7.5% {
+  4.5% {
     transform: scaleY(0.08);
   }
 }
 
-/* In line: the outline and the eyes stroked in one hairline, whatever size the wing is drawn. */
-.wing-line :is(.wing-body, .wing-eye) {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1px;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-/* --------------------------------------------------------------------------------- stage */
+/* ------------------------------------------------------------------------ the live window */
 
 /*
- * A stage (Stage.tsx): a panel a step off the page with one hairline, a field of contour lines
- * drawn in the page's ink at a low strength, and fine grain over it. The field fades out toward
- * the top and the foot, so what stands on it reads first. Texture, not light: nothing glows.
+ * The app at work, in one of X Money's panels (Showcase.tsx): the live window stands in it 64px
+ * under its top and runs off its foot.
  */
-.stage {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border-radius: 24px;
-  background-color: var(--s-stage);
-  box-shadow: inset 0 0 0 1px var(--s-line);
+.showcase > .wrap {
+  padding-bottom: var(--s-section);
 }
 
-.stage-field,
-.stage-canvas {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  width: 100%;
-  height: 100%;
-  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 66%, transparent);
-  mask-image: linear-gradient(transparent, #000 14%, #000 66%, transparent);
+.showcase-panel {
+  display: flex;
+  justify-content: center;
+  height: clamp(440px, 46vw, 600px);
+  padding: 64px 56px 0;
 }
 
-.stage-field path {
-  fill: none;
-  stroke: var(--s-ink);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
+.showcase-window {
+  width: min(100%, 1000px);
+  animation: window-in 1200ms var(--s-expo) 500ms both;
 }
 
-/* The still drawing shows until the canvas has drawn, then gives way to it. */
-.stage[data-live] .stage-field,
-.stage:not([data-live]) .stage-canvas {
-  visibility: hidden;
+@keyframes window-in {
+  from {
+    transform: translateY(48px);
+  }
 }
 
-.stage-quiet :is(.stage-field, .stage-canvas) {
-  opacity: 0.55;
-}
+/* ------------------------------------------------------------------------- split parts */
 
-.stage-grain {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
-  opacity: 0.1;
-  pointer-events: none;
-}
-
-/* -------------------------------------------------------------------------------- roster */
-
-/* Every agent in one table of hairline cells, five to a row. */
-.roster-grid {
+/*
+ * A part set as X Money sets "Built to earn": the heading, a grey paragraph and plain facts between
+ * hairlines down the left half, the facts at its foot; a tall panel holding the product at the
+ * right.
+ */
+.split-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  margin: 56px 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--s-line);
-  border-left: 1px solid var(--s-line);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: stretch;
 }
 
-.roster-grid > li {
+.split-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.split-text > .lead {
+  margin-top: 20px;
+}
+
+.split-rows {
+  margin: auto 0 0;
+  padding: 48px 0 0;
+  list-style: none;
+}
+
+.split-rows li {
   display: flex;
   align-items: center;
-  gap: 12px;
-  box-sizing: border-box;
-  min-width: 0;
-  min-height: 88px;
-  padding: 16px 24px;
-  border-right: 1px solid var(--s-line);
-  border-bottom: 1px solid var(--s-line);
+  gap: 14px;
+  min-height: 56px;
+  border-top: 1px solid var(--s-line);
   color: var(--s-ink);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
 }
 
-.roster-grid > li > span:last-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
+.split-rows li:first-child {
+  border-top: 0;
 }
 
-.roster-grid .g-agent-mark {
+.row-glyph {
   flex: none;
+  color: var(--s-ink);
 }
 
-.roster-more {
-  color: var(--s-soft);
-  font-weight: 400;
+.split-panel {
+  min-height: 560px;
 }
 
-.roster-plus {
+/* New chat's agent menu, standing in the middle of its panel, running through the agents. */
+.pick-panel {
   display: grid;
-  flex: none;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  box-shadow: inset 0 0 0 1px var(--s-line-strong);
-  font-size: 16px;
-  line-height: 1;
+  padding: 48px 32px;
 }
 
-/* ------------------------------------------------------------------------------ explorer */
-
-/* The list of what the app does at the left, the chosen part on its stage at the right. */
-.explorer-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
-  gap: 48px;
-  align-items: start;
-  margin-top: 56px;
+.pick {
+  box-sizing: border-box;
+  width: min(300px, 100%);
+  padding: 6px;
+  border-radius: 16px;
+  background-color: var(--m-raised);
+  box-shadow: var(--m-pop);
+  color: var(--m-ink);
+  text-align: left;
 }
 
-.explorer-list {
+.pick-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 0 0 4px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--m-rim);
+  color: var(--m-fg-3);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.pick-list {
   display: grid;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
-  border-bottom: 1px solid var(--s-line);
 }
 
-/* A row: a name and two grey lines between hairlines. The chosen one takes the ink. */
-.explorer-item {
-  position: relative;
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 18px;
+  transition: background-color 320ms var(--s-swift);
+}
+
+.pick-row[data-chosen] {
+  background-color: var(--m-selected);
+}
+
+.pick-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-state {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--m-fg-3);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.pick-row[data-chosen] .pick-state {
+  color: var(--m-ink);
+}
+
+.pick-more {
+  color: var(--m-fg-3);
+}
+
+.pick-plus {
   display: grid;
-  gap: 4px;
-  width: 100%;
-  padding: 18px 0 19px;
-  border: 0;
-  border-top: 1px solid var(--s-line);
-  background: none;
-  color: var(--s-soft);
-  font-family: var(--g-sans);
-  text-align: left;
-  cursor: pointer;
-  transition: color 200ms var(--s-swift);
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--m-rim-strong);
+  font-size: 14px;
+  line-height: 1;
 }
 
-.explorer-item-title {
-  font-size: 16px;
-  line-height: 24px;
+/* --------------------------------------------------------------------------- the handoff */
+
+/*
+ * The handoff, as X Money shows its rate (Handoff.tsx): the heading in the column's right half,
+ * then one wide panel with a single figure in its middle and pieces of a chat floating around it
+ * at three depths, the far ones small and out of focus, each drifting on its own.
+ */
+.stat-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  margin-bottom: 56px;
+}
+
+.stat-head > .title {
+  grid-column: 2;
+}
+
+.stat-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: clamp(400px, 40vw, 480px);
+  padding: 32px;
+  text-align: center;
+}
+
+.stat-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.float-card {
+  --scale: 1;
+  --amp: 10px;
+  --dur: 7s;
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background-color: var(--s-card);
+  box-shadow: inset 0 0 0 1px var(--s-line);
+  text-align: left;
+  white-space: nowrap;
+  transform: translate(-50%, -50%) scale(var(--scale));
+  animation: float-drift var(--dur) ease-in-out calc(var(--n, 0) * -1.7s) infinite alternate;
+}
+
+.float-card[data-depth="0"] {
+  z-index: 2;
+}
+
+.float-card[data-depth="1"] {
+  --scale: 0.9;
+  --amp: 7px;
+  --dur: 9s;
+  z-index: 1;
+  filter: blur(1.5px);
+}
+
+.float-card[data-depth="2"] {
+  --scale: 0.78;
+  --amp: 5px;
+  --dur: 11s;
+  filter: blur(3.5px);
+}
+
+@keyframes float-drift {
+  from {
+    transform: translate(-50%, calc(-50% + var(--amp))) scale(var(--scale));
+  }
+
+  to {
+    transform: translate(-50%, calc(-50% - var(--amp))) scale(var(--scale));
+  }
+}
+
+.float-copy {
+  display: grid;
+}
+
+.float-copy strong {
+  color: var(--s-ink);
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
 }
 
-.explorer-item-text {
+.float-copy span {
+  color: var(--s-soft);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-figure {
+  position: relative;
+  z-index: 3;
+  color: var(--s-ink);
+  font-size: clamp(40px, 5.2vw, 76px);
+  line-height: 1.02;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.stat-note {
+  position: relative;
+  z-index: 3;
+  max-width: 420px;
+  margin-top: 18px;
+  color: var(--s-soft);
+  font-size: 14px;
+  line-height: 22px;
+  text-wrap: balance;
+}
+
+/* ------------------------------------------------------------------ six parts of the app */
+
+/*
+ * X Money's "One app" (Everything.tsx): six panels in staggered rows, two to a row with the third
+ * and sixth wider and set apart, each part of the app drawn small in its panel and running off its
+ * edges, its name and two grey lines beside it at the panel's foot.
+ */
+.everything-title {
+  margin-bottom: 56px;
+}
+
+.six {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 72px 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.six-item {
+  display: grid;
+  grid-column: span 6;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.six-item[data-wide] {
+  grid-column: 4 / span 9;
+  grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+}
+
+.six-item[data-part="new"] {
+  grid-column: 1 / span 9;
+}
+
+.six-panel {
+  height: 280px;
+}
+
+/* The part's own view at its own size, from 28px in, cut off at the panel's right and foot. */
+.six-view {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 560px;
+  height: 420px;
+}
+
+.six-view > * {
+  height: 100%;
+}
+
+.six-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.six-text h3 {
+  color: var(--s-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.six-text p {
+  max-width: 300px;
+  margin-top: 6px;
+  color: var(--s-soft);
+  font-size: 14px;
+  line-height: 21px;
+  text-wrap: pretty;
+}
+
+/* The rest of the workspace: plain rows between hairlines, two to a line. */
+.parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 48px;
+  margin: 88px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part {
+  display: flex;
+  gap: 14px;
+  padding: 18px 0;
+  border-top: 1px solid var(--s-line);
+  color: var(--s-soft);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.part strong {
+  color: var(--s-ink);
+  font-weight: 500;
+}
+
+.part-glyph {
+  flex: none;
+  margin-top: 1px;
+  color: var(--s-ink);
+}
+
+/* ---------------------------------------------------------------------------------- away */
+
+/* The three statements at the column's foot, between hairlines. */
+.split-text > .away-list {
+  margin: auto 0 0;
+  padding: 40px 0 0;
+  list-style: none;
+}
+
+.away-list li {
+  padding: 20px 0;
+  border-top: 1px solid var(--s-line);
+}
+
+.away-list li:first-child {
+  border-top: 0;
+}
+
+.away-list h3 {
+  color: var(--s-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.away-list p {
+  max-width: 460px;
+  margin-top: 6px;
+  color: var(--s-soft);
   font-size: 14px;
   line-height: 22px;
   text-wrap: pretty;
 }
 
-.explorer-item:hover,
-.explorer-item[aria-pressed="true"] {
+/* The phone close up, standing in its panel and running off its foot, as X Money's does. */
+.away-panel {
+  display: grid;
+  place-items: end center;
+  padding: 64px 24px 0;
+}
+
+/* A phone drawn in CSS. */
+.phone {
+  box-sizing: border-box;
+  width: 300px;
+  height: 470px;
+  margin-bottom: -40px;
+  padding: 9px 9px 0;
+  border-radius: 40px 40px 0 0;
+  background-color: var(--m-raised);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  color: var(--m-ink);
+  font-family: var(--g-sans);
+  text-align: left;
+}
+
+.phone-screen {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 18px 12px 0;
+  overflow: hidden;
+  border-radius: 31px 31px 0 0;
+  background-color: var(--m-surface);
+}
+
+.phone-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 6px 14px;
+}
+
+.phone-title {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.phone-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--m-fg-3);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.phone-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--m-green);
+}
+
+.phone-chats {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.phone-chats li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  border-radius: 12px;
+}
+
+.phone-chats li[data-state="needs"] {
+  background-color: var(--m-fill);
+}
+
+.phone-chat {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.phone-chat strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-chat span {
+  color: var(--m-fg-3);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.phone-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.phone-chats li[data-state="needs"] .phone-dot {
+  background-color: var(--m-ink);
+}
+
+.phone-chats li[data-state="working"] .phone-dot {
+  box-shadow: inset 0 0 0 1px var(--m-fg-3);
+}
+
+.phone-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  margin-top: 14px;
+  padding: 0 8px 0 14px;
+  border-radius: 20px;
+  background-color: var(--m-raised);
+  box-shadow: inset 0 0 0 1px var(--m-rim);
+  color: var(--m-fg-3);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.phone-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: rgb(var(--m-k) / 0.13);
+}
+
+/* ----------------------------------------------------------------------- two halves */
+
+/* A heading in the left half and its rows in the right half (downloads, questions). */
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px 48px;
+  align-items: start;
+}
+
+.two-col-head {
+  display: grid;
+  gap: 20px;
+  justify-items: start;
+}
+
+@media (min-width: 1024px) {
+  .faq .two-col-head {
+    position: sticky;
+    top: 40px;
+  }
+}
+
+/* ------------------------------------------------------------------------------ download */
+
+.getit-rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row: a thin glyph, the system in ink over what it needs in grey, an arrow at the end; under
+   the hand it stands on a panel, as X Money's open question does. */
+.getit-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 14px 18px;
+  border-radius: var(--s-radius);
+  color: var(--s-ink);
+  text-decoration: none;
+  transition: background-color 200ms var(--s-swift);
+}
+
+.getit-row:hover {
+  background-color: var(--s-panel);
+}
+
+.getit-glyph {
+  flex: none;
+  width: 28px;
+  color: var(--s-soft);
+  transition: color 200ms var(--s-swift);
+}
+
+.getit-row:hover .getit-glyph {
   color: var(--s-ink);
 }
 
-.explorer-item .explorer-item-text {
+.getit-name {
+  display: grid;
+  min-width: 0;
+}
+
+.getit-name strong {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.getit-name span {
   color: var(--s-soft);
+  font-size: 13px;
+  line-height: 20px;
 }
 
-/* The chosen row's top hairline is drawn in ink; while the list moves on by itself it fills. */
-.explorer-item-bar {
-  position: absolute;
-  top: -1px;
-  left: 0;
-  width: 100%;
-  height: 1px;
-  background-color: var(--s-ink);
-  transform: scaleX(0);
-  transform-origin: 0 50%;
+.getit-arrow {
+  flex: none;
+  margin-left: auto;
+  color: var(--s-soft);
+  transition:
+    color 200ms var(--s-swift),
+    transform 400ms var(--s-glide);
 }
 
-.explorer-item[aria-pressed="true"] .explorer-item-bar {
-  transform: none;
+.getit-row:hover .getit-arrow {
+  color: var(--s-ink);
+  transform: translateY(2px);
 }
 
-.explorer-grid[data-auto] .explorer-item[aria-pressed="true"] .explorer-item-bar {
-  animation: bar-run 7000ms linear both;
+/* ----------------------------------------------------------------------------------- faq */
+
+/* X Money's questions: plain rows, the open one standing on a panel, its plus turned to a minus. */
+.faq-list {
+  display: grid;
+  gap: 4px;
 }
 
-@keyframes bar-run {
-  from {
-    transform: scaleX(0);
-  }
+.faq-item {
+  border-radius: var(--s-radius);
+  transition: background-color 300ms var(--s-swift);
 }
 
-/* The stage keeps the chosen picture in view beside the list as the list scrolls. */
-.explorer-stage {
-  position: sticky;
-  top: calc(var(--s-nav-h) + 24px);
-  height: 440px;
+.faq-item:is([data-state="open"], [open]:not([data-state])) {
+  background-color: var(--s-panel);
 }
 
-.explorer-view {
-  position: absolute;
-  inset: 56px 56px 0;
+.faq-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  color: var(--s-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+
+.faq-item > summary::-webkit-details-marker {
   display: none;
 }
 
-.explorer-view[data-active] {
-  display: block;
-  animation: view-in 520ms var(--s-expo) both;
+.faq-icon {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--s-ink);
 }
 
-/* The pane runs past the stage's foot, so only its top corners show. */
-.explorer-view > * {
-  height: calc(100% + 24px);
+.faq-icon > span {
+  position: absolute;
+  top: 6.5px;
+  left: 0;
+  width: 14px;
+  height: 1px;
+  background-color: currentColor;
+  transition: rotate 420ms var(--s-glide);
 }
 
-@keyframes view-in {
-  from {
-    transform: translateY(18px) scale(0.985);
-  }
+.faq-icon > span + span {
+  rotate: 90deg;
 }
 
+.faq-item:is([data-state="open"], [open]:not([data-state])) .faq-icon > span + span {
+  rotate: 0deg;
+}
+
+.faq-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 420ms var(--s-expo);
+}
+
+.faq-item:is([data-state="open"], [open]:not([data-state])) .faq-body {
+  grid-template-rows: 1fr;
+}
+
+.faq-answer {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.faq-answer > p {
+  max-width: 520px;
+  padding: 0 18px 18px;
+  color: var(--s-soft);
+  font-size: 14px;
+  line-height: 22px;
+  text-wrap: pretty;
+}
+
+.faq-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 18px 18px;
+}
+
+/* --------------------------------------------------------------------- the terminal view */
 /* The terminal: a chat in its agent's own interface. */
 .tm {
   box-sizing: border-box;
@@ -544,647 +1075,26 @@
 
 /* --------------------------------------------------------------------------------- tiles */
 
-/*
- * The rest of the workspace: tiles between hairlines, four to a row, with a tick where the lines
- * meet, as a drawing marks its sheet.
- */
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 56px 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--s-line);
-  border-left: 1px solid var(--s-line);
-}
-
-.tile {
-  position: relative;
-  box-sizing: border-box;
-  min-width: 0;
-  padding: 28px 24px 32px;
-  border-right: 1px solid var(--s-line);
-  border-bottom: 1px solid var(--s-line);
-}
-
-.tile::before,
-.tile::after {
-  content: "";
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  background:
-    linear-gradient(var(--s-tick, #4d4d4d), var(--s-tick, #4d4d4d)) center / 100% 1px no-repeat,
-    linear-gradient(var(--s-tick, #4d4d4d), var(--s-tick, #4d4d4d)) center / 1px 100% no-repeat;
-  pointer-events: none;
-}
-
-.tile::before {
-  top: -5px;
-  left: -5px;
-}
-
-.tile::after {
-  right: -5px;
-  bottom: -5px;
-}
-
-.tile-glyph {
-  display: block;
-  margin-bottom: 20px;
-  color: var(--s-ink);
-}
-
-.tile h3 {
-  color: var(--s-ink);
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 500;
-}
-
-.tile p {
-  margin-top: 6px;
-  color: var(--s-soft);
-  font-size: 14px;
-  line-height: 22px;
-  text-wrap: pretty;
-}
-
-/* ---------------------------------------------------------------------------------- away */
-
-.away-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 48px;
-  align-items: stretch;
-  margin-top: 56px;
-}
-
-.away-list {
-  display: grid;
-  align-content: start;
-  align-self: start;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-bottom: 1px solid var(--s-line);
-}
-
-.away-list li {
-  padding: 24px 0 25px;
-  border-top: 1px solid var(--s-line);
-}
-
-.away-list h3 {
-  color: var(--s-ink);
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-}
-
-.away-list p {
-  max-width: 480px;
-  margin-top: 6px;
-  color: var(--s-soft);
-  font-size: 15px;
-  line-height: 24px;
-  text-wrap: pretty;
-}
-
-.away-stage {
-  display: grid;
-  place-items: end center;
-  min-height: 460px;
-  padding: 48px 24px 0;
-}
-
-/* A phone drawn in CSS, standing on the stage and running off its foot. */
-.phone {
-  box-sizing: border-box;
-  width: 288px;
-  height: 440px;
-  margin-bottom: -32px;
-  padding: 9px 9px 0;
-  border-radius: 38px 38px 0 0;
-  background-color: var(--m-raised);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
-  color: var(--m-ink);
-  font-family: var(--g-sans);
-  text-align: left;
-}
-
-.phone-screen {
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  height: 100%;
-  padding: 18px 12px 0;
-  overflow: hidden;
-  border-radius: 29px 29px 0 0;
-  background-color: var(--m-surface);
-}
-
-.phone-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 6px 14px;
-}
-
-.phone-title {
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 500;
-}
-
-.phone-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--m-fg-3);
-  font-size: 11.5px;
-  line-height: 16px;
-}
-
-.phone-live i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--m-green);
-}
-
-.phone-chats {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.phone-chats li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 8px;
-  border-radius: 12px;
-}
-
-.phone-chats li[data-state="needs"] {
-  background-color: var(--m-fill);
-}
-
-.phone-chat {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-
-.phone-chat strong {
-  overflow: hidden;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.phone-chat span {
-  color: var(--m-fg-3);
-  font-size: 11.5px;
-  line-height: 16px;
-}
-
-.phone-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.phone-chats li[data-state="needs"] .phone-dot {
-  background-color: var(--m-ink);
-}
-
-.phone-chats li[data-state="working"] .phone-dot {
-  box-shadow: inset 0 0 0 1px var(--m-fg-3);
-}
-
-.phone-box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  margin-top: 14px;
-  padding: 0 8px 0 14px;
-  border-radius: 20px;
-  background-color: var(--m-raised);
-  box-shadow: inset 0 0 0 1px var(--m-rim);
-  color: var(--m-fg-3);
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.phone-send {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background-color: rgb(var(--m-k) / 0.13);
-}
-
-/* --------------------------------------------------------------------------------- facts */
-
-/* Four figures in a row between hairlines, each a number in ink over one grey line. */
-.facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 56px 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--s-line);
-  border-bottom: 1px solid var(--s-line);
-}
-
-.facts li {
-  display: grid;
-  gap: 14px;
-  align-content: start;
-  padding: 32px 24px 36px 0;
-}
-
-.facts li + li {
-  padding-left: 24px;
-  border-left: 1px solid var(--s-line);
-}
-
-.fact-figure {
-  color: var(--s-ink);
-  font-size: 56px;
-  line-height: 56px;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.fact-text {
-  max-width: 240px;
-  color: var(--s-soft);
-  font-size: 15px;
-  line-height: 24px;
-  text-wrap: pretty;
-}
-
-/* ------------------------------------------------------------------------------ timeline */
-
-/* What shipped: a rail with a dot for each of the three newest days, the newest lit. */
-.timeline {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 32px;
-  margin: 72px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.timeline::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background-color: var(--s-line-strong);
-}
-
-.timeline-day {
-  position: relative;
-  display: grid;
-  gap: 4px;
-  padding-top: 32px;
-  color: var(--s-ink);
-  text-decoration: none;
-}
-
-.timeline-dot {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background-color: var(--s-bg);
-  box-shadow: inset 0 0 0 1px var(--s-soft);
-  transition: background-color 200ms var(--s-swift);
-}
-
-.timeline li[data-latest] .timeline-dot,
-.timeline-day:hover .timeline-dot {
-  background-color: var(--s-ink);
-  box-shadow: none;
-}
-
-.timeline-day time {
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 500;
-}
-
-.timeline-count {
-  color: var(--s-soft);
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.timeline-text {
-  display: -webkit-box;
-  max-width: 340px;
-  margin-top: 8px;
-  overflow: hidden;
-  color: var(--s-soft);
-  font-size: 15px;
-  line-height: 24px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  transition: color 200ms var(--s-swift);
-}
-
-.timeline-text code {
-  font-family: var(--g-mono);
-  font-size: 13px;
-}
-
-.timeline-day:hover .timeline-text {
-  color: var(--s-ink);
-}
-
-/* ------------------------------------------------------------------------------ two columns */
-
-/* A heading at the left and its rows at the right, under one hairline (downloads, questions). */
-.two-col {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 32px 48px;
-  align-items: start;
-  padding-top: 40px;
-  border-top: 1px solid var(--s-line);
-}
-
-.two-col-head {
-  display: grid;
-  gap: 16px;
-  justify-items: start;
-}
-
-/* ------------------------------------------------------------------------------ download */
-
-.getit-rows {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-bottom: 1px solid var(--s-line);
-}
-
-.getit-rows li + li {
-  border-top: 1px solid var(--s-line);
-}
-
-/* A row: a thin glyph, the system in ink over what it needs in grey, an arrow at the end. */
-.getit-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-sizing: border-box;
-  min-height: 80px;
-  padding: 16px 4px;
-  color: var(--s-ink);
-  text-decoration: none;
-}
-
-.getit-rows li:first-child .getit-row {
-  padding-top: 6px;
-}
-
-.getit-glyph {
-  flex: none;
-  width: 32px;
-  color: var(--s-soft);
-  transition: color 200ms var(--s-swift);
-}
-
-.getit-row:hover .getit-glyph {
-  color: var(--s-ink);
-}
-
-.getit-name {
-  display: grid;
-  min-width: 0;
-}
-
-.getit-name strong {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-}
-
-.getit-name span {
-  color: var(--s-soft);
-  font-size: 14px;
-  line-height: 22px;
-}
-
-.getit-arrow {
-  flex: none;
-  margin-left: auto;
-  color: var(--s-soft);
-  transition:
-    color 200ms var(--s-swift),
-    transform 400ms var(--s-glide);
-}
-
-.getit-row:hover .getit-arrow {
-  color: var(--s-ink);
-  transform: translateY(2px);
-}
-
-/* ----------------------------------------------------------------------------------- faq */
-
-/* The questions are rows between hairlines, closed at the foot; nothing boxes them. */
-.faq-list {
-  display: grid;
-  border-bottom: 1px solid var(--s-line);
-}
-
-.faq-item + .faq-item {
-  border-top: 1px solid var(--s-line);
-}
-
-.faq-item > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 0 21px;
-  color: var(--s-ink);
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-  list-style: none;
-  cursor: pointer;
-}
-
-.faq-item:first-child > summary {
-  padding-top: 6px;
-}
-
-.faq-item > summary::-webkit-details-marker {
-  display: none;
-}
-
-/* A plus that turns into a cross as its answer opens. */
-.faq-icon {
-  position: relative;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: var(--s-soft);
-  transition: rotate 500ms var(--s-glide);
-}
-
-.faq-icon > span {
-  position: absolute;
-  top: 6.5px;
-  left: 0;
-  width: 14px;
-  height: 1px;
-  background-color: currentColor;
-}
-
-.faq-icon > span + span {
-  rotate: 90deg;
-}
-
-.faq-item:is([data-state="open"], [open]:not([data-state])) .faq-icon {
-  rotate: 45deg;
-}
-
-.faq-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 420ms var(--s-expo);
-}
-
-.faq-item:is([data-state="open"], [open]:not([data-state])) .faq-body {
-  grid-template-rows: 1fr;
-}
-
-.faq-answer {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.faq-answer > p {
-  max-width: 480px;
-  padding: 0 0 24px;
-  color: var(--s-soft);
-  font-size: 16px;
-  line-height: 28px;
-  text-wrap: pretty;
-}
-
-.faq-agents {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 0 24px;
-}
-
-.faq-link {
-  font-size: 14px;
-  line-height: 20px;
-}
-
-/* -------------------------------------------------------------------------------- finale */
-
-.finale {
-  overflow: hidden;
-}
-
-.finale-head {
-  display: grid;
-  gap: 32px;
-  justify-items: start;
-  padding-top: 56px;
-  border-top: 1px solid var(--s-line);
-}
-
-.finale-title {
-  color: var(--s-ink);
-  font-size: clamp(40px, 6.4vw, 84px);
-  line-height: 1;
-  font-weight: 400;
-  letter-spacing: -0.045em;
-}
-
-.finale-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-/*
- * The wing drawn very large in one hairline across the column, fading into the footer. When the
- * section arrives the line draws itself; without scripts it is simply there.
- */
-.finale-art {
-  margin-top: 72px;
-  padding: 0 1px 8px;
-  overflow: hidden;
-  color: var(--s-art);
-  -webkit-mask-image: linear-gradient(#000 55%, transparent);
-  mask-image: linear-gradient(#000 55%, transparent);
-}
-
-/* A dash longer than the whole outline, whether the browser measures it on the page or in the art. */
-.finale-wing :is(.wing-body, .wing-eye) {
-  stroke-dasharray: 3200;
-  stroke-dashoffset: 0;
-}
-
-html.js .finale-art[data-reveal] :is(.wing-body, .wing-eye) {
-  transition: stroke-dashoffset 2600ms var(--s-glide);
-}
-
-html.js .finale-art[data-reveal] .wing-eye {
-  transition-delay: 1500ms;
-}
-
-html.js .finale-art[data-reveal]:not([data-revealed]) :is(.wing-body, .wing-eye) {
-  stroke-dashoffset: 3200;
-}
-
 /* ---------------------------------------------------------------------- scroll motion */
 
 /*
- * Rows, tiles and stages rise into place as they scroll in, and settle before they reach the
- * middle of the window. Tied to the scroll itself (a view timeline), so it needs no script, runs
- * both ways, and cannot leave anything hidden: only position moves, never opacity, so the text
- * stays readable throughout. Browsers without view timelines, and visitors who ask for less
- * motion, get the page at rest.
+ * Panels and rows rise into place as they scroll in, and settle before they reach the middle of
+ * the window. Tied to the scroll itself (a view timeline), so it needs no script, runs both ways,
+ * and cannot leave anything hidden: only position moves, never opacity, so the text stays readable
+ * throughout. Browsers without view timelines, and visitors who ask for less motion, get the page
+ * at rest.
  */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
     :is(
-        .roster-grid > li,
-        .tile,
-        .facts li,
-        .timeline li,
+        .split-panel,
+        .stat-panel,
+        .six-item,
+        .part,
+        .split-rows li,
         .away-list li,
         .getit-row,
-        .faq-item,
-        .explorer-stage,
-        .away-stage
+        .faq-item
       ) {
       animation: rise-in linear both;
       animation-timeline: view();
@@ -1200,231 +1110,127 @@ html.js .finale-art[data-reveal]:not([data-revealed]) :is(.wing-body, .wing-eye)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-line,
-  .hero-lead,
-  .hero-actions,
-  .hero-facts,
-  .hero-detail,
-  .hero-wing-float,
-  .wing-eye,
-  .tm-cursor,
-  .explorer-view[data-active],
-  .explorer-grid[data-auto] .explorer-item[aria-pressed="true"] .explorer-item-bar {
+  .word-in,
+  .hw3-air,
+  .hw3-idle,
+  .hw3-eye,
+  .showcase-window,
+  .float-card,
+  .tm-cursor {
     animation: none;
   }
 
-  .wing-look {
+  .hw3-tilt {
     transform: none;
   }
 
   .faq-body,
-  .faq-icon,
-  .explorer-item,
-  .getit-arrow,
-  .timeline-dot,
-  .timeline-text {
+  .faq-icon > span,
+  .pick-row,
+  .getit-row,
+  .getit-arrow {
     transition: none;
   }
 }
 
 /* ------------------------------------------------------------------------------- sizes */
 
-@media (min-width: 1024px) {
-  /* The questions' heading stays in view beside them. */
-  .faq-head {
-    position: sticky;
-    top: calc(var(--s-nav-h) + 32px);
+@media (max-width: 1279px) {
+  .six-item,
+  .six-item[data-wide],
+  .six-item[data-part="new"] {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+
+  .six {
+    row-gap: 56px;
   }
 }
 
 @media (max-width: 1023px) {
-  .hero {
-    padding-top: 64px;
+  .hero > .wrap {
+    padding: 64px 0 56px;
   }
 
-  .hero-stage {
-    margin-top: 56px;
-  }
-
-  .hero-field {
-    padding: 88px 32px 0;
-  }
-
-  .hero-wing {
-    top: 26px;
-    right: 48px;
-    width: 64px;
-  }
-
-  .roster-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .explorer-grid,
-  .away-grid,
-  .two-col {
+  .split-grid,
+  .two-col,
+  .stat-head {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .explorer-grid {
-    gap: 32px;
+  .stat-head > .title {
+    grid-column: 1;
   }
 
-  /* In one column the picture stands over the list that chooses it. */
-  .explorer-stage {
-    position: relative;
-    top: auto;
-    order: -1;
-    height: 420px;
+  .split-panel {
+    min-height: 480px;
   }
 
-  .explorer-view {
-    inset: 32px 32px 0;
+  .showcase-panel {
+    padding: 40px 24px 0;
   }
 
-  .tiles,
-  .facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .facts li:nth-child(odd) {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .facts li:nth-child(n + 3) {
-    border-top: 1px solid var(--s-line);
-  }
-
-  .timeline {
+  .parts {
     grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
-    margin-top: 56px;
   }
 
-  .timeline::before {
-    top: 0;
-    right: auto;
-    bottom: 0;
-    left: 4px;
-    width: 1px;
-    height: auto;
-  }
-
-  .timeline-day {
-    padding: 0 0 0 32px;
-  }
-
-  .timeline-dot {
-    top: 6px;
+  /* The far pieces of the chat step out of the way of the figure on a narrower panel. */
+  .float-card[data-depth="2"] {
+    display: none;
   }
 }
 
 @media (max-width: 639px) {
-  .hero {
-    padding-top: 48px;
+  .hero > .wrap {
+    padding: 48px 0 48px;
   }
 
-  .hero-lead {
-    margin-top: 20px;
-    font-size: 16px;
-    line-height: 26px;
+  .hw3 {
+    margin: 40px auto 40px;
   }
 
-  .hero-actions {
-    gap: 8px;
-    margin-top: 24px;
+  .showcase-panel {
+    height: 420px;
+    padding: 28px 16px 0;
   }
 
-  .hero-stage {
-    margin-top: 40px;
+  .six-item,
+  .six-item[data-wide],
+  .six-item[data-part="new"] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
 
-  /* The systems take a line of their own, so no line starts on a dot. */
-  .hero-facts li:last-child {
-    flex-basis: 100%;
-    padding-left: 0;
+  .six-panel {
+    height: 240px;
   }
 
-  .hero-facts li:last-child::before {
+  .six-text p {
+    max-width: none;
+  }
+
+  .stat-panel {
+    height: 420px;
+    padding: 24px;
+  }
+
+  /* On a phone two pieces float, one above the figure and one under it. */
+  .float-card[data-depth="1"] {
     display: none;
   }
 
-  .stage {
-    border-radius: 18px;
+  .float-card[data-depth="0"]:first-child {
+    top: 14%;
+    left: 42%;
   }
 
-  .hero-field {
-    padding: 56px 12px 0;
+  .float-card[data-depth="0"]:last-child {
+    top: 86%;
+    left: 58%;
   }
 
-  .hero-wing {
-    top: 16px;
-    right: 24px;
-    width: 44px;
-  }
-
-  .roster-grid,
-  .tiles,
-  .explorer-grid,
-  .away-grid,
-  .facts {
-    margin-top: 40px;
-  }
-
-  .roster-grid > li {
-    gap: 10px;
-    min-height: 68px;
-    padding: 12px;
-    font-size: 14px;
-    line-height: 20px;
-  }
-
-  .explorer-stage {
-    height: 380px;
-  }
-
-  .explorer-view {
-    inset: 16px 12px 0;
-  }
-
-  .tiles {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tile {
-    padding: 24px 20px 28px;
-  }
-
-  .away-stage {
-    min-height: 400px;
-    padding: 32px 12px 0;
-  }
-
-  .phone {
-    width: min(100%, 272px);
-    height: 400px;
-  }
-
-  .facts li {
-    padding: 24px 12px 28px 0;
-  }
-
-  .facts li + li {
-    padding-left: 12px;
-  }
-
-  .fact-figure {
-    font-size: 44px;
-    line-height: 44px;
-  }
-
-  .finale-head {
-    padding-top: 40px;
-  }
-
-  .finale-art {
-    height: clamp(180px, 56vw, 495px);
-    margin-top: 56px;
+  .split-panel {
+    min-height: 440px;
   }
 }

@@ -67,8 +67,8 @@
 .page-lead {
   max-width: 560px;
   color: var(--s-soft);
-  font-size: 18px;
-  line-height: 29.25px;
+  font-size: 16px;
+  line-height: 26px;
   text-wrap: pretty;
 }
 
@@ -80,7 +80,8 @@
 .page-column > .prose {
   box-sizing: border-box;
   border-radius: var(--s-radius);
-  background-color: var(--s-card);
+  /* X Money's panel, the one step off the black page. */
+  background-color: var(--s-panel);
 }
 
 /* -------------------------------------------------------------------------------- prose */

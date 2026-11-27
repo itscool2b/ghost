@@ -96,20 +96,30 @@ test("public pages are prerendered dark, whole without JavaScript", async () => 
     assert.doesNotMatch(downloads, /Ghost updates itself/);
   }
   const home = await readFile(new URL("index.html", root), "utf8");
-  // The app on the page is drawn in HTML, so the page ships no screenshot of it, and its one
-  // picture, the hero's field, is whole without scripts: an SVG drawn when the page was built.
-  assert.doesNotMatch(home, /<picture|<img\b/);
-  assert.match(home, /<svg class="stage-field"[^>]*aria-hidden="true"/);
-  assert.equal((home.match(/<canvas class="stage-canvas" aria-hidden="true">/g) ?? []).length, 3);
-  // Every part of the page is in the markup: the six parts of the app with their words, the
-  // nine agents and the eight tiles, none of them waiting on a script.
-  assert.equal((home.match(/class="explorer-item"/g) ?? []).length, 6);
-  assert.equal((home.match(/class="roster-agent"/g) ?? []).length, 9);
-  assert.equal((home.match(/class="tile"/g) ?? []).length, 8);
-  // No label stands over a heading (no eyebrows): each chapter's head is its heading and one
-  // paragraph, nothing else.
-  for (const [, head] of home.matchAll(/<div class="chapter-head">([\s\S]*?)<\/div>/g))
-    assert.match(head, /^<h2 [^>]*class="title">[\s\S]*<\/h2><p class="lead">[\s\S]*<\/p>$/);
+  // The app on the page is drawn in HTML, so the page ships no screenshot of it. The opening's
+  // object, the wing as a slab, is CSS and inline SVG built with the page: twelve layers, all
+  // hidden from assistive technology, no canvas and nothing waiting on a script.
+  assert.doesNotMatch(home, /<picture|<img\b|<canvas/);
+  assert.match(home, /<div class="hw3"[^>]*aria-hidden="true"/);
+  assert.equal((home.match(/<svg class="hw3-layer"/g) ?? []).length, 12);
+  // The opening is one statement whose words flip in, each in the markup.
+  assert.match(home, /<h1 id="hero-title" class="hero-title">/);
+  assert.equal(
+    (home.match(/<span class="word-in"[^>]*>([^<]+)<\/span>/g) ?? []).length,
+    "Every coding agent, in one window.".split(" ").length,
+  );
+  // Every part of the page is in the markup: the nine agents in New chat's menu, the six parts
+  // of the app with their words and the eight rows of the rest, none of them waiting on a script.
+  assert.equal((home.match(/class="pick-row"/g) ?? []).length, 9);
+  assert.equal((home.match(/class="six-item"/g) ?? []).length, 6);
+  assert.equal((home.match(/class="part"/g) ?? []).length, 8);
+  // No label stands over a heading (no eyebrows): every part's heading is the first thing in
+  // its column.
+  const heads = home.match(/<div class="(?:split-text|stat-head|two-col-head[^"]*)"><h2 /g) ?? [];
+  assert.equal(heads.length, 5, "agents, the handoff, from anywhere, download and questions");
+  assert.match(home, /<div class="wrap"><h2 id="features-title" class="title everything-title">/);
+  for (const [, head] of home.matchAll(/<h2 [^>]*class="title[^"]*">([\s\S]*?)<\/h2>/g))
+    assert.match(head, /<span class="tone">/, "every heading is two tones");
 });
 test("the changelog page lists every pull request in CHANGELOG.md, newest first", async () => {
   const source = await readFile(new URL("../../../CHANGELOG.md", import.meta.url), "utf8");
@@ -127,15 +137,6 @@ test("the changelog page lists every pull request in CHANGELOG.md, newest first"
   assert.deepEqual(
     [...html.matchAll(/<time dateTime="(\d{4}-\d{2}-\d{2})"/gi)].map((match) => match[1]),
     days,
-  );
-  // The home page shows the three newest days on a timeline, each leading to its day on this
-  // page.
-  const home = await readFile(new URL("index.html", root), "utf8");
-  assert.deepEqual(
-    [...home.matchAll(/class="timeline-day" href="\/changelog#day-(\d{4}-\d{2}-\d{2})"/g)].map(
-      (match) => match[1],
-    ),
-    days.slice(0, 3),
   );
 });
 test("every page links the public repository from its header, menu and footer", async () => {
@@ -186,12 +187,8 @@ test("the site is for a local app: no account pages, and no page offers one", as
     const html = await readFile(new URL(`${path}index.html`, root), "utf8");
     assert.doesNotMatch(html, /href="\/(?:signin|signup|account|verify-device)\b/, path);
     assert.doesNotMatch(html, /href="auracode:/, path);
-    // The changelog is the project's history, so only its own chrome is held to the wording; the
-    // home page's three latest days quote it too.
-    const text =
-      path === "changelog/"
-        ? html.replace(/<main[\s\S]*<\/main>/, "")
-        : html.replace(/<ol class="timeline">[\s\S]*?<\/ol>/, "");
+    // The changelog is the project's history, so only its own chrome is held to the wording.
+    const text = path === "changelog/" ? html.replace(/<main[\s\S]*<\/main>/, "") : html;
     assert.doesNotMatch(text, /Sign in|Sign up|Create (?:your |an )?account|[Ii]nvit/, path);
     assert.doesNotMatch(text, /open.source|Choose a plan|Subscribe now/i, path);
   }

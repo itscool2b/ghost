@@ -2,7 +2,33 @@
 
 Status: the current references are those of Main, the styling pass of 25 November 2026, in the first section. Everything after it supported earlier passes (Halo on 1 November, the website rebuilds of 10 and 17 November) and is kept as the record of where today's details came from. The observations do not establish visual approval or complete product parity.
 
-## Main, 25 November 2026 (current)
+## X Money, 26 November 2026 (current for the website)
+
+The owner, of the website: "X money has their website right in light mode, essentially copy MANY MANY ASPECTS OF IT ... copy X money, copy dot.com and add our own unique animations". Asked whether that meant a light site, they chose light and minutes later said "actually make it dark mode my bad", so the site copies X Money's dark version. The page is https://money.x.com/en ("X Money — Every dollar works harder on X"; x.money is a domain on sale and xmoney.com another company). It follows the system's appearance and has a System, Light and Dark switch in its footer. It was walked from top to bottom in Ghost's own browser beside the chat, in light and in dark (its `data-theme` attribute removed or set for the look, nothing stored), with computed styles read from the page at 1132px.
+
+Measured:
+
+- **Palette.** Dark: page `#000`, ink white, grey white at 60%, hairlines white at 10%, panels `#141414`. Light: page white, ink black, grey black at 60%, hairlines black at 10%, panels `#f2f2f2`.
+- **Frame.** A fixed sidebar 220px wide at the page's left (`fixed top-0 h-svh p-6`): the X mark and "Money" with a product switcher, then Overview, Features, Updates, Help and Legal (13px medium, the current one in ink, the rest grey), and a quiet "Sign In" pill at its foot (32px, a hairline of the ink at 10%). The article stands right of it in a 1152px column.
+- **Type** (its own face, xVF). Opening 48/52 at weight 500 and -0.01em, centred; headings 32/36 at 500 in two lines, ink then grey; leads 13/20 at 500 with 0.04em tracking in grey; the six parts' names 13/20 at 500 over 13/20 grey; body 16/24.
+- **Pills.** The one that acts in the ink with the page's colour for its words, 24px tall, 13px medium, 12px in; the quiet one the page inside a hairline, 32px, 16px in.
+- **Parts, in order.** The opening (a statement whose words flip in, a WebGL card in its packaging under it, one grey line with its point in ink, one pill); a split part (a small label, the heading, a grey line, three facts between hairlines at the column's foot; a tall panel with a phone on a field of short dashes at the right); the rate (the heading in the right half, then a wide panel with savings cards floating out of focus behind "Up to 6.00% APY"); "One app" (six panels in staggered rows, each a small live animation with 01 to 06, its name and two grey lines beside it); a split part with a seal and a phone close up; questions (the heading and a pill at left, rows at right, the open one on a rounded panel with a minus); footnotes; a footer of link columns ending in "X.COM" drawn very large in one hairline, cut off by the page's foot. Every part after the opening starts on a hairline across the column with 80px above and below.
+- **Motion.** The opening's words: `translateY(45%) rotateX(-40deg)` and transparent to rest, 650ms on `cubic-bezier(0.23, 1, 0.32, 1)`, the first after 100ms and each 55ms after the one before. The sidebar's items rise 4px into place. The six parts' pictures loop every four to five seconds.
+
+| X Money | Observed | Ghost's copy |
+| --- | --- | --- |
+| Sidebar | Mark, product switcher, five links, Sign In | The wordmark; Overview, Agents, Features, Download, FAQ, Changelog, the one in view on a quiet pill that slides to it; Download and GitHub's mark at its foot |
+| Opening | Statement, the card in WebGL, a line, one pill | The statement with the same word flip; the wing as a CSS 3D slab that flies in, rides the air, turns to the pointer and blinks; a line; Download and Star on GitHub |
+| "Built to earn" | Facts at left, phone panel at right | The agents: facts at left, New chat's agent menu in a panel at right, moving through the agents |
+| Rate | Floating cards behind "Up to 6.00% APY" | "One chat. Every agent." with pieces of a handed-off chat floating at three depths |
+| "One app" | Six staggered panels with 01 to 06 | Six staggered panels drawn from the app, no numbers; then the rest of the workspace as rows |
+| FDIC | Seal and phone close up | From anywhere: three statements and the phone close up |
+| Questions | Rounded open panel, minus and plus | The same |
+| Footer | Link columns, appearance switch, "X.COM" in one hairline | Ghost's footer as it was (the owner liked it), then "Ghost" in one hairline, drawing itself |
+
+Kept apart on purpose: the small labels over its headings ("▪ X Money", "▪ Automatic growth") and the 01 to 06 over its six parts are eyebrows and numbered kickers, which Ghost never has; the short dashes behind its phones, because the owner disliked the site's "background of lines" the same day; the appearance switch, because the site is always dark; the live window under the opening is dot.com's, kept from the earlier page. Nothing of X Money's ships: no code, font, mark, artwork, illustration or copy.
+
+## Main, 25 November 2026 (current for the desktop; the website's part superseded by X Money)
 
 The owner asked for "the greatest styling pass of all time": a default look for the desktop called Main, a new website, and the remote page to match. For the desktop the models are the Grok Bot desktop app, audited below on 17 November, and the Synara ADE. For the website: polar.sh ("look how clean and sleek"), linear.app, ghost.ai ("the attention to detail is awesome") and x.ai/bot. Every page was walked from top to bottom in Ghost's own browser, section by section, at the owner's word ("make sure u actually scroll through the whole landing pages"), with computed styles read from the page. Nothing of any of them ships: no code, font, icon, artwork or copy.
 
