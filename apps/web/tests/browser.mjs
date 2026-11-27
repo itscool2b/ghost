@@ -20,8 +20,8 @@ const settled = (page) =>
     document.getAnimations().every((animation) => !(animation instanceof CSSTransition)),
   );
 
-/** The page is always dark: the same near-black whatever the system asks for. */
-const PAGE = "rgb(10, 10, 10)";
+/** The page is always dark: X Money's black, whatever the system asks for. */
+const PAGE = "rgb(0, 0, 0)";
 const pageColour = (page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
 const audit = async (page, where, include) => {
@@ -36,17 +36,17 @@ const audit = async (page, where, include) => {
 };
 
 /**
- * The agents' table: every agent named once, each cell wholly inside the viewport and none
- * overlapping the next, and nothing in it moving on its own.
+ * The agents in New chat's menu (Agents.tsx): every agent named once, each row wholly inside the
+ * viewport and none overlapping the next.
  */
 const agentWall = (page) =>
   page.evaluate(() => {
-    const shown = [...document.querySelectorAll(".roster-agent")].filter(
+    const shown = [...document.querySelectorAll(".pick-list > .pick-row:not(.pick-more)")].filter(
       (item) => item.getClientRects().length > 0,
     );
     const boxes = shown.map((item) => item.getBoundingClientRect());
     return {
-      names: shown.map((item) => item.textContent),
+      names: shown.map((item) => item.querySelector(".pick-name")?.textContent),
       inView: boxes.every(
         (box) => box.left >= 0 && box.right <= document.documentElement.clientWidth,
       ),
@@ -64,10 +64,10 @@ const agentWall = (page) =>
   });
 
 const assertWall = (wall, where) => {
-  assert.equal(wall.names.length, 9, `${where}: the table names every agent`);
+  assert.equal(wall.names.length, 9, `${where}: the menu names every agent`);
   assert.equal(new Set(wall.names).size, 9, `${where}: each agent once`);
-  assert.ok(wall.inView, `${where}: the table fits the page`);
-  assert.ok(wall.apart, `${where}: no two cells overlap`);
+  assert.ok(wall.inView, `${where}: the menu fits the page`);
+  assert.ok(wall.apart, `${where}: no two rows overlap`);
 };
 
 const sideways = (page) =>
@@ -134,7 +134,7 @@ try {
       });
       await page.addInitScript(() => localStorage.setItem("auracode-appearance", "light"));
       await page.goto(base);
-      const heroStage = page.locator(".hero-detail .handoff-stage");
+      const heroStage = page.locator(".showcase-window .handoff-stage");
       assert.equal(await heroStage.locator(".handoff-prior").isVisible(), true);
       assert.equal(await heroStage.locator(".handoff-next").isVisible(), true);
       // The site is always dark: pinned on the root, with no switch and nothing read from
@@ -142,22 +142,34 @@ try {
       assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
       assert.equal(await page.getByLabel("Appearance").count(), 0);
       assert.equal(await pageColour(page), PAGE);
-      // The agents' table: every agent once, in view.
+      // The agents in New chat's menu: every agent once, in view.
       assertWall(await agentWall(page), "1440px");
       assert.equal(await page.getByRole("list", { name: "Agents Ghost runs" }).count(), 1);
+      // The sidebar: the home page's parts and the pages of their own, Overview in view.
+      const main = page.getByRole("navigation", { name: "Main" });
+      assert.equal(await main.getByRole("link").count(), 6);
       assert.equal(
-        await page.getByRole("navigation", { name: "Main" }).getByRole("link").count(),
-        5,
+        await main.getByRole("link", { name: "Overview" }).getAttribute("aria-current"),
+        "location",
       );
+      const side = await page.locator(".site-nav").evaluate((nav) => {
+        const box = nav.getBoundingClientRect();
+        return {
+          left: box.left,
+          width: box.width,
+          height: box.height,
+          position: getComputedStyle(nav).position,
+        };
+      });
+      assert.equal(side.position, "fixed", "the sidebar stays put");
+      assert.equal(side.left, 0);
+      assert.ok(side.width >= 200 && side.width <= 260, `the sidebar's width: ${side.width}`);
       await settled(page);
       await page.screenshot({ path: join(artifacts, `${name}-home-dark.png`), fullPage: true });
       await page.reload();
-      // One heading opens the page, in two tones: the name, then what it is.
+      // One statement opens the page, its words in the markup.
       await page
-        .getByRole("heading", {
-          level: 1,
-          name: "Meet Ghost ADE. One window for every coding agent.",
-        })
+        .getByRole("heading", { level: 1, name: "Every coding agent, in one window." })
         .waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
       await settled(page);
@@ -173,82 +185,48 @@ try {
       await page.keyboard.press("Enter");
       assert.equal(new URL(page.url()).hash, "#main");
       await page.evaluate(() => document.activeElement?.blur());
-      // The stages' fields are decoration: a still drawing and a canvas each, both hidden from
-      // assistive technology. Where motion is not welcome the canvas never draws, so the still
-      // drawing is what shows. Nothing plays that would need a Pause button.
-      assert.equal(await page.locator("canvas").count(), 3);
-      assert.equal(await page.locator('canvas:not([aria-hidden="true"])').count(), 0);
-      assert.equal(await page.locator(".stage[data-live]").count(), 0);
-      assert.equal(await page.locator(".hero-field .stage-field").isVisible(), true);
+      // The opening's object is decoration: the wing as a slab, hidden from assistive technology,
+      // with no canvas. Nothing plays that would need a Pause button.
+      assert.equal(await page.locator("canvas").count(), 0);
+      assert.equal(await page.locator('.hw3[aria-hidden="true"]').isVisible(), true);
       assert.equal(await page.getByRole("button", { name: /pause|play/i }).count(), 0);
       // No page shows a screenshot: the app is drawn in HTML.
       assert.equal(await page.locator("main img, main picture").count(), 0);
       // The FAQ opens on its first answer and keeps one open at a time.
       assert.equal(await page.locator("details.faq-item[open]").count(), 1);
       assert.equal(await page.locator("details.faq-item").first().getAttribute("open"), "");
-      // What the app does: six rows, the first chosen, each a toggle button whose two lines are
-      // always shown. The chosen row's picture stands on the stage; the handoff shows both its
-      // parts.
-      const rows = page.locator(".explorer-item");
-      const pressed = page.locator('.explorer-item[aria-pressed="true"]');
-      const shown = page.locator(".explorer-view:visible");
-      assert.equal(await rows.count(), 6);
-      assert.equal(await pressed.count(), 1);
-      assert.equal(await rows.first().getAttribute("aria-pressed"), "true");
-      for (const row of await rows.all()) {
-        assert.equal(await row.locator(".explorer-item-title").isVisible(), true);
-        assert.equal(await row.locator(".explorer-item-text").isVisible(), true);
+      // What the app does: six parts, each a picture in a panel with its name and two lines
+      // beside it, all shown; the pictures are decoration. The rest of the workspace: eight rows.
+      const six = page.locator(".six-item");
+      assert.equal(await six.count(), 6);
+      for (const part of await six.all()) {
+        assert.equal(await part.locator(".six-text h3").isVisible(), true);
+        assert.equal(await part.locator(".six-text p").isVisible(), true);
+        assert.equal(await part.locator(".six-panel").getAttribute("aria-hidden"), "true");
       }
-      const handoff = page.locator('.explorer-view[data-card="handoff"] .handoff-stage');
-      await handoff.scrollIntoViewIfNeeded();
-      assert.equal(await shown.count(), 1);
-      assert.equal(await handoff.locator(".handoff-prior").isVisible(), true);
-      assert.equal(await handoff.locator(".handoff-next").isVisible(), true);
-      assert.match(await handoff.locator(".handoff-prior").textContent(), /Frame pacing now waits/);
-      assert.match(
-        await handoff.locator(".handoff-next").textContent(),
-        /Next message includes a handoff to Codex/,
-      );
-      await handoff.screenshot({ path: join(artifacts, `${name}-handoff.png`) });
-      // Choosing another row shows its picture and nothing else, by pointer and by keyboard, and
-      // where motion is not welcome the list never moves on by itself.
-      for (const [title, card] of [
-        ["Queue and steer", "queue"],
-        ["Chat or terminal", "terminal"],
-        ["A dashboard for every chat", "dashboard"],
-      ]) {
-        const row = page.getByRole("button", { name: new RegExp(`^${title}`) });
-        await row.click();
-        assert.equal(await row.getAttribute("aria-pressed"), "true");
-        assert.equal(await pressed.count(), 1);
-        assert.equal(await shown.count(), 1);
-        assert.equal(await shown.getAttribute("data-card"), card);
-        await settled(page);
-        await audit(page, `the ${card} view`, ".explorer");
-      }
-      const changes = page.getByRole("button", { name: /^Every change in view/ });
-      await changes.focus();
-      await page.keyboard.press("Enter");
-      assert.equal(await changes.getAttribute("aria-pressed"), "true");
-      assert.equal(await shown.getAttribute("data-card"), "changes");
-      await page.waitForTimeout(400);
-      assert.equal(await shown.getAttribute("data-card"), "changes");
-      assert.equal(await page.locator(".explorer-grid[data-auto]").count(), 0);
-      await rows.first().click();
+      assert.equal(await page.locator(".part").count(), 8);
+      await page.locator(".stat-panel").scrollIntoViewIfNeeded();
+      await page
+        .locator(".stat-panel")
+        .screenshot({ path: join(artifacts, `${name}-handoff.png`) });
       await page.evaluate(() => document.activeElement?.blur());
       await page.setViewportSize({ width: 390, height: 844 });
-      await handoff.screenshot({ path: join(artifacts, `${name}-handoff-mobile.png`) });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .locator(".stat-panel")
+        .screenshot({ path: join(artifacts, `${name}-handoff-mobile.png`) });
       await page.screenshot({ path: join(artifacts, `${name}-mobile.png`), fullPage: true });
       assert.ok(await sideways(page));
       await settled(page);
       assertWall(await agentWall(page), "390px");
-      // In one column the picture stands over the list that chooses it.
+      // In one column a part's panel stands under its words.
       const stacked = await page.evaluate(() => {
-        const stage = document.querySelector(".explorer-stage").getBoundingClientRect();
-        const list = document.querySelector(".explorer-list").getBoundingClientRect();
-        return stage.bottom <= list.top + 0.5;
+        const text = document.querySelector(".agents .split-text").getBoundingClientRect();
+        const panel = document.querySelector(".agents .split-panel").getBoundingClientRect();
+        return text.bottom <= panel.top + 0.5;
       });
-      assert.ok(stacked, "the explorer's picture stands over its list on a phone");
+      assert.ok(stacked, "the agents' panel stands under their words on a phone");
       // Below 1024px the bar's Download waits while the hero's own is in view, and comes back
       // once that has scrolled away.
       const barAction = () =>
@@ -269,11 +247,11 @@ try {
       });
       await page.locator(".nav-menu-button").click();
       await page.getByRole("navigation", { name: "Menu" }).waitFor();
-      // The menu holds the page's five sections, the public repository and nothing else: there
+      // The menu holds the sidebar's six links, the public repository and nothing else: there
       // is no account to sign in to.
       assert.equal(
         await page.getByRole("navigation", { name: "Menu" }).getByRole("link").count(),
-        6,
+        7,
       );
       await page.waitForFunction(() =>
         document
@@ -358,9 +336,9 @@ try {
       // The stored value is left as it was: the site keeps no appearance of its own.
       assert.equal(await page.evaluate(() => localStorage.getItem("auracode-appearance")), "light");
       assert.deepEqual(failures, []);
-      // Full motion, under a system that asks for light: the page is dark all the same, the
-      // hero's field and its handoff loop run, the list of what the app does moves on by itself,
-      // and nothing errors or scrolls sideways.
+      // Full motion, under a system that asks for light: the page is dark all the same, the wing
+      // flies in and rides the air, the handoff loop runs, New chat's menu moves through the
+      // agents by itself, and nothing errors or scrolls sideways.
       const moving = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         reducedMotion: "no-preference",
@@ -383,10 +361,11 @@ try {
           timeout: 10000,
         },
       );
-      // The field's canvas has drawn and taken over from the still drawing.
-      await motion.locator(".hero-field[data-live]").waitFor();
-      assert.equal(await motion.locator(".hero-field .stage-field").isVisible(), false);
-      assert.equal(await motion.locator(".hero-field .stage-canvas").isVisible(), true);
+      // The wing rides the air.
+      assert.ok(
+        await motion.evaluate(() => document.querySelector(".hw3-idle").getAnimations().length > 0),
+        "the wing moves",
+      );
       await motion.waitForTimeout(1200);
       await motion.screenshot({ path: join(artifacts, `${name}-motion-hero.png`) });
       assert.equal(await pageColour(motion), PAGE);
@@ -398,19 +377,12 @@ try {
         assert.ok(await sideways(motion), `the moving home page scrolls sideways at ${width}px`);
       }
       await motion.setViewportSize({ width: 1440, height: 900 });
-      // In view and left alone, the list moves on to its second row by itself.
-      await motion.locator(".explorer-grid").scrollIntoViewIfNeeded();
-      await motion.mouse.move(2, 2);
-      await motion.locator(".explorer-grid[data-auto]").waitFor();
+      // In view, New chat's menu moves on to its second agent by itself.
+      await motion.locator(".pick-panel").scrollIntoViewIfNeeded();
       await motion.waitForFunction(
-        () =>
-          document.querySelectorAll(".explorer-item")[1]?.getAttribute("aria-pressed") === "true",
+        () => document.querySelectorAll(".pick-row")[1]?.hasAttribute("data-chosen"),
         null,
         { timeout: 15000 },
-      );
-      assert.equal(
-        await motion.locator(".explorer-view:visible").getAttribute("data-card"),
-        "queue",
       );
       const pageHeight = await motion.evaluate(() => document.documentElement.scrollHeight);
       for (let top = 900; top < pageHeight; top += 900) {
@@ -435,21 +407,17 @@ try {
       await moving.close();
       const nojs = await browser.newContext({ javaScriptEnabled: false, colorScheme: "light" });
       const staticPage = await nojs.newPage();
-      // Without scripts the page is whole: the agents' table, the six parts of the app with
-      // their words and the first one's picture, and the field as a still drawing.
+      // Without scripts the page is whole: the agents in their menu, the six parts of the app
+      // with their words and pictures, the eight rows, and the wing.
       await staticPage.goto(base);
       for (const width of [1440, 390]) {
         await staticPage.setViewportSize({ width, height: 900 });
         assertWall(await agentWall(staticPage), `${width}px without scripts`);
       }
-      assert.equal(await staticPage.locator(".explorer-item-text:visible").count(), 6);
-      assert.equal(
-        await staticPage.locator(".explorer-view:visible").getAttribute("data-card"),
-        "handoff",
-      );
-      assert.equal(await staticPage.locator(".hero-field .stage-field").isVisible(), true);
-      assert.equal(await staticPage.locator(".tile").count(), 8);
-      assert.equal(await staticPage.locator(".timeline-day").count(), 3);
+      assert.equal(await staticPage.locator(".six-text:visible").count(), 6);
+      assert.equal(await staticPage.locator(".part:visible").count(), 8);
+      assert.equal(await staticPage.locator(".hw3").isVisible(), true);
+      assert.equal(await staticPage.locator("details.faq-item[open]").count(), 1);
       await staticPage.goto(`${base}/download`);
       // Without scripts the page names every system, and every installer once one is published.
       for (const name of release

@@ -706,24 +706,18 @@ async function createChat(): Promise<string> {
 }
 
 /**
- * The start screen's picture is a file the build must carry and the WebView must decode (#143): a
- * build without it would show only the aircraft's name.
+ * The start screen is the Ghost wing (LaunchArt.tsx), drawn in the page: the solid wing has its
+ * outline and stands at a size on screen in the real WebView.
  */
-async function startScreenPicture(figure: HTMLElement): Promise<void> {
-  await waitFor("the start screen's picture to load", () =>
-    figure.hasAttribute("data-loaded") ? figure : null,
-  );
-  const address = figure.querySelector("image")?.getAttribute("href");
-  if (!address) throw new StepError("the start screen has no picture");
-  const picture = new Image();
-  picture.src = address;
-  try {
-    await picture.decode();
-  } catch {
-    throw new StepError(`the start screen's picture did not load: ${address}`);
-  }
-  if (picture.naturalWidth === 0 || picture.naturalHeight === 0)
-    throw new StepError(`the start screen's picture is empty: ${address}`);
+async function startScreenWing(figure: HTMLElement): Promise<void> {
+  await waitFor("the start screen's wing to be drawn", () => {
+    const solid = figure.querySelector<SVGSVGElement>(".launch-art-solid");
+    const outline = solid?.querySelector(".wing-body")?.getAttribute("d") ?? "";
+    const box = solid?.getBoundingClientRect();
+    return outline.length > 0 && box !== undefined && box.width > 40 && box.height > 10
+      ? solid
+      : null;
+  });
 }
 
 /**
@@ -731,13 +725,13 @@ async function startScreenPicture(figure: HTMLElement): Promise<void> {
  * for an agent that cannot run here, its row under Other agents with the reason.
  */
 async function agentOption(agentId: string): Promise<{ disabled: boolean; text: string }> {
-  // Launch shows the start screen's aircraft (#114), and the sidebar's New chat opens the form.
+  // Launch shows the start screen's wing, and the sidebar's New chat opens the form.
   const opening = await waitFor(
     "the start screen or New chat",
     () => one("new-chat") ?? one("launch-art"),
   );
   if (opening.dataset.testid === "launch-art") {
-    await startScreenPicture(opening);
+    await startScreenWing(opening);
     await clickWhenEnabled("the sidebar's New chat", () => one("new-chat-button"));
   }
   const form = await waitFor("the New chat screen", () => one("new-chat"));

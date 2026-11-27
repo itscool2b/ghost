@@ -165,6 +165,7 @@ export function WorktreeChip({
       <Popover
         label="Where this chat works"
         triggerLabel={text.name}
+        tip={text.name.replace(/\. Where this chat works$/, "")}
         className="new-chat-worktree-popover"
         onOpenChange={(open) => {
           if (open) setSide(placement(row.current?.querySelector("details") ?? null));
@@ -189,11 +190,13 @@ export function WorktreeChip({
               </>
             ) : null}
             {text.branch ? (
-              <>
+              // The new branch's name: in the chip's name and its tooltip, and drawn where the
+              // line under the card has room for it (new-chat.css).
+              <span className="new-chat-worktree-new">
                 {" "}
                 <span className="new-chat-worktree-word">on</span>{" "}
                 <code className="new-chat-branch">{text.branch}</code>
-              </>
+              </span>
             ) : null}
             {view.error ? <span className="new-chat-worktree-flag" aria-hidden="true" /> : null}
             <ChevronDown size={12} aria-hidden="true" />

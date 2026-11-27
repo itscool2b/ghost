@@ -31,19 +31,20 @@ shared Geist font package and semantic tokens from `@ghost/ui`.
 
 ## Reference evidence
 
-The website was rebuilt for Main on 26 November 2026, as [visual-language.md](../../docs/design/visual-language.md) describes under "Website composition": always dark, one ink and one grey, two-tone headings at the left edge, chapters on hairlines and the product on monochrome stages. [reference-audit.md](../../docs/design/reference-audit.md) records the pages it was measured against (polar.sh, linear.app, ghost.ai and x.ai/bot) and their limits. No third-party reference artwork or brand assets are shipped.
+The website was rebuilt on X Money's frame on 26 November 2026, in X Money's dark version, as [visual-language.md](../../docs/design/visual-language.md) describes under "Website composition": a fixed sidebar, a centred opening whose words flip in over the wing as a CSS 3D slab, and flat panels holding the app drawn in HTML.
 
-The page shows no screenshot of the app. The hero window and the views of what the app does are
-drawn in HTML from tokens, after the app's own Main look and preview modes (a pending handoff, the
-queue, the Changes panel, a terminal chat, the browser in Annotate and the Dashboard); update them
-with the app. The stages' field is drawn by one function in `app/home/Stage.tsx`, as an SVG when
-the page is built and on a canvas once the page can move. The favicons and social card are
-generated at build time by `scripts/site-images.ts` from the logo's own paths. Without JavaScript
-the page is whole: every row's words are in the markup, the first view stands, the field is its
-still drawing and the FAQ opens natively. The site is always dark, with no appearance control and
-no persisted theme; the standalone notices page is script-free and dark too. The changelog page is
-built from the repository's `CHANGELOG.md` by `scripts/changelog.ts`. Reduced motion holds the
-live window, the field and the list of views still.
+The page shows no screenshot of the app. The live window, New chat's agent menu, the pieces of a
+handed-off chat and the six parts of what the app does are drawn in HTML from tokens, after the
+app's own Main look and preview modes (a handoff, the queue, the Changes panel, a terminal chat,
+the browser in Annotate, the Dashboard and New chat); update them with the app. The opening's wing
+is a CSS 3D slab of twelve inline SVG layers (`app/home/HeroWing.tsx`), whole without scripts. The
+favicons and social card are generated at build time by `scripts/site-images.ts` from the logo's
+own paths. Without JavaScript the page is whole: every part's words are in the markup, the window
+is its printed frame, the first agent stands chosen and the FAQ opens natively. The site is always
+dark, with no appearance control and no persisted theme; the standalone notices page is
+script-free and dark too. The changelog page is built from the repository's `CHANGELOG.md` by
+`scripts/changelog.ts`. Reduced motion holds the wing, the window, the menu and the floating pieces
+still.
 
 ## Deployment prerequisites
 

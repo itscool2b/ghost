@@ -1,10 +1,11 @@
 /*
- * onghost.dev in Main (owner, 25 November 2026; docs/design/visual-language.md, "Main" and "Website
- * composition"): one dark page, one ink and one grey, hairlines, and no colour except what means
- * something inside the product. Type is Geist at regular and medium weight, set at the left edge,
- * and every heading is two tones: its first clause in ink, the rest in grey. The page is always
- * dark: there is no light variant, no appearance switch and nothing stored. Nothing glows; the
- * stages' grain is texture.
+ * onghost.dev on X Money's frame, in X Money's dark version (owner, 26 November 2026: "X money has
+ * their website right ... essentially copy MANY MANY ASPECTS OF IT ... copy X money, copy dot.com
+ * and add our own unique animations", then "actually make it dark mode"; docs/design/
+ * visual-language.md, "Website composition"). A black page with a fixed sidebar at its left; one
+ * ink and one grey at 60%; hairlines of the ink at 10%; flat square-cornered panels a step off the
+ * page that hold the product; small type, medium for what names, regular for what explains. The
+ * page is always dark: no light variant, no appearance switch, nothing stored. Nothing glows.
  *
  * Shared Graphite tokens (--g-*) carry the faces. The site's own palette and layout are here
  * (--s-*), with the illustrated app's (--m-*), which wears the desktop's Main palette so the page
@@ -12,31 +13,34 @@
  */
 
 :root {
-  --s-bg: #0a0a0a;
-  --s-ink: #f2f2f2;
-  /* Secondary text: holds 4.5:1 on the page, on a card and on a stage. */
-  --s-soft: #8f8f8f;
-  /* A step off the page: cards, the stages' floor, a quiet pill. */
-  --s-card: #111111;
-  --s-stage: #0f0f0f;
-  --s-quiet: #191919;
-  --s-quiet-hover: #212121;
-  --s-quiet-strong: #1e1e1e;
-  --s-quiet-strong-hover: #272727;
-  --s-quiet-ink: #f2f2f2;
-  /* Hairlines, and the firmer one under the hand. */
-  --s-line: #1c1c1c;
-  --s-line-strong: #2e2e2e;
-  /* The logo drawn in one line at the page's foot, a corner tick, a timeline's rail. */
-  --s-art: #2e2e2e;
-  /* The primary pill is the page's ink. */
-  --s-primary: #f2f2f2;
-  --s-primary-hover: #ffffff;
-  --s-on-primary: #0a0a0a;
-  --s-nav: rgb(10 10 10 / 0.82);
-  --s-chip: rgb(242 242 242 / 0.7);
+  --s-bg: #000000;
+  --s-ink: #ffffff;
+  /* Secondary text, X Money's grey: 7.4:1 on the page and 7.2:1 on a panel. */
+  --s-soft: rgb(255 255 255 / 0.6);
+  /* A panel: X Money's step off the black page, square, with no edge. */
+  --s-panel: #141414;
+  /* What stands on a panel: a card, a raised row. */
+  --s-card: #1c1c1c;
+  --s-stage: #141414;
+  /* The quiet pill: the page with a hairline, a fill under the hand. */
+  --s-quiet: transparent;
+  --s-quiet-hover: rgb(255 255 255 / 0.08);
+  --s-quiet-strong: rgb(255 255 255 / 0.06);
+  --s-quiet-strong-hover: rgb(255 255 255 / 0.1);
+  --s-quiet-ink: #ffffff;
+  /* Hairlines, X Money's ink at 10%, and a firmer one. */
+  --s-line: rgb(255 255 255 / 0.1);
+  --s-line-strong: rgb(255 255 255 / 0.18);
+  /* The name drawn in one line at the page's foot. */
+  --s-art: rgb(255 255 255 / 0.22);
+  /* The primary pill is the ink. */
+  --s-primary: #ffffff;
+  --s-primary-hover: #e3e3e3;
+  --s-on-primary: #000000;
+  --s-nav: rgb(0 0 0 / 0.82);
+  --s-chip: rgb(255 255 255 / 0.7);
   /* Ink as channels, for rings and fills at an alpha. */
-  --s-k: 242 242 242;
+  --s-k: 255 255 255;
   /* The terminal's own surface. */
   --s-night: #0e0e0e;
   --s-night-fg-1: #f5f5f5;
@@ -58,7 +62,7 @@
   --m-rim-strong: rgb(245 245 245 / 0.14);
   --m-ring: rgb(255 255 255 / 0.07);
   --m-fg-3: #a0a0a0;
-  /* One hairline around the window, so it reads on the page's own near-black. */
+  /* One hairline around the window, so it reads on the panel it stands on. */
   --m-frame: rgb(255 255 255 / 0.09);
   --m-fill: rgb(245 245 245 / 0.06);
   --m-fill-hover: rgb(245 245 245 / 0.1);
@@ -75,15 +79,21 @@
   --m-del-bg: rgb(255 92 92 / 0.1);
   --m-amber: #e6cc6e;
   --m-amber-bg: #2a2517;
-  /* Layout: one column of 1200 between 24px gutters, and a document column inside it. */
-  --s-max: 1200px;
+  /*
+   * Layout: the sidebar's width from 1024px, one column of 1120 between 24px gutters right of it
+   * (16 on phones), and a document column inside it.
+   */
+  --s-side: 0px;
+  --s-max: 1120px;
   --s-inner: 976px;
   --s-gutter: 24px;
-  --s-section: 128px;
+  --s-section: 80px;
   --s-nav-h: 60px;
-  --s-radius: 16px;
+  --s-radius: 14px;
   /* Arrive fast, land softly. */
   --s-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  /* X Money's opening: the words flip up and settle. */
+  --s-flip: cubic-bezier(0.23, 1, 0.32, 1);
   /* Travel and settle without a bounce. */
   --s-glide: cubic-bezier(0.32, 0.72, 0, 1);
   /* A colour change under the hand. */
@@ -91,20 +101,26 @@
   color-scheme: dark;
 }
 
-@media (max-width: 1023px) {
+@media (min-width: 1024px) {
   :root {
-    --s-section: 104px;
+    --s-side: 220px;
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --s-side: 248px;
   }
 }
 
 @media (max-width: 639px) {
   :root {
     --s-gutter: 16px;
-    --s-section: 80px;
+    --s-section: 64px;
   }
 }
 
-/* Cross-document view transitions: pages cross-fade and the header stays in place. */
+/* Cross-document view transitions: pages cross-fade and the sidebar stays in place. */
 @view-transition {
   navigation: auto;
 }
@@ -127,8 +143,14 @@
 html {
   background-color: var(--s-bg);
   scroll-behavior: smooth;
-  scroll-padding-top: calc(var(--s-nav-h) + 24px);
+  scroll-padding-top: 24px;
   -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 1023px) {
+  html {
+    scroll-padding-top: calc(var(--s-nav-h) + 16px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -144,11 +166,17 @@ body {
   background-color: var(--s-bg);
   color: var(--s-ink);
   font-family: var(--g-sans);
-  font-size: 16px;
-  line-height: 26px;
+  font-size: 15px;
+  line-height: 24px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* The public pages stand right of the sidebar (header.tsx); the remote page has no sidebar. */
+body.site {
+  box-sizing: border-box;
+  padding-left: var(--s-side);
 }
 
 :where(h1, h2, h3, p, ul, ol, figure, dl, dd) {
@@ -234,89 +262,68 @@ svg {
 /* --------------------------------------------------------------------------- typography */
 
 /*
- * A heading is two tones at one size and weight: what it names in ink, what it says about it in
- * grey (.tone). Regular weight, tight tracking, at the left edge.
+ * A heading is two lines in one size and weight, as X Money sets them: what it names in ink, and
+ * under it what it says in grey (.tone). Medium, tight, at the left edge.
  */
 .title {
   color: var(--s-ink);
-  font-size: 40px;
-  line-height: 46px;
-  font-weight: 400;
-  letter-spacing: -0.028em;
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
   text-wrap: balance;
+}
+
+.title .tone {
+  display: block;
 }
 
 .tone {
   color: var(--s-soft);
 }
 
-/* A grey paragraph beside or under a heading. */
+/* A grey paragraph under a heading. */
 .lead {
+  max-width: 460px;
   color: var(--s-soft);
-  font-size: 18px;
-  line-height: 29px;
+  font-size: 15px;
+  line-height: 24px;
   text-wrap: pretty;
-}
-
-@media (max-width: 1023px) {
-  .title {
-    font-size: 34px;
-    line-height: 40px;
-  }
 }
 
 @media (max-width: 639px) {
   .title {
     font-size: 28px;
-    line-height: 34px;
+    line-height: 32px;
   }
-
-  .lead {
-    font-size: 16px;
-    line-height: 26px;
-  }
-}
-
-/* A section: one hairline across the column, then room. */
-.section {
-  position: relative;
-  padding: 0 0 var(--s-section);
 }
 
 /*
- * A chapter's head: the hairline, then its heading at the left and one grey paragraph at the
- * right, starting at half the column. No label stands over either.
+ * A section, as X Money's: one hairline across the column, then 80px of room above and below. No
+ * label stands over a heading.
  */
-.chapter-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px 48px;
-  align-items: start;
-  padding-top: 40px;
+.section {
+  position: relative;
+}
+
+.section > .wrap {
+  padding: var(--s-section) 0;
   border-top: 1px solid var(--s-line);
 }
 
-.chapter-head > .lead {
-  max-width: 520px;
-  padding-top: 6px;
-}
-
-@media (max-width: 1023px) {
-  .chapter-head {
-    grid-template-columns: minmax(0, 1fr);
-    padding-top: 32px;
-  }
-
-  .chapter-head > .lead {
-    padding-top: 0;
-  }
+/* A panel: flat, square, a step off the black page, with no edge. */
+.panel {
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: var(--s-panel);
 }
 
 /* A card: flat, a step off the page, one hairline. */
 .card {
   box-sizing: border-box;
   border-radius: var(--s-radius);
-  background-color: var(--s-card);
+  background-color: var(--s-panel);
   box-shadow: inset 0 0 0 1px var(--s-line);
 }
 
@@ -325,8 +332,8 @@ svg {
   align-items: center;
   gap: 6px;
   color: var(--s-ink);
-  font-size: 15px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 22px;
   font-weight: 500;
   text-decoration: none;
   background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
@@ -348,16 +355,16 @@ svg {
 
 .note {
   color: var(--s-soft);
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 /* -------------------------------------------------------------------------- calls to act */
 
 /*
- * Pills. One filled in the page's ink says what to do next; the quiet one beside it is a step off
- * the page with a hairline. 40px with 14px medium words; 36 in the header; 44 where a statement
- * ends.
+ * X Money's pills, 13px medium words: the one that acts in the ink with black words, the quiet one
+ * the page itself inside a hairline that takes a fill under the hand. 32px; 28 small; 40 where a
+ * statement ends.
  */
 .btn {
   display: inline-flex;
@@ -365,14 +372,15 @@ svg {
   justify-content: center;
   gap: 8px;
   box-sizing: border-box;
-  height: 40px;
-  padding: 0 18px;
+  height: 32px;
+  padding: 0 16px;
   border: 0;
   border-radius: 999px;
   font-family: var(--g-sans);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 20px;
   font-weight: 500;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
@@ -397,15 +405,14 @@ svg {
 }
 
 .btn-lg {
-  height: 44px;
-  padding: 0 22px;
-  font-size: 15px;
-  line-height: 22px;
+  height: 40px;
+  padding: 0 20px;
+  font-size: 14px;
 }
 
 .btn-sm {
-  height: 36px;
-  padding: 0 14px;
+  height: 28px;
+  padding: 0 12px;
 }
 
 .btn-primary {
@@ -451,6 +458,17 @@ svg {
 
 /* Offscreen zones, and the whole page in a hidden tab, hold their ambient loops (enhance.tsx). */
 :is([data-off], [data-hidden])
-  :is(.m-loader rect, .m-caret, .m-shimmer, .m-steer, .tm-cursor, .wing-eye, .hero-wing-float) {
+  :is(
+    .m-loader rect,
+    .m-caret,
+    .m-shimmer,
+    .m-steer,
+    .tm-cursor,
+    .wing-eye,
+    .hw3-idle,
+    .hw3-eye,
+    .float-card,
+    .pick-row
+  ) {
   animation-play-state: paused;
 }

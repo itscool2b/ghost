@@ -21,6 +21,7 @@ import type {
   WorkspaceSnapshot,
 } from "../../bindings";
 import { folderStateLabel, shortAgo, statusWord } from "../../lib/chat/present";
+import { useDashboardButton } from "../dashboard/useDashboardButton";
 import { commandKey, Keys } from "./Keys";
 
 export function projectsOf(
@@ -182,6 +183,7 @@ export function ChatList({
   onNewProject,
   onProjectNewChat,
   onCustomize,
+  dashboardOpen = false,
   onDashboard,
   onProjectSettings,
   onChatOptions,
@@ -216,6 +218,8 @@ export function ChatList({
    * one needs you.
    */
   readonly onDashboard?: () => void;
+  /** The Dashboard is open over the window (its button says so to assistive technology). */
+  readonly dashboardOpen?: boolean;
   readonly onProjectSettings?: (project: ProjectSummary) => void;
   readonly onChatOptions?: (chat: ChatSummary) => void;
   readonly archived?: boolean;
@@ -236,6 +240,7 @@ export function ChatList({
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const [sectionFolded, setSectionFolded] = useState(false);
   const search = useRef<HTMLInputElement>(null);
+  const dashboardButton = useDashboardButton(dashboardOpen);
   const now = useMinute();
   const all = chats ?? [];
   const arrived = useArrivals(chats === null ? null : chats.map((chat) => chat.id));
@@ -284,10 +289,11 @@ export function ChatList({
     if (!active) return;
     const keys = (event: KeyboardEvent) => {
       if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      // Like Ctrl+J, none of these acts behind an open dialog (the Dashboard, the palette, a
+      // sheet): what they open would land unseen under it.
+      if (document.querySelector("dialog[open]")) return;
       const index = chatShortcutIndex(event);
       if (index !== null) {
-        // Like Ctrl+J, a chat never opens behind an open dialog.
-        if (document.querySelector("dialog[open]")) return;
         const chatId = shortcuts.current[index];
         if (chatId === undefined) return;
         event.preventDefault();
@@ -355,11 +361,14 @@ export function ChatList({
         ) : null}
         {onDashboard ? (
           <button
+            ref={dashboardButton}
             type="button"
             className="chat-nav-action"
             onClick={onDashboard}
             data-testid="dashboard-button"
             data-tour="dashboard"
+            aria-haspopup="dialog"
+            aria-expanded={dashboardOpen}
             aria-label={[
               "Dashboard",
               needing > 0 ? `${needing} ${needing === 1 ? "needs" : "need"} you` : null,

@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import catalog from "#release-catalog";
 import { GitHubMark, REPOSITORY } from "../repo";
-import { HeroWindow, useHandoffLoop } from "./HeroWindow";
-import { Stage } from "./Stage";
-import { Wing } from "./Wing";
+import { HeroWing } from "./HeroWing";
+import { Words } from "./Words";
 
 /**
  * Whether installers are published. Until they are, the action does not name the visitor's system:
@@ -24,30 +23,28 @@ function usePlatform(): string | null {
   return platform;
 }
 
-const FACTS = ["Free", "MIT licensed", "No account", "Windows, macOS and Linux"] as const;
-
 /**
- * The page's opening, at the left edge: the name in ink and what it is in grey as one heading, a
- * paragraph, the two pills and one line of facts. Under them the stage: a field of contour lines
- * with the wing flying over it and the app itself standing on it, running off the stage's foot.
- * The window is live: one session replayed, handed from agent to agent. The lines arrive one after
- * another by position alone, so the words are readable from the first frame.
+ * The page's opening, as X Money opens its own: one statement in the middle whose words flip up
+ * into place one after another, the object under it (the wing as a solid slab, HeroWing.tsx), then
+ * one grey line with its point in ink and the two pills, Download naming the visitor's system as
+ * dot.com's does.
  */
 export function Hero() {
-  const stage = useRef<HTMLDivElement>(null);
-  const state = useHandoffLoop(stage);
   const platform = usePlatform();
-
   return (
-    <section className="hero" aria-labelledby="hero-title" data-zone="">
-      <div className="wrap hero-copy">
+    <section className="hero" id="top" aria-labelledby="hero-title" data-zone="">
+      <div className="wrap hero-inner">
         <h1 id="hero-title" className="hero-title">
-          <span className="hero-line">Meet Ghost ADE.</span>{" "}
-          <span className="hero-line tone">One window for every coding agent.</span>
+          <span className="hero-line">
+            <Words text="Every coding agent," />
+          </span>{" "}
+          <span className="hero-line">
+            <Words text="in one window." from={3} />
+          </span>
         </h1>
+        <HeroWing />
         <p className="hero-lead">
-          Run Claude Code, Codex, Cursor and six more side by side on your own machine. Hand a chat
-          from one to the next, see every change they make, and steer it all from your phone.
+          Ghost ADE is free for <span>Windows, macOS and Linux</span>. No account, MIT licensed.
         </p>
         <div className="hero-actions">
           <a className="btn btn-primary btn-lg" href="/download">
@@ -58,23 +55,6 @@ export function Hero() {
             Star on GitHub
           </a>
         </div>
-        <ul className="hero-facts">
-          {FACTS.map((fact) => (
-            <li key={fact}>{fact}</li>
-          ))}
-        </ul>
-      </div>
-      <div className="wrap hero-stage" ref={stage}>
-        <Stage className="hero-field">
-          <span className="hero-wing" aria-hidden="true">
-            <span className="hero-wing-float">
-              <Wing look />
-            </span>
-          </span>
-          <div className="hero-detail" aria-hidden="true">
-            <HeroWindow state={state} />
-          </div>
-        </Stage>
       </div>
     </section>
   );

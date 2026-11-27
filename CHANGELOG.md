@@ -10,6 +10,10 @@ that changes the app adds its own line in the same pull request; see "Changelog"
 [docs/developing-in-ghost.md](docs/developing-in-ghost.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-27
+
+- Ghost opens on its wing instead of a picture of an aircraft, New chat is cleaner, and the Dashboard opens over your chats. The wing draws itself, opens its eyes and watches your pointer, then flies up into New chat, which now has one line of words over the message box and one quiet line under it for the folder, the worktree and the agent's details. The Dashboard is a panel over the window that closes with Escape, a click beside it, or when you open a chat. ([#226](https://github.com/itscool2b/ghost/pull/226))
+
 ## 2026-11-26
 
 - The Terms of Service and Privacy Policy have a new version, so Ghost shows its notice with both links once more. They now name Ghost ADE and its earlier names, cover Ghost for iPhone, and say when the new version starts to apply to you: when you press OK, or on December 26, 2026. ([#225](https://github.com/itscool2b/ghost/pull/225))

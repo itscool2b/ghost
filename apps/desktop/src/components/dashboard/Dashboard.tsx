@@ -1,8 +1,18 @@
 import { springs, usePrefersReducedMotion } from "@ghost/ui";
 import { AgentMark, PixelLoader, StatusDot } from "@ghost/ui/graphite";
-import { ArrowLeft, Check, ChevronRight, Square, X } from "lucide-react";
+import { Check, ChevronRight, Square, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import type { ChatProcesses, ChatSummary, ProcessesSnapshot } from "../../bindings";
 import type { AppStore } from "../../lib/chat/appStore";
 import {
@@ -33,6 +43,7 @@ import {
 import { EMPTY_WORKSPACE, type WorkspaceStore } from "../../lib/workspace";
 import { TaskKindIcon, TaskMark, taskFacts, useClock } from "../chat/BackgroundTasks";
 import { projectName } from "../chat/ChatList";
+import { DialogClose, showDialog } from "../chat/Modal";
 import { terminalChats } from "../chat/terminalChatRuntime";
 import { LineEditsCard } from "./LineEditsCard";
 import "./dashboard.css";
@@ -77,18 +88,24 @@ function cardMotion(reduced: boolean) {
 /**
  * The Dashboard: every chat on a board of three lanes, Needs you, Working and Finished, each a card
  * that opens its chat. A working card says what its agent and its tasks are doing, and folds the
- * programs it runs (read from the process table every two seconds while the page is open), each
- * with Stop. A lane keeps its order: a chat that changes lane arrives at the top of the new one.
- * Under the board, AI line edits shows the lines agents' edits changed over the last year.
+ * programs it runs (read from the process table every two seconds while it is open), each with
+ * Stop. A lane keeps its order: a chat that changes lane arrives at the top of the new one. Under
+ * the board, AI line edits shows the lines agents' edits changed over the last year.
+ *
+ * It opens over the window and goes again, and never takes the chats' place (owner, 26 November
+ * 2026: "the dashboard shouldnt be a whole different thing it should be something that breifly
+ * opens up without going to a whole different location"): a modal panel over the chats, which stay
+ * where they were behind it. Escape, its close button, a click beside it or opening a chat close
+ * it; the native dialog keeps focus inside and gives it back to what opened it.
  */
-export function DashboardScreen({
+export function Dashboard({
   app,
   workspace,
   api = processesApi,
   lineEdits = lineEditsApi,
   cleared = dashboardCleared,
   stopChat = chatStop,
-  onBack,
+  onClose,
   onOpenChat,
 }: {
   readonly app: AppStore;
@@ -101,9 +118,33 @@ export function DashboardScreen({
   readonly cleared?: DashboardCleared;
   /** Stops a chat's agent, as its header's Stop does. */
   readonly stopChat?: (chatId: string) => Promise<void>;
-  readonly onBack: () => void;
+  /** Called once the panel has gone; the caller then unmounts it. */
+  readonly onClose: () => void;
   readonly onOpenChat: (chatId: string) => void;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const title = useId();
+  const [closing, setClosing] = useState(false);
+  // Shown as a modal at once, and closed before it leaves the page, so the dialog itself hands
+  // focus back to the control that opened it.
+  useLayoutEffect(() => {
+    const node = dialog.current;
+    if (!node) return;
+    if (!node.open) showDialog(node);
+    return () => node.close();
+  }, []);
+  // The panel settles out before it goes; where nothing animates (reduced motion, the app's motion
+  // setting: dashboard.css) it goes at once.
+  const close = () => {
+    const panel = dialog.current?.querySelector(".dashboard-panel");
+    const moving = panel ? getComputedStyle(panel).animationName !== "none" : false;
+    if (moving) setClosing(true);
+    else onClose();
+  };
+  const openChat = (chatId: string) => {
+    onOpenChat(chatId);
+    onClose();
+  };
   const listed = useSyncExternalStore(app.subscribe, app.getSnapshot).chats ?? [];
   const organization = useSyncExternalStore(
     workspace?.subscribe ?? noSubscribe,
@@ -212,112 +253,146 @@ export function DashboardScreen({
     (reading.current?.chats ?? []).map((chat) => [chat.chat_id, chat] as const),
   );
 
-  return (
-    <main className="setup-shell g-root dashboard-screen" data-testid="dashboard-screen">
-      <div className="setup-drag" data-tauri-drag-region="" />
-      <div className="dashboard-page">
+  return createPortal(
+    // A click on the dialog itself is a click beside the panel: the dialog fills the window and
+    // the panel is the only thing drawn in it.
+    <dialog
+      ref={dialog}
+      className="g-root dashboard"
+      data-testid="dashboard"
+      data-closing={closing ? "" : undefined}
+      aria-labelledby={title}
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+      // The browser may close it itself (an Escape it will not let the page hold back): then it is
+      // simply gone. A close the panel made and undid at once (React's development remount) has
+      // left it open by the time its event arrives, and changes nothing.
+      onClose={() => {
+        if (!dialog.current?.open) onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") event.stopPropagation();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) close();
+      }}
+    >
+      <div
+        className="dashboard-panel"
+        onAnimationEnd={(event) => {
+          if (closing && event.target === event.currentTarget) onClose();
+        }}
+      >
         <header className="dashboard-bar">
-          <button type="button" className="g-button g-button-ghost g-button-28" onClick={onBack}>
-            <ArrowLeft size={14} aria-hidden="true" /> Back to chats
-          </button>
+          <div className="dashboard-head">
+            <h2 id={title}>Dashboard</h2>
+            <p data-testid="dashboard-summary">{boardSummary(board)}</p>
+          </div>
+          <DialogClose label="Close the Dashboard" onClick={close} />
         </header>
-        <div className="dashboard-head">
-          <h1>Dashboard</h1>
-          <p data-testid="dashboard-summary">{boardSummary(board)}</p>
-        </div>
-        {error !== null ? (
-          <p role="alert" className="ui-error dashboard-message">
-            {error}
+        {/*
+         * Focus starts on the board, so the arrow keys scroll it; it is a stop of its own for Tab
+         * too, so a board with nothing to press still scrolls from the keyboard.
+         */}
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must take focus. */}
+        <div className="dashboard-page" tabIndex={0} data-autofocus="">
+          {error !== null ? (
+            <p role="alert" className="ui-error dashboard-message">
+              {error}
+            </p>
+          ) : null}
+          <p role="status" className="dashboard-message">
+            {notice}
           </p>
-        ) : null}
-        <p role="status" className="dashboard-message">
-          {notice}
-        </p>
-        <div className="dashboard-board">
-          {LANES.map((lane) => {
-            const cards =
-              lane === "finished" && !allFinished
-                ? board[lane].slice(0, FINISHED_SHOWN)
-                : board[lane];
-            return (
-              <section
-                key={lane}
-                className="dashboard-lane"
-                data-lane={lane}
-                aria-labelledby={`dashboard-lane-${lane}`}
-                data-testid="dashboard-lane"
-              >
-                <div className="dashboard-lane-head">
-                  <h2 id={`dashboard-lane-${lane}`} className="dashboard-lane-title">
-                    <LaneMark lane={lane} busy={board[lane].length > 0} />
-                    {LANE_TITLES[lane]}{" "}
-                    <span className="dashboard-lane-count">{board[lane].length}</span>
-                  </h2>
-                  {lane === "finished" && board.finished.length > 0 ? (
+          <div className="dashboard-board">
+            {LANES.map((lane) => {
+              const cards =
+                lane === "finished" && !allFinished
+                  ? board[lane].slice(0, FINISHED_SHOWN)
+                  : board[lane];
+              return (
+                <section
+                  key={lane}
+                  className="dashboard-lane"
+                  data-lane={lane}
+                  aria-labelledby={`dashboard-lane-${lane}`}
+                  data-testid="dashboard-lane"
+                >
+                  <div className="dashboard-lane-head">
+                    <h3 id={`dashboard-lane-${lane}`} className="dashboard-lane-title">
+                      <LaneMark lane={lane} busy={board[lane].length > 0} />
+                      {LANE_TITLES[lane]}{" "}
+                      <span className="dashboard-lane-count">{board[lane].length}</span>
+                    </h3>
+                    {lane === "finished" && board.finished.length > 0 ? (
+                      <button
+                        type="button"
+                        className="g-button g-button-ghost g-button-28 dashboard-lane-clear"
+                        data-testid="dashboard-clear-finished"
+                        title="Take every finished chat off the Dashboard until it is used again"
+                        onClick={() => cleared.clear(board.finished, listed)}
+                      >
+                        Clear finished
+                      </button>
+                    ) : null}
+                  </div>
+                  {board[lane].length === 0 ? (
+                    <p className="dashboard-lane-empty">{EMPTY[lane]}</p>
+                  ) : null}
+                  <ul className="dashboard-cards">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {cards.map((chat) => (
+                        <motion.li
+                          key={chat.id}
+                          className="dashboard-card"
+                          data-lane={lane}
+                          data-testid="dashboard-card"
+                          data-test-chat-id={chat.id}
+                          {...cardMotion(reduced)}
+                        >
+                          <DashboardCard
+                            chat={chat}
+                            lane={lane}
+                            line={stateLine(chat, inTerminal, lane)}
+                            place={placeOf(chat)}
+                            processes={processes.get(chat.id)}
+                            reading={reading}
+                            now={now}
+                            stopping={stopping}
+                            onStop={stop}
+                            onOpenChat={openChat}
+                            holdsAgent={holdsAgent(chat, lane)}
+                            stoppingAgent={stoppingChats.has(chat.id)}
+                            onStopAgent={() => void stopAgent(chat)}
+                            onClear={() => cleared.clear([chat], listed)}
+                          />
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                  {lane === "finished" && board.finished.length > FINISHED_SHOWN ? (
                     <button
                       type="button"
-                      className="g-button g-button-ghost g-button-28 dashboard-lane-clear"
-                      data-testid="dashboard-clear-finished"
-                      title="Take every finished chat off the Dashboard until it is used again"
-                      onClick={() => cleared.clear(board.finished, listed)}
+                      className="g-button g-button-ghost g-button-28 dashboard-lane-more"
+                      aria-expanded={allFinished}
+                      onClick={() => setAllFinished((all) => !all)}
                     >
-                      Clear finished
+                      {allFinished
+                        ? "Show fewer"
+                        : `Show ${board.finished.length - FINISHED_SHOWN} more`}
                     </button>
                   ) : null}
-                </div>
-                {board[lane].length === 0 ? (
-                  <p className="dashboard-lane-empty">{EMPTY[lane]}</p>
-                ) : null}
-                <ul className="dashboard-cards">
-                  <AnimatePresence initial={false} mode="popLayout">
-                    {cards.map((chat) => (
-                      <motion.li
-                        key={chat.id}
-                        className="dashboard-card"
-                        data-lane={lane}
-                        data-testid="dashboard-card"
-                        data-test-chat-id={chat.id}
-                        {...cardMotion(reduced)}
-                      >
-                        <DashboardCard
-                          chat={chat}
-                          lane={lane}
-                          line={stateLine(chat, inTerminal, lane)}
-                          place={placeOf(chat)}
-                          processes={processes.get(chat.id)}
-                          reading={reading}
-                          now={now}
-                          stopping={stopping}
-                          onStop={stop}
-                          onOpenChat={onOpenChat}
-                          holdsAgent={holdsAgent(chat, lane)}
-                          stoppingAgent={stoppingChats.has(chat.id)}
-                          onStopAgent={() => void stopAgent(chat)}
-                          onClear={() => cleared.clear([chat], listed)}
-                        />
-                      </motion.li>
-                    ))}
-                  </AnimatePresence>
-                </ul>
-                {lane === "finished" && board.finished.length > FINISHED_SHOWN ? (
-                  <button
-                    type="button"
-                    className="g-button g-button-ghost g-button-28 dashboard-lane-more"
-                    aria-expanded={allFinished}
-                    onClick={() => setAllFinished((all) => !all)}
-                  >
-                    {allFinished
-                      ? "Show fewer"
-                      : `Show ${board.finished.length - FINISHED_SHOWN} more`}
-                  </button>
-                ) : null}
-              </section>
-            );
-          })}
+                </section>
+              );
+            })}
+          </div>
+          <LineEditsCard api={lineEdits} agentNames={agentNames} today={today} />
         </div>
-        <LineEditsCard api={lineEdits} agentNames={agentNames} today={today} />
       </div>
-    </main>
+    </dialog>,
+    document.body,
   );
 }
 
@@ -389,7 +464,7 @@ function DashboardCard({
       <div className="dashboard-card-head">
         <AgentMark agent={chat.agent_id} size={28} state={markState(chat, lane)} label={line} />
         <div className="dashboard-card-text">
-          <h3 className="dashboard-card-title">
+          <h4 className="dashboard-card-title">
             <button
               type="button"
               className="dashboard-card-open"
@@ -398,7 +473,7 @@ function DashboardCard({
             >
               {title}
             </button>
-          </h3>
+          </h4>
           <p className="dashboard-card-meta">
             {chat.agent_name} · {place}
           </p>

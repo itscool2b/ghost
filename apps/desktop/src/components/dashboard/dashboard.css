@@ -1,36 +1,112 @@
 /*
  * Dashboard (docs/design/visual-language.md, Desktop composition): a board of three lanes, Needs
- * you, Working and Finished, over the inset pane. Lanes are open columns under their headings;
- * each chat is a glass card with a hairline rim that opens its chat. A card that needs you wears a
- * volt rim, one that failed a red one; nothing glows. Below a 760px board the lanes stack.
+ * you, Working and Finished. Lanes are open columns under their headings; each chat is a card with
+ * a hairline rim that opens its chat. A card that needs you wears a volt rim, one that failed a red
+ * one; nothing glows. Below a 760px board the lanes stack.
+ *
+ * It opens over the window and goes again (Dashboard.tsx; owner, 26 November 2026: "something that
+ * breifly opens up without going to a whole different location"): a native modal dialog that fills
+ * the window and draws one panel in it, the pane's colour at 20px with a hairline and the shadow,
+ * 40px under the top and centred, over the shared scrim. The board scrolls inside the panel under a
+ * header that stays.
  */
 
-.dashboard-screen {
-  display: block;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--g-line-strong) transparent;
-}
-
-.dashboard-page {
+.dashboard {
+  position: fixed;
+  inset: 0;
   box-sizing: border-box;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: calc(var(--ui-titlebar-height) + var(--g-space-4)) var(--g-space-40) var(--g-space-64);
-  container-type: inline-size;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: var(--g-space-40) var(--g-space-24);
+  border: 0;
+  background: transparent;
+  color: var(--g-fg-1);
+  overflow: hidden;
 }
 
+/* Half the dialogs' scrim: the chats stay in view behind a panel that is only passing. */
+.dashboard::backdrop {
+  background-color: color-mix(in srgb, var(--g-scrim) 50%, transparent);
+  animation: ui-fade-in var(--g-dur-base) var(--g-ease-out) both;
+}
+
+.dashboard[data-closing]::backdrop {
+  animation: dashboard-fade-out var(--g-dur-exit) var(--g-ease-out) both;
+}
+
+.dashboard-panel {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(1180px, 100%);
+  max-height: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--g-radius-20);
+  /* The pane's own colour, which the cards' greys are set against, solid in every theme. */
+  background-color: var(--ui-pane-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  animation: dashboard-in var(--g-dur-glide) var(--g-ease-glide) both;
+}
+
+/* Going, it rolls back up as it fades, faster than it came; a click meanwhile does nothing. */
+.dashboard[data-closing] .dashboard-panel {
+  animation: dashboard-out var(--g-dur-exit) var(--g-ease-out) both;
+  pointer-events: none;
+}
+
+/*
+ * It unrolls from its header down, and rolls back up. A clip, never a transform: the cards inside
+ * animate their own moves from where they are measured, and a moving panel would throw those
+ * measures off while it opens.
+ */
+@keyframes dashboard-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 calc(100% - var(--g-space-64)) 0 round var(--g-radius-20));
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round var(--g-radius-20));
+  }
+}
+
+@keyframes dashboard-out {
+  from {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round var(--g-radius-20));
+  }
+
+  to {
+    opacity: 0;
+    clip-path: inset(0 0 calc(100% - var(--g-space-64)) 0 round var(--g-radius-20));
+  }
+}
+
+@keyframes dashboard-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The header stays while the board scrolls: the title and its summary at left, close at right. */
 .dashboard-bar {
   display: flex;
-  align-items: center;
-  margin: 0 calc(var(--g-space-12) * -1);
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--g-space-16);
+  padding: var(--g-space-20) var(--g-space-20) var(--g-space-16) var(--g-space-32);
+  border-bottom: 1px solid var(--g-line-faint);
 }
 
-.dashboard-head {
-  margin: var(--g-space-40) 0 var(--g-space-24);
-}
-
-.dashboard-head h1 {
+.dashboard-head h2 {
   margin: 0;
   color: var(--g-fg-1);
   font-size: var(--g-text-title);
@@ -40,11 +116,50 @@
 }
 
 .dashboard-head p {
-  margin: var(--g-space-4) 0 0;
+  margin: var(--g-space-2) 0 0;
   color: var(--g-fg-3);
   font-size: var(--g-text-ui);
   line-height: var(--g-leading-ui);
   font-variant-numeric: tabular-nums;
+}
+
+.dashboard-page {
+  position: relative;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: var(--g-space-24) var(--g-space-32) var(--g-space-32);
+  overflow-y: auto;
+  container-type: inline-size;
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-line-strong) transparent;
+}
+
+/*
+ * The board holds focus to scroll by keys. Opened by a click it shows no ring; reached by the
+ * keyboard it shows the focus line inside its edge.
+ */
+.dashboard-page:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.dashboard-page:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: -2px;
+}
+
+/* Where motion is not welcome it is simply there, and simply gone. */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-panel,
+  .dashboard[data-closing] .dashboard-panel,
+  .dashboard::backdrop,
+  .dashboard[data-closing]::backdrop {
+    animation: none;
+  }
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"]) :is(.dashboard-panel, .dashboard::backdrop) {
+  animation: none;
 }
 
 .dashboard-message {
