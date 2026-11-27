@@ -133,6 +133,8 @@ export function App({
   useEffect(
     () =>
       subscribeNativeNavigation((id) => {
+        // A notification's chat is the one to see: the Dashboard would stand over it.
+        setDashboardOpen(false);
         setView("chats");
         setOpenChatRequest({ id });
       }),

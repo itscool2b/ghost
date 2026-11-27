@@ -2108,9 +2108,19 @@ async function inspect(engine, launcher) {
       .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
       .analyze();
     assert.deepEqual(paletteScan.violations, [], "Command palette accessibility");
+    // Behind an open dialog (the palette here, the Dashboard alike) Ctrl+N and Ctrl+\ wait:
+    // nothing opens or folds unseen under it.
+    const current = page.locator('[data-testid="chat-row"][aria-current="true"]');
+    const folded = () => page.locator(".chat-app").getAttribute("data-sidebar-collapsed");
+    const foldedBefore = await folded();
+    await page.keyboard.press("Control+n");
+    await page.keyboard.press("Control+Backslash");
+    await page.waitForTimeout(200);
+    assert.equal(await current.count(), 1, "Ctrl+N opened New chat behind the palette");
+    assert.equal(await folded(), foldedBefore, "Ctrl+\\ folded the sidebar behind the palette");
+    await page.getByRole("combobox", { name: "Search and commands" }).waitFor();
     await page.keyboard.press("Escape");
     // Ctrl+N opens New chat and Ctrl+1 to Ctrl+9 open the sidebar's chats in their order.
-    const current = page.locator('[data-testid="chat-row"][aria-current="true"]');
     await page.keyboard.press("Control+n");
     await current.waitFor({ state: "detached" });
     await page.keyboard.press("Control+9");

@@ -287,10 +287,11 @@ export function ChatList({
     if (!active) return;
     const keys = (event: KeyboardEvent) => {
       if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      // Like Ctrl+J, none of these acts behind an open dialog (the Dashboard, the palette, a
+      // sheet): what they open would land unseen under it.
+      if (document.querySelector("dialog[open]")) return;
       const index = chatShortcutIndex(event);
       if (index !== null) {
-        // Like Ctrl+J, a chat never opens behind an open dialog.
-        if (document.querySelector("dialog[open]")) return;
         const chatId = shortcuts.current[index];
         if (chatId === undefined) return;
         event.preventDefault();

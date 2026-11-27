@@ -491,7 +491,8 @@ export function ChatsScreen({
         event.defaultPrevented ||
         !(event.metaKey || event.ctrlKey) ||
         event.altKey ||
-        event.key !== "\\"
+        event.key !== "\\" ||
+        document.querySelector("dialog[open]")
       )
         return;
       event.preventDefault();
