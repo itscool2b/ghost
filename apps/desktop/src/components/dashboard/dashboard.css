@@ -6,7 +6,7 @@
  *
  * It opens over the window and goes again (Dashboard.tsx; owner, 26 November 2026: "something that
  * breifly opens up without going to a whole different location"): a native modal dialog that fills
- * the window and draws one panel in it, the raised layer at 20px with its hairline and shadow,
+ * the window and draws one panel in it, the pane's colour at 20px with a hairline and the shadow,
  * 40px under the top and centred, over the shared scrim. The board scrolls inside the panel under a
  * header that stays.
  */
@@ -46,7 +46,8 @@
   margin: 0 auto;
   overflow: hidden;
   border-radius: var(--g-radius-20);
-  background-color: var(--g-glass-pop);
+  /* The pane's own colour, which the cards' greys are set against, solid in every theme. */
+  background-color: var(--ui-pane-fill);
   box-shadow:
     var(--g-shadow-pop),
     inset 0 0 0 1px var(--g-glass-rim);
