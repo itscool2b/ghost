@@ -51,27 +51,41 @@
   box-shadow:
     var(--g-shadow-pop),
     inset 0 0 0 1px var(--g-glass-rim);
-  transform-origin: 50% 0;
-  animation: dashboard-in var(--g-dur-panel) var(--g-ease-quint) both;
+  animation: dashboard-in var(--g-dur-glide) var(--g-ease-glide) both;
 }
 
-/* Going, it settles back as it fades, faster than it came; a click meanwhile does nothing. */
+/* Going, it rolls back up as it fades, faster than it came; a click meanwhile does nothing. */
 .dashboard[data-closing] .dashboard-panel {
   animation: dashboard-out var(--g-dur-exit) var(--g-ease-out) both;
   pointer-events: none;
 }
 
+/*
+ * It unrolls from its header down, and rolls back up. A clip, never a transform: the cards inside
+ * animate their own moves from where they are measured, and a moving panel would throw those
+ * measures off while it opens.
+ */
 @keyframes dashboard-in {
   from {
     opacity: 0;
-    transform: translateY(calc(var(--g-space-8) * -1)) scale(0.96);
+    clip-path: inset(0 0 calc(100% - var(--g-space-64)) 0 round var(--g-radius-20));
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round var(--g-radius-20));
   }
 }
 
 @keyframes dashboard-out {
+  from {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round var(--g-radius-20));
+  }
+
   to {
     opacity: 0;
-    transform: translateY(calc(var(--g-space-4) * -1)) scale(0.98);
+    clip-path: inset(0 0 calc(100% - var(--g-space-64)) 0 round var(--g-radius-20));
   }
 }
 
@@ -110,6 +124,7 @@
 }
 
 .dashboard-page {
+  position: relative;
   flex: 1 1 auto;
   box-sizing: border-box;
   min-height: 0;
