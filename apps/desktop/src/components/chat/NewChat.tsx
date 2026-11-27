@@ -964,11 +964,11 @@ export function NewChat({
             {unavailable.length > 0 ? (
               <Popover
                 label="Other agents"
-                triggerLabel={`Other agents, ${unavailable.length}`}
+                triggerLabel={`Other agents ${unavailable.length}`}
                 className="new-chat-more"
                 trigger={
                   <>
-                    <span className="new-chat-more-label">Other agents</span>
+                    <span className="new-chat-more-label">Other agents</span>{" "}
                     <span className="new-chat-more-count">{unavailable.length}</span>
                     <ChevronDown size={12} aria-hidden="true" />
                   </>

@@ -192,13 +192,16 @@ export async function checkDashboard(browser, url, out, engine) {
         );
         assert.equal(await page.getByText("cargo.exe").count(), 0, "what it started stopped too");
 
-        // Escape closes it and hands focus back to its button, which opens it again.
+        // Escape closes it; opened from its button, it hands focus back to that button.
         const opener = page.getByTestId("dashboard-button");
         const reopen = async () => {
           await dashboard.waitFor({ state: "detached" });
           await opener.click();
           await dashboard.waitFor();
         };
+        await page.keyboard.press("Escape");
+        await reopen();
+        assert.equal(await opener.getAttribute("aria-expanded"), "true");
         await page.keyboard.press("Escape");
         await dashboard.waitFor({ state: "detached" });
         assert.equal(await opener.getAttribute("aria-expanded"), "false");
