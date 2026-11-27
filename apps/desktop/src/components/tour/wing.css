@@ -1,26 +1,27 @@
 /*
- * The shared wing (`Wing` in @ghost/ui) as the desktop draws it. It flies in two places only, setup
- * and the tour (docs/design/visual-language.md), so its rules reach no further than those.
+ * The shared wing (`Wing` in @ghost/ui) as the desktop draws it. It is alive in four places only:
+ * setup, the tour, the start screen and New chat (docs/design/visual-language.md), so its rules reach
+ * no further than those.
  */
 
 /* The logo, alive (the shared Wing): one shape in the current colour whose eyes look and blink. */
-:is(.tour, .setup-shell) .wing {
+:is(.tour, .setup-shell, .launch-art, .new-chat-hero) .wing {
   display: block;
   width: 100%;
   height: auto;
   overflow: visible;
 }
 
-:is(.tour, .setup-shell) .wing-body {
+:is(.tour, .setup-shell, .launch-art, .new-chat-hero) .wing-body {
   fill: currentColor;
 }
 
-:is(.tour, .setup-shell) .wing-look {
+:is(.tour, .setup-shell, .launch-art, .new-chat-hero) .wing-look {
   transform: translate(calc(var(--look-x, 0) * 22px), calc(var(--look-y, 0) * 14px));
   transition: transform var(--g-dur-row) var(--g-ease-out);
 }
 
-:is(.tour, .setup-shell) .wing-eye {
+:is(.tour, .setup-shell, .launch-art, .new-chat-hero) .wing-eye {
   transform-box: fill-box;
   transform-origin: 50% 70%;
   animation: wing-blink var(--g-dur-blink) ease-in-out var(--g-dur-tick) infinite;
@@ -43,15 +44,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :is(.tour, .setup-shell) .wing-eye {
+  :is(.tour, .setup-shell, .launch-art, .new-chat-hero) .wing-eye {
     animation: none;
   }
 
-  :is(.tour, .setup-shell) .wing-look {
+  :is(.tour, .setup-shell, .launch-art, .new-chat-hero) .wing-look {
     transition: none;
   }
 }
 
-:root:is([data-motion="reduced"], [data-motion="off"]) :is(.tour, .setup-shell) .wing-eye {
+:root:is([data-motion="reduced"], [data-motion="off"])
+  :is(.tour, .setup-shell, .launch-art, .new-chat-hero)
+  .wing-eye {
   animation: none;
 }

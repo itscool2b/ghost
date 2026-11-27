@@ -292,7 +292,7 @@
   background-color: transparent;
 }
 
-.pane-shell > :is(.agents-screen, .plugins-screen, .dashboard-screen) {
+.pane-shell > :is(.agents-screen, .plugins-screen) {
   position: relative;
   isolation: isolate;
   flex: 1;
@@ -305,11 +305,11 @@
 }
 
 /* The pane's light, as the chat's: under the content, never over a word. */
-.pane-shell > :is(.agents-screen, .plugins-screen, .dashboard-screen)::before {
+.pane-shell > :is(.agents-screen, .plugins-screen)::before {
   content: none;
 }
 
-.pane-shell :is(.agents-page, .dashboard-page) {
+.pane-shell .agents-page {
   padding-top: calc(var(--ui-titlebar-height) + var(--g-space-4) - var(--ui-pane-inset));
 }
 

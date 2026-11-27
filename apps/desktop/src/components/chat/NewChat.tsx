@@ -1,6 +1,8 @@
-import { AgentMark, Logo, PixelLoader } from "@ghost/ui/graphite";
+import { AgentMark, PixelLoader, Wing } from "@ghost/ui/graphite";
 import { ArrowUp, Check, ChevronDown, Folder, FolderOpen, RefreshCw, Search } from "lucide-react";
 import {
+  type CSSProperties,
+  Fragment,
   useEffect,
   useId,
   useLayoutEffect,
@@ -38,6 +40,7 @@ import { FolderBusy } from "./FolderBusy";
 import { closePopover, Popover } from "./Popover";
 import { WorktreeChip } from "./WorktreeChip";
 import { needsRecovery, WorktreeRecoveryList, worktreesToReview } from "./WorktreeRecoveryList";
+import "../tour/wing.css";
 import "./new-chat.css";
 import { Select } from "../Select";
 
@@ -118,6 +121,40 @@ function readyLine(agent: AgentEntry): string | null {
     case "broken":
       return null;
   }
+}
+
+/**
+ * The selected agent in a few words, for the quiet line under the card: its name and version, or
+ * that it is still being looked for. Its popover opens on the whole of `readyLine`.
+ */
+function factLine(agent: AgentEntry): string {
+  switch (agent.availability.state) {
+    case "ready":
+      return agent.availability.version === null
+        ? agent.name
+        : `${agent.name} ${agentVersion(agent.name, agent.availability.version)}`;
+    case "checking":
+      return `Looking for ${agent.name}`;
+    case "missing":
+    case "broken":
+      return agent.name;
+  }
+}
+
+/**
+ * A line whose words flip up into place one after another (new-chat.css, after X Money's opening),
+ * read as one line by everyone else. `from` continues the count of a line that runs on.
+ */
+function Words({ text, from = 0 }: { readonly text: string; readonly from?: number }) {
+  return text.split(" ").map((word, index) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: a word's place in a fixed line is its identity
+    <Fragment key={index}>
+      {index > 0 ? " " : null}
+      <span className="new-chat-word" style={{ "--word": from + index } as CSSProperties}>
+        {word}
+      </span>
+    </Fragment>
+  ));
 }
 
 /** An agent choice's state: still detected, found, or waiting on the person to sign in. */
@@ -554,14 +591,24 @@ export function NewChat({
           });
       }}
     >
+      {/*
+       * The wing, alive (it blinks and watches the pointer), over one line in two tones: "New
+       * chat" in ink and where it starts in grey (owner, 26 November 2026: "wayyyy sexier, wayyyy
+       * sleeker"). The message box's own words say what to do, so no sentence repeats them.
+       */}
       <header className="new-chat-hero">
-        <Logo className="new-chat-logo" size={56} />
-        <h1 className="new-chat-title">New chat</h1>
-        <p className="new-chat-hint">
-          {draft.context
-            ? `In ${draft.context.projectName}. Say what you want done, then send.`
-            : "Say what you want done, choose the agent and the folder, then send."}
-        </p>
+        <div className="new-chat-wing">
+          <Wing look />
+        </div>
+        <h1 className="new-chat-title">
+          <Words text="New chat" />
+          {draft.context ? (
+            <span className="new-chat-tone">
+              {" "}
+              <Words text={`in ${draft.context.projectName}`} from={2} />
+            </span>
+          ) : null}
+        </h1>
       </header>
       {/*
        * Type first (owner, 17 November 2026): the message box leads, as the Grok Bot app's new
@@ -790,26 +837,165 @@ export function NewChat({
           </div>
         </div>
       </div>
-      <p className="new-chat-where">
-        <Folder className="new-chat-folder-icon" size={14} aria-hidden="true" />
-        <span
-          className="new-chat-path"
-          data-testid="new-chat-folder"
-          data-test-folder={state.folder ?? ""}
-          data-empty={chosenFolder ? undefined : ""}
-          title={chosenFolder ?? undefined}
-        >
-          {chosenFolder ?? "No folder chosen"}
-        </span>
-        <span className="new-chat-where-mode">
-          {chosenFolder
-            ? worktreeMode
-              ? "Starts in a separate worktree"
-              : "Starts in this folder"
-            : "Select a folder to continue"}
-        </span>
-      </p>
-      {/* Under the card: where it works, then the agent's facts, consent, warnings and errors. */}
+      {/*
+       * Under the card, one quiet line: the folder by its name (the whole path in its tooltip) and
+       * where the chat works in it, then at the right the agent's facts and the agents that cannot
+       * run here, each a popover. Consent, warnings and errors follow under the line.
+       */}
+      <div className="new-chat-context">
+        <p className="new-chat-where">
+          <Folder className="new-chat-folder-icon" size={14} aria-hidden="true" />
+          <span
+            className="new-chat-path"
+            data-testid="new-chat-folder"
+            data-test-folder={state.folder ?? ""}
+            data-empty={chosenFolder ? undefined : ""}
+            title={chosenFolder ?? undefined}
+          >
+            {chosenFolder ? projectName(chosenFolder) : "No folder chosen"}
+          </span>
+          {worktree.kind === "none" || worktree.kind === "plain" ? (
+            <span className="new-chat-where-mode">
+              {chosenFolder
+                ? worktreeMode
+                  ? "Starts in a separate worktree"
+                  : "Starts in this folder"
+                : "Select a folder to continue"}
+            </span>
+          ) : null}
+        </p>
+        <WorktreeChip
+          view={worktree}
+          busyChats={preview?.busy_chats.length ?? 0}
+          onStopBusy={stopBusy}
+          openRef={openChip}
+          onPropose={(change, field) => folderChoice.propose(change, field)}
+          onClearError={() => folderChoice.clearError()}
+        />
+        {selected || unavailable.length > 0 ? (
+          <span className="new-chat-facts">
+            {selected ? (
+              <Popover
+                label={`About ${selected.name}`}
+                triggerLabel={`${factLine(selected)}. Details`}
+                className="new-chat-more"
+                trigger={
+                  <>
+                    <span className="new-chat-more-line" data-state={selectedState ?? undefined}>
+                      {factLine(selected)}
+                    </span>
+                    <ChevronDown size={12} aria-hidden="true" />
+                  </>
+                }
+              >
+                <div className="new-chat-more-body">
+                  {ready ? <p className="new-chat-more-ready">{ready}</p> : null}
+                  {selected.description ? <p>{selected.description}</p> : null}
+                  {selected.installation ? (
+                    <InstallationStatus installation={selected.installation} />
+                  ) : null}
+                  {selected.latest_release?.version ? (
+                    <small className="ui-muted">
+                      Latest on {selected.latest_release.source}: {selected.latest_release.version}
+                      {selected.latest_release.stale ? " (cached; refresh unavailable)" : null}
+                    </small>
+                  ) : null}
+                  {selected.installation ? (
+                    <section className="new-chat-maintenance" aria-label="Agent maintenance">
+                      {state.maintenanceBusy === "checking" ? (
+                        <small className="ui-muted">Checking available actions…</small>
+                      ) : null}
+                      {state.maintenance?.auth_status ||
+                      state.maintenance?.update_unavailable === null ? (
+                        <div className="new-chat-actions">
+                          {state.maintenance?.auth_status ? (
+                            <button
+                              type="button"
+                              className="g-button g-button-outline g-button-28"
+                              disabled={state.maintenanceBusy !== null}
+                              onClick={() => void draft.checkAuth()}
+                            >
+                              {state.maintenanceBusy === "auth"
+                                ? "Checking sign-in…"
+                                : "Check sign-in"}
+                            </button>
+                          ) : null}
+                          {state.maintenance?.update_unavailable === null ? (
+                            <button
+                              type="button"
+                              className="g-button g-button-outline g-button-28"
+                              disabled={state.maintenanceBusy !== null || state.creating}
+                              onClick={() => void draft.updateAgent().then(() => onRefreshAgents())}
+                            >
+                              {state.maintenanceBusy === "update"
+                                ? "Updating agent…"
+                                : "Update agent"}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {state.maintenance?.update_unavailable ? (
+                        <small className="ui-muted">{state.maintenance.update_unavailable}</small>
+                      ) : null}
+                      {state.auth ? (
+                        <span
+                          role="status"
+                          className="new-chat-auth"
+                          data-state={
+                            state.auth.state === "sign_in_required" ? "sign-in" : undefined
+                          }
+                        >
+                          {authStatusText(state.auth)}
+                        </span>
+                      ) : null}
+                      {state.maintenanceMessage ? (
+                        <span role="status">{state.maintenanceMessage}</span>
+                      ) : null}
+                      {state.maintenanceError ? (
+                        <span role="alert" className="ui-error">
+                          {state.maintenanceError}
+                        </span>
+                      ) : null}
+                    </section>
+                  ) : null}
+                </div>
+              </Popover>
+            ) : null}
+            {unavailable.length > 0 ? (
+              <Popover
+                label="Other agents"
+                triggerLabel={`Other agents ${unavailable.length}`}
+                className="new-chat-more"
+                trigger={
+                  <>
+                    <span className="new-chat-more-label">Other agents</span>{" "}
+                    <span className="new-chat-more-count">{unavailable.length}</span>
+                    <ChevronDown size={12} aria-hidden="true" />
+                  </>
+                }
+              >
+                <ul className="new-chat-unavailable">
+                  {unavailable.map((agent) => (
+                    <li key={agent.id} data-test-unavailable={agent.id}>
+                      <AgentMark
+                        agent={agent.id}
+                        size={24}
+                        ghost={agent.availability.state === "missing"}
+                        state={agent.availability.state === "broken" ? "error" : "idle"}
+                        label={agent.availability.state === "broken" ? "Failed" : "Not available"}
+                      />
+                      <span>
+                        <strong>{agent.name}</strong>
+                        <span>{agentChoice(agent).reason}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Popover>
+            ) : null}
+          </span>
+        ) : null}
+      </div>
       <div className="new-chat-below">
         {managedPicked ? (
           <p className="ui-error" role="alert">
@@ -855,14 +1041,6 @@ export function NewChat({
             </div>
           </details>
         ) : null}
-        <WorktreeChip
-          view={worktree}
-          busyChats={preview?.busy_chats.length ?? 0}
-          onStopBusy={stopBusy}
-          openRef={openChip}
-          onPropose={(change, field) => folderChoice.propose(change, field)}
-          onClearError={() => folderChoice.clearError()}
-        />
         {preview && busy ? (
           <FolderBusy
             className="new-chat-busy"
@@ -891,105 +1069,6 @@ export function NewChat({
           <p role="alert" className="new-chat-error" data-testid="new-chat-error">
             {state.error}
           </p>
-        ) : null}
-        {selected ? (
-          <details className="new-chat-more">
-            <summary>
-              <span className="new-chat-more-line" data-state={selectedState ?? undefined}>
-                {ready}
-              </span>
-              <span className="new-chat-more-label">Details</span>
-            </summary>
-            <div className="new-chat-more-body">
-              {selected.description ? <p>{selected.description}</p> : null}
-              {selected.installation ? (
-                <InstallationStatus installation={selected.installation} />
-              ) : null}
-              {selected.latest_release?.version ? (
-                <small className="ui-muted">
-                  Latest on {selected.latest_release.source}: {selected.latest_release.version}
-                  {selected.latest_release.stale ? " (cached; refresh unavailable)" : null}
-                </small>
-              ) : null}
-              {selected.installation ? (
-                <section className="new-chat-maintenance" aria-label="Agent maintenance">
-                  {state.maintenanceBusy === "checking" ? (
-                    <small className="ui-muted">Checking available actions…</small>
-                  ) : null}
-                  {state.maintenance?.auth_status ||
-                  state.maintenance?.update_unavailable === null ? (
-                    <div className="new-chat-actions">
-                      {state.maintenance?.auth_status ? (
-                        <button
-                          type="button"
-                          className="g-button g-button-outline g-button-28"
-                          disabled={state.maintenanceBusy !== null}
-                          onClick={() => void draft.checkAuth()}
-                        >
-                          {state.maintenanceBusy === "auth" ? "Checking sign-in…" : "Check sign-in"}
-                        </button>
-                      ) : null}
-                      {state.maintenance?.update_unavailable === null ? (
-                        <button
-                          type="button"
-                          className="g-button g-button-outline g-button-28"
-                          disabled={state.maintenanceBusy !== null || state.creating}
-                          onClick={() => void draft.updateAgent().then(() => onRefreshAgents())}
-                        >
-                          {state.maintenanceBusy === "update" ? "Updating agent…" : "Update agent"}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {state.maintenance?.update_unavailable ? (
-                    <small className="ui-muted">{state.maintenance.update_unavailable}</small>
-                  ) : null}
-                  {state.auth ? (
-                    <span
-                      role="status"
-                      className="new-chat-auth"
-                      data-state={state.auth.state === "sign_in_required" ? "sign-in" : undefined}
-                    >
-                      {authStatusText(state.auth)}
-                    </span>
-                  ) : null}
-                  {state.maintenanceMessage ? (
-                    <span role="status">{state.maintenanceMessage}</span>
-                  ) : null}
-                  {state.maintenanceError ? (
-                    <span role="alert" className="ui-error">
-                      {state.maintenanceError}
-                    </span>
-                  ) : null}
-                </section>
-              ) : null}
-            </div>
-          </details>
-        ) : null}
-        {unavailable.length > 0 ? (
-          <details className="new-chat-more">
-            <summary>
-              <span className="new-chat-more-label">Other agents</span>
-              <span className="new-chat-more-count">{unavailable.length}</span>
-            </summary>
-            <ul className="new-chat-unavailable">
-              {unavailable.map((agent) => (
-                <li key={agent.id} data-test-unavailable={agent.id}>
-                  <AgentMark
-                    agent={agent.id}
-                    size={24}
-                    ghost={agent.availability.state === "missing"}
-                    state={agent.availability.state === "broken" ? "error" : "idle"}
-                    label={agent.availability.state === "broken" ? "Failed" : "Not available"}
-                  />
-                  <span>
-                    <strong>{agent.name}</strong>
-                    <span>{agentChoice(agent).reason}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
         ) : null}
       </div>
     </form>

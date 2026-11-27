@@ -1,75 +1,63 @@
-import { type CSSProperties, useEffect, useState } from "react";
-import { type LaunchPicture, launchPicture } from "./launchPictures";
+import { LOGO_VIEWBOX, Wing } from "@ghost/ui/graphite";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import "../tour/wing.css";
 import "./launch-art.css";
 
-/** The picture's corner, in its own pixels: a picture that fills its frame reads as a plate. */
-const CORNER = 12;
+/** The outline's width on screen while it draws, in pixels. */
+const HAIRLINE = 1.25;
 
 /**
- * The start screen: this launch's aircraft, alone in the pane with its name under it (owner,
- * 7 November 2026: "i dont want that thing showing on startup. just the art on startup"; 17 November
- * 2026: the owner's ten images in place of the text drawings). New chat, a project's New chat and
- * Ctrl+N open the composer as before.
+ * The start screen (owner, 26 November 2026: "it should just be our logo in a really sexy way",
+ * in place of the aircraft pictures of 17 November): the wing alone in the pane. Once per launch
+ * its outline draws itself in a hairline of ink, the solid wing sweeps in over the line and opens
+ * its eyes; then it hovers, blinks now and then and watches the pointer. New chat, a project's New
+ * chat and Ctrl+N open the composer as before, and the wing flies up into New chat's own.
  *
- * The picture is an ink map (launchPictures.ts) used as a mask over one rectangle of the theme's
- * ink, so it is light on a dark theme and dark on a light one and its empty parts are the pane
- * itself: no image shows as a black or white box in a theme of the other kind. An SVG mask reads a
- * grey image as coverage in every WebView the app runs in. The stylesheet fits it to the pane and
- * never draws it larger than its own pixels. The picture and its name wait for the image, then
- * arrive together.
+ * It is the shared wing (`Wing` in @ghost/ui) in the theme's ink, its eyes cut through to the pane,
+ * so it is right in every theme and both appearances. Under reduced motion it is simply there.
  */
-export function LaunchArt({ picture = launchPicture() }: { readonly picture?: LaunchPicture }) {
-  const [loaded, setLoaded] = useState<string | null>(null);
+export function LaunchArt() {
+  const root = useRef<HTMLDivElement>(null);
+
+  // The outline is one screen hairline whatever size the pane gives the wing: its stroke is set
+  // in the drawing's own units from the width it is drawn at.
+  useLayoutEffect(() => {
+    const node = root.current;
+    const line = node?.querySelector<SVGSVGElement>(".launch-art-line");
+    if (!node || !line) return;
+    const measure = () => {
+      const width = line.getBoundingClientRect().width;
+      if (width > 0)
+        node.style.setProperty(
+          "--launch-art-stroke",
+          ((LOGO_VIEWBOX[0] / width) * HAIRLINE).toFixed(3),
+        );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(line);
+    return () => observer.disconnect();
+  }, []);
+
+  // A hidden window holds the hover and the blink where they are.
   useEffect(() => {
-    let live = true;
-    const image = new Image();
-    // A picture that cannot load still shows its name.
-    const done = () => {
-      if (live) setLoaded(picture.id);
-    };
-    image.onload = done;
-    image.onerror = done;
-    image.src = picture.src;
-    return () => {
-      live = false;
-    };
-  }, [picture]);
-  const mask = `launch-art-ink-${picture.id}`;
-  const { width, height } = picture;
+    const node = root.current;
+    if (!node) return;
+    const sync = () => node.toggleAttribute("data-hidden", document.hidden);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
+
   return (
-    <figure
-      className="launch-art"
-      data-testid="launch-art"
-      data-art={picture.id}
-      data-loaded={loaded === picture.id ? "" : undefined}
-    >
-      <svg
-        className="launch-art-picture"
-        role="img"
-        aria-label={picture.name}
-        viewBox={`0 0 ${width} ${height}`}
-        style={{ "--launch-art-width": width, "--launch-art-height": height } as CSSProperties}
-      >
-        <mask
-          id={mask}
-          maskUnits="userSpaceOnUse"
-          x={0}
-          y={0}
-          width={width}
-          height={height}
-          style={{ maskType: "luminance" }}
-        >
-          <image href={picture.src} width={width} height={height} preserveAspectRatio="none" />
-        </mask>
-        <rect
-          width={width}
-          height={height}
-          rx={CORNER}
-          fill="currentColor"
-          mask={`url(#${mask})`}
-        />
-      </svg>
-      <figcaption className="launch-art-caption">{picture.name}</figcaption>
-    </figure>
+    <div ref={root} className="launch-art" data-testid="launch-art" role="img" aria-label="Ghost">
+      <div className="launch-art-wing">
+        <div className="launch-art-float">
+          <Wing className="launch-art-line" line />
+          <Wing className="launch-art-solid" look />
+        </div>
+      </div>
+    </div>
   );
 }

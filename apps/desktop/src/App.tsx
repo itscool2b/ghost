@@ -3,7 +3,7 @@ import { MotionConfig } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { AppInfo, InstructionsTarget, StressConfig } from "./bindings";
 import { ChatsScreen } from "./components/chat/ChatsScreen";
-import { DashboardScreen } from "./components/dashboard/DashboardScreen";
+import { Dashboard } from "./components/dashboard/Dashboard";
 import { ErrorScreen } from "./components/ErrorScreen";
 import { Home } from "./components/Home";
 import { Sidebar } from "./components/Sidebar";
@@ -38,7 +38,7 @@ type Boot =
   | { readonly status: "failed"; readonly message: string };
 
 /** The chats (the default), the M0 home (the info card and the demo stream), or the stress view. */
-type View = "chats" | "diagnostics" | "stress" | "setup" | "dashboard" | "settings";
+type View = "chats" | "diagnostics" | "stress" | "setup" | "settings";
 
 /**
  * Switching views ends the current stream: the shell stops it (so it does not keep streaming into
@@ -69,6 +69,8 @@ export function App({
 }) {
   const [boot, setBoot] = useState<Boot>({ status: "loading" });
   const [view, setView] = useState<View>(setUp ? "chats" : "setup");
+  // The Dashboard opens over the chats and never takes their place (Dashboard.tsx).
+  const [dashboardOpen, setDashboardOpen] = useState(false);
   // Keyboard focus never falls to nothing: back from Settings or the Dashboard, the terminal or
   // control that held it takes it again (lib/focusReturn.ts).
   useEffect(() => {
@@ -131,6 +133,8 @@ export function App({
   useEffect(
     () =>
       subscribeNativeNavigation((id) => {
+        // A notification's chat is the one to see: the Dashboard would stand over it.
+        setDashboardOpen(false);
         setView("chats");
         setOpenChatRequest({ id });
       }),
@@ -332,9 +336,9 @@ export function App({
         onDemo={() => setNewChatRequest({ id: String(Date.now()), agent: "mock" })}
       />
     );
-  // Settings and the Dashboard keep the chats mounted behind them: the open chat and its draft survive
-  // the visit.
-  if (view === "chats" || view === "settings" || view === "dashboard") {
+  // Settings keeps the chats mounted behind it, and the Dashboard opens over them: the open chat and
+  // its draft survive the visit.
+  if (view === "chats" || view === "settings") {
     return (
       <>
         <div hidden={view !== "chats"} className="app-view">
@@ -353,7 +357,8 @@ export function App({
             onRecoveryDismissed={onRecoveryDismissed}
             onDiagnostics={() => setView("diagnostics")}
             onAgents={() => openSettings("agents")}
-            onDashboard={() => setView("dashboard")}
+            dashboardOpen={dashboardOpen}
+            onDashboard={() => setDashboardOpen((open) => !open)}
             onCustomize={(projectId, activeChatId) =>
               openSettings("plugins", { projectId, activeChatId })
             }
@@ -403,18 +408,13 @@ export function App({
             }}
           />
         ) : null}
-        {view === "dashboard" ? (
-          <div className="pane-shell g-root">
-            <DashboardScreen
-              app={chats}
-              workspace={workspace}
-              onBack={() => setView("chats")}
-              onOpenChat={(id) => {
-                setView("chats");
-                setOpenChatRequest({ id });
-              }}
-            />
-          </div>
+        {dashboardOpen && view === "chats" ? (
+          <Dashboard
+            app={chats}
+            workspace={workspace}
+            onClose={() => setDashboardOpen(false)}
+            onOpenChat={(id) => setOpenChatRequest({ id })}
+          />
         ) : null}
       </>
     );

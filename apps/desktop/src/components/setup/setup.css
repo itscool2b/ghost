@@ -17,7 +17,7 @@
  * .g-root, which would paint the page colour over it; the Agents page and the Dashboard are panes
  * (shell.css) and keep their fill. A fixture page without the window's root keeps the page colour.
  */
-:root.g-root .setup-shell:not(.agents-screen, .dashboard-screen) {
+:root.g-root .setup-shell:not(.agents-screen) {
   background-color: transparent;
 }
 

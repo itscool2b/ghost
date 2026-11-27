@@ -94,9 +94,7 @@ for (const [engine, launcher] of Object.entries({ chromium, webkit })) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`${url}/?preview=project-chat`);
       await page.getByRole("button", { name: "New chat in auracode", exact: true }).click();
-      await page
-        .getByText("In auracode. Say what you want done, then send.", { exact: true })
-        .waitFor();
+      await page.getByRole("heading", { name: "New chat in auracode", level: 1 }).waitFor();
       await page.getByLabel("Claude Code. Choose agent", { exact: true }).waitFor();
       await capture("project-new-chat");
       await page.getByTestId("new-chat-pick-folder").click();

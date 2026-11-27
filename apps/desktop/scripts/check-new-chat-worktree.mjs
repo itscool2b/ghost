@@ -116,7 +116,9 @@ async function inspect(engine, launcher) {
     const chip = await chipReady(page, "worktree");
     assert.equal(await chip.getAttribute("data-test-start"), "main");
     assert.equal(await chip.getAttribute("data-test-branch"), "ghost/7f3a9c2e");
-    await page.getByText("Starts in a separate worktree", { exact: true }).waitFor();
+    // The chip says where the chat works; the line under the card adds no sentence for a Git folder.
+    assert.match(await chip.locator("summary").innerText(), /^Worktree\s+from\s+main\b/);
+    assert.equal(await page.getByText("Starts in a separate worktree", { exact: true }).count(), 0);
     assert.equal(
       await chip.locator("summary").getAttribute("aria-label"),
       "Worktree from main on ghost/7f3a9c2e. Where this chat works",
@@ -197,9 +199,9 @@ async function inspect(engine, launcher) {
     await chipReady(page, "worktree");
     await openPopover(page);
     await page.locator('[data-test-mode-choice="local"]').click();
-    await chipReady(page, "local");
+    const local = await chipReady(page, "local");
     await page.keyboard.press("Escape");
-    await page.getByText("Starts in this folder", { exact: true }).waitFor();
+    assert.match(await local.locator("summary").innerText(), /^Local\s+on\s+main\b/);
     await audit(page, "local", engine, scans);
     await page.getByTestId("new-chat-create").click();
     await page.locator('[data-test-phase="live"]').waitFor();
