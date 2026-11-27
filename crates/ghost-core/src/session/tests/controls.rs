@@ -734,19 +734,19 @@ async fn a_reopened_chat_names_its_access_and_keeps_a_change_for_its_next_start(
         .await
         .unwrap();
     super::conversation::reopen_manager(&mut rig).await;
-    // The saved catalogs load as the manager opens.
+    // The saved catalogs load as the manager opens. Until they arrive the chat lists the
+    // placeholder choices (`legacy:...`), so wait for the saved ones, not for any: on a busy
+    // machine the placeholder came first and the test read it.
+    let saved = ["default", "acceptEdits", "bypassPermissions"];
     let mut lists = rig.manager.lists(&chat.id).await.unwrap();
     for _ in 0..600 {
-        if !lists.controls.access.choices.is_empty() {
+        if access_values(&lists) == saved {
             break;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
         lists = rig.manager.lists(&chat.id).await.unwrap();
     }
-    assert_eq!(
-        access_values(&lists),
-        ["default", "acceptEdits", "bypassPermissions"]
-    );
+    assert_eq!(access_values(&lists), saved);
     assert_eq!(
         lists.controls.access.effective.as_deref(),
         Some("acceptEdits")
