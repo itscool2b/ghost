@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { bellAttention, type NoticeItem, Notifications } from "./Notifications";
+import { bellAttention, bellCount, type NoticeItem, Notifications } from "./Notifications";
 
 const item = (key: string, level?: NoticeItem["level"]): NoticeItem => ({
   key,
@@ -34,5 +34,19 @@ describe("the notifications bell", () => {
     expect(empty).toContain('aria-label="Notifications, none"');
     expect(empty).not.toContain("data-attention");
     expect(empty).toContain("No notifications.");
+  });
+
+  it("counts what is new, or what needs attention while one does, on the bell", () => {
+    const seen = new Set(["a"]);
+    const news = [item("a"), item("b"), item("c")];
+    expect(bellCount(news, seen, bellAttention(news, seen))).toBe("2");
+    const failing = [item("a", "error"), item("b"), item("c", "error")];
+    expect(bellCount(failing, seen, bellAttention(failing, seen))).toBe("2");
+    expect(bellCount([item("a")], seen, null)).toBeNull();
+    const many = Array.from({ length: 12 }, (_, index) => item(String(index)));
+    expect(bellCount(many, new Set(), "new")).toBe("9+");
+    const html = renderToStaticMarkup(<Notifications items={news} />);
+    expect(html).toContain('<span class="chat-inbox-count" aria-hidden="true">3</span>');
+    expect(renderToStaticMarkup(<Notifications items={[]} />)).not.toContain("chat-inbox-count");
   });
 });

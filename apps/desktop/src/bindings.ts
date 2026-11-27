@@ -370,19 +370,18 @@ export const commands = {
 	dictationCancel: (id: string) => __TAURI_INVOKE<void>("dictation_cancel", { id }),
 	/**
 	 *  Fetches the larger speech model, once, from its pinned address (`larger.rs`): the page supplies
-	 *  nothing but the wish, which also takes back an earlier Cancel or Remove. Progress arrives on
-	 *  `channel`; the download goes on if the page leaves.
+	 *  nothing but the wish, which also chooses the model, so dictation uses it once it is here.
+	 *  Progress arrives on `channel`; the download goes on if the page leaves.
 	 */
 	dictationLargerDownload: (channel: Channel<LargerEvent>) => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_download", { channel })),
-	/**
-	 *  Stops the download, or says no to one Ghost has not started yet. What arrived is kept, and the
-	 *  next download continues from it; Ghost does not start one by itself again.
-	 */
+	/**  Stops the download. What arrived is kept, and the next download continues from it. */
 	dictationLargerCancel: () => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_cancel")),
 	/**
-	 *  Deletes the larger model; dictation returns to the built-in one, and Ghost does not fetch the
-	 *  model by itself again.
+	 *  Chooses which speech model dictation uses: the larger one (`use_larger`, once it is here) or
+	 *  the built-in one. The next recording loads it; one in progress keeps the model it started with.
 	 */
+	dictationLargerUse: (useLarger: boolean) => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_use", { useLarger })),
+	/**  Deletes the larger model and its choice; dictation returns to the built-in one. */
 	dictationLargerRemove: () => typedError<null, AppError>(__TAURI_INVOKE("dictation_larger_remove")),
 	/**  Whether reading aloud can run here, and the voices to choose from. */
 	speechStatus: () => __TAURI_INVOKE<SpeechStatus>("speech_status"),
@@ -2092,7 +2091,7 @@ export type DictationModel = {
 	supported: boolean,
 	/**
 	 *  The larger speech model a person can fetch (`larger.rs`). `name` above is the model in
-	 *  use: this one once it is ready.
+	 *  use: this one while it is here and chosen.
 	 */
 	larger: LargerModel,
 };
@@ -2789,8 +2788,8 @@ export type LargerModel = {
 	 *  shows how far it has come from this.
 	 */
 	received: number,
-	/**  Ghost will fetch it by itself: nobody said no and the disk has the room (`larger::wanted`). */
-	automatic: boolean,
+	/**  The person chose it (`larger::chosen`): dictation uses it whenever it is here. */
+	chosen: boolean,
 };
 
 export type LargerState = "absent" | "downloading" | "ready";

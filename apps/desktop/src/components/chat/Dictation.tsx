@@ -13,6 +13,7 @@ import { flushSync } from "react-dom";
 import {
   type DictationApi,
   DictationController,
+  type DictationSource,
   type DictationState,
   dictationBusy,
   dictationFrame,
@@ -25,7 +26,8 @@ import {
   type Placement,
   placeDictation,
   recordingTime,
-  WAVE_SAMPLES,
+  sameDictationView,
+  WAVE_TICK_MS,
   type WaveSample,
 } from "../../lib/dictation";
 import "./dictation.css";
@@ -56,7 +58,10 @@ type Exit =
   | { readonly kind: "dissolve"; readonly serial: number; readonly words: readonly LiveWord[] };
 
 export interface DictationView {
+  /** The recording's stage and words; the level and the time are read from `source`. */
   readonly state: DictationState;
+  /** Every microphone report, for the waveform and the time. */
+  readonly source: DictationSource;
   /** Starting, listening, finishing or stopping: the draft is read-only and Send waits. */
   readonly busy: boolean;
   /** The bar stands in for the composer's controls. */
@@ -75,7 +80,6 @@ export interface DictationView {
 }
 
 const IDLE: DictationState = { state: "idle" };
-const idle = () => IDLE;
 const unsubscribed = () => () => {};
 
 /** The longest wait for a closing animation that never reports its end. */
@@ -119,11 +123,15 @@ export function useDictation({
         })
       : null,
   );
-  const state = useSyncExternalStore(
-    controller?.subscribe ?? unsubscribed,
-    controller?.getSnapshot ?? idle,
-    controller?.getSnapshot ?? idle,
-  );
+  // The composer renders again only when the message box would change (`sameDictationView`): the
+  // level, the waveform and the time arrive 12 times a second and are drawn by the bar alone.
+  const shown = useRef<DictationState>(IDLE);
+  const view = useCallback(() => {
+    const next = controller?.getSnapshot() ?? IDLE;
+    if (!sameDictationView(shown.current, next)) shown.current = next;
+    return shown.current;
+  }, [controller]);
+  const state = useSyncExternalStore(controller?.subscribe ?? unsubscribed, view, view);
   const busy = dictationBusy(state);
   const open = state.state !== "idle";
   const settled = useCallback(() => setExit(null), []);
@@ -215,6 +223,7 @@ export function useDictation({
 
   return {
     state,
+    source: controller,
     busy,
     open,
     ghost,
@@ -325,7 +334,6 @@ export function DictationBar({ dictation }: { readonly dictation: DictationView 
       </div>
     );
   }
-  const recording = state.state === "listening" || state.state === "finishing" ? state : null;
   const waiting = state.state !== "listening";
   return (
     // biome-ignore lint/a11y/useSemanticElements: a fieldset's anonymous content box breaks the bar's single flex row.
@@ -355,12 +363,8 @@ export function DictationBar({ dictation }: { readonly dictation: DictationView 
       >
         <X size={16} />
       </button>
-      <Wave
-        wave={recording?.wave ?? []}
-        tick={recording?.tick ?? -1}
-        quiet={state.state !== "listening"}
-      />
-      <span className="dictation-time">{recordingTime(recording?.seconds ?? 0)}</span>
+      <Wave source={dictation.source} quiet={state.state !== "listening"} />
+      <RecordingTime source={dictation.source} live={state.state === "listening"} />
       <button
         ref={finish}
         type="button"
@@ -378,49 +382,145 @@ export function DictationBar({ dictation }: { readonly dictation: DictationView 
   );
 }
 
+const recordingOf = (value: DictationState) =>
+  value.state === "listening" || value.state === "finishing" ? value : null;
+
 /**
- * The microphone's level over the last 13 seconds, newest at the right: a bar per report, dark
- * where voice detection heard speech. Each report slides the row one bar to the left.
+ * How long the recording has run, after a dot that breathes while the microphone is open. It
+ * renders once a second, whatever the microphone reports in between.
+ */
+export function RecordingTime({
+  source,
+  live,
+}: {
+  readonly source: DictationSource;
+  readonly live: boolean;
+}) {
+  const seconds = useSyncExternalStore(
+    source.subscribe,
+    () => recordingOf(source.getSnapshot())?.seconds ?? 0,
+    () => 0,
+  );
+  return (
+    <span className="dictation-time" data-live={live ? "" : undefined}>
+      {recordingTime(seconds)}
+    </span>
+  );
+}
+
+/** The waveform's geometry, in CSS pixels: one bar per report, 2px wide, 2px apart. */
+const BAR = 2;
+const PITCH = 4;
+
+/**
+ * The microphone's level over the last seconds, newest at the right: a bar per report, centred on
+ * the line, in ink where voice detection heard speech. It is drawn on a canvas straight from the
+ * recording, never through React, and glides one bar to the left over each report's 80 ms; under
+ * reduced motion it steps instead.
  */
 export function Wave({
-  wave,
-  tick,
+  source,
   quiet,
 }: {
-  readonly wave: readonly WaveSample[];
-  readonly tick: number;
+  readonly source: DictationSource;
   readonly quiet: boolean;
 }) {
-  const pad = WAVE_SAMPLES - wave.length;
-  const first = tick - wave.length + 1;
-  const bars = [];
-  for (let index = 0; index < WAVE_SAMPLES; index++) {
-    const sample = index < pad ? undefined : wave[index - pad];
-    bars.push(
-      <span
-        key={first - pad + index}
-        data-voiced={sample?.voiced ? "" : undefined}
-        style={{ "--level": sample?.level ?? 0 } as CSSProperties}
-      />,
-    );
-  }
-  const now = wave.at(-1)?.level ?? 0;
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const meter = useRef<HTMLMeterElement>(null);
+  useEffect(() => {
+    const node = canvas.current;
+    const context = node?.getContext("2d");
+    if (!node || !context) return;
+    const still = prefersReducedMotion();
+    let samples: readonly WaveSample[] = [];
+    let tick = -1;
+    let arrived = performance.now();
+    let width = 0;
+    let height = 0;
+    let ratio = 1;
+    let quietInk = "";
+    let voicedInk = "";
+    // The last frame drawn at rest: nothing moves until the next report.
+    let settled = false;
+    const colours = () => {
+      const style = getComputedStyle(node);
+      quietInk = style.color;
+      voicedInk = style.getPropertyValue("--dictation-voiced").trim() || quietInk;
+    };
+    const draw = (progress: number) => {
+      if (!width || !height) return;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.clearRect(0, 0, width, height);
+      const shift = (1 - progress) * PITCH;
+      const count = samples.length;
+      for (let index = count - 1; index >= 0; index--) {
+        const x = width - (count - index) * PITCH + shift + (PITCH - BAR);
+        if (x + BAR < 0) break;
+        const sample = samples[index];
+        if (!sample) continue;
+        const tall = Math.max(BAR, Math.round(sample.level * (height - 2)));
+        context.fillStyle = sample.voiced ? voicedInk : quietInk;
+        const y = (height - tall) / 2;
+        if (context.roundRect) {
+          context.beginPath();
+          context.roundRect(x, y, BAR, tall, BAR / 2);
+          context.fill();
+        } else context.fillRect(x, y, BAR, tall);
+      }
+    };
+    const read = () => {
+      const recording = recordingOf(source.getSnapshot());
+      if (!recording || recording.tick === tick) return;
+      samples = recording.wave;
+      tick = recording.tick;
+      arrived = performance.now();
+      settled = false;
+      colours();
+      if (meter.current) meter.current.value = Math.round((samples.at(-1)?.level ?? 0) * 100) / 100;
+      if (still) draw(1);
+    };
+    const resize = () => {
+      ratio = window.devicePixelRatio || 1;
+      width = node.clientWidth;
+      height = node.clientHeight;
+      node.width = Math.round(width * ratio);
+      node.height = Math.round(height * ratio);
+      colours();
+      draw(1);
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(node);
+    const stop = source.subscribe(read);
+    read();
+    resize();
+    let frame = 0;
+    const loop = (now: number) => {
+      if (!settled) {
+        const progress = Math.min(1, (now - arrived) / WAVE_TICK_MS);
+        draw(progress);
+        settled = progress === 1;
+      }
+      frame = requestAnimationFrame(loop);
+    };
+    if (!still) frame = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      stop();
+    };
+  }, [source]);
   return (
     <div className="dictation-wave" data-quiet={quiet ? "" : undefined}>
       <meter
+        ref={meter}
         className="sr-only"
         aria-label="Microphone level"
         min={0}
         max={1}
-        value={Math.round(now * 100) / 100}
+        defaultValue={0}
       />
-      <div
-        className="dictation-wave-track"
-        aria-hidden="true"
-        data-step={tick < 1 ? undefined : tick % 2 ? "odd" : "even"}
-      >
-        {bars}
-      </div>
+      {/* No fallback content: the meter above is what assistive technology reads. */}
+      <canvas ref={canvas} className="dictation-wave-canvas" />
     </div>
   );
 }

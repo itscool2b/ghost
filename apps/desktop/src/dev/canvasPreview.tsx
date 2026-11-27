@@ -44,7 +44,7 @@ function scriptedMicrophone(): DictationApi {
         state: "absent",
         available: false,
         received: 0,
-        automatic: false,
+        chosen: false,
       },
     }),
     start: async (_id, onEvent) => {

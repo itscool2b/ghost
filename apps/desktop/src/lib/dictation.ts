@@ -26,21 +26,17 @@ export interface DictationApi {
 
 /**
  * The larger speech model (docs/local-dictation.md, "The larger model"): fetched once from its
- * pinned address, by Ghost itself shortly after it starts or when the person asks. The page supplies
- * nothing but the wish.
+ * pinned address when the person asks, and used only while they choose it. The built-in model is
+ * the default (owner, 27 November 2026). The page supplies nothing but the wish.
  */
 export interface LargerApi {
-  /**
-   * Starts the download; `event` hears it arrive and how it ended. It also takes back an earlier
-   * Cancel or Remove, so Ghost finishes the download by itself should this attempt not.
-   */
+  /** Starts the download and chooses the model; `event` hears it arrive and how it ended. */
   download(event: (event: LargerEvent) => void): Promise<void>;
-  /**
-   * Stops it, or says no before Ghost started it. What arrived is kept, and the next download
-   * continues from it; Ghost does not start one by itself again.
-   */
+  /** Stops it. What arrived is kept, and the next download continues from it. */
   cancel(): Promise<void>;
-  /** Deletes it. Ghost does not fetch it by itself again. */
+  /** Uses the larger model (once it is here) or the built-in one, from the next recording. */
+  use(larger: boolean): Promise<void>;
+  /** Deletes it; dictation returns to the built-in model. */
   remove(): Promise<void>;
 }
 
@@ -57,6 +53,9 @@ export const dictationApi: DictationApi = {
     },
     cancel: async () => {
       await settle(commands.dictationLargerCancel());
+    },
+    use: async (larger) => {
+      await settle(commands.dictationLargerUse(larger));
     },
     remove: async () => {
       await settle(commands.dictationLargerRemove());
@@ -75,7 +74,7 @@ export type LargerPhase =
 
 const megabytes = (bytes: number): number => Math.round(bytes / 1_000_000);
 
-/** What the larger model's row says: what it is and costs, how far it has come, or that it is in use. */
+/** What the larger model's row says: what it is and costs, how far it has come, or whether it is in use. */
 export function largerDetail(model: DictationModel, phase: LargerPhase): string {
   const { name, bytes, state } = model.larger;
   const size = `${megabytes(bytes)} MB`;
@@ -84,15 +83,14 @@ export function largerDetail(model: DictationModel, phase: LargerPhase): string 
   if (phase.state === "verifying") return "Checking the download.";
   if (phase.state === "removing") return `Removing ${name}.`;
   if (state === "ready")
-    return `${name} is downloaded and in use. Removing it returns dictation to the built-in model and frees ${size}.`;
-  // A download this page did not start, Ghost's own included: the core says how far it has come.
+    return model.larger.chosen
+      ? `${name} is in use. It is slower than the built-in model on most computers. Removing it frees ${size}.`
+      : `${name} is downloaded. Dictation uses the built-in model, which is faster. Removing it frees ${size}.`;
+  // A download this page did not start (a page reloaded while it ran): the core says how far it has come.
   if (state === "downloading")
     return `Downloading ${name}: ${megabytes(model.larger.received)} of ${megabytes(bytes)} MB.`;
   const what = `${name} makes about 40% fewer mistakes, gets programming words right and hears 24 more European languages.`;
-  // Ghost fetches it by itself unless the person said no: the row says so before it starts.
-  if (model.larger.automatic && phase.state === "idle" && !phase.kept)
-    return `${what} Ghost downloads it by itself, once: ${size} from Hugging Face. It runs on this device.`;
-  const offer = `${what} A one-time ${size} download from Hugging Face; it runs on this device.`;
+  const offer = `${what} It is slower than the built-in model. A one-time ${size} download from Hugging Face; it runs on this device.`;
   return phase.state === "idle" && phase.kept ? `${offer} What arrived so far is kept.` : offer;
 }
 
@@ -106,7 +104,7 @@ export const KEPT_MESSAGE = "What it heard so far is in your draft.";
 
 export const NO_TEXT: LiveText = { settled: "", stable: "", tentative: "" };
 
-/** Samples of microphone level the waveform keeps: 160 ticks of 80 ms, about 13 seconds. */
+/** Samples of microphone level the waveform keeps: 160 reports of 80 ms, about 13 seconds. */
 export const WAVE_SAMPLES = 160;
 
 export interface WaveSample {
@@ -144,6 +142,35 @@ export type DictationState =
       /** The words heard before the failure went into the draft. */
       readonly kept: boolean;
     };
+
+/** How long the microphone takes between level reports, which the waveform slides by. */
+export const WAVE_TICK_MS = 80;
+
+/** What can be watched for a recording's state: its controller. */
+export interface DictationSource {
+  subscribe(listener: () => void): () => void;
+  getSnapshot(): DictationState;
+}
+
+/**
+ * Whether two states draw the same message box: the same stage and the same words. The level, the
+ * waveform and the time change with every microphone report (12 a second) and are drawn by the
+ * bar alone, so the composer does not render again for them.
+ */
+export function sameDictationView(a: DictationState, b: DictationState): boolean {
+  if (a === b) return true;
+  if (a.state !== b.state) return false;
+  if (
+    (a.state === "listening" && b.state === "listening") ||
+    (a.state === "finishing" && b.state === "finishing")
+  )
+    return (
+      a.text.settled === b.text.settled &&
+      a.text.stable === b.text.stable &&
+      a.text.tentative === b.text.tentative
+    );
+  return false;
+}
 
 /** Retrying cannot help a processor that lacks the engine's instructions. */
 export function offersRetry(value: DictationState): boolean {

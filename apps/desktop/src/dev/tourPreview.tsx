@@ -240,6 +240,7 @@ function Preview() {
       onSettings={() => setRequest({ id: String(Date.now()) })}
       onCustomize={() => {}}
       onDashboard={() => {}}
+      onAutomations={() => {}}
     />
   );
 }

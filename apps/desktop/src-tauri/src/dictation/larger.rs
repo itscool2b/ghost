@@ -1,15 +1,15 @@
 //! The larger dictation model (docs/local-dictation.md, "The larger model"): Parakeet Ultra,
-//! fetched once after installation, because it is too large to ride in the installer. Ghost fetches
-//! it by itself a minute after it starts (owner, 22 November 2026: "Automatically pls"), until
-//! the person says no in Settings > Voice.
+//! fetched once when the person asks, because it is too large to ride in the installer. The
+//! built-in model is dictation's default (owner, 27 November 2026: "make the smaller model the
+//! default ... they can use the bigger model if they want"): Ghost never fetches this one by
+//! itself, and uses it only while the person has chosen it in Settings > Voice.
 //!
 //! What may happen here, and how it is held to that:
-//! - The app itself starts the download, or its own page does; only that page cancels or removes
-//!   it. Neither supplies anything: the address, the size and the SHA-256 are constants of this
-//!   build ([`model::LARGER`]).
-//! - Cancel and Remove are remembered as a file beside the model ([`decline`]): Ghost never starts
-//!   the download by itself again until the person presses Download. It also leaves it alone
-//!   where the disk would be left short of room ([`HEADROOM`]).
+//! - Only Settings > Voice starts, cancels or removes the download, and chooses the model. None of
+//!   them supplies anything: the address, the size and the SHA-256 are constants of this build
+//!   ([`model::LARGER`]).
+//! - The choice is a file beside the model ([`chosen`]), so it holds across launches and profiles,
+//!   like the model itself.
 //! - The connection is HTTPS only and follows a redirect only to Hugging Face's own hosts.
 //! - The file is written beside its final name as `.partial`, never past the pinned size, and gets
 //!   its name only after all of it hashed to the pinned SHA-256. Dictation loads nothing else.
@@ -63,154 +63,34 @@ struct Run {
 /// The download in flight, if any: one at a time, whoever asked.
 static ACTIVE: Mutex<Option<Arc<Run>>> = Mutex::new(None);
 
-/// How long after launch Ghost first looks at fetching the model by itself, and how long it waits
-/// before it looks again (it was offline, the disk was short, a download was already running).
-pub const FIRST: Duration = Duration::from_secs(60);
-pub const AGAIN: Duration = Duration::from_secs(15 * 60);
-/// What the disk must still have free once the model is on it, for Ghost's own data and everything
-/// else on the computer, before Ghost fetches the model unasked.
-const HEADROOM: u64 = 2 << 30;
-/// Its presence in the models folder says the person does not want the model fetched for them.
+/// Its presence in the models folder says the person chose the larger model for dictation.
+const CHOSEN: &str = "larger-model.use";
+/// Left by copies that fetched the model by themselves, to remember a no. Nothing reads it now;
+/// a choice either way clears it.
 const DECLINED: &str = "larger-model.declined";
 
-/// Whether this copy fetches the model by itself at all. A development build does not, since
-/// each scratch data folder would fetch its own 486 MB; `GHOST_DICTATION_AUTOMATIC=1` turns it on
-/// there to test it, and `=0` turns it off anywhere.
-pub fn enabled() -> bool {
-    enabled_for(
-        std::env::var("GHOST_DICTATION_AUTOMATIC").ok().as_deref(),
-        cfg!(debug_assertions),
-    )
+/// The person chose the larger model: dictation uses it whenever it is here.
+pub fn chosen(folder: &Path) -> bool {
+    folder.join(CHOSEN).symlink_metadata().is_ok()
 }
 
-fn enabled_for(wish: Option<&str>, development: bool) -> bool {
-    match wish {
-        Some("0") => false,
-        Some("1") => true,
-        _ => !development,
-    }
-}
-
-/// The person said no: they cancelled the download or removed the model.
-pub fn declined(folder: &Path) -> bool {
-    folder.join(DECLINED).symlink_metadata().is_ok()
-}
-
-/// Remembers that the person does not want the model fetched for them.
-pub fn decline(folder: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(folder)
-        .and_then(|()| File::create(folder.join(DECLINED)))
-        .map(|_| ())
-        .map_err(|_| {
-            "Ghost could not save that choice. Check that this disk is not full.".to_string()
-        })
-}
-
-/// The person asked for the model: Ghost may fetch it by itself again, should this attempt not
-/// finish.
-pub fn accept(folder: &Path) -> Result<(), String> {
-    let path = folder.join(DECLINED);
-    match std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir(&path)) {
-        Ok(()) => Ok(()),
-        Err(_) if !declined(folder) => Ok(()),
-        Err(_) => Err("Ghost could not save that choice.".into()),
-    }
-}
-
-/// Whether fetching the rest of the model leaves the disk [`HEADROOM`]. A disk that will not say
-/// how much it has free is tried: the writing fails cleanly where there is no room.
-fn room(free: Option<u64>, kept: u64, pin: &Download) -> bool {
-    free.is_none_or(|free| free >= pin.bytes.saturating_sub(kept).saturating_add(HEADROOM))
-}
-
-/// Bytes free to this user on the disk holding `folder`, which may not exist yet.
-fn free_space(folder: &Path) -> Option<u64> {
-    let existing = folder.ancestors().find(|path| path.exists())?;
-    disk::free(existing)
-}
-
-/// What `folder` and its disk say about fetching the model unasked: it is not here, nobody said
-/// no, and `free` is room enough.
-fn open_to(folder: &Path, free: Option<u64>) -> bool {
-    let pin = &model::LARGER;
-    model::larger(Some(folder)).is_none()
-        && !declined(folder)
-        && room(
-            free,
-            std::fs::metadata(Arriving::partial(folder, pin)).map_or(0, |meta| meta.len()),
-            pin,
-        )
-}
-
-/// Whether Ghost will fetch the model by itself. What Settings says and what the launch does both
-/// ask here.
-pub fn wanted(folder: &Path) -> bool {
-    enabled() && super::audio::cpu_supported() && open_to(folder, free_space(folder))
-}
-
-/// What the launch does after looking: nothing more this run, or look again after [`AGAIN`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Attempt {
-    Done,
-    Later,
-}
-
-/// How an automatic download's ending decides the next step. A connection that failed is tried
-/// again; a file that was not the pinned one, or a disk that would not take it, is not fetched
-/// again and again behind the person's back.
-fn after(end: &LargerEvent) -> Attempt {
-    match end {
-        LargerEvent::Failed { message }
-            if [INTERRUPTED, OFFLINE, UNAVAILABLE].contains(&message.as_str()) =>
-        {
-            Attempt::Later
+/// Records whether dictation uses the larger model once it is here.
+pub fn choose(folder: &Path, use_it: bool) -> Result<(), String> {
+    let failed =
+        |_| "Ghost could not save that choice. Check that this disk is not full.".to_string();
+    let _ = std::fs::remove_file(folder.join(DECLINED));
+    let path = folder.join(CHOSEN);
+    if use_it {
+        std::fs::create_dir_all(folder)
+            .and_then(|()| File::create(&path))
+            .map(|_| ())
+            .map_err(failed)
+    } else {
+        match std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir(&path)) {
+            Ok(()) => Ok(()),
+            Err(_) if !chosen(folder) => Ok(()),
+            Err(error) => Err(failed(error)),
         }
-        // Cancelled is the person's no, which `decline` wrote down. It is looked at again only so
-        // that a later yes in the same run is honoured.
-        LargerEvent::Cancelled => Attempt::Later,
-        _ => Attempt::Done,
-    }
-}
-
-/// One look at fetching the model unasked, and the fetch itself when everything allows it.
-pub async fn attempt(folder: PathBuf) -> Attempt {
-    if !enabled() || !super::audio::cpu_supported() || model::larger(Some(&folder)).is_some() {
-        return Attempt::Done;
-    }
-    if downloading() {
-        return Attempt::Later;
-    }
-    let free = free_space(&folder);
-    if !open_to(&folder, free) {
-        tracing::debug!(
-            declined = declined(&folder),
-            ?free,
-            "the larger dictation model is not fetched by itself for now"
-        );
-        return Attempt::Later;
-    }
-    let (ended, end) = tokio::sync::oneshot::channel();
-    let ended = Mutex::new(Some(ended));
-    let started = start(folder, move |event| {
-        if matches!(
-            event,
-            LargerEvent::Ready | LargerEvent::Cancelled | LargerEvent::Failed { .. }
-        ) && let Some(ended) = crate::sync::lock(&ended).take()
-        {
-            let _ = ended.send(event);
-        }
-    });
-    if started.is_err() {
-        return Attempt::Later;
-    }
-    match end.await {
-        Ok(event) => {
-            if let LargerEvent::Failed { message } = &event {
-                tracing::debug!(%message, "the larger dictation model did not arrive by itself");
-            }
-            after(&event)
-        }
-        Err(_) => Attempt::Later,
     }
 }
 
@@ -479,132 +359,31 @@ async fn fetch(
     Ok(true)
 }
 
-/// The one question asked of the operating system here: how much room a disk has.
-mod disk {
-    use std::path::Path;
-
-    #[cfg(windows)]
-    #[allow(unsafe_code)] // Read-only volume query; the contract is stated at the call.
-    pub fn free(existing: &Path) -> Option<u64> {
-        use std::os::windows::ffi::OsStrExt;
-        use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
-        let wide: Vec<u16> = existing.as_os_str().encode_wide().chain([0]).collect();
-        let mut free = 0_u64;
-        // SAFETY: `wide` is a NUL-terminated path that outlives the call, `free` is a valid
-        // place for the one number asked for, and the two null pointers are numbers not asked for.
-        let answered = unsafe {
-            GetDiskFreeSpaceExW(
-                wide.as_ptr(),
-                &mut free,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            )
-        };
-        (answered != 0).then_some(free)
-    }
-
-    #[cfg(unix)]
-    #[allow(unsafe_code)] // Read-only volume query; the contract is stated at the call.
-    pub fn free(existing: &Path) -> Option<u64> {
-        use std::os::unix::ffi::OsStrExt;
-        let path = std::ffi::CString::new(existing.as_os_str().as_bytes()).ok()?;
-        let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
-        // SAFETY: `path` is a NUL-terminated string that outlives the call and `stat` is room
-        // for the one structure the call fills in.
-        if unsafe { libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) } != 0 {
-            return None;
-        }
-        // SAFETY: the call succeeded, so it filled the structure in.
-        let stat = unsafe { stat.assume_init() };
-        // The fields' widths differ between Linux and macOS.
-        #[allow(clippy::unnecessary_cast)]
-        Some((stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64))
-    }
-
-    #[cfg(not(any(windows, unix)))]
-    pub fn free(_existing: &Path) -> Option<u64> {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn ghost_fetches_the_model_by_itself_only_until_the_person_says_no() {
+    fn the_larger_model_is_used_only_once_the_person_chooses_it() {
         let root = tempfile::tempdir().unwrap();
-        // The folder need not exist to be asked about, or to have the no written in it.
+        // The folder need not exist to be asked about, or to have the choice written in it.
         let folder = root.path().join("models").join("dictation");
-        let plenty = Some(u64::MAX);
-        assert!(!declined(&folder));
-        assert!(open_to(&folder, plenty), "nothing is in the way at first");
-        assert_eq!(accept(&folder), Ok(()), "a yes with no no before it");
-        decline(&folder).unwrap();
-        assert!(declined(&folder));
-        assert!(
-            !open_to(&folder, plenty),
-            "a no holds whatever else is true"
+        assert!(!chosen(&folder), "the built-in model is the default");
+        assert_eq!(
+            choose(&folder, false),
+            Ok(()),
+            "no is a no with nothing to clear"
         );
-        decline(&folder).unwrap();
-        assert!(declined(&folder), "said twice is still no");
-        accept(&folder).unwrap();
-        assert!(open_to(&folder, plenty), "Download takes the no back");
-        // Whatever sits under that name is a no, and a yes clears it.
-        std::fs::create_dir(folder.join(DECLINED)).unwrap();
-        assert!(!open_to(&folder, plenty));
-        accept(&folder).unwrap();
-        assert!(open_to(&folder, plenty));
-        // The model already here is not fetched again.
-        let model = File::create(folder.join(model::LARGER.file)).unwrap();
-        model.set_len(model::LARGER.bytes).unwrap();
-        assert!(!open_to(&folder, plenty));
-    }
-
-    #[test]
-    fn a_development_build_fetches_nothing_unasked_and_any_build_can_be_told_not_to() {
-        assert!(enabled_for(None, false), "a release does");
-        assert!(!enabled_for(None, true), "a development build does not");
-        assert!(enabled_for(Some("1"), true), "unless it is testing this");
-        assert!(
-            !enabled_for(Some("0"), false),
-            "and a release can be told not to"
-        );
-        assert!(!enabled_for(Some("yes"), true), "nothing else turns it on");
-    }
-
-    #[test]
-    fn the_model_is_not_fetched_unasked_onto_a_disk_it_would_leave_short() {
-        let pin = &model::LARGER;
-        assert!(room(Some(pin.bytes + HEADROOM), 0, pin));
-        assert!(!room(Some(pin.bytes + HEADROOM - 1), 0, pin));
-        assert!(!room(Some(0), 0, pin));
-        // What already arrived needs no room again.
-        assert!(room(Some(HEADROOM + 1000), pin.bytes - 1000, pin));
-        assert!(!room(Some(HEADROOM + 999), pin.bytes - 1000, pin));
-        assert!(room(None, 0, pin), "a disk that will not say is tried");
-        let folder = tempfile::tempdir().unwrap();
-        assert!(!open_to(folder.path(), Some(pin.bytes)));
-        std::fs::write(Arriving::partial(folder.path(), pin), vec![0_u8; 4096]).unwrap();
-        assert!(open_to(folder.path(), Some(pin.bytes - 4096 + HEADROOM)));
-        assert!(!open_to(folder.path(), Some(pin.bytes - 4097 + HEADROOM)));
-        // This disk says: the question reaches the operating system and comes back.
-        assert!(free_space(&folder.path().join("not").join("made").join("yet")).is_some());
-    }
-
-    #[test]
-    fn a_failed_connection_is_tried_again_and_a_wrong_file_is_not() {
-        let failed = |message: &str| LargerEvent::Failed {
-            message: message.into(),
-        };
-        for retried in [INTERRUPTED, OFFLINE, UNAVAILABLE] {
-            assert_eq!(after(&failed(retried)), Attempt::Later, "{retried}");
-        }
-        for ended in [NOT_PINNED, DISK, "The download could not be set up."] {
-            assert_eq!(after(&failed(ended)), Attempt::Done, "{ended}");
-        }
-        assert_eq!(after(&LargerEvent::Ready), Attempt::Done);
-        assert_eq!(after(&LargerEvent::Cancelled), Attempt::Later);
+        choose(&folder, true).unwrap();
+        assert!(chosen(&folder));
+        choose(&folder, true).unwrap();
+        assert!(chosen(&folder), "chosen twice is still chosen");
+        choose(&folder, false).unwrap();
+        assert!(!chosen(&folder));
+        // An earlier copy's no is cleared by a choice either way.
+        File::create(folder.join(DECLINED)).unwrap();
+        choose(&folder, true).unwrap();
+        assert!(!folder.join(DECLINED).exists());
     }
 
     fn digest(bytes: &[u8]) -> String {

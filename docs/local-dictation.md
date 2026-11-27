@@ -8,16 +8,20 @@ them install it").
 
 Larger models were measured on 22 November 2026 (owner: "do hella research on the best voice to
 text model and change it"). The best of them, Parakeet Ultra, makes about 40% fewer errors and
-hears 24 more languages. It is too large to ship inside the app, so it is a one-time download
-that Ghost makes by itself shortly after it starts (owner, 22 November 2026, asked whether it should
-be one click or automatic: "Automatically pls"), and that Settings > Voice shows and can refuse:
-[The larger model](#the-larger-model). [Why the built-in model is
+hears 24 more languages, but it is slower. It is too large to ship inside the app, so it is a
+one-time download a person asks for in Settings > Voice, and the built-in model stays the default
+for everyone (owner, 27 November 2026: "make the smaller model the default on install ... and then
+they can use the bigger model if they want"; from 22 November Ghost had fetched it by itself and
+used it once it arrived): [The larger model](#the-larger-model). [Why the built-in model is
 small](#why-the-built-in-model-is-small) has the comparison and the reason.
 
 ## Using it
 
 Click the microphone. The composer's controls give way to the bar: Cancel, the live waveform of the
-microphone's level (dark where speech was heard), the time, and Finish where Send was. Finish holds
+microphone's level (dark where speech was heard), the time after a dot that breathes while the
+microphone is open, and Finish where Send was. The waveform is a canvas the recording draws
+directly, and the composer renders again only when the words change, not on each of the twelve
+level reports a second (owner, 27 November 2026: it "kinda lags"). Finish holds
 focus, so Enter finishes; Enter in the message box finishes too, and Esc cancels.
 
 While the microphone listens, the words heard so far appear at the cursor as ghost text, lighter
@@ -36,49 +40,31 @@ box's own metrics, so dictated words sit exactly where they will land.
 
 Closing the chat, hiding the window, switching profiles or quitting cancels a recording. Reduced
 motion (the system's or the app's) keeps every state and drops the movement: no sweep, dissolve,
-word fade, caret pulse or waveform slide.
+word fade, caret pulse, breathing dot or waveform glide.
 
 ## The larger model
 
-Ghost fetches Parakeet Ultra by itself: a first look one minute after it starts, then one every
-quarter of an hour for as long as the model is wanted and not here, so a computer that was
-offline gets it once it is not. It is a 486 MB download from Hugging Face, made once; a download
-that was cut short continues from what arrived. Dictation works without it, on the built-in
-model, and uses the larger one from the next recording after it arrives.
+The built-in model is the default on every install and for every recording (owner, 27 November
+2026). Parakeet Ultra is a choice: Settings > Voice > Larger model says what it is and costs and
+offers Download, a 486 MB download from Hugging Face, made once; a download that was cut short
+continues from what arrived (Cancel keeps what came, and the button then reads Continue). Download
+also chooses the model, so dictation uses it from the next recording after it arrives. Once it is
+here the row holds a switch, on while it is chosen, and Remove, which deletes it. With the switch
+off, dictation uses the built-in model and the larger one stays on disk.
 
-Settings > Voice > Larger model is where a person sees this and says no. Before Ghost has started,
-the row says what the model is and that Ghost downloads it by itself, with Cancel. While it arrives
-the row counts the megabytes, with Cancel. Once it is here the Dictation row names it and its
-languages, and the row offers Remove, which deletes it and returns to the built-in model.
-
-Cancel and Remove are a no that Ghost keeps: it writes an empty file, `larger-model.declined`,
-beside the model, and never starts the download by itself while that file is there. The row then
-offers Download (Continue, where part of the model was kept), which takes the no back.
-
-Ghost does not start the download by itself:
-
-- after a no, as above;
-- onto a disk that would be left with less than 2 GiB free (it looks again each quarter of an
-  hour, and the row offers Download meanwhile, which the person may still press);
-- on a processor dictation cannot run on, or in a copy missing its built-in models;
-- again in the same run, after a download whose file was not the pinned one or that the disk
-  would not take (a failed connection is tried again; a wrong file is not fetched over and over);
-- in a development build, where each scratch data folder would fetch its own copy
-  (`GHOST_DICTATION_AUTOMATIC=1` turns it on there to test it; `=0` turns it off in any build);
-- in a smoke launch.
-
-It does not know whether a connection is metered: a computer tethered to a phone fetches the
-486 MB unless the person cancels it. That is the cost of fetching without being asked, and the
-owner's choice.
+The choice is an empty file, `larger-model.use`, beside the model in `models/dictation`, so it
+holds across launches and profiles as the model does. A copy from before 27 November that fetched
+the model by itself has it on disk without that file: it goes back to the built-in model until the
+person turns the switch on. Such a copy may also have left `larger-model.declined`, which nothing
+reads now; either choice deletes it. Ghost never starts the download by itself.
 
 Who may do what, and how that is held (`src-tauri/src/dictation/larger.rs`):
 
-- The app itself starts the download (`dictation::commands::start_automatic`), or its own page
-  does (`dictation_larger_download`); only that page cancels or removes it
-  (`dictation_larger_cancel`, `dictation_larger_remove`). Neither supplies anything: the
-  address, the size and the SHA-256 are constants of the build (`dictation::model::LARGER`,
-  pinned to a Hugging Face revision). Agents, linked assistants and remote sessions have no tool
-  for it, and cannot take a person's no back.
+- Only the Voice page starts the download (`dictation_larger_download`), cancels it
+  (`dictation_larger_cancel`), chooses the model (`dictation_larger_use`) or removes it
+  (`dictation_larger_remove`). None of them supplies anything but the wish: the address, the size
+  and the SHA-256 are constants of the build (`dictation::model::LARGER`, pinned to a Hugging Face
+  revision). Agents, linked assistants and remote sessions have no tool for it.
 - The connection is HTTPS only and follows a redirect only to `huggingface.co`, its subdomains or
   `*.hf.co`, on the default port, with no credentials in the address.
 - The file is written as `<name>.partial` in `models/dictation` under the data folder (shared by
@@ -99,8 +85,7 @@ Audio lives only in memory and is zeroed when the recording ends: at most a 12 s
 the phrase in progress (at most 20 s) and the last 30 s of settled phrases. No audio or transcript
 is written to disk or logged; transcribe.cpp's and ggml's native logging is turned off before the
 first model loads. Dictating makes no network request (the one request this feature makes is
-the larger model's download from Hugging Face, once, which Ghost starts by itself unless the person
-said no; it carries no audio and no text, and Hugging Face sees it as any download, with the
+the larger model's download from Hugging Face, once, when the person asks for it; it carries no audio and no text, and Hugging Face sees it as any download, with the
 computer's network address), and no account, API key, cloud speech service,
 Python or external executable is involved. The finished text becomes a normal draft and follows
 the draft's usual persistence.
@@ -275,10 +260,8 @@ is no longer needed.
   shorter phrases, finishing skips a pass that would be slow or redundant), zeroing, operation
   ownership, the model pins, and the larger model's download (it gets its name only when whole
   and matching, a wrong or oversized file is discarded, a continued download is hashed again,
-  only Hugging Face over HTTPS may send it; and of fetching it unasked: a no holds until Download
-  takes it back, a model already here is not fetched, a disk that would be left short is left
-  alone, a development build fetches nothing, a failed connection is tried again and a wrong
-  file is not) (31 tests). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
+  only Hugging Face over HTTPS may send it) and the choice (the built-in model stays in use until
+  the larger one is chosen, and chosen but absent is still the built-in one). The opt-in `bundled_models_transcribe_fixture_audio_live` runs the bundled models over
   every 16 kHz mono WAV in `GHOST_DICTATION_FIXTURE_DIR` as the microphone would deliver it, and
   prints the live updates, timing and final text (`-- --ignored --nocapture`).
 - `vitest run src/lib/dictation.test.ts`: the controller (live text, the bounded waveform, finishing,
@@ -290,11 +273,11 @@ is no longer needed.
   as the ghost draws it with the message box pixel for pixel. The fixture never opens a microphone.
 - `node scripts/check-dictation-larger.mjs` (port 1467), Chromium and WebKit, light and dark:
   the offer, the download's progress, Cancel and Continue, the model in use once it arrives,
-  Remove, a failure, a copy with nowhere to keep a model, Settings' search, and axe; and for a
-  copy that fetches it by itself: the row saying so before it starts, a download the page did
-  not start counting up, Cancel before and during it as a no that holds, and Remove as one too.
+  Remove, a failure, a copy with nowhere to keep a model, Settings' search, and axe; and a model
+  that is here but not chosen: the built-in model named, nothing fetched, the switch choosing it
+  and back.
 - Natively, on Windows x64 (debug app with `GHOST_DICTATION_AUTOMATIC=1`, fresh scratch data
-  folders), 22 November 2026, with nothing pressed: the row said Ghost downloads the model by
+  folders), 22 November 2026, of the automatic download removed on 27 November, with nothing pressed: the row said Ghost downloads the model by
   itself, the download began about a minute after launch, the row counted it in, and the
   Dictation row named Parakeet Ultra (the whole file in about 10 s on this connection). Remove
   left only `larger-model.declined`, and after a restart nothing was fetched in 85 s. Download

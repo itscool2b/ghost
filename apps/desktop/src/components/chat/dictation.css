@@ -49,10 +49,10 @@
   color: var(--g-fg-3);
 }
 
+/* Opacity alone: a blur on every word repaints the whole box, which lagged on CPU-painted windows. */
 @keyframes dictation-word-in {
   from {
     opacity: 0;
-    filter: blur(4px);
   }
 }
 
@@ -119,7 +119,7 @@
   }
 }
 
-/* Cancel: the words blur away from the newest back, and the draft is as it was. */
+/* Cancel: the words fade away from the newest back, and the draft is as it was. */
 .dictation-ghost[data-mode="dissolve"] .dictation-word {
   animation: dictation-dissolve var(--g-dur-dissolve) var(--g-ease) both;
   animation-delay: calc(var(--from-end, 0) * var(--g-dur-dissolve) / 16);
@@ -128,7 +128,6 @@
 @keyframes dictation-dissolve {
   to {
     opacity: 0;
-    filter: blur(6px);
   }
 }
 
@@ -154,84 +153,66 @@
 }
 
 /*
- * The waveform: one bar per microphone report (80 ms), newest at the right, dark where voice
- * detection heard speech. It opens from the middle, fades in from the left, and each report
- * slides the row one bar along.
+ * The waveform (`Wave`): one bar per microphone report, centred on the line, newest at the right,
+ * in ink where voice detection heard speech. A canvas draws it straight from the recording, so the
+ * page does no layout for it; it fades in from the left and dims while the words settle.
  */
 .dictation-wave {
-  display: flex;
+  --dictation-voiced: var(--g-fg-1);
   flex: 1;
-  align-items: center;
-  justify-content: flex-end;
   min-width: 0;
-  height: 28px;
-  overflow: hidden;
+  height: 24px;
   color: var(--g-fg-4);
-  -webkit-mask-image: linear-gradient(90deg, transparent, black 24%);
-  mask-image: linear-gradient(90deg, transparent, black 24%);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 32%);
+  mask-image: linear-gradient(90deg, transparent, black 32%);
   transition: opacity var(--g-dur-base) var(--g-ease);
-  animation: dictation-wave-open var(--g-dur-glide) var(--g-ease-glide) backwards;
 }
 
 .dictation-wave[data-quiet] {
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
-@keyframes dictation-wave-open {
-  from {
-    clip-path: inset(0 50%);
-  }
-}
-
-.dictation-wave-track {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--g-space-2);
+.dictation-wave-canvas {
+  display: block;
+  width: 100%;
   height: 100%;
 }
 
-.dictation-wave-track[data-step="odd"] {
-  animation: dictation-wave-odd var(--g-dur-wave) linear;
-}
-
-.dictation-wave-track[data-step="even"] {
-  animation: dictation-wave-even var(--g-dur-wave) linear;
-}
-
-/* Two names for one slide, so each report restarts it. */
-@keyframes dictation-wave-odd {
-  from {
-    transform: translateX(4px);
-  }
-}
-
-@keyframes dictation-wave-even {
-  from {
-    transform: translateX(4px);
-  }
-}
-
-.dictation-wave-track > span {
-  flex: none;
-  width: 2px;
-  height: max(2px, calc(var(--level) * 100%));
-  border-radius: var(--g-radius-pill);
-  background-color: currentColor;
-}
-
-.dictation-wave-track > span[data-voiced] {
-  color: var(--g-fg-1);
-}
-
+/* The time, after a dot that breathes while the microphone is open. */
 .dictation-time {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: var(--g-space-6);
   min-width: 4ch;
   color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+}
+
+.dictation-time::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-fg-4);
+  content: "";
+  transition: background-color var(--g-dur-base) var(--g-ease);
+}
+
+.dictation-time[data-live] {
+  color: var(--g-fg-2);
+}
+
+.dictation-time[data-live]::before {
+  background-color: var(--g-fg-1);
+  animation: dictation-caret var(--g-dur-tick) var(--g-ease-in-out) infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictation-time[data-live]::before {
+    animation: none;
+  }
 }
 
 /* A failure, or a stop that did not take, in the bar: its words, then the way on. */

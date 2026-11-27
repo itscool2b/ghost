@@ -89,6 +89,8 @@ export function App({
     chatLabel?: string;
     projectId?: string | null;
     activeChatId?: string;
+    /** A setting's row to show, as a search result would (its `data-setting`). */
+    setting?: string;
   }>({
     id: "initial",
     page: "general",
@@ -357,6 +359,7 @@ export function App({
             onRecoveryDismissed={onRecoveryDismissed}
             onDiagnostics={() => setView("diagnostics")}
             onAgents={() => openSettings("agents")}
+            onAutomations={() => openSettings("remote", { setting: "New automation" })}
             dashboardOpen={dashboardOpen}
             onDashboard={() => setDashboardOpen((open) => !open)}
             onCustomize={(projectId, activeChatId) =>
@@ -393,6 +396,7 @@ export function App({
             workspace={workspace}
             projectId={settingsEntry.projectId ?? null}
             activeChatId={settingsEntry.activeChatId}
+            initialSetting={settingsEntry.setting}
             agents={{ app: chats, transport }}
             backLabel={settingsReturn === "setup" ? "Back to setup" : "Back to chats"}
             info={info}
