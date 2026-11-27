@@ -22,47 +22,71 @@
    * Anchored, not centred: opening a disclosure grows the page downward and the card stays put.
    * The top offset snaps to the spacing grid at each window height.
    */
-  padding: max(var(--g-space-40), round(down, 12vh, var(--g-space-4))) var(--g-space-24)
+  padding: max(var(--g-space-40), round(down, 17vh, var(--g-space-4))) var(--g-space-24)
     var(--g-space-64);
   overflow-y: auto;
 }
 
 /* ---------------------------------------------------------------------------- hero */
 
+/*
+ * The wing, alive, over one line in two tones, and the card 32px under them (owner, 26 November
+ * 2026: "wayyyy sexier, wayyyy sleeker"). No sentence under the line: the box's own words say what
+ * to do.
+ */
 .new-chat-hero {
+  --new-chat-word-step: calc(var(--g-dur-flight) / 12);
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: var(--g-space-24);
+  margin-bottom: var(--g-space-32);
   text-align: center;
 }
 
-.new-chat-logo {
-  margin-bottom: var(--g-space-12);
+/*
+ * The wing, 64px across (it is 2.4 times wider than tall), in ink; it blinks and watches the
+ * pointer (wing.css). Leaving the start screen it flies here from the middle of the pane, where the
+ * webview can carry it: the two wings share one view-transition name (ChatsScreen.tsx).
+ */
+.new-chat-wing {
+  width: 64px;
+  margin-bottom: var(--g-space-16);
   color: var(--g-fg-1);
+  view-transition-name: ghost-wing;
 }
 
-/* Two tones at one size and weight: the agent and folder in ink, the connecting words in grey. */
+/* One line at display size: "New chat" in ink, where it starts in grey. */
 .new-chat-title {
   margin: 0;
   color: var(--g-fg-1);
-  font-size: var(--g-text-title);
-  line-height: var(--g-leading-title);
+  font-size: var(--g-text-display);
+  line-height: var(--g-leading-display);
   font-weight: var(--g-weight-medium);
   letter-spacing: var(--g-tracking-display);
   text-wrap: balance;
 }
 
-.new-chat-ink {
-  color: var(--g-fg-1);
+.new-chat-tone {
+  color: var(--g-fg-3);
 }
 
-/* Keep the description close to its heading. */
-.new-chat-hint {
-  margin: var(--g-space-6) 0 0;
-  color: var(--g-fg-3);
-  font-size: var(--g-text-prose);
-  line-height: var(--g-leading-prose);
+/*
+ * Each word flips up into place a beat after the one before, once per New chat: from 45% down and
+ * tipped back 40 degrees, as X Money opens its page.
+ */
+.new-chat-word {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  backface-visibility: hidden;
+  animation: new-chat-word var(--g-dur-flight) var(--g-ease-expo)
+    calc(var(--word, 0) * var(--new-chat-word-step)) backwards;
+}
+
+@keyframes new-chat-word {
+  from {
+    opacity: 0;
+    transform: perspective(600px) translateY(45%) rotateX(-40deg);
+  }
 }
 
 /* ---------------------------------------------------------------------------- card */
@@ -85,7 +109,7 @@
 .new-chat-message {
   box-sizing: border-box;
   width: 100%;
-  min-height: 56px;
+  min-height: 64px;
   max-height: 240px;
   margin: 0;
   padding: var(--g-space-12) var(--g-space-16) var(--g-space-6);
@@ -207,26 +231,87 @@
   padding: 0;
 }
 
-/* Where the chat will work, under the box: the folder in mono, then how it starts. */
-.new-chat-where {
+/* ------------------------------------------------------------ under the card: one line */
+
+/*
+ * One quiet 12px line under the card: the folder by its name and where the chat works in it at
+ * the left, on the card's text axis; the agent's facts and the agents that cannot run here at the
+ * right. Each part is a bare 24px pill that takes the quiet fill under the hand, as the chips in
+ * the box do. A narrow pane lets the right half wrap under the left.
+ */
+.new-chat-context {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--g-space-8);
+  gap: var(--g-space-2) var(--g-space-4);
   min-width: 0;
-  margin: var(--g-space-8) 0 0;
-  padding: 0 var(--g-space-16);
+  margin-top: var(--g-space-12);
+  padding: 0 calc(var(--new-chat-axis) - var(--g-space-8));
   color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
 }
 
-.new-chat-where > .new-chat-path {
-  font-size: var(--g-text-meta);
-  line-height: var(--g-leading-meta);
+.new-chat-where {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-6);
+  min-width: 0;
+  height: var(--g-control);
+  margin: 0;
+  padding: 0 var(--g-space-8);
 }
 
 .new-chat-where-mode {
   flex: none;
+}
+
+/*
+ * The worktree chip stands in the line as one more pill, its new branch's name left to its
+ * tooltip, its accessible name and its popover, where it can be renamed.
+ */
+.new-chat-context > .new-chat-worktree {
+  padding: 0;
+}
+
+.new-chat-context .new-chat-worktree-new {
+  display: none;
+}
+
+.new-chat-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-space-2);
+  margin-left: auto;
+}
+
+/* The two popovers at the right: bare 24px pills that open down under the line, at its right. */
+.new-chat-facts > .new-chat-more > summary {
+  gap: var(--g-space-4);
+  height: var(--g-control);
+  max-width: 280px;
+  padding: 0 var(--g-space-8);
+  color: var(--g-fg-3);
+}
+
+.new-chat-facts > .new-chat-more > summary > svg {
+  flex: none;
+  transition: transform var(--g-dur-base) var(--g-ease-quint);
+}
+
+.new-chat-facts > .new-chat-more[open] > summary > svg {
+  transform: rotate(180deg);
+}
+
+.new-chat-facts > .new-chat-more > .chat-popover-panel {
+  top: calc(100% + 8px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  width: min(360px, calc(100vw - 48px));
+  transform-origin: 100% 0;
+  animation-name: chat-menu-in;
 }
 
 .new-chat-choices {
@@ -418,24 +503,19 @@
   font-weight: var(--g-weight-regular);
 }
 
+/* The folder by its name in ink (its whole path is the tooltip), or that none is chosen yet. */
 .new-chat-path {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--g-fg-1);
-  font-family: var(--g-mono);
-  font-size: var(--g-text-code);
-  line-height: var(--g-leading-code);
-  font-variant-ligatures: none;
+  color: var(--g-fg-2);
+  font-weight: var(--g-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .new-chat-path[data-empty] {
   color: var(--g-fg-3);
-  font-family: var(--g-sans);
-  font-size: var(--g-text-ui);
-  line-height: var(--g-leading-ui);
+  font-weight: var(--g-weight-regular);
 }
 
 /* ----------------------------------------------------------------- under the card */
@@ -511,15 +591,15 @@
   cursor: pointer;
 }
 
-/* Disclosures: a quiet 12px line that opens in place. */
-.new-chat-more {
+/* Disclosures under the line (retained worktrees): a quiet 12px line that opens in place. */
+.new-chat-below > .new-chat-more {
   padding: 0 var(--new-chat-axis);
   color: var(--g-fg-3);
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
 }
 
-.new-chat-more > summary {
+.new-chat-below > .new-chat-more > summary {
   display: flex;
   align-items: center;
   gap: var(--g-space-8);
@@ -530,12 +610,12 @@
   cursor: pointer;
 }
 
-.new-chat-more > summary::-webkit-details-marker {
+.new-chat-below > .new-chat-more > summary::-webkit-details-marker {
   display: none;
 }
 
 /* A 12px chevron that turns down as the line opens, in place of a plus and a minus. */
-.new-chat-more > summary::after {
+.new-chat-below > .new-chat-more > summary::after {
   content: "";
   flex: none;
   width: 12px;
@@ -548,17 +628,17 @@
     background-color var(--g-dur-micro) var(--g-ease);
 }
 
-.new-chat-more[open] > summary::after {
+.new-chat-below > .new-chat-more[open] > summary::after {
   transform: rotate(90deg);
 }
 
 @media (hover: hover) {
-  .new-chat-more > summary:hover::after {
+  .new-chat-below > .new-chat-more > summary:hover::after {
     background-color: var(--g-fg-1);
   }
 }
 
-.new-chat-more > summary:focus-visible {
+.new-chat-below > .new-chat-more > summary:focus-visible {
   border-radius: var(--g-radius-4);
   outline: 2px solid var(--g-focus);
   outline-offset: 2px;
@@ -567,14 +647,23 @@
 .new-chat-more-line {
   min-width: 0;
   overflow: hidden;
-  font-family: var(--g-mono);
-  font-variant-ligatures: none;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.new-chat-more-line[data-state="detecting"] {
-  font-family: var(--g-sans);
+/* An agent that waits on a sign-in says so in the line's own ink. */
+.new-chat-more-line[data-state="sign-in"] {
+  color: var(--g-fg-1);
+}
+
+/* In the agent's popover: what runs, from where, in mono, over the rest. */
+.new-chat-more-body > .new-chat-more-ready {
+  color: var(--g-fg-3);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-meta);
+  font-variant-ligatures: none;
+  overflow-wrap: anywhere;
 }
 
 .new-chat-more-label {
@@ -590,6 +679,11 @@
   }
 }
 
+.new-chat-facts .new-chat-more-label {
+  color: inherit;
+  font-weight: var(--g-weight-regular);
+}
+
 .new-chat-more-count {
   color: var(--g-fg-3);
   font-family: var(--g-mono);
@@ -602,6 +696,10 @@
   align-items: flex-start;
   gap: var(--g-space-8);
   margin-top: var(--g-space-8);
+}
+
+.chat-popover-panel > .new-chat-more-body {
+  margin-top: 0;
 }
 
 .new-chat-more-body > p {
@@ -1069,7 +1167,8 @@
  * backwards only: a held final frame would keep a layer that stops the popovers inside from frosting
  * what is behind them.
  */
-.new-chat > :is(.new-chat-hero, .new-chat-card, .new-chat-where, .new-chat-below) {
+.new-chat > :is(.new-chat-card, .new-chat-context, .new-chat-below),
+.new-chat-wing {
   animation: g-enter var(--g-dur-row) var(--g-ease-reveal) backwards;
 }
 
@@ -1077,17 +1176,25 @@
   animation-delay: var(--g-stagger-row);
 }
 
-.new-chat > :is(.new-chat-where, .new-chat-below) {
+.new-chat > :is(.new-chat-context, .new-chat-below) {
   animation-delay: calc(var(--g-stagger-row) * 2);
 }
 
+/* A wing that flew here from the start screen has arrived already. */
+:root[data-wing-flight] .new-chat-wing {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .new-chat > :is(.new-chat-hero, .new-chat-card, .new-chat-where, .new-chat-below),
+  .new-chat > :is(.new-chat-card, .new-chat-context, .new-chat-below),
+  .new-chat-wing,
+  .new-chat-word,
   .new-chat-agent[data-found] .g-agent-mark {
     animation: none;
   }
 
   .new-chat-more > summary::after,
+  .new-chat-facts > .new-chat-more > summary > svg,
   .new-chat-card {
     transition: none;
   }
@@ -1099,7 +1206,9 @@
 
 :root:is([data-motion="reduced"], [data-motion="off"])
   :is(
-    .new-chat > :is(.new-chat-hero, .new-chat-card, .new-chat-where, .new-chat-below),
+    .new-chat > :is(.new-chat-card, .new-chat-context, .new-chat-below),
+    .new-chat-wing,
+    .new-chat-word,
     .new-chat-agent[data-found] .g-agent-mark
   ) {
   animation: none;
@@ -1112,10 +1221,10 @@
   animation: none;
 }
 
-/* A narrow pane lets the folder line wrap under its path. */
+/* A narrow pane puts the agent's facts on their own line under the folder's. */
 @media (max-width: 720px) {
-  .new-chat-where {
-    flex-wrap: wrap;
+  .new-chat-facts {
+    margin-left: 0;
   }
 }
 

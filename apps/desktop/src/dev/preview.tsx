@@ -14,11 +14,10 @@ import type {
   SessionStatus,
 } from "../bindings";
 import { ChatList } from "../components/chat/ChatList";
-import { SidebarBand } from "../components/chat/ChatsScreen";
+import { flyWing, SidebarBand } from "../components/chat/ChatsScreen";
 import { ChatView } from "../components/chat/ChatView";
 import { CommandPalette, type PaletteCommand } from "../components/chat/CommandPalette";
 import { LaunchArt } from "../components/chat/LaunchArt";
-import { LAUNCH_ART } from "../components/chat/launchPictures";
 import { SidebarFooter } from "../components/chat/SidebarFooter";
 import { createXtermRuntime } from "../components/chat/terminalRuntime";
 import {
@@ -1018,13 +1017,8 @@ function Preview() {
   const [chatCommands, setChatCommands] = useState<readonly PaletteCommand[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [projectNew, setProjectNew] = useState(false);
-  // `launch`: the start screen until New chat opens the composer; `&art=` names the piece shown.
+  // `launch`: the start screen until New chat opens the composer.
   const [launching, setLaunching] = useState(mode === "launch");
-  const [launchPiece] = useState(
-    () =>
-      LAUNCH_ART.find((piece) => piece.id === new URLSearchParams(location.search).get("art")) ??
-      LAUNCH_ART[0],
-  );
   const [selected, setSelected] = useState<string | null>(
     mode === "new" || mode === "launch" || scenario ? null : "preview",
   );
@@ -1526,11 +1520,13 @@ function Preview() {
           error={null}
           selected={selected}
           onSelect={() => setSelected("preview")}
-          onNewChat={() => {
-            setProjectNew(false);
-            setLaunching(false);
-            setSelected(null);
-          }}
+          onNewChat={() =>
+            flyWing(() => {
+              setProjectNew(false);
+              setLaunching(false);
+              setSelected(null);
+            })
+          }
         />
         <SidebarFooter
           onSettings={() =>
@@ -1541,7 +1537,7 @@ function Preview() {
       <main className="chat-main">
         <div className="chat-drag" />
         {selected === null && launching ? (
-          <LaunchArt picture={launchPiece} />
+          <LaunchArt />
         ) : selected === null ? (
           <NewChatPreview
             base={AGENT}

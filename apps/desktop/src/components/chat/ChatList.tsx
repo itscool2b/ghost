@@ -182,6 +182,7 @@ export function ChatList({
   onNewProject,
   onProjectNewChat,
   onCustomize,
+  dashboardOpen = false,
   onDashboard,
   onProjectSettings,
   onChatOptions,
@@ -215,6 +216,8 @@ export function ChatList({
    * Opens the Dashboard; the row counts the chats whose agent works now, after a volt dot while
    * one needs you.
    */
+  /** The Dashboard is open over the window (its button says so to assistive technology). */
+  readonly dashboardOpen?: boolean;
   readonly onDashboard?: () => void;
   readonly onProjectSettings?: (project: ProjectSummary) => void;
   readonly onChatOptions?: (chat: ChatSummary) => void;
@@ -360,6 +363,8 @@ export function ChatList({
             onClick={onDashboard}
             data-testid="dashboard-button"
             data-tour="dashboard"
+            aria-haspopup="dialog"
+            aria-expanded={dashboardOpen}
             aria-label={[
               "Dashboard",
               needing > 0 ? `${needing} ${needing === 1 ? "needs" : "need"} you` : null,

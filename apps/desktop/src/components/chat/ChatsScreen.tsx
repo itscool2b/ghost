@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { flushSync } from "react-dom";
 import type {
   AppInfo,
   ChatRole,
@@ -69,6 +70,29 @@ const noSubscribe = () => () => {};
 const TOUR_OFFER_AFTER_MS = 700;
 
 /** `set` with `key` in or out, the same set when nothing changes. */
+/**
+ * Leaving the start screen for New chat, the start screen's wing flies up into New chat's own: the
+ * two share the view-transition name `ghost-wing` (launch-art.css, new-chat.css). Only where the
+ * webview has view transitions and motion is welcome; anywhere else New chat simply opens.
+ */
+export function flyWing(update: () => void): void {
+  const root = document.documentElement;
+  const still =
+    matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    root.matches('[data-motion="reduced"], [data-motion="off"]');
+  if (
+    still ||
+    typeof document.startViewTransition !== "function" ||
+    !document.querySelector(".launch-art")
+  ) {
+    update();
+    return;
+  }
+  root.setAttribute("data-wing-flight", "");
+  const flight = document.startViewTransition(() => flushSync(update));
+  void flight.finished.finally(() => root.removeAttribute("data-wing-flight"));
+}
+
 function toggled(set: ReadonlySet<string>, key: string, present: boolean): ReadonlySet<string> {
   if (set.has(key) === present) return set;
   const next = new Set(set);
@@ -135,6 +159,7 @@ export function ChatsScreen({
   onRecoveryDismissed,
   onDiagnostics,
   onAgents,
+  dashboardOpen = false,
   onDashboard,
   onSettings,
   onCustomize,
@@ -160,6 +185,8 @@ export function ChatsScreen({
   readonly onDiagnostics: () => void;
   readonly onAgents?: () => void;
   /** Opens the Dashboard: every chat by what it needs, and what its agent runs. */
+  /** The Dashboard is open over the chats: its button in the sidebar shows it. */
+  readonly dashboardOpen?: boolean;
   readonly onDashboard?: () => void;
   readonly onSettings?: () => void;
   readonly onCustomize?: (projectId: string | null, activeChatId?: string) => void;
@@ -500,14 +527,15 @@ export function ChatsScreen({
           onProjectNewChat={
             workspace
               ? (project) => {
-                  if (!organization.data) return;
-                  setBoardProject(null);
-                  setSelected(null);
-                  setComposing(true);
-                  setArchived(false);
-                  setDraft(
-                    new NewChatDraft(transport, projectChatContext(project, organization.data)),
-                  );
+                  const data = organization.data;
+                  if (!data) return;
+                  flyWing(() => {
+                    setBoardProject(null);
+                    setSelected(null);
+                    setComposing(true);
+                    setArchived(false);
+                    setDraft(new NewChatDraft(transport, projectChatContext(project, data)));
+                  });
                 }
               : undefined
           }
@@ -522,6 +550,7 @@ export function ChatsScreen({
                   )
               : undefined
           }
+          dashboardOpen={dashboardOpen}
           onDashboard={onDashboard}
           onProjectSettings={workspace ? (project) => setProjectDialog({ project }) : undefined}
           onChatOptions={workspace ? (chat) => setChatOptions(chat.id) : undefined}
@@ -535,12 +564,14 @@ export function ChatsScreen({
             setBoardProject(null);
             setSelected(chatId);
           }}
-          onNewChat={() => {
-            setBoardProject(null);
-            setSelected(null);
-            setComposing(true);
-            setDraft(new NewChatDraft(transport));
-          }}
+          onNewChat={() =>
+            flyWing(() => {
+              setBoardProject(null);
+              setSelected(null);
+              setComposing(true);
+              setDraft(new NewChatDraft(transport));
+            })
+          }
         />
         <SidebarFooter
           onSettings={onSettings}
@@ -714,11 +745,12 @@ export function ChatsScreen({
               id: "new",
               title: "New chat",
               detail: "Choose an agent and project",
-              run: () => {
-                setSelected(null);
-                setComposing(true);
-                setDraft(new NewChatDraft(transport));
-              },
+              run: () =>
+                flyWing(() => {
+                  setSelected(null);
+                  setComposing(true);
+                  setDraft(new NewChatDraft(transport));
+                }),
             },
             ...(workspace
               ? [

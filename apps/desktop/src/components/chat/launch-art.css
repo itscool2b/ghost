@@ -1,72 +1,157 @@
 /*
- * The start screen (LaunchArt.tsx): this launch's aircraft, alone in the pane under the drag band,
- * its name just beneath it, the two centred together. The pane sets the figure's size, never the
- * picture, so the picture can be sized from the figure (the cq units) without resizing its own room.
+ * The start screen (LaunchArt.tsx): the wing alone in the pane under the drag band, in the theme's
+ * ink. Once per launch: the outline draws itself, the solid wing sweeps in over it from the left
+ * tip, the eyes open; then it hovers and watches the pointer, blinking now and then (wing.css).
+ * Motion is position, stroke and clip; durations are the wing's own tokens, so reduced motion and
+ * the app's motion setting set them to nothing and the wing simply stands there.
  */
 .launch-art {
   container-type: size;
   display: flex;
   flex: 1 1 0;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--g-space-16);
   box-sizing: border-box;
   width: 100%;
   min-height: 0;
   margin: 0;
-  padding: var(--g-space-40) var(--g-space-24) var(--g-space-48);
+  padding: var(--g-space-40) var(--g-space-24) var(--g-space-64);
   overflow: hidden;
+  color: var(--g-fg-1);
 }
 
 /*
- * The picture is one rectangle of the theme's ink behind the image's mask, so its colour is the
- * text's. It takes the smallest of: its own pixels (an image drawn larger than it is goes soft),
- * the share of the figure's width it may fill, and the width at which its height, with the name
- * and the gap under it, is the same share of the figure's height.
+ * About two fifths of the pane's width, never taller than half its height (the wing is 1044 by
+ * 440), and it arrives from a little below and a little smaller, as if from further away.
  */
-.launch-art-picture {
-  --launch-art-fill: 0.84;
-  --launch-art-own: calc(var(--launch-art-width) * 1px);
-  --launch-art-across: calc(100cqw * var(--launch-art-fill));
-  --launch-art-room: calc(100cqh - var(--g-leading-meta) - var(--g-space-16));
-  --launch-art-shape: calc(var(--launch-art-width) / var(--launch-art-height));
-  --launch-art-down: calc(
-    var(--launch-art-room) *
-    var(--launch-art-fill) *
-    var(--launch-art-shape)
-  );
-  flex: none;
-  width: min(var(--launch-art-own), var(--launch-art-across), var(--launch-art-down));
-  height: auto;
-  aspect-ratio: var(--launch-art-width) / var(--launch-art-height);
-  color: var(--g-fg-1);
-  user-select: none;
+.launch-art-wing {
+  --launch-art-shape: calc(1044 / 440);
+  width: min(40cqw, 560px, 48cqh * var(--launch-art-shape));
+  animation: launch-art-arrive var(--g-dur-arrive) var(--g-ease-expo) both;
 }
 
-.launch-art-caption {
-  color: var(--g-fg-2);
-  font-size: var(--g-text-meta);
-  line-height: var(--g-leading-meta);
-  text-align: center;
+/* The outline and the solid wing stand in one cell, one over the other. */
+.launch-art-float {
+  display: grid;
+  view-transition-name: ghost-wing;
+  animation: launch-art-hover var(--g-dur-hover) ease-in-out calc(var(--g-dur-arrive) * 1.8)
+    infinite;
 }
 
-/* Waiting: nothing shows until the image is in, so the name never arrives without its picture. */
-.launch-art:not([data-loaded]) > :is(.launch-art-picture, .launch-art-caption) {
-  visibility: hidden;
+.launch-art-float > .wing {
+  grid-area: 1 / 1;
 }
 
-/* Arriving: the picture, then its name, rise once per launch, as New chat's rows do. */
-.launch-art[data-loaded] > :is(.launch-art-picture, .launch-art-caption) {
-  animation: g-enter var(--g-dur-row) var(--g-ease-reveal) backwards;
+/* The outline: one hairline of ink drawn from the nose round, then gone under the solid wing. */
+.launch-art .launch-art-line :is(.wing-body, .wing-eye) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--launch-art-stroke, 2.5);
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: launch-art-draw var(--g-dur-arrive) var(--g-ease-glide) both;
 }
 
-.launch-art[data-loaded] > .launch-art-caption {
-  animation-delay: var(--g-stagger-row);
+.launch-art .launch-art-line {
+  animation: launch-art-line-out var(--g-dur-land) var(--g-ease-out) calc(var(--g-dur-arrive) * 1.4)
+    both;
 }
 
+/* The solid wing sweeps in over its outline, from the left tip to the right. */
+.launch-art .launch-art-solid {
+  animation: launch-art-sweep calc(var(--g-dur-arrive) * 0.7) var(--g-ease-glide)
+    calc(var(--g-dur-arrive) * 0.65) both;
+}
+
+/* Its eyes open as it settles; after that they blink now and then. */
+.launch-art .launch-art-solid .wing-eye {
+  animation:
+    launch-art-eyes var(--g-dur-land) var(--g-ease-out) calc(var(--g-dur-arrive) * 1.3) both,
+    wing-blink var(--g-dur-blink) ease-in-out calc(var(--g-dur-arrive) * 2 + var(--g-dur-blink))
+    infinite;
+}
+
+/* A hidden window holds everything where it is. */
+.launch-art[data-hidden] :is(.launch-art-wing, .launch-art-float, .wing, .wing-body, .wing-eye) {
+  animation-play-state: paused;
+}
+
+/* A window painted on the processor keeps the arrival and the blink, not the endless hover. */
+:root[data-paint="cpu"] .launch-art-float {
+  animation: none;
+}
+
+/*
+ * Into New chat (ChatsScreen.tsx): the wing glides up and shrinks into New chat's own while the
+ * rest of the pane changes under it. The two pictures are one shape in one ink, so their cross-fade
+ * reads as one wing.
+ */
+::view-transition-group(ghost-wing) {
+  animation-duration: var(--g-dur-flight);
+  animation-timing-function: var(--g-ease-glide);
+}
+
+@keyframes launch-art-arrive {
+  from {
+    transform: translateY(var(--g-space-16)) scale(0.94);
+  }
+}
+
+@keyframes launch-art-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes launch-art-line-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes launch-art-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes launch-art-eyes {
+  from {
+    transform: scaleY(0.08);
+  }
+}
+
+/* It rides the air: up a little, the left tip a touch higher, and back. */
+@keyframes launch-art-hover {
+  50% {
+    transform: translateY(calc(var(--g-space-6) * -1)) rotate(-0.6deg);
+  }
+}
+
+/* Still: the solid wing, eyes open, no outline under it. */
 @media (prefers-reduced-motion: reduce) {
-  .launch-art[data-loaded] > :is(.launch-art-picture, .launch-art-caption) {
+  .launch-art :is(.launch-art-wing, .launch-art-float, .launch-art-solid),
+  .launch-art .launch-art-solid .wing-eye {
     animation: none;
   }
+
+  .launch-art .launch-art-line {
+    display: none;
+  }
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"])
+  .launch-art
+  :is(.launch-art-wing, .launch-art-float, .launch-art-solid),
+:root:is([data-motion="reduced"], [data-motion="off"]) .launch-art .launch-art-solid .wing-eye {
+  animation: none;
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"]) .launch-art .launch-art-line {
+  display: none;
 }

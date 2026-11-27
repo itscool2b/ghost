@@ -351,12 +351,6 @@ export function renderText(catalogue, distribution) {
     "",
     "Agent marks: the logos shown beside the Claude Code (the Claude spark), Codex (the OpenAI Blossom), Pi, Antigravity, Cursor, Grok Build (the Grok mark), OpenCode, oh-my-pi and Hermes agents, and the model makers' marks (Anthropic, OpenAI, Google Gemini, xAI, DeepSeek, Mistral AI, Meta, Qwen and Moonshot AI), and the marks of the assistants that can be linked as bots (Grok Bot, Muse, Hermes and OpenClaw), and the GitHub mark beside the website's link to the repository, are trademarks of their respective owners. They only identify which agent a chat uses, whose model is working, which assistant a link is for or where the source is, imply no endorsement or partnership, and are not covered by these notices or by any license for Ghost. Their sources, guidelines and terms are listed in third-party/brand-marks.md.",
     "",
-    ...(distribution === "desktop"
-      ? [
-          "Start screen aircraft: the pictures of aircraft the desktop app opens on were supplied by Ghost's owner. They are not covered by these notices or by any license for Ghost. The files and how they were prepared are listed in third-party/ascii-art.md.",
-          "",
-        ]
-      : []),
   ];
   const used = new Map();
   for (const record of records) {

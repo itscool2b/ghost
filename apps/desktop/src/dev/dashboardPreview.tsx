@@ -1,12 +1,14 @@
 /**
- * Scripted Dashboard fixture (`?preview=dashboard`, `&case=empty`, `&case=live`, `&case=busy`),
- * mounted in the same inset pane as the app's. Never reads the process table or stops anything:
+ * Scripted Dashboard fixture (`?preview=dashboard`, `&case=empty`, `&case=live`, `&case=busy`):
+ * the Dashboard open over an empty inset pane, as it opens over the chats in the app, with a
+ * Dashboard button in the pane to open it again once it is closed (`&closed` starts closed).
+ * Never reads the process table or stops anything:
  * the snapshot is invented, and Stop removes the row and what it started. `live` moves a chat from
  * Working to Needs you and back every few seconds, so the cards' moves between lanes can be
  * watched; `busy` adds a day's worth of finished chats. AI line edits shows an invented summer of
  * Claude Code and Codex edits (none with `empty`), and `counting` keeps it counting for a moment.
  */
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type {
   BackgroundTask,
@@ -15,7 +17,7 @@ import type {
   ProcessesSnapshot,
   ProcessRow,
 } from "../bindings";
-import { DashboardScreen } from "../components/dashboard/DashboardScreen";
+import { Dashboard } from "../components/dashboard/Dashboard";
 import type { AppStore } from "../lib/chat/appStore";
 import { DashboardCleared } from "../lib/dashboardCleared";
 import type { LineEditsApi } from "../lib/lineEdits";
@@ -272,33 +274,69 @@ function lineEditsFixture(kind: string | null): LineEditsApi {
   };
 }
 
-export function mountDashboardPreview(container: HTMLElement) {
-  const kind = new URLSearchParams(location.search).get("case");
-  const { api, app, workspace } = fixture(kind);
-  const lineEdits = lineEditsFixture(kind);
-  // The app's own frame (App.tsx): the inset pane fills the window and the page fills the pane.
-  container.style.height = "100vh";
-  createRoot(container).render(
-    <StrictMode>
-      <div className="pane-shell g-root">
-        <DashboardScreen
-          app={app}
-          workspace={workspace}
-          api={api}
-          lineEdits={lineEdits}
-          // Clearing lasts for the page only, so each check starts from the full board.
-          cleared={new DashboardCleared(null)}
-          stopChat={async (id) => {
-            // The checks read which chat's agent a card asked to stop.
-            document.body.dataset.stoppedChat = id;
-          }}
-          onBack={() => {}}
+/** The pane the Dashboard opens over, with the button that opens it, as the sidebar's does. */
+function DashboardPreview({
+  start,
+  ...fixtures
+}: Omit<Parameters<typeof Dashboard>[0], "onClose" | "onOpenChat"> & { readonly start: boolean }) {
+  const [open, setOpen] = useState(start);
+  return (
+    <div className="pane-shell g-root">
+      <main
+        style={{
+          flex: 1,
+          padding: "var(--g-space-24)",
+          borderRadius: "var(--ui-pane-radius)",
+          background: "var(--ui-pane-fill)",
+        }}
+      >
+        <button
+          type="button"
+          className="g-button g-button-ghost g-button-28"
+          data-testid="dashboard-button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          Dashboard
+        </button>
+      </main>
+      {open ? (
+        <Dashboard
+          {...fixtures}
+          onClose={() => setOpen(false)}
           onOpenChat={(id) => {
             // The checks read which chat a card asked to open.
             document.body.dataset.openedChat = id;
           }}
         />
-      </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function mountDashboardPreview(container: HTMLElement) {
+  const params = new URLSearchParams(location.search);
+  const kind = params.get("case");
+  const { api, app, workspace } = fixture(kind);
+  const lineEdits = lineEditsFixture(kind);
+  // The app's own frame (App.tsx): the inset pane fills the window and the Dashboard opens over it.
+  container.style.height = "100vh";
+  createRoot(container).render(
+    <StrictMode>
+      <DashboardPreview
+        start={!params.has("closed")}
+        app={app}
+        workspace={workspace}
+        api={api}
+        lineEdits={lineEdits}
+        // Clearing lasts for the page only, so each check starts from the full board.
+        cleared={new DashboardCleared(null)}
+        stopChat={async (id) => {
+          // The checks read which chat's agent a card asked to stop.
+          document.body.dataset.stoppedChat = id;
+        }}
+      />
     </StrictMode>,
   );
 }

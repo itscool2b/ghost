@@ -1,4 +1,8 @@
-/** Scripted Dashboard checks (`?preview=dashboard`). Reads no process table, stops nothing. */
+/**
+ * Scripted Dashboard checks (`?preview=dashboard`). Reads no process table, stops nothing. The
+ * Dashboard opens over the window as a modal panel and goes again (Dashboard.tsx): the checks open
+ * it from its button, close it with Escape, its close button and by opening a chat.
+ */
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -40,32 +44,55 @@ export async function checkDashboard(browser, url, out, engine) {
           );
 
         await page.goto(`${url}/?preview=dashboard&theme=${theme}`);
-        await page.getByRole("heading", { name: "Dashboard", level: 1 }).waitFor();
+        const dashboard = page.getByRole("dialog", { name: "Dashboard" });
+        await dashboard.getByRole("heading", { name: "Dashboard", level: 2 }).waitFor();
         const lanes = page.getByTestId("dashboard-lane");
         assert.equal(await lanes.count(), 3);
-        // The page fills the app's inset pane, its lanes side by side (it once shrank to a
-        // 70px column there, every word on its own line).
+        // A panel over the window, as wide as the window allows up to 1180px, its lanes side by
+        // side (they once shrank to a 70px column, every word on its own line).
         const frame = await page.evaluate(() => {
-          const screen = document.querySelector('[data-testid="dashboard-screen"]');
+          const panel = document.querySelector(".dashboard-panel").getBoundingClientRect();
           const boxes = [...document.querySelectorAll('[data-testid="dashboard-lane"]')].map(
             (lane) => lane.getBoundingClientRect(),
           );
           return {
-            screen: screen.getBoundingClientRect().width,
+            left: panel.left,
+            right: panel.right,
+            top: panel.top,
+            bottom: panel.bottom,
+            width: panel.width,
             window: innerWidth,
+            height: innerHeight,
             tops: boxes.map((box) => Math.round(box.top)),
             widths: boxes.map((box) => Math.round(box.width)),
           };
         });
-        assert.ok(frame.screen >= frame.window - 32, `the page fills the pane: ${frame.screen}`);
+        assert.ok(
+          frame.left >= 16 && frame.right <= frame.window - 16,
+          `the panel stands inside the window: ${frame.left}..${frame.right}`,
+        );
+        assert.ok(frame.top >= 16 && frame.bottom <= frame.height - 16, "and inside its height");
+        assert.ok(
+          frame.width >= Math.min(1180, frame.window - 48) - 1,
+          `as wide as the window allows: ${frame.width}`,
+        );
         assert.equal(new Set(frame.tops).size, 1, `lanes side by side: ${frame.tops}`);
         assert.ok(Math.min(...frame.widths) >= 220, `lanes have room: ${frame.widths}`);
-        assert.deepEqual(await page.getByRole("heading", { level: 2 }).allTextContents(), [
+        assert.deepEqual(await dashboard.getByRole("heading", { level: 3 }).allTextContents(), [
           "Needs you 2",
           "Working 3",
           "Finished 2",
           "AI line edits",
         ]);
+        // Opened, focus is on the board; the button that opens it says it is open.
+        assert.equal(
+          await page.evaluate(() => document.activeElement?.classList.contains("dashboard-page")),
+          true,
+        );
+        assert.equal(
+          await page.getByTestId("dashboard-button").getAttribute("aria-expanded"),
+          "true",
+        );
         assert.equal(
           await page.getByTestId("dashboard-summary").textContent(),
           "2 need you, 3 working, 2 finished in the last day.",
@@ -165,15 +192,43 @@ export async function checkDashboard(browser, url, out, engine) {
         );
         assert.equal(await page.getByText("cargo.exe").count(), 0, "what it started stopped too");
 
-        // The whole card opens its chat, not only its title; its button takes the focus.
+        // Escape closes it and hands focus back to its button, which opens it again.
+        const opener = page.getByTestId("dashboard-button");
+        const reopen = async () => {
+          await dashboard.waitFor({ state: "detached" });
+          await opener.click();
+          await dashboard.waitFor();
+        };
+        await page.keyboard.press("Escape");
+        await dashboard.waitFor({ state: "detached" });
+        assert.equal(await opener.getAttribute("aria-expanded"), "false");
+        assert.equal(
+          await page.evaluate(() => document.activeElement?.dataset.testid),
+          "dashboard-button",
+        );
+        await opener.click();
+        await dashboard.waitFor();
+        // A click beside the panel closes it; so does its close button.
+        await page.mouse.click(8, frame.height - 8);
+        await reopen();
+        await dashboard.getByRole("button", { name: "Close the Dashboard" }).click();
+        await reopen();
+
+        // The whole card opens its chat, not only its title, and the Dashboard goes; its button
+        // takes the focus.
         const pi = page.locator('[data-test-chat-id="chat-pi"]');
         const box = await pi.boundingBox();
         await page.mouse.click(box.x + box.width / 2, box.y + box.height - 8);
         assert.equal(await page.evaluate(() => document.body.dataset.openedChat), "chat-pi");
+        await reopen();
+        await page.evaluate(() => {
+          document.body.dataset.openedChat = "";
+        });
         const open = page.getByRole("button", { name: "Tidy the changelog check", exact: true });
         await open.focus();
         await page.keyboard.press("Enter");
         assert.equal(await page.evaluate(() => document.body.dataset.openedChat), "chat-pi");
+        await reopen();
 
         // A card whose agent works or waits for an answer offers Stop; every other card Clear.
         assert.equal(await claude.getByTestId("dashboard-card-stop").count(), 1);
@@ -189,13 +244,13 @@ export async function checkDashboard(browser, url, out, engine) {
         );
         // Clear takes a card off the board without opening it; Clear finished takes the rest.
         await pi.getByTestId("dashboard-card-clear").click();
-        await page.getByRole("heading", { name: "Finished 1", level: 2 }).waitFor();
+        await page.getByRole("heading", { name: "Finished 1", level: 3 }).waitFor();
         // The lane's count changes at once; the card leaves once its (here instant) exit settles,
         // which a slower machine reads before.
         await pi.waitFor({ state: "detached" });
         assert.equal(await laneOf("chat-pi"), null);
         await page.getByTestId("dashboard-clear-finished").click();
-        await page.getByRole("heading", { name: "Finished 0", level: 2 }).waitFor();
+        await page.getByRole("heading", { name: "Finished 0", level: 3 }).waitFor();
         assert.equal(await page.getByTestId("dashboard-clear-finished").count(), 0);
 
         await page.goto(`${url}/?preview=dashboard&theme=${theme}&case=empty`);
@@ -210,7 +265,7 @@ export async function checkDashboard(browser, url, out, engine) {
         // A busy day: Finished shows its newest eight, and the rest on request.
         await page.goto(`${url}/?preview=dashboard&theme=${theme}&case=busy`);
         const finished = page.locator('[data-lane="finished"] [data-testid="dashboard-card"]');
-        await page.getByRole("heading", { name: "Finished 13", level: 2 }).waitFor();
+        await page.getByRole("heading", { name: "Finished 13", level: 3 }).waitFor();
         assert.equal(await finished.count(), 8);
         assert.equal(
           await finished.first().getAttribute("data-test-chat-id"),
@@ -248,7 +303,7 @@ async function checkMoves(browser, url, engine) {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${url}/?preview=dashboard&case=live`);
-    await page.getByRole("heading", { name: "Dashboard", level: 1 }).waitFor();
+    await page.getByRole("heading", { name: "Dashboard", level: 2 }).waitFor();
     const samples = () =>
       page.evaluate(() => {
         const columns = Object.fromEntries(

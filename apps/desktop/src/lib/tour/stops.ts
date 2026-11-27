@@ -54,7 +54,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "window",
     side: "right",
     title: "Dashboard",
-    body: "Every chat by what it needs from you: waiting on you, working or finished. The number here counts the agents at work.",
+    body: "Every chat by what it needs from you, waiting on you, working or finished, over the window you are in. The number here counts the agents at work.",
   },
   {
     id: "new-chat",

@@ -111,9 +111,9 @@ export const LineEditsCard = memo(function LineEditsCard({
     >
       <div className="dashboard-activity-head">
         <div className="dashboard-activity-heading">
-          <h2 id="dashboard-activity-title" className="dashboard-activity-title">
+          <h3 id="dashboard-activity-title" className="dashboard-activity-title">
             AI line edits
-          </h2>
+          </h3>
           <p className="dashboard-activity-total" data-testid="dashboard-activity-total">
             {busy ? "–" : formatLines(calendar.total)}
           </p>
