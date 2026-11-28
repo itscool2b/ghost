@@ -84,10 +84,12 @@ func _ready() -> void:
 	_peer.connect_to_host(endpoint[0], int(endpoint[1]))
 	RenderingServer.frame_post_draw.connect(_after_draw)
 	_install_logger()
-	# A run started to be replayed stands still from before its first step.
+	# A run started to be replayed stands still once its first step is taken. Not before it:
+	# that step is where the engine puts the first scene in the tree, and a game stopped
+	# before it would have its scene a step early, one step ahead of the run it repeats.
+	# Nothing can have been given to a game in its first step, so nothing is missed.
 	if OS.get_environment("GHOST_GAME_HOLD") == "1":
 		_frozen = true
-		_settle_frozen()
 
 func _install_logger() -> void:
 	# Godot 4.5 and later hand errors to a Logger with their file and line. Its script is apart,
@@ -529,8 +531,8 @@ func _release_held() -> void:
 ## stretch. The game is in the state the first run was in, as far as it draws no numbers and
 ## reads no clock of its own.
 func _start_replay(id, message: Dictionary) -> void:
-	if _tick != 0 or not _stopped:
-		_refuse(id, "A replay starts with a run that has not taken a step yet.")
+	if _tick > 1 or not _frozen:
+		_refuse(id, "A replay starts with a run that stands at its first step.")
 		return
 	var events: Array = []
 	for raw in message.get("events", []):

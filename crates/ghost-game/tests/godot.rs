@@ -532,7 +532,7 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
             manager,
             folder,
             "game_eval",
-            json!({"code": "[scene.frames, Globals.score, scene.get_node(\"Player\").position.x, scene.speed]"}),
+            json!({"code": "return [scene.frames, Globals.score, scene.get_node(\"Player\").position.x, scene.speed]"}),
         )
         .await;
         assert!(!reply.error, "{}", reply.text);
@@ -579,7 +579,9 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
     .await;
     assert!(!early.error, "{}", early.text);
     let early_state = state(&manager, &game).await;
-    assert!(early_state.starts_with("[12, 0, "), "{early_state}");
+    // Twelve steps: the scene joins the tree in the first, so it has run eleven, and the value
+    // the agent set after the first half second is not set yet.
+    assert_eq!(early_state, "[11, 0, 100.0, 200.0]");
     let unknown = tool(&manager, &game, "game_replay", json!({"replay": "r9"})).await;
     assert!(
         unknown.error && unknown.text.contains("Kept: r1"),
