@@ -526,6 +526,75 @@ pub async fn game_recent(
     Ok(games.recent(&chat_id, seconds).await?)
 }
 
+/// The pictures, sounds and models of the chat's folder, the newest first, for the pane's
+/// Assets view. Links are not followed and hidden folders, dependencies and builds are not
+/// entered.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_assets(
+    state: State<'_, AppState>,
+    chat_id: String,
+) -> Result<ghost_game::assets::GameAssets, AppError> {
+    let folder = folder_of(&state, &chat_id).await?;
+    tokio::task::spawn_blocking(move || ghost_game::assets::list(&folder))
+        .await
+        .map_err(|_| AppError::new(AppErrorCode::Internal, "The folder could not be read."))
+}
+
+/// One asset of the chat's folder, for the person to look at or hear.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+pub struct GameAssetData {
+    pub kind: ghost_game::assets::AssetKind,
+    /// What the file is, by its name ("image/png", "audio/ogg", "model/gltf-binary").
+    pub mime: String,
+    pub base64: String,
+}
+
+/// What a browser calls a file with this name.
+fn asset_mime(path: &str) -> &'static str {
+    let extension = path
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())
+        .unwrap_or_default();
+    match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "mp3" => "audio/mpeg",
+        "flac" => "audio/flac",
+        "glb" => "model/gltf-binary",
+        "gltf" => "model/gltf+json",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Reads one asset by the path [`game_assets`] listed it under. Only a picture, a sound or a
+/// model inside the chat's own folder is read, through no link, up to the size its kind allows.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_asset(
+    state: State<'_, AppState>,
+    chat_id: String,
+    path: String,
+) -> Result<GameAssetData, AppError> {
+    let folder = folder_of(&state, &chat_id).await?;
+    let mime = asset_mime(&path).to_owned();
+    let (kind, bytes) =
+        tokio::task::spawn_blocking(move || ghost_game::assets::read(&folder, &path))
+            .await
+            .map_err(|_| AppError::new(AppErrorCode::Internal, "The asset could not be read."))??;
+    Ok(GameAssetData {
+        kind,
+        mime,
+        base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+    })
+}
+
 /// Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
 /// stream's own end. Answers the stream's number, for `game_unwatch`.
 #[tauri::command]

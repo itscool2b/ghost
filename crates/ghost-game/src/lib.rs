@@ -12,6 +12,7 @@
 //!   the run's token before anything else, and from then on can only answer and send pictures:
 //!   every message is bounded, and what it says is data for the agent, never an instruction.
 
+pub mod assets;
 pub mod bridge;
 mod check;
 pub mod detect;

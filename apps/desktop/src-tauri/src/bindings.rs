@@ -117,6 +117,8 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::game::game_tunables,
             crate::game::game_set_value,
             crate::game::game_recent,
+            crate::game::game_assets,
+            crate::game::game_asset,
             crate::game::game_watch,
             crate::game::game_unwatch,
             crate::game::game_log,

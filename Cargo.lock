@@ -2225,6 +2225,8 @@ dependencies = [
 name = "ghost-game"
 version = "0.1.0"
 dependencies = [
+ "cap-fs-ext",
+ "cap-std",
  "ghost-fetch",
  "process-wrap",
  "serde",
