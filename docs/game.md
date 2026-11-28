@@ -108,6 +108,30 @@ entered: hidden folders (`.godot`, `.git`), `node_modules`, `target`, `build`, `
 most 1500 assets, ten folders deep. Read to show: a picture up to 12 MiB, a sound up to 24 MiB,
 a model up to 32 MiB; a larger file is listed and says it is too large.
 
+## Export
+
+**Export for the web** is beside Play for a Godot project, and **Pack for the web** is in the
+pane of a web game. It makes a zip with `index.html` at its top, in the person's Downloads
+folder, and shows where it is with the steps for itch.io in itch.io's own words (its guide was
+read on 28 November 2026: pick "HTML Game" from the "Kind Of Game" list; at most 1000 files and
+500 MB unpacked, no file over 200 MB). **Open itch.io** opens its page for a new game in the
+person's browser. Nothing is uploaded by Ghost.
+
+- **A Godot project** is exported by Ghost's own Godot 4.7.2, without a window
+  (`--headless --export-release "Web"`). Godot needs its web export template, ten megabytes of
+  a 1.28 GB archive: Ghost fetches that part alone, the first time, and keeps it. The game is
+  exported without threads, so it runs on any web host with no special headers.
+- **The project's own Web preset** is used when its `export_presets.cfg` has one. A project
+  with no presets gets one written for the run and taken away again when the export ends,
+  however it ends. A project whose presets hold none for the web is told so.
+- Exporting runs Godot's importer, as opening the project in Godot's editor does, which leaves
+  Godot's own files beside the project's (`.godot`, `*.uid`).
+- **A web game** is packed from what it built: `dist`, `build` or `out` when one holds an
+  `index.html`, or the project itself when it is a plain page (without `node_modules` and
+  hidden files). Building is the project's own step: a game with nothing built is told to
+  build first.
+- Unity, Unreal and Roblox export from their own editors.
+
 ## The agent plays it
 
 An agent gets the tools only in a chat whose folder holds a game, or one the person turned Game
@@ -224,6 +248,19 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   and only a path inside the project is opened (`run::checked_scene`).
 - A value turned from the pane is one of the node's own, named by a plain name, and a number or
   a switch: `set_value` refuses anything else.
+- **Only the person exports.** `game_export` and `game_export_show` are commands of the
+  window; no tool exports, packs or uploads, and `helper.rs` tests that no tool's name says it
+  does. The zip goes to the person's own Downloads folder under a name made from the game's
+  (letters, digits and dashes). The app shows only the zip it just wrote: the page names no
+  path. Ghost uploads nothing and holds no account with itch.io.
+- **What export fetches** is one part of one archive, from Godot's releases on GitHub over
+  HTTPS, by its place in the archive, and it is kept only when it unpacks to the pinned size and
+  SHA-256 (`export::WEB_TEMPLATE`). The pin was made from a copy of the whole archive whose
+  SHA-512 matched the one Godot publishes. A server that answers with anything but that part
+  is refused.
+- **The preset Ghost writes** is made new or not at all (never over a file that is there) and
+  removed when the export ends. A link in the folder being packed is not followed, and a
+  folder's hidden files and `node_modules` are not packed.
 - **Assets are looked at, by the person.** `game_assets` and `game_asset` are commands of the
   window; no tool reaches them. Only a file that is a picture, a sound or a model by its name is
   read, by a plain path inside the chat's own folder (no `..`, no hidden part, no drive or
@@ -270,6 +307,13 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
 - **Pointing** asks the bridge what is at a point: the smallest box that holds it among
   controls, sprites, collision shapes, polygons, tile layers and the projected bounds of 3D
   meshes, with whatever fills most of the picture counted only when nothing smaller is there.
+- **Export** (`crates/ghost-game/src/export.rs`; `ghost-fetch`'s `download_entry` and
+  `zip_folder`). The template is asked for with one range request that covers its entry in the
+  archive, inflated, and checked. Godot is run under a second name in a folder of Ghost's own,
+  beside a file (`._sc_`) that tells it to keep its editor's settings and caches there, so an
+  export leaves nothing in the person's own Godot folder (not on a Mac, where Godot is a
+  bundle and runs as it is). The exported game is in Ghost's folder (`exports/<name>`) and is
+  packed from there.
 - **Assets** (`crates/ghost-game/src/assets.rs`, `components/game/AssetsView.tsx`,
   `lib/gameAssets.ts`). The list is a walk of the folder that follows no link. A file's bytes
   come once, as base64, and are kept as an object URL while something shows them; what nothing
@@ -306,6 +350,15 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   nothing outside its folder. The real-Godot test loads and plays both Godot starters.
 - `vitest`: `lib/game.test.ts`, `lib/gameTell.test.ts` (the words of each note, slider ranges, a
   controller's input).
+- Export: `cargo test -p ghost-fetch` (an entry unpacked from its own bytes and checked; a
+  wrong hash, size, place or a cut answer refused; a host it may not use; a folder packed with
+  its top at the archive's top, without links, hidden files or what it is told to skip),
+  `cargo test -p ghost-game export` (the project's own Web preset found, the preset Ghost
+  writes, a preset taken away after a failed export and the project's own left alone, a web
+  game packed from its build). The real-engine test exports the fixture: the template fetched
+  by itself from Godot's release, the page and the engine at the zip's top, the preset gone,
+  a second export. `check-game.mjs` plays the button, the progress line, the sheet, a zip with
+  too many files for itch.io and a failed export.
 - Assets: `cargo test -p ghost-game assets` (what is listed and what is not, a path read only
   as listed, every spelling of a path out of the folder, a link neither listed nor read, a file
   too large), `lib/gameAssets.test.ts` (sheets, a sound's shape, what a turn left, the bytes
@@ -316,8 +369,13 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   and a person played live, and replays it to the same frame, twice, the second time stopped
   early. `check-game.mjs` plays Point, the last 15 seconds, Tune and a stand-in controller.
 
-## Still to come
+## Not done
 
-Export, and a place on the website. They are in the plan. Pointing, replays and tuning
-are for Godot games: a web game is played in the browser with the person's own input, which
-Ghost does not record, and its page is annotated with the browser's own Annotate.
+- Pointing, replays and tuning are for Godot games: a web game is played in the browser with
+  the person's own input, which Ghost does not record, and its page is annotated with the
+  browser's own Annotate.
+- Export is for the web. A desktop or phone build needs Godot's other templates and, for
+  phones and Macs, signing with the person's own keys.
+- An exported game is not run by Ghost before it is packed. itch.io's own page is where it is
+  first played.
+- A controller has been checked with a stand-in only.

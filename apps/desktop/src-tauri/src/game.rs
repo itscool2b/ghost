@@ -595,6 +595,47 @@ pub async fn game_asset(
     })
 }
 
+/// Packs the chat's game for the web and puts the zip in the person's Downloads folder. A Godot
+/// project is exported by Ghost's own Godot (its web template is fetched first, ten megabytes,
+/// when it is not here yet); a web game is packed from its built folder. Nothing is uploaded.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_export(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    games: State<'_, Games>,
+    chat_id: String,
+) -> Result<ghost_game::export::GameExport, AppError> {
+    let folder = folder_of(&state, &chat_id).await?;
+    let downloads = app
+        .path()
+        .download_dir()
+        .map_err(|_| AppError::new(AppErrorCode::Internal, "There is no Downloads folder."))?;
+    Ok(games.export(&chat_id, &folder, &downloads).await?)
+}
+
+/// Shows the zip the chat's last export made, in its folder. The page names no path: only the
+/// zip this app just wrote is ever shown.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_export_show(games: State<'_, Games>, chat_id: String) -> Result<(), AppError> {
+    let zip = games.exported(&chat_id).ok_or_else(|| {
+        AppError::new(
+            AppErrorCode::RevealFailed,
+            "The exported zip is no longer there.",
+        )
+    })?;
+    tauri::async_runtime::spawn_blocking(move || tauri_plugin_opener::reveal_item_in_dir(zip))
+        .await
+        .map_err(|_| AppError::new(AppErrorCode::RevealFailed, "The folder could not be shown."))?
+        .map_err(|error| {
+            AppError::new(
+                AppErrorCode::RevealFailed,
+                format!("The folder could not be shown: {error}"),
+            )
+        })
+}
+
 /// Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
 /// stream's own end. Answers the stream's number, for `game_unwatch`.
 #[tauri::command]

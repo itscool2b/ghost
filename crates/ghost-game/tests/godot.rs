@@ -70,7 +70,7 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
         .collect();
     let manager = Manager::new(
         Config {
-            root,
+            root: root.clone(),
             max_running: 2,
         },
         || {},
@@ -624,6 +624,46 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
         .collect();
     now.retain(|name| name != ".godot" && !before.contains(name));
     assert!(now.is_empty(), "new in the project: {now:?}");
+
+    // Export for the web: Ghost's own Godot, its web template fetched by itself (ten megabytes
+    // of an archive of 1.28 GB) and checked, a preset written for the run and taken away again,
+    // and the game packed with its page at the archive's top.
+    let downloads = scratch.path().join("Downloads");
+    let exported = manager
+        .export("chat", &game, &downloads)
+        .await
+        .expect("the game is exported");
+    assert_eq!(exported.what, "Godot's web export");
+    assert!(exported.files >= 5, "{} files", exported.files);
+    assert!(
+        exported.bytes > 5_000_000,
+        "{} bytes: the engine is most of a web game",
+        exported.bytes
+    );
+    let zip = std::path::PathBuf::from(&exported.zip);
+    assert_eq!(zip.parent(), Some(downloads.as_path()));
+    assert_eq!(manager.exported("chat").as_deref(), Some(zip.as_path()));
+    let unpacked = scratch.path().join("unpacked");
+    ghost_fetch::unzip(&zip, &unpacked, 512 * 1024 * 1024).expect("the zip unpacks");
+    for name in ["index.html", "index.wasm", "index.pck", "index.js"] {
+        assert!(
+            unpacked.join(name).is_file(),
+            "{name} is at the archive's top"
+        );
+    }
+    let page = std::fs::read_to_string(unpacked.join("index.html")).unwrap();
+    assert!(page.contains("index.js"), "the page loads the engine");
+    assert!(
+        !game.join("export_presets.cfg").exists(),
+        "the preset written for the run is taken away"
+    );
+    assert!(
+        ghost_game::export::template_path(&root).is_file(),
+        "the template is kept for the next export"
+    );
+    // Again: nothing is fetched twice, and the zip is replaced.
+    let again = manager.export("chat", &game, &downloads).await.unwrap();
+    assert_eq!(again.zip, exported.zip);
 
     // A script that does not parse is found without running the game.
     std::fs::write(

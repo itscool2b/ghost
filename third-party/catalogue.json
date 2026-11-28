@@ -2,7 +2,7 @@
   "version": 1,
   "scope": "Locked production dependency closure, excluding dev/build dependencies and procedural macro executables. transcribe.cpp's vendored sources, the bundled dictation models and the bundled scrcpy server are explicitly included. Linker-level and installer SDK qualification is separate.",
   "inputs": {
-    "Cargo.lock": "4cd1e46a9aa2e09df4290b537134d2600d61e7c3774c1efdd082fb13e57a5be3",
+    "Cargo.lock": "981fe368a44807b81c7dcb1ff39a7d0d48702018d91ed183fe694de48c6b6d6e",
     "Cargo.toml": "8fdbd65e1911619cc436e29e5a8ece8d5bf6acf6decbf9a5491c337002faf24f",
     "apps/design-lab/package.json": "ea8a3eb1316e5e98b806d9c834b4971bb40253fb96ff0955b4235b92eeb40150",
     "apps/desktop/package.json": "638d59dc335100333692c241773c5c0fb69bcfa64f1f40cc7fc35e7c44ef56c9",
@@ -19,7 +19,7 @@
     "crates/ghost-core/Cargo.toml": "b54b36b833bc92614598b7861a388baeddf2c007ca4379e83f34df05eb6b6403",
     "crates/ghost-devices/Cargo.toml": "2b7a1bb6f87b7b2224d3ec04b4ea681d64f9ffac98ef0678b05857f6b1aa879e",
     "crates/ghost-drivers/Cargo.toml": "716cd0cf5d1001fbcadb3df9849112809a4e431b1942ce1a4da7c73ba1d27fce",
-    "crates/ghost-fetch/Cargo.toml": "a3bca2b05711e12811f120d0392a15625e21e2cee83643bfdbea4a7ecf631fa2",
+    "crates/ghost-fetch/Cargo.toml": "f9f85550708f2dbd6599c759e0eebd37d986b0157ee72458d074474f57e44606",
     "crates/ghost-game/Cargo.toml": "bf178183096bd8e42519aac96ed1b68517c86787c0f323a513b23b9c1512ae8b",
     "crates/ghost-process/Cargo.toml": "c648c7f0ec67fabc3d44f0184b60648ed74600b19eaf59c7ee5aabebd91566fb",
     "crates/ghost-protocol/Cargo.toml": "9cf1c79a4528ea1cafc73ae3c6f8ab7c738304df0d72bfd2cbec1a843dc2c857",

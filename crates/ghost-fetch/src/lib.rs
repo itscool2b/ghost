@@ -6,11 +6,16 @@
 //! - [`unzip`] unpacks a checked archive into an empty folder so that no entry lands outside it:
 //!   not by its own path, and not through a link.
 //!
+//! - [`download_entry`] takes one pinned file out of a published zip archive without the archive,
+//!   and [`zip_folder`] packs a folder.
+//!
 //! Neither decides what may be fetched or who may ask. That is the caller's: the pin is a
 //! constant of the build, and the person starts the fetch.
 
 mod download;
+mod entry;
 mod unzip;
 
 pub use download::{Checked, Digest, DownloadError, Pin, Progress, client, download};
+pub use entry::{EntryPin, ZipError, download_entry, unpack_entry, zip_folder};
 pub use unzip::{UnzipError, unzip};

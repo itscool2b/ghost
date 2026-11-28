@@ -416,6 +416,9 @@ struct Chat {
     /// Runs kept to be played again, oldest first, and how many were ever kept.
     replays: Vec<Replay>,
     replay_seq: u32,
+    /// An export is under way, and the zip the last one made.
+    exporting: bool,
+    exported: Option<PathBuf>,
 }
 
 impl Chat {
@@ -437,6 +440,8 @@ impl Chat {
             generation: 0,
             replays: Vec::new(),
             replay_seq: 0,
+            exporting: false,
+            exported: None,
         }
     }
 }
@@ -1672,6 +1677,69 @@ impl Manager {
             patience,
         )
         .await
+    }
+
+    /// Packs the chat's game for the web and puts the zip in `downloads`: the person's
+    /// action, from the pane. A Godot project is exported by Ghost's own Godot; a web game is
+    /// packed from its built folder. The zip is remembered, so the pane can show it in its
+    /// folder without naming a path.
+    pub async fn export(
+        &self,
+        chat_id: &str,
+        folder: &Path,
+        downloads: &Path,
+    ) -> Result<crate::export::GameExport, Error> {
+        if !self.enabled() {
+            return Err(Error::Refused(TURNED_OFF.into()));
+        }
+        let project = self.look(chat_id, folder).await.ok_or_else(|| {
+            Error::Refused("This chat's folder does not hold a game Ghost knows.".into())
+        })?;
+        self.look_once().await;
+        let godot = {
+            let mut state = self.state();
+            let chat = state
+                .chats
+                .get_mut(chat_id)
+                .ok_or_else(|| Error::Refused("This chat is gone.".into()))?;
+            if chat.exporting {
+                return Err(Error::Refused(
+                    "This chat's game is being exported already.".into(),
+                ));
+            }
+            chat.exporting = true;
+            // Ghost's own Godot of the pinned version: the template is that version's.
+            state
+                .found
+                .iter()
+                .find(|found| found.managed && found.version == godot::VERSION)
+                .map(|found| found.program.clone())
+        };
+        let result = crate::export::export(
+            &project,
+            folder,
+            godot.as_deref(),
+            &self.inner.config.root,
+            downloads,
+        )
+        .await;
+        let mut state = self.state();
+        if let Some(chat) = state.chats.get_mut(chat_id) {
+            chat.exporting = false;
+            if let Ok(done) = &result {
+                chat.exported = Some(PathBuf::from(&done.zip));
+            }
+        }
+        result
+    }
+
+    /// The zip the chat's last export made, while it is still there.
+    pub fn exported(&self, chat_id: &str) -> Option<PathBuf> {
+        self.state()
+            .chats
+            .get(chat_id)
+            .and_then(|chat| chat.exported.clone())
+            .filter(|zip| zip.is_file())
     }
 
     /// Whether the chat's game gets a window of its own from its next start on. The person's

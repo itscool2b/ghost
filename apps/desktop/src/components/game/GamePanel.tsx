@@ -33,6 +33,7 @@ import {
 } from "react";
 import type {
   ChatGame,
+  GameExport,
   GameInput,
   GameLog,
   GamePicked,
@@ -72,6 +73,7 @@ import type { AnnotationTarget } from "../browser/BrowserPanel";
 import { commandKey } from "../chat/Keys";
 import { AssetsView } from "./AssetsView";
 import { connected, EngineConnect } from "./EngineConnect";
+import { ExportSheet } from "./ExportSheet";
 import { markedPicture, pngFrom, TuneSheet, themeColor } from "./GameTell";
 
 /** A box in the stage's own pixels: where a note is put beside. */
@@ -190,6 +192,18 @@ export function GamePanel({
     if (wantedAsset !== null) setView("assets");
   }, [wantedAsset]);
   const assetShown = useCallback(() => store.shownAsset(chatId), [store, chatId]);
+  /** An export under way, and what the last one made. */
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<GameExport | null>(null);
+  const exportWeb = () => {
+    setProblem(null);
+    setExported(null);
+    setExporting(true);
+    api
+      .exportWeb(chatId)
+      .then(setExported, fail)
+      .finally(() => setExporting(false));
+  };
   /** What the pointer is for when it is not the game's: choosing something in the picture. */
   const [pointing, setPointing] = useState<"tell" | "tune" | null>(null);
   const [picked, setPicked] = useState<{ node: GamePicked; anchor: Anchor } | null>(null);
@@ -513,8 +527,26 @@ export function GamePanel({
             onStartProject={startProject}
             onOpenBrowser={onOpenBrowser}
             onError={fail}
+            exporting={exporting}
+            onExport={exportWeb}
           />
         )}
+        {exporting ? (
+          <output className="game-bar game-exporting" data-testid="game-exporting">
+            <span className="game-progress" aria-hidden="true" />
+            <span className="game-bar-text">
+              Packing the game for the web. A project's first export takes longer: Godot's web part
+              is fetched once (10 MB) and the project is imported.
+            </span>
+          </output>
+        ) : null}
+        {exported && view === "game" ? (
+          <ExportSheet
+            exported={exported}
+            onShow={() => api.exportShow(chatId).catch(fail)}
+            onClose={() => setExported(null)}
+          />
+        ) : null}
         {logOpen && game ? (
           <LogSheet chatId={chatId} api={api} game={game} onClose={() => setLogOpen(false)} />
         ) : null}
@@ -621,7 +653,13 @@ function Stage({
   shown,
   stage,
   onPicked,
+  exporting,
+  onExport,
 }: {
+  /** An export is under way. */
+  readonly exporting: boolean;
+  /** Packs the game for the web. */
+  readonly onExport: () => void;
   readonly chatId: string;
   readonly api: GameApi;
   readonly game: ChatGame;
@@ -724,16 +762,28 @@ function Stage({
               starts its dev server and opens it there, plays it with time frozen while it thinks,
               and you play it in the same place.
             </p>
-            {onOpenBrowser ? (
+            <div className="game-actions">
+              {onOpenBrowser ? (
+                <button
+                  type="button"
+                  className="g-button g-button-primary g-button-28"
+                  data-testid="game-open-browser"
+                  onClick={onOpenBrowser}
+                >
+                  Open the browser
+                </button>
+              ) : null}
               <button
                 type="button"
-                className="g-button g-button-primary g-button-28"
-                data-testid="game-open-browser"
-                onClick={onOpenBrowser}
+                className="g-button g-button-ghost g-button-28"
+                data-testid="game-export"
+                title="Pack the built game into a zip that itch.io takes as it is"
+                disabled={exporting}
+                onClick={onExport}
               >
-                Open the browser
+                {exporting ? "Packing" : "Pack for the web"}
               </button>
-            ) : null}
+            </div>
           </>
         ) : (
           <p>
@@ -799,6 +849,16 @@ function Stage({
           onClick={() => api.openEditor(chatId).catch(onError)}
         >
           Open in Godot
+        </button>
+        <button
+          type="button"
+          className="g-button g-button-ghost g-button-28"
+          data-testid="game-export"
+          title="Export the game as a web page, in a zip that itch.io takes as it is"
+          disabled={exporting}
+          onClick={onExport}
+        >
+          {exporting ? "Exporting" : "Export for the web"}
         </button>
       </div>
     </div>
