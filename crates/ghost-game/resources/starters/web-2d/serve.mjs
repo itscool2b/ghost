@@ -1,11 +1,14 @@
 // Serves this folder to this computer only, for playing the game while it is built:
 //   npm run dev      then open the address it prints
-import { createReadStream, statSync } from "node:fs";
+import { createReadStream, realpathSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
+// The system's own answer to where a path leads: it follows links and, on Windows, writes a
+// short name (GIT~1) out as the real one (.git).
+const realPath = realpathSync.native;
+const root = realPath(resolve(fileURLToPath(new URL(".", import.meta.url))));
 const port = Number(process.env.PORT) || 5173;
 // The names this server answers to. A page on another site that points its own name at this
 // computer is not one of them, so it cannot read these files through a browser.
@@ -33,6 +36,26 @@ const refuse = (response, status, text) => {
   response.end(text);
 };
 
+/**
+ * The file a request names, or `null`. What decides is where the path really leads on disk, not
+ * how the address spells it: a link, a backslash or a short name cannot reach a hidden file
+ * (.git, .env) or anything outside this folder.
+ */
+const fileFor = (path) => {
+  if (path.includes("\\") || path.includes("\0")) return null;
+  let real;
+  try {
+    real = realPath(join(root, path.endsWith("/") ? `${path}index.html` : path));
+    if (!statSync(real).isFile()) return null;
+  } catch {
+    return null;
+  }
+  const inside = relative(root, real);
+  if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return null;
+  if (inside.split(/[\\/]/).some((part) => part.startsWith("."))) return null;
+  return real;
+};
+
 createServer((request, response) => {
   if (!hosts.has(String(request.headers.host ?? "").toLowerCase())) {
     refuse(response, 403, "Forbidden");
@@ -49,20 +72,8 @@ createServer((request, response) => {
     refuse(response, 400, "Bad request");
     return;
   }
-  // Hidden files and folders (.git, .env) are not part of the game.
-  if (path.split("/").some((part) => part.startsWith("."))) {
-    refuse(response, 404, "Not found");
-    return;
-  }
-  const file = normalize(join(root, path.endsWith("/") ? `${path}index.html` : path));
-  // Nothing outside this folder is served.
-  if (!file.startsWith(root + sep)) {
-    refuse(response, 403, "Forbidden");
-    return;
-  }
-  try {
-    if (!statSync(file).isFile()) throw new Error("not a file");
-  } catch {
+  const file = fileFor(path);
+  if (file === null) {
     refuse(response, 404, "Not found");
     return;
   }

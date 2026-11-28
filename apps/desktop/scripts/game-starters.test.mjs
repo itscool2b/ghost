@@ -3,7 +3,7 @@
 // and the files parse as what they are.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -55,6 +55,16 @@ test("the canvas starter's server serves its folder to this computer and nothing
   await writeFile(join(folder, ".git", "config"), "[core]\n");
   await writeFile(join(folder, ".env"), "NOT=served\n");
   await writeFile(join(folder, "..", "ghost-starter-outside.txt"), "outside\n");
+  await mkdir(join(folder, "art"));
+  await writeFile(join(folder, "art", "ship.png"), "png");
+  // A link inside the folder that leads out of it, where this system lets one be made.
+  const linked = await symlink(
+    join(folder, "..", "ghost-starter-outside.txt"),
+    join(folder, "art", "link.txt"),
+  ).then(
+    () => true,
+    () => false,
+  );
   const port = await freePort();
   const server = spawn(process.execPath, [join(folder, "serve.mjs")], {
     env: { ...process.env, PORT: String(port) },
@@ -83,14 +93,35 @@ test("the canvas starter's server serves its folder to this computer and nothing
       assert.equal(refused.status, 403, `Host: ${host}`);
       assert.doesNotMatch(refused.body, /canvas|requestAnimationFrame/);
     }
-    // Hidden files, files outside the folder, and what is not there.
-    for (const path of ["/.env", "/.git/config", "/sub/.hidden/x"]) {
-      assert.equal((await ask(port, path)).status, 404, path);
-    }
-    for (const path of ["/../ghost-starter-outside.txt", "/%2e%2e/ghost-starter-outside.txt"]) {
+    // A file in a folder of the game's own is served.
+    assert.equal((await ask(port, "/art/ship.png")).status, 200);
+    // Hidden files, files outside the folder, and what is not there, however the address
+    // spells them: with a backslash, in another case, by a Windows short name, through a link.
+    for (const path of [
+      "/.env",
+      "/.git/config",
+      "/sub/.hidden/x",
+      "/art%5C..%5C.env",
+      "/%5C.env",
+      "/art/..%5C.git%5Cconfig",
+      "/.GIT/config",
+      "/GIT~1/config",
+      "/ENV~1",
+      "/../ghost-starter-outside.txt",
+      "/%2e%2e/ghost-starter-outside.txt",
+      "/art/%2e%2e/%2e%2e/ghost-starter-outside.txt",
+      "/art/..%5C..%5Cghost-starter-outside.txt",
+      "/art",
+      "/game.js%00.png",
+    ]) {
       const answer = await ask(port, path);
-      assert.ok([403, 404].includes(answer.status), `${path}: ${answer.status}`);
-      assert.doesNotMatch(answer.body, /outside/);
+      assert.ok([400, 403, 404].includes(answer.status), `${path}: ${answer.status}`);
+      assert.doesNotMatch(answer.body, /outside|NOT=served|\[core\]/, path);
+    }
+    if (linked) {
+      const through = await ask(port, "/art/link.txt");
+      assert.equal(through.status, 404, "a link that leads out of the folder");
+      assert.doesNotMatch(through.body, /outside/);
     }
     assert.equal((await ask(port, "/missing.png")).status, 404);
     assert.equal((await ask(port, "/%E0%A4%A")).status, 400);
