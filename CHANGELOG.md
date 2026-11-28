@@ -12,6 +12,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-28
 
+- Ghost can now run the game you are building. Open a chat in a Godot project and a game button appears in its header: press Play and the game runs beside the chat, where you play it with your keyboard and mouse. Your agent can run it, see it and play it too. Time stands still while the agent thinks, and each move it makes comes back as a strip of pictures, so it can check its own work. If Godot is not on your computer, the pane offers to get it (about 82 MB). Errors show with their file and line. Web games, Unity, Unreal and Roblox projects are recognised, and Settings > Game has the switch. ([#231](https://github.com/itscool2b/ghost/pull/231))
 - Declining a plan works the way you expect. When you ask for changes, your note now reaches the agent together with the refusal, in your own words, so it answers your question or changes the plan right away instead of asking what you wanted. Decline now stops the agent, so you can say what you want instead. The answered plan shows the note you sent. ([#230](https://github.com/itscool2b/ghost/pull/230))
 
 ## 2026-11-27
