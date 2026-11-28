@@ -149,6 +149,24 @@ export const commands = {
 	 */
 	gamePicture: (chatId: string) => typedError<string, AppError>(__TAURI_INVOKE("game_picture", { chatId })),
 	/**
+	 *  The person pressed Start a game: one of Ghost's own small projects is written into the
+	 *  chat's folder, which must hold no game and none of its files yet. Game is turned on for the
+	 *  chat, and its idle session starts again with the game tools.
+	 */
+	gameStartProject: (chatId: string, starter: Starter) => typedError<GameToolsChange, AppError>(__TAURI_INVOKE("game_start_project", { chatId, starter })),
+	/**
+	 *  Whether the agent tools of the engine this chat's project is made with (Unity, Unreal,
+	 *  Roblox) are within reach on this computer now, for the pane's Connect card.
+	 */
+	gameProbe: (chatId: string) => typedError<EngineProbe | null, AppError>(__TAURI_INVOKE("game_probe", { chatId })),
+	/**
+	 *  The person pressed "Add to this project" on a Connect card: the engine's own MCP server, as
+	 *  its maker's guide gives it, becomes one of the MCP servers of the chat's project, for the
+	 *  agents that can take it. The person's, from the pane: no tool calls this, and the address or
+	 *  program is Ghost's own constant for that engine, never the page's.
+	 */
+	gameConnect: (chatId: string) => typedError<GameConnected, AppError>(__TAURI_INVOKE("game_connect", { chatId })),
+	/**
 	 *  The person turned Game on for this chat (a folder a game is about to be made in), or asked
 	 *  for the game tools in a chat whose folder became a game after its agent started. The chat's
 	 *  idle session starts again, since an agent's tools are fixed when its session starts.
@@ -2217,6 +2235,15 @@ export type EditablePrompt = {
 	has_context: boolean,
 };
 
+/**  What the look found. */
+export type EngineProbe = {
+	engine: GameEngine,
+	/**  The engine's agent tools can be reached, or are installed, now. */
+	ready: boolean,
+	/**  What was found, in words for the person. */
+	detail: string,
+};
+
 export type EnvState = { state: "resolving" } | { state: "ready"; source: string; took_ms: number; vars: number } | { state: "fallback"; reason: string };
 
 /**  The environment agents start with, as the banner shows it. */
@@ -2354,6 +2381,13 @@ export type FolderScope =
 export type FolderState = "ok" | "missing" | 
 /**  The OS refused access (macOS privacy). */
 "not_allowed";
+
+/**  What connecting an engine's own agent tools to a project did. */
+export type GameConnected = 
+/**  The engine's server is one of this project's MCP servers now. */
+"added" | 
+/**  It already was. */
+"already";
 
 export type GameEngine = 
 /**  Godot 4, which Ghost runs itself. */
@@ -4446,6 +4480,17 @@ export type SpeechVoice = {
 	/**  One line on how it sounds, from the catalogue. */
 	description: string,
 };
+
+/**  The projects Ghost can start. */
+export type Starter = 
+/**  Godot, 2D: a player on a floor that runs and jumps. */
+"godot2d" | 
+/**  Godot, 3D: a player on a floor, a camera and a sun. */
+"godot3d" | 
+/**  A plain canvas page with no dependencies, and a small server for it. */
+"web2d" | 
+/**  Three.js with Vite. */
+"web3d";
 
 export type SteeringAck = {
 	message_id: string,

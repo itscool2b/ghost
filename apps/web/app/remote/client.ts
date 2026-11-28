@@ -119,6 +119,11 @@ export interface State {
   readonly features: readonly string[];
   /** How the computer looks: its theme and appearance, as it said, or as it last said. */
   readonly look: Look | null;
+  /**
+   * Why the chat that was open closed by itself, in words for the list: the computer gave its
+   * place to another device, or could not send the chat again. Gone at the next open.
+   */
+  readonly closed?: string | null;
 }
 
 /** A request the computer refused, in its own words. */
@@ -734,16 +739,26 @@ export class RemoteClient {
     if (following) await this.#reopen(following);
   }
 
-  /** Opens a chat again after the session changed; a failure leaves it for the list. */
+  /**
+   * Opens a chat again after the session changed. A failure leaves it for the list, which says
+   * why when the computer did: a chat that closes by itself with no word looks like a fault.
+   */
   async #reopen(chatId: string) {
     this.#opening = null;
     try {
       await this.open(chatId);
-    } catch {
+    } catch (error) {
       if (this.#state.opening === chatId || this.#state.chat?.id === chatId) {
         this.#forgetChat();
         this.#set({ chat: null, opening: null });
       }
+      if (error instanceof RemoteError && this.#state.chat === null)
+        this.#set({
+          closed:
+            error.code === "busy"
+              ? "This chat was opened on another device. Open it again to bring it back here."
+              : error.message,
+        });
     }
   }
 
@@ -838,7 +853,11 @@ export class RemoteClient {
     if (this.#opening?.chatId === chatId) return this.#opening.done;
     this.#early = [];
     if (this.#state.chat?.id !== chatId) this.#forgetChat();
-    this.#set({ opening: chatId, chat: this.#state.chat?.id === chatId ? this.#state.chat : null });
+    this.#set({
+      opening: chatId,
+      chat: this.#state.chat?.id === chatId ? this.#state.chat : null,
+      closed: null,
+    });
     if (!this.#ready) {
       // `#begin` opens it once the computer answers.
       this.#opening = null;

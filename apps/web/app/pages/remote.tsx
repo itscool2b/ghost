@@ -287,6 +287,10 @@ function Themed({
 
 function Remote({ client }: { readonly client: RemoteClient }) {
   const state = useSyncExternalStore(client.subscribe, client.getState, client.getState);
+  // Why the last chat tapped did not open. Kept here, not in the list: the list is off screen
+  // while a chat opens, so what it held of a failed open was gone when it came back, and the
+  // tap looked as if it had done nothing.
+  const [unopened, setUnopened] = useState("");
   if (state.phase.name === "empty")
     return (
       <Centered title="Reach your computer from here.">
@@ -334,7 +338,14 @@ function Remote({ client }: { readonly client: RemoteClient }) {
     );
   }
   if (state.chat || state.opening) return <ChatScreen client={client} state={state} />;
-  return <ListScreen client={client} state={state} />;
+  return (
+    <ListScreen
+      client={client}
+      state={state}
+      error={unopened || state.closed || ""}
+      setError={setUnopened}
+    />
+  );
 }
 
 /** A computer turned this browser away: try again, or delete its key here. */
@@ -452,10 +463,20 @@ function ago(at: number, now: number): string {
 const message = (error: unknown): string =>
   error instanceof Error && error.message ? error.message : "Something went wrong.";
 
-function ListScreen({ client, state }: { readonly client: RemoteClient; readonly state: State }) {
+function ListScreen({
+  client,
+  state,
+  error,
+  setError,
+}: {
+  readonly client: RemoteClient;
+  readonly state: State;
+  /** Why a chat did not open, or closed by itself. */
+  readonly error: string;
+  readonly setError: (words: string) => void;
+}) {
   const [creating, setCreating] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);

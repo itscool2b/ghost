@@ -60,7 +60,8 @@ const MAX_EVICTIONS: usize = 4;
 /// How long a browser whose place in a chat was given to another waits before it may take one
 /// the same way. A page that is still there opens the chat again the moment it is told: without
 /// the wait, one page more than a chat takes would have them push each other out for ever.
-const SETTLE: Duration = Duration::from_secs(60);
+/// Short, so that a person who taps the chat on that device a little later is let in.
+const SETTLE: Duration = Duration::from_secs(5);
 /// Bot calls running at once.
 const MAX_BOT_CALLS: usize = 8;
 /// Live events queued for one browser before it is told to open its chat again.
