@@ -104,6 +104,21 @@ pub async fn call(
         return ToolReply::failed(format!("Ghost's game tools have no \"{tool}\"."));
     }
     let project = manager.look(chat_id, folder).await;
+    // A web game is a page: its tools go to the app's browser, which shows what the agent does
+    // there. So do the tools of a chat with no game Ghost knows, where the game may be a plain
+    // page, and a game_run that names an address. The status is put together below.
+    let web = match &project {
+        Some(project) => project.engine == GameEngine::Web,
+        None => true,
+    } || (tool == "game_run" && arguments["url"].is_string());
+    if web
+        && tool != "game_status"
+        && let Some(browser) = manager.web()
+    {
+        return browser
+            .call(chat_id.to_owned(), tool.to_owned(), arguments.clone())
+            .await;
+    }
     // Reading what is there does not open the pane; anything that shows or changes the game does.
     if !matches!(
         tool,
@@ -319,7 +334,7 @@ async fn status(manager: &Manager, chat_id: &str, project: Option<&GameProject>)
                 }
                 GameEngine::Godot => {}
                 GameEngine::Web => lines.push(
-                    "A web game runs in Ghost's browser: start its dev server and open it with browser_navigate."
+                    "A web game runs in Ghost's browser beside the chat. Start its dev server (the chat's Run, or your shell), then call game_run with its url: it opens there with its clock under your control, and game_act, game_wait_for, game_look, game_eval (JavaScript), game_tree, game_logs and game_time work on it."
                         .to_owned(),
                 ),
                 GameEngine::Unity | GameEngine::Unreal | GameEngine::Roblox => lines.push(format!(
@@ -332,6 +347,15 @@ async fn status(manager: &Manager, chat_id: &str, project: Option<&GameProject>)
                 )),
             }
         }
+    }
+    // Where a web game stands is the browser's to say.
+    let web = project.is_none_or(|project| project.engine == GameEngine::Web);
+    if web && let Some(browser) = manager.web() {
+        let said = browser
+            .call(chat_id.to_owned(), "game_status".to_owned(), json!({}))
+            .await;
+        lines.push(said.text);
+        return ToolReply::text(lines.join("\n"));
     }
     if let Some(game) = manager.chat(chat_id) {
         lines.push(match game.state {

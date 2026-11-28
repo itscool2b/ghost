@@ -215,6 +215,32 @@ impl ghost_core::game_service::GameBridge for AgentBridge {
     }
 }
 
+/// Web games, for the tools: the app's browser, where a game that is a page runs
+/// (`crate::browser::game`). Looked up at each call, since the browser is the profile's.
+struct WebRunner(AppHandle);
+
+impl ghost_game::WebGames for WebRunner {
+    fn call(
+        &self,
+        chat_id: String,
+        tool: String,
+        arguments: serde_json::Value,
+    ) -> ghost_game::WebFuture {
+        let app = self.0.clone();
+        Box::pin(async move {
+            let Some(browser) = app
+                .try_state::<Arc<crate::browser::Browser>>()
+                .map(|state| Arc::clone(state.inner()))
+            else {
+                return ghost_game::ToolReply::failed(
+                    "Ghost's browser is not available in this run, so a web game cannot be opened here.",
+                );
+            };
+            crate::browser::game::call(&browser, &chat_id, &tool, &arguments).await
+        })
+    }
+}
+
 /// Creates the game manager during setup. Nothing is started and nothing is looked for until a
 /// pane is opened or an agent asks.
 pub fn setup(app: &AppHandle) {
@@ -247,6 +273,7 @@ pub fn setup(app: &AppHandle) {
             idle.stop_idle().await;
         }
     });
+    games.set_web(Some(Arc::new(WebRunner(app.clone()))));
     app.manage(games);
     app.manage(chosen);
     app.manage(Watches::default());

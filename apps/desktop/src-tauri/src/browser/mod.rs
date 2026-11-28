@@ -13,6 +13,7 @@
 mod address;
 pub mod agent;
 pub mod commands;
+pub mod game;
 #[cfg(target_os = "linux")]
 mod gtk_layer;
 mod history;
@@ -42,8 +43,9 @@ pub use history::HistoryEntry;
 /// The window event every change of the browser goes out on.
 pub const EVENT: &str = "auracode-browser";
 
-/// Ghost's page script, injected into every top document before the page's own scripts.
-pub const PAGE_SCRIPT: &str = include_str!("page.js");
+/// Ghost's page script, injected into every top document before the page's own scripts: the page
+/// agent, and the game clock, which sleeps unless the page was marked as a game ([`game`]).
+pub const PAGE_SCRIPT: &str = concat!(include_str!("page.js"), "\n", include_str!("game.js"));
 
 /// Tabs one chat may have open.
 pub const TAB_LIMIT: usize = 24;
