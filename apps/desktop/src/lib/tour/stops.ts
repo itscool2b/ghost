@@ -106,6 +106,13 @@ export const TOUR_STOPS: readonly TourStop[] = [
     body: "An Android emulator, an iPhone simulator on a Mac, or your own phone on a cable, for building apps. Agents open it themselves when they work on an app; you both see it and use it.",
   },
   {
+    id: "game",
+    place: "chat",
+    side: "below",
+    title: "Your game beside the chat",
+    body: "In a game's chat, the game runs here. You play it with your keyboard and mouse. The agent runs it, sees it and plays it too, with time frozen while it thinks.",
+  },
+  {
     id: "run",
     place: "chat",
     side: "below",

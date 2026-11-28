@@ -15,6 +15,10 @@ pub fn managed_mobile(server: &ResolvedMcpServer) -> bool {
     server.definition.id == "ghost-mobile"
         && server.definition.name.replace('-', "_") == "ghost_mobile"
 }
+/// Ghost's game server (the Game universal plugin's tools, on the chat's game).
+pub fn managed_game(server: &ResolvedMcpServer) -> bool {
+    server.definition.id == "ghost-game" && server.definition.name.replace('-', "_") == "ghost_game"
+}
 /// Ghost's project server (a coordinated project's tools, for its coordinator and workers).
 pub fn managed_project(server: &ResolvedMcpServer) -> bool {
     server.definition.id == "aura-project"
@@ -25,6 +29,7 @@ pub fn managed(server: &ResolvedMcpServer) -> bool {
     managed_memory(server)
         || managed_browser(server)
         || managed_mobile(server)
+        || managed_game(server)
         || managed_project(server)
 }
 pub fn acp_session(
@@ -263,6 +268,21 @@ pub(crate) mod tests {
         lookalike.definition.name = "ghost_mobile".into();
         assert!(!managed(&lookalike), "the id must be Ghost's too");
         let (servers, omitted) = acp_session(&[mobile], false, false, false).unwrap();
+        assert!(omitted);
+        assert_eq!(servers, json!([]));
+    }
+    /// The game server is one of Ghost's own too, on the same terms.
+    #[test]
+    fn the_game_server_is_optional_like_the_browsers() {
+        let mut game = memory();
+        game.definition.id = "ghost-game".into();
+        game.definition.name = "ghost_game".into();
+        assert!(managed(&game) && managed_game(&game));
+        assert!(!managed_browser(&game) && !managed_mobile(&game) && !managed_memory(&game));
+        let mut lookalike = server();
+        lookalike.definition.name = "ghost_game".into();
+        assert!(!managed(&lookalike), "the id must be Ghost's too");
+        let (servers, omitted) = acp_session(&[game], false, false, false).unwrap();
         assert!(omitted);
         assert_eq!(servers, json!([]));
     }

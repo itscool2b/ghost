@@ -18,6 +18,7 @@ pub fn apply(app: &AppHandle, general: &GeneralPreferences) {
     crate::native_shell::apply_preferences(app, general);
     crate::browser::apply_preferences(app, general);
     crate::mobile::apply_preferences(app, general);
+    crate::game::apply_preferences(app, general);
     if let Some(updates) = app.try_state::<crate::updater::Updates>() {
         updates.set_automatic(general.automatic_updates);
     }
@@ -33,6 +34,7 @@ pub(crate) fn apply_to_manager(
     manager.set_agent_memory_writes(general.agent_memory_writes);
     manager.set_browser_tools(general.browser);
     manager.set_mobile_tools(general.mobile);
+    manager.set_game_tools(general.game);
     manager.set_coordination(general.coordinated_projects);
 }
 

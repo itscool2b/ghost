@@ -151,6 +151,10 @@ void appearanceReady.then((setUp) => {
         void import("./dev/devicePreview").then(({ mountDevicePreview }) =>
           mountDevicePreview(container),
         );
+      else if (mode === "game")
+        void import("./dev/gamePreview").then(({ mountGamePreview }) =>
+          mountGamePreview(container),
+        );
       else if (mode === "canvas")
         void import("./dev/canvasPreview").then(({ mountCanvasPreview }) =>
           mountCanvasPreview(container),

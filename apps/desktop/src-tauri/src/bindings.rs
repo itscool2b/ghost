@@ -59,6 +59,8 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<crate::browser::BrowserEvent>()
         // The payload of `ghost-mobile` (mobile::EVENT).
         .typ::<ghost_devices::manager::MobileStatus>()
+        // The payload of `ghost-game` (game::EVENT).
+        .typ::<ghost_game::GameStatus>()
         .commands(tauri_specta::collect_commands![
             commands::app_info,
             crate::browser::commands::browser_status,
@@ -100,6 +102,26 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::mobile::mobile_rotate,
             crate::mobile::mobile_screenshot,
             crate::mobile::mobile_agent_call,
+            crate::game::game_status,
+            crate::game::game_look,
+            crate::game::game_refresh,
+            crate::game::game_fetch_start,
+            crate::game::game_fetch_cancel,
+            crate::game::game_run,
+            crate::game::game_stop,
+            crate::game::game_time,
+            crate::game::game_step,
+            crate::game::game_sound,
+            crate::game::game_input,
+            crate::game::game_watch,
+            crate::game::game_unwatch,
+            crate::game::game_log,
+            crate::game::game_window,
+            crate::game::game_open_editor,
+            crate::game::game_picture,
+            crate::game::game_turn_on,
+            crate::game::game_turned_on,
+            crate::game::game_agent_call,
             crate::profile_commands::profiles_list,
             crate::profile_commands::profile_activate,
             crate::updater::app_update_status,

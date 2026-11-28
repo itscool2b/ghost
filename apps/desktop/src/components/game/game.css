@@ -1,0 +1,596 @@
+/*
+ * The game beside the chat (docs/game.md). On a wide window it is a pane of its own beside the
+ * chat's, half the width, since a game is wider than it is tall; narrower, it covers the chat's
+ * work area under the header. Its name sits in the header's band, where what the agent is doing
+ * takes the name's place; the game's picture fills the stage, whole and unstretched, with its
+ * controls in one row at the foot. Notices and the log float over the stage, so nothing that
+ * comes and goes moves the picture. Nothing glows.
+ */
+
+.game-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* It slides in from its side, whether the person or the agent opened it. */
+  animation: game-panel-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+@keyframes game-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+/* Narrow windows: the game covers the work area; the chat stays behind it. */
+.game-panel[data-full] {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background-color: var(--ui-pane-fill);
+}
+
+.chat-work-area:has(> .game-panel[data-full]) > .chat-conversation {
+  visibility: hidden;
+}
+
+.game-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-8);
+  height: var(--g-app-header);
+  padding: 0 var(--g-space-8) 0 var(--g-space-12);
+}
+
+/* The name and what the agent is doing share one cell and cross over each other. */
+.game-title {
+  display: grid;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-ui);
+  font-weight: var(--g-weight-medium);
+  line-height: var(--g-leading-ui);
+}
+
+.game-title-name,
+.game-title-agent {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-width: 0;
+  transition:
+    opacity var(--g-dur-base) var(--g-ease),
+    transform var(--g-dur-base) var(--g-ease);
+}
+
+.game-title-name > svg {
+  flex: none;
+  color: var(--g-fg-3);
+}
+
+.game-title-agent {
+  color: var(--g-fg-2);
+  font-weight: var(--g-weight-regular);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+}
+
+.game-title[data-agent] .game-title-name {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.game-title[data-agent] .game-title-agent {
+  opacity: 1;
+  transform: none;
+}
+
+.game-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.game-head-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-2);
+}
+
+/* The run's errors, counted, in the header: it opens the log. */
+.game-errors {
+  gap: var(--g-space-6);
+  color: var(--g-fg-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-errors > svg {
+  flex: none;
+  color: var(--g-warning);
+}
+
+/* ---------------------------------------------------------------- bars */
+
+.game-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-8);
+  min-height: 32px;
+  margin: 0 var(--g-space-8) var(--g-space-6);
+  padding: var(--g-space-4) var(--g-space-6) var(--g-space-4) var(--g-space-12);
+  border-radius: var(--g-radius-12);
+  background-color: var(--g-glass-card);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+}
+
+.game-bar-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A problem or a notice, over the foot of the stage: the picture keeps its place. */
+.game-notices {
+  position: absolute;
+  inset: auto 0 var(--g-space-8);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-6);
+  pointer-events: none;
+}
+
+.game-notices > .game-bar {
+  margin-bottom: 0;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  pointer-events: auto;
+  animation: game-notice-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+.game-notices > .game-bar > .game-bar-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* While the log is open at the foot, notices sit at the head of the stage instead of over it. */
+.game-stage:has(> .game-log) > .game-notices {
+  inset: var(--g-space-8) 0 auto;
+}
+
+@keyframes game-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+/* The header's game button while the agent plays a game whose pane is closed. */
+.chat-game-toggle[data-agent] {
+  position: relative;
+}
+
+.chat-game-toggle[data-agent]::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-volt);
+}
+
+/* ---------------------------------------------------------------- the stage */
+
+.game-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 var(--g-space-12) var(--g-space-8);
+  overflow: auto;
+}
+
+.game-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  /* The frame inside measures itself against this box. */
+  container-type: size;
+}
+
+/* The picture's own shape, as large as the stage allows in both directions. */
+.game-frame {
+  position: relative;
+  flex: none;
+  width: min(100cqw, calc(100cqh * var(--game-w, 16) / var(--game-h, 9)));
+  aspect-ratio: var(--game-w, 16) / var(--game-h, 9);
+}
+
+/* The game's own picture, whole and unstretched. */
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--g-radius-12);
+  background-color: var(--g-surface-1);
+  box-shadow: 0 0 0 1px var(--g-glass-rim);
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.game-canvas:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: 2px;
+}
+
+/* The first frame fades up in place of the waiting box. */
+.game-screen[data-state="live"] .game-canvas {
+  animation: game-screen-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+@keyframes game-screen-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A word over the foot of the picture: how to play, or why nothing moves. */
+.game-hint {
+  position: absolute;
+  bottom: var(--g-space-12);
+  left: 50%;
+  padding: var(--g-space-4) var(--g-space-12);
+  border-radius: var(--g-radius-pill);
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-2);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  white-space: nowrap;
+  translate: -50% 0;
+  pointer-events: none;
+  animation: game-notice-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.game-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g-space-8);
+  padding: 0 var(--g-space-8) var(--g-space-8);
+}
+
+.game-controls-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-2);
+}
+
+.game-speed {
+  min-width: 44px;
+  justify-content: center;
+  color: var(--g-fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-meter-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--g-leading-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- words */
+
+.game-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--g-space-12);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  padding: var(--g-space-16) var(--g-space-4);
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+}
+
+.game-message h2 {
+  margin: 0;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-title);
+  font-weight: var(--g-weight-medium);
+  line-height: var(--g-leading-title);
+  overflow-wrap: anywhere;
+}
+
+.game-message p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.game-note {
+  margin: 0;
+  color: var(--g-fg-3);
+}
+
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--g-space-8);
+}
+
+.game-actions .g-button > svg {
+  flex: none;
+}
+
+.game-meter {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-line);
+  accent-color: var(--g-fg-1);
+  appearance: none;
+}
+
+.game-meter::-webkit-progress-bar {
+  background-color: var(--g-line);
+}
+
+.game-meter::-webkit-progress-value {
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-fg-1);
+}
+
+.game-meter::-moz-progress-bar {
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-fg-1);
+}
+
+/* Something is on its way: a fine line with a part that travels along it. */
+.game-progress {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-line);
+}
+
+.game-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  border-radius: inherit;
+  background-color: var(--g-fg-2);
+  animation: game-progress var(--g-dur-shimmer) var(--g-ease-in-out) infinite;
+}
+
+/* Over the picture while its first frame is on the way. */
+.game-progress-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120px;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+@keyframes game-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+/* ---------------------------------------------------------------- the log */
+
+/* Over the stage, from its foot: the picture stays where it is behind it. */
+.game-log {
+  position: absolute;
+  inset: auto var(--g-space-8) var(--g-space-8);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70%, 420px);
+  border-radius: var(--g-radius-12);
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+  animation: game-notice-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+.game-log-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--g-space-4) var(--g-space-4) 0 var(--g-space-12);
+}
+
+.game-log-head h2 {
+  margin: 0;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-ui);
+  font-weight: var(--g-weight-medium);
+  line-height: var(--g-leading-ui);
+}
+
+.game-log-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-8);
+  min-height: 0;
+  padding: var(--g-space-4) var(--g-space-12) var(--g-space-12);
+  overflow: auto;
+}
+
+.game-log-body:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: -2px;
+}
+
+.game-log-errors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-log-errors > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-2);
+  padding-left: var(--g-space-8);
+  box-shadow: inset 2px 0 var(--g-red);
+}
+
+.game-log-errors > li[data-kind="warning"] {
+  box-shadow: inset 2px 0 var(--g-warning);
+}
+
+.game-log-text {
+  color: var(--g-fg-1);
+  overflow-wrap: anywhere;
+}
+
+.game-log-where {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--g-fg-3);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+button.game-log-where {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--g-line);
+  text-underline-offset: 3px;
+}
+
+button.game-log-where:hover {
+  color: var(--g-fg-1);
+}
+
+button.game-log-where:focus-visible {
+  border-radius: var(--g-radius-4);
+  outline: 2px solid var(--g-focus);
+  outline-offset: 2px;
+}
+
+.game-log-lines {
+  margin: 0;
+  padding: var(--g-space-8) var(--g-space-12);
+  border-radius: var(--g-radius-8);
+  background-color: var(--g-surface-1);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-2);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-progress::after {
+    width: 100%;
+    opacity: 0.4;
+    animation: none;
+  }
+
+  .game-panel,
+  .game-notices > .game-bar,
+  .game-hint,
+  .game-log,
+  .game-screen[data-state="live"] .game-canvas {
+    animation: none;
+  }
+
+  .game-title-name,
+  .game-title-agent {
+    transform: none;
+    transition: none;
+  }
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"]) .game-progress::after {
+  width: 100%;
+  opacity: 0.4;
+  animation: none;
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"])
+  :is(
+    .game-panel,
+    .game-notices > .game-bar,
+    .game-hint,
+    .game-log,
+    .game-screen[data-state="live"] .game-canvas
+  ) {
+  animation: none;
+}
+
+:root:is([data-motion="reduced"], [data-motion="off"]) :is(.game-title-name, .game-title-agent) {
+  transform: none;
+  transition: none;
+}

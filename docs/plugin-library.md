@@ -40,6 +40,16 @@ stopped, sessions that start get no device tools, and a running session's tools 
 off. Setting Android up, accepting Google's SDK licence and letting an agent use a phone are the
 person's alone, in the pane: no tool does any of them.
 
+The third is Game, the game beside the chat ([how it works](game.md),
+[plan](superpowers/plans/2026-11-27-game.md)): the Game pane, where Ghost runs a Godot project out
+of sight and shows it, and the `ghost_game` MCP tools, served the same way
+(`--ghost-game-helper --mcp`). Unlike the other two, a session gets these tools only when its
+chat's folder holds a game or the person turned Game on for the chat, so other chats carry none of
+them. It is Settings > Game, and its switch is the profile preference `game`. Turned off, chats
+show no game, every game Ghost started is stopped, sessions that start get no game tools, and a
+running session's tools answer that it is off. Getting Godot, turning Game on for a chat, a window
+of the game's own and Godot's editor are the person's alone, in the pane: no tool does any of them.
+
 ## Shared MCP
 
 Ghost owns stable server IDs and immutable definition revisions. New definitions default to the selected

@@ -111,6 +111,7 @@ const setup: SetupApi = {
     if (action.type === "browser") general.browser = action.enabled;
     if (action.type === "browser_passwords") general.browser_passwords = action.enabled;
     if (action.type === "mobile") general.mobile = action.enabled;
+    if (action.type === "game") general.game = action.enabled;
     if (action.type === "automatic_updates") general.automatic_updates = action.enabled;
     if (action.type === "coordinated_projects") general.coordinated_projects = action.enabled;
     if (action.type === "speech_voice") general.speech_voice = action.voice;

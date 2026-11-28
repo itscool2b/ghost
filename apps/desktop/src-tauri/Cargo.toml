@@ -37,6 +37,7 @@ ghost-config.workspace = true
 ghost-core.workspace = true
 ghost-devices.workspace = true
 ghost-drivers.workspace = true
+ghost-game.workspace = true
 ghost-process.workspace = true
 ghost-protocol.workspace = true
 ghost-remote.workspace = true

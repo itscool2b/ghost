@@ -28,6 +28,7 @@ import {
   numbered,
   sessionInfo,
 } from "../lib/chat/testing";
+import { GameStore } from "../lib/game";
 import { MobileStore } from "../lib/mobile";
 import { DEFAULT_GENERAL, type SetupApi } from "../lib/setup";
 import { speechPlayer } from "../lib/speech";
@@ -36,6 +37,7 @@ import { type WorkspaceApi, WorkspaceStore } from "../lib/workspace";
 import { worktreeRecoveryApi } from "../lib/worktreeRecovery";
 import { FixtureBrowser } from "./browserPreview";
 import { fixtureFolderMatches } from "./folderMatches";
+import { FakeGame } from "./gameFixture";
 import { FakeMobile } from "./mobileFixture";
 import { withPreviewContext } from "./previewContext";
 import { speechFixture } from "./speechFixture";
@@ -175,11 +177,14 @@ const setup: SetupApi = {
 /** One stand-in browser and device for the page (StrictMode builds the state twice). */
 let browser: FixtureBrowser | null = null;
 let mobile: FakeMobile | null = null;
+let game: FakeGame | null = null;
 
 function Preview() {
   const [fixture] = useState(() => {
     browser ??= new FixtureBrowser();
     mobile ??= new FakeMobile();
+    // The tour's chat is a game's, so the header shows the Game button the tour stops at.
+    game ??= Object.assign(new FakeGame(), { everyChat: true });
     const transport = withPreviewContext(
       new FakeTransport({
         chatsList: async () => structuredClone(chats),
@@ -219,6 +224,7 @@ function Preview() {
     const whole = Object.assign(transport, {
       browser: new BrowserStore(browser),
       mobile: new MobileStore(mobile),
+      game: new GameStore(game),
     });
     return { transport: whole, app: new AppStore(whole), workspace: new WorkspaceStore(api) };
   });

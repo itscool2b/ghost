@@ -13,6 +13,7 @@ export type Page =
   | "plugins"
   | "browser"
   | "mobile"
+  | "game"
   | "instructions"
   | "memory"
   | "experiments"
@@ -22,7 +23,7 @@ export type Page =
 
 export const PAGE_GROUPS: readonly (readonly Page[])[] = [
   ["general", "appearance", "chats", "voice", "shortcuts"],
-  ["agents", "plugins", "browser", "mobile", "instructions", "memory", "experiments"],
+  ["agents", "plugins", "browser", "mobile", "game", "instructions", "memory", "experiments"],
   ["remote", "privacy", "about"],
 ];
 
@@ -36,6 +37,7 @@ export const PAGE_LABELS: Readonly<Record<Page, string>> = {
   plugins: "Plugins & MCP",
   browser: "Browser",
   mobile: "Mobile",
+  game: "Game",
   instructions: "Instructions",
   memory: "Project memory",
   experiments: "Experiments",
@@ -155,6 +157,22 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   },
   { page: "mobile", title: "Android", words: "mobile sdk emulator adb set up download google" },
   { page: "mobile", title: "iPhone", words: "ios simulator xcode mac apple axe" },
+  {
+    page: "game",
+    title: "Game",
+    words: "game universal plugin built-in games godot engine play pane agents tools turn off",
+  },
+  {
+    page: "game",
+    title: "Game tools for agents",
+    words: "game tools agents run play act freeze filmstrip scene inspect logs eval code",
+  },
+  { page: "game", title: "Godot", words: "godot engine download get fetch version installed" },
+  {
+    page: "game",
+    title: "Other engines",
+    words: "unity unreal roblox web three phaser engine connect",
+  },
   { page: "instructions", title: "Instructions", words: "agents.md claude.md rules prompt" },
   { page: "instructions", title: "Applies to", words: "scope folder project global chat" },
   {

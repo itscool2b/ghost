@@ -549,6 +549,9 @@ struct Prepared {
     memory_mcp_available: bool,
     /// The chat is a coordinated project's coordinator or one of its workers.
     coordinated: bool,
+    /// The chat's agent gets the game tools: its folder holds a game, or the person turned Game
+    /// on for it.
+    game: bool,
     /// Shared MCP servers this agent cannot take, said in the chat as it starts.
     mcp_notice: Option<String>,
     mcp_servers: Vec<ghost_protocol::mcp::ResolvedMcpServer>,
@@ -828,6 +831,9 @@ pub(crate) struct ChatActor {
     browser_grant: Option<crate::browser_service::BrowserGrant>,
     /// The Mobile plugin's tools for this session's agent, on the chat's own device.
     mobile_grant: Option<crate::mobile_service::MobileGrant>,
+    /// The Game plugin's tools for this session's agent, on the chat's own game. Only a session
+    /// that started in a game project, or in a chat the person turned Game on for, has it.
+    game_grant: Option<crate::game_service::GameGrant>,
     /// A coordinated project's tools for this generation's agent, revoked with the generation.
     coordinator_grant: Option<crate::coordinator_service::CoordinatorGrant>,
     generation: u64,
@@ -1037,6 +1043,7 @@ impl ChatActor {
             memory_grant: None,
             browser_grant: None,
             mobile_grant: None,
+            game_grant: None,
             coordinator_grant: None,
             generation: 0,
             retiring: Vec::new(),
@@ -2924,6 +2931,7 @@ impl ChatActor {
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.cancel_checkpoint();
         if !matches!(
@@ -2989,6 +2997,7 @@ impl ChatActor {
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.force_wait = None;
         self.stop_deadline = None;
@@ -3079,6 +3088,7 @@ impl ChatActor {
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.cancel_checkpoint();
         // Every Stop holds what is queued until now, one that repeats a stop in progress included: a
@@ -3133,6 +3143,7 @@ impl ChatActor {
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         let Some(driver) = &mut self.driver else {
             return;
@@ -3402,6 +3413,11 @@ impl ChatActor {
             Arc::clone(&deps.detector),
             Arc::clone(&deps.env),
             self.shared.agent_accounts(),
+            self.shared
+                .game_tools
+                .load(Ordering::Acquire)
+                .then(|| self.shared.game_bridge())
+                .flatten(),
             progress,
             winding_down,
         ));
@@ -3592,6 +3608,7 @@ impl ChatActor {
             this.memory_grant = None;
             this.browser_grant = None;
             this.mobile_grant = None;
+            this.game_grant = None;
             this.coordinator_grant = None;
             this.release_if_idle();
             this.set_status(SessionStatus::Stopped, None);
@@ -3861,6 +3878,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.release_if_idle();
         self.set_status(SessionStatus::Stopped, None);
@@ -4309,6 +4327,28 @@ The person continues this conversation here, in your terminal. Reply only that y
             }
             _ => None,
         };
+        // The Game plugin's tools (docs/game.md), under the same conditions as the browser's and
+        // one more: the chat's folder holds a game, or the person turned Game on for the chat.
+        // The grant keeps the folder this session starts in; its calls reach no other.
+        self.game_grant = match self.shared.game_bridge() {
+            Some(bridge)
+                if prepared.game
+                    && self.chat.agent_host == ghost_protocol::agents::AgentHost::Native
+                    && prepared.memory_mcp_available
+                    && spec.kind != ghost_protocol::DriverKind::Headless
+                    && self.shared.game_tools.load(Ordering::Acquire) =>
+            {
+                crate::game_service::GameGrant::start(
+                    bridge,
+                    self.chat_id.clone(),
+                    self.chat.folder.clone(),
+                    Arc::clone(&self.shared.game_tools),
+                    &self.shared.deps.rt,
+                )
+                .ok()
+            }
+            _ => None,
+        };
         // A coordinated project's tools (an experiment): for its coordinator and its workers,
         // under the same conditions as the browser's.
         self.coordinator_grant = match self.shared.coordination.bridge() {
@@ -4344,6 +4384,9 @@ The person continues this conversation here, in your terminal. Reply only that y
                     servers.push(helper);
                 }
                 if let Some(helper) = self.mobile_grant.as_ref().and_then(|grant| grant.mcp()) {
+                    servers.push(helper);
+                }
+                if let Some(helper) = self.game_grant.as_ref().and_then(|grant| grant.mcp()) {
                     servers.push(helper);
                 }
                 if let Some(helper) = self
@@ -4867,6 +4910,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.cancel_checkpoint();
         self.quitting = true;
@@ -6228,6 +6272,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         let Some(driver) = &mut self.driver else {
             return;
@@ -6253,6 +6298,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         let Some(driver) = self.driver.take() else {
             return;
@@ -6367,6 +6413,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.book.clear(generation);
         self.release_if_idle();
@@ -6441,6 +6488,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.kill_generation(generation);
         self.release_if_idle();
@@ -6509,6 +6557,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.kill_generation(generation);
         if let Some(turn) = self.turn.take() {
@@ -6598,6 +6647,7 @@ The person continues this conversation here, in your terminal. Reply only that y
         self.memory_grant = None;
         self.browser_grant = None;
         self.mobile_grant = None;
+        self.game_grant = None;
         self.coordinator_grant = None;
         self.release_if_idle();
         let message = self.error_text(&message, false);
@@ -7832,10 +7882,12 @@ async fn prepare(
     detector: Arc<ghost_agents::Detector>,
     env: Arc<ghost_process::EnvResolver>,
     accounts: Option<Arc<crate::agent_accounts::AgentAccountsStore>>,
+    games: Option<Arc<dyn crate::game_service::GameBridge>>,
     progress: mpsc::UnboundedSender<String>,
     mut winding_down: watch::Receiver<usize>,
 ) -> Result<Prepared, StartFailure> {
     let folder = context.chat.folder.clone();
+    let chat_id = context.chat.id.clone();
     // The actor holds the sender for as long as this task can matter.
     let _ = winding_down.wait_for(|retiring| *retiring == 0).await;
     if let ghost_process::HostAvailability::Unavailable { reason } =
@@ -7933,6 +7985,13 @@ async fn prepare(
             .await,
         Ok(crate::chatstore::coordinator::Reply::Member(Some(_)))
     );
+    // Asked here, off the actor's thread: it reads a few of the folder's files.
+    let game = match games {
+        Some(games) if matches!(agent_host, ghost_protocol::agents::AgentHost::Native) => {
+            games.wanted(chat_id, folder_key.clone()).await
+        }
+        _ => false,
+    };
     let folder_context = super::workspace_folders::resolve(
         context,
         super::workspace_folders::supported(Some(&*spec), &agent_host),
@@ -7947,6 +8006,7 @@ async fn prepare(
     Ok(Prepared {
         memory_mcp_available,
         coordinated,
+        game,
         mcp_notice,
         mcp_servers,
         spec,

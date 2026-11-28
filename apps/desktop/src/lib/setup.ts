@@ -78,6 +78,7 @@ export const DEFAULT_GENERAL: GeneralPreferences = {
   browser: true,
   browser_passwords: true,
   mobile: true,
+  game: true,
   automatic_updates: true,
   coordinated_projects: false,
   speech_voice: null,

@@ -40,6 +40,7 @@ pub mod demo;
 pub mod dictation;
 pub mod error;
 pub mod folder_resolution_commands;
+pub mod game;
 pub mod general_preferences;
 pub mod git_commands;
 pub mod glass;
@@ -261,6 +262,7 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     app.manage(Arc::new(clones));
     browser::setup(app.handle());
     mobile::setup(app.handle());
+    game::setup(app.handle());
     native_shell::setup(app.handle());
     remote::setup(app.handle(), &rt);
     general_preferences::refresh(app.handle());
@@ -438,6 +440,8 @@ fn on_event(app: &tauri::AppHandle, event: RunEvent) {
             browser::shutdown(app);
             // Its emulators save their state and stop; none outlives the app.
             mobile::shutdown(app);
+            // No game outlives the app either.
+            game::shutdown(app);
             remote::shutdown(app);
             if let Some(clones) = app.try_state::<Arc<ghost_core::cloning::Clones>>() {
                 clones.cancel_all();

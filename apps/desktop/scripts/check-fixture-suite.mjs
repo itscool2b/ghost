@@ -58,6 +58,7 @@ try {
     "check-canvas.mjs",
     "check-browser.mjs",
     "check-device.mjs",
+    "check-game.mjs",
     "check-opening.mjs",
     "check-tour.mjs",
     "check-plan.mjs",

@@ -24,6 +24,7 @@ import { changesApi } from "../changes";
 import { type ChatImagesApi, chatImagesApi } from "../chatImages";
 import { type ComposerTransport, composerApi } from "../composer";
 import { type ConversationTransport, conversationApi } from "../conversation";
+import { type GameStore, gameStore } from "../game";
 import { type GitWorkspaceApi, gitWorkspaceApi } from "../gitWorkspace";
 import {
   agentAuthStatus,
@@ -98,6 +99,8 @@ export interface Transport {
   readonly browser?: BrowserStore;
   /** The device beside the chat (the Mobile plugin). Absent: no device is offered. */
   readonly mobile?: MobileStore;
+  /** The game beside the chat (the Game plugin). */
+  readonly game?: GameStore;
   agentMaintenance(agentId: string): Promise<AgentMaintenance>;
   agentAuthStatus(agentId: string): Promise<AgentAuthStatus>;
   agentUpdate(agentId: string): Promise<void>;
@@ -168,6 +171,7 @@ export interface Transport {
 export const tauriTransport: Transport = {
   browser: browserStore,
   mobile: mobileStore,
+  game: gameStore,
   git: gitWorkspaceApi,
   files: fileLinkApi,
   run: worktreeRunApi,

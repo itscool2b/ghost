@@ -134,7 +134,11 @@ pub(super) async fn prepare_launch(
         && !names.iter().any(|name| {
             matches!(
                 name.replace('-', "_").as_str(),
-                "ghost_project_memory" | "ghost_browser" | "ghost_mobile" | "ghost_project"
+                "ghost_project_memory"
+                    | "ghost_browser"
+                    | "ghost_mobile"
+                    | "ghost_game"
+                    | "ghost_project"
             )
         });
     match context

@@ -5,6 +5,7 @@ import {
   Bot,
   FileText,
   FlaskConical,
+  Gamepad2,
   Globe,
   Info,
   Keyboard,
@@ -36,6 +37,7 @@ import type { AppStore } from "../../lib/chat/appStore";
 import type { Transport } from "../../lib/chat/transport";
 import type { DataCleanupApi } from "../../lib/dataCleanup";
 import { type DictationApi, dictationApi } from "../../lib/dictation";
+import type { GameStore } from "../../lib/game";
 import { GLOBAL, type InstructionsApi, instructionsApi } from "../../lib/instructions";
 import { revealDataDir } from "../../lib/ipc";
 import { COPYRIGHT, OPERATOR, PRIVACY_URL, TERMS_URL } from "../../lib/legal";
@@ -46,6 +48,7 @@ import { type GeneralApi, generalApi, type SetupApi, setupApi } from "../../lib/
 import { type SpeechApi, speechApi } from "../../lib/speech";
 import { type UpdatesApi, updatesApi } from "../../lib/updates";
 import { EMPTY_WORKSPACE, type WorkspaceStore } from "../../lib/workspace";
+import { GameSettings } from "../game/GameSettings";
 import { PluginLibraryScreen } from "../library/PluginLibraryScreen";
 import { UniversalPlugins } from "../library/UniversalPlugins";
 import { MobileSettings } from "../mobile/MobileSettings";
@@ -84,6 +87,7 @@ const ICONS: Readonly<Record<Page, LucideIcon>> = {
   plugins: Puzzle,
   browser: Globe,
   mobile: Smartphone,
+  game: Gamepad2,
   instructions: FileText,
   memory: BookOpen,
   experiments: FlaskConical,
@@ -107,6 +111,8 @@ export interface CustomizeServices {
   readonly browser?: BrowserStore;
   /** Mobile's devices (what is installed and running). */
   readonly mobile?: MobileStore;
+  /** Game's engines (whether Godot is here, and what runs). */
+  readonly game?: GameStore;
 }
 
 /** One keycap per key in a chord; a repeated key shows twice. */
@@ -539,6 +545,16 @@ export function SettingsScreen({
                 it. It is on unless you turn it off here.
               </p>
               <MobileSettings prefs={prefs} mobile={services?.mobile} />
+            </>,
+          )}
+          {pane(
+            "game",
+            <>
+              <p className="settings-lead">
+                The game beside your chats is part of Ghost, and so are the tools agents get to play
+                it. It is on unless you turn it off here.
+              </p>
+              <GameSettings prefs={prefs} game={services?.game} />
             </>,
           )}
           {pane(

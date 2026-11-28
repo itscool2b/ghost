@@ -10,6 +10,8 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+# SDK archives are zip files, unpacked by the code every fetched tool is unpacked with.
+ghost-fetch.workspace = true
 # Screenshots are read and shrunk for agents. The version the workspace already locks.
 png = "0.18.1"
 # The emulator in a job object (Windows) or a process group (Unix), as agents' processes are.
@@ -32,9 +34,6 @@ specta.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net"] }
 tracing.workspace = true
-# SDK archives are zip files. The version the updater already locks, inflating with the zlib-rs
-# the workspace already has.
-zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(windows)'.dependencies]
 # The "no console window" flag, in the type the job object wrapper takes.
@@ -42,6 +41,8 @@ windows = { version = "0.62.2", features = ["Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+# Test archives are written with it. The version the updater and ghost-fetch already lock.
+zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 tokio = { workspace = true, features = ["test-util", "net"] }
 
 [lints]
