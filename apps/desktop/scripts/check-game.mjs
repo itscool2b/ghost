@@ -912,6 +912,70 @@ export async function checkGame(browser, url, out, engine) {
       await fresh.getByRole("button", { name: "Dismiss the new assets" }).click();
       await until(async () => (await fresh.count()) === 0, `${label}: dismissed`);
 
+      // Export: the game packed for the web, where the zip is, and how it goes on itch.io in
+      // itch.io's own words. Nothing is uploaded.
+      await open("ready");
+      await panel.getByTestId("game-export").click();
+      await panel.getByTestId("game-exporting").waitFor();
+      assert.equal(await panel.getByTestId("game-export").isDisabled(), true);
+      const packed = panel.getByTestId("game-exported");
+      await packed.waitFor();
+      await called(page, "export", label);
+      assert.equal(await panel.getByTestId("game-exporting").count(), 0);
+      assert.match(
+        await packed.getByTestId("game-exported-what").textContent(),
+        /Godot's web export: 9 files, 9\.5 MB zipped\./,
+      );
+      assert.match(
+        await packed.getByTestId("game-exported-zip").textContent(),
+        /moon-hop-web\.zip$/,
+      );
+      assert.match(await packed.textContent(), /pick "HTML Game" from the "Kind Of Game" list/);
+      assert.match(await packed.textContent(), /Nothing was uploaded/);
+      assert.equal(
+        await packed.getByTestId("game-exported-itch").getAttribute("href"),
+        "https://itch.io/game/new",
+      );
+      assert.equal(await packed.getByTestId("game-exported-too-many").count(), 0);
+      await axe(page, `${label} exported`);
+      await shot("exported");
+      await packed.getByTestId("game-exported-show").click();
+      await called(page, "exportShow", label);
+      await packed.getByRole("button", { name: "Close" }).click();
+      await until(async () => (await packed.count()) === 0, `${label}: the export's sheet closes`);
+      // More files than itch.io takes in one zip: said, where the person can still act on it.
+      await page.evaluate(() => {
+        window.gameFixture.exported_ = { ...window.gameFixture.exported_, files: 1400 };
+      });
+      await panel.getByTestId("game-export").click();
+      await packed.waitFor();
+      assert.match(
+        await packed.getByTestId("game-exported-too-many").textContent(),
+        /1400 files\. itch\.io takes at most 1000/,
+      );
+      await packed.getByRole("button", { name: "Close" }).click();
+      // An export that fails says why, and the button is there to try again.
+      await page.evaluate(() => {
+        window.gameFixture.exportFails =
+          "Exporting uses Ghost's own Godot 4.7.2. Get it in the Game pane first.";
+      });
+      await panel.getByTestId("game-export").click();
+      await until(
+        async () =>
+          /Get it in the Game pane first/.test(
+            (await panel
+              .getByTestId("game-problem")
+              .textContent()
+              .catch(() => "")) ?? "",
+          ),
+        `${label}: a failed export says why`,
+      );
+      assert.equal(await packed.count(), 0);
+      assert.equal(await panel.getByTestId("game-export").isDisabled(), false);
+      // A web game is packed from what it built.
+      await open("web");
+      assert.match(await panel.getByTestId("game-export").textContent(), /Pack for the web/);
+
       // A narrow window: the pane covers the chat's work area instead of sitting beside it.
       await open("ready");
       await page.setViewportSize({ width: 900, height: 800 });

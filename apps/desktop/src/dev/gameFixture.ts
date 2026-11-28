@@ -9,6 +9,7 @@ import type {
   GameAssetData,
   GameAssets,
   GameConnected,
+  GameExport,
   GameInput,
   GameLog,
   GamePicked,
@@ -498,6 +499,25 @@ export class FakeGame implements GameApi {
       run_seconds: 48.5,
       inputs: 212,
     };
+  }
+  /** What an export answers; a test may make it fail, or make it large. */
+  exported_: GameExport = {
+    folder: "C:\\Users\\me\\Ghost\\game\\exports\\moon-hop",
+    zip: "C:\\Users\\me\\Downloads\\moon-hop-web.zip",
+    files: 9,
+    bytes: 9_961_472,
+    what: "Godot's web export",
+  };
+  exportFails: string | null = null;
+  async exportWeb(): Promise<GameExport> {
+    this.calls.push("export");
+    // Long enough for the pane to say it is working.
+    await new Promise((done) => setTimeout(done, 150));
+    if (this.exportFails !== null) throw new Error(this.exportFails);
+    return this.exported_;
+  }
+  async exportShow(): Promise<void> {
+    this.calls.push("exportShow");
   }
   /** A turn made a picture: it is the folder's newest. */
   made(path: string): void {

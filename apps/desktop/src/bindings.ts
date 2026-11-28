@@ -156,6 +156,17 @@ export const commands = {
 	 */
 	gameAsset: (chatId: string, path: string) => typedError<GameAssetData, AppError>(__TAURI_INVOKE("game_asset", { chatId, path })),
 	/**
+	 *  Packs the chat's game for the web and puts the zip in the person's Downloads folder. A Godot
+	 *  project is exported by Ghost's own Godot (its web template is fetched first, ten megabytes,
+	 *  when it is not here yet); a web game is packed from its built folder. Nothing is uploaded.
+	 */
+	gameExport: (chatId: string) => typedError<GameExport, AppError>(__TAURI_INVOKE("game_export", { chatId })),
+	/**
+	 *  Shows the zip the chat's last export made, in its folder. The page names no path: only the
+	 *  zip this app just wrote is ever shown.
+	 */
+	gameExportShow: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("game_export_show", { chatId })),
+	/**
 	 *  Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
 	 *  stream's own end. Answers the stream's number, for `game_unwatch`.
 	 */
@@ -2477,6 +2488,19 @@ export type GameError = {
 	stack: string[],
 	/**  How many times it has happened in this run. */
 	count: number,
+};
+
+/**  What an export made. */
+export type GameExport = {
+	/**  The folder the game was exported to: `index.html` and what it loads. */
+	folder: string,
+	/**  The same, packed with `index.html` at its top, as itch.io takes it. */
+	zip: string,
+	files: number,
+	/**  The zip's size in bytes. */
+	bytes: number,
+	/**  What was exported, in a few words ("Godot's web export", "The built folder dist"). */
+	what: string,
 };
 
 /**

@@ -1321,3 +1321,27 @@ button.game-log-where:focus-visible {
   padding: 0;
   list-style: none;
 }
+
+/* --------------------------------------------------------------------- export */
+
+/* An export under way, said over the foot of the stage. */
+.game-exporting {
+  position: absolute;
+  inset: auto var(--g-space-8) var(--g-space-8);
+  z-index: 2;
+  align-items: center;
+  gap: var(--g-space-8);
+}
+
+.game-exporting > .game-progress {
+  flex: none;
+}
+
+.game-export .game-code {
+  margin: 0;
+  user-select: all;
+}
+
+.game-export .game-steps {
+  margin: 0;
+}

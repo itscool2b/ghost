@@ -14,6 +14,7 @@ import {
   type GameAssets,
   type GameConnected,
   type GameEngine,
+  type GameExport,
   type GameInput,
   type GameLog,
   type GamePicked,
@@ -63,6 +64,10 @@ export interface GameApi {
   assets(chatId: string): Promise<GameAssets>;
   /** One of them, by the path it was listed under. */
   asset(chatId: string, path: string): Promise<GameAssetData>;
+  /** Packs the chat's game for the web and puts the zip in Downloads. */
+  exportWeb(chatId: string): Promise<GameExport>;
+  /** Shows the zip the last export made, in its folder. */
+  exportShow(chatId: string): Promise<void>;
   /** Streams the chat's game to `onPacket`; answers the stop. */
   watch(chatId: string, onPacket: (packet: Uint8Array) => void): Promise<() => void>;
   log(chatId: string): Promise<GameLog>;
@@ -107,6 +112,8 @@ export const tauriGameApi: GameApi = {
   recent: (chatId, seconds) => settle(commands.gameRecent(chatId, seconds)),
   assets: (chatId) => settle(commands.gameAssets(chatId)),
   asset: (chatId, path) => settle(commands.gameAsset(chatId, path)),
+  exportWeb: (chatId) => settle(commands.gameExport(chatId)),
+  exportShow: (chatId) => done(settle(commands.gameExportShow(chatId))),
   watch: async (chatId, onPacket) => {
     // The packets arrive as raw bytes (an ArrayBuffer), whatever the generated type says.
     const channel = new Channel<number[]>((message) => {
