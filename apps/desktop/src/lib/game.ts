@@ -9,6 +9,9 @@ import {
   type ChatGame,
   commands,
   type EngineProbe,
+  type GameAsset,
+  type GameAssetData,
+  type GameAssets,
   type GameConnected,
   type GameEngine,
   type GameInput,
@@ -20,6 +23,7 @@ import {
   type GameTunables,
   type Starter,
 } from "../bindings";
+import { freshSince } from "./gameAssets";
 import { settle } from "./ipc";
 
 export const GAME_EVENT = "ghost-game";
@@ -55,6 +59,10 @@ export interface GameApi {
   ): Promise<void>;
   /** The last seconds of the run as pictures, and the run kept for the agent to play again. */
   recent(chatId: string, seconds: number): Promise<GameRecent>;
+  /** The pictures, sounds and models of the chat's folder, the newest first. */
+  assets(chatId: string): Promise<GameAssets>;
+  /** One of them, by the path it was listed under. */
+  asset(chatId: string, path: string): Promise<GameAssetData>;
   /** Streams the chat's game to `onPacket`; answers the stop. */
   watch(chatId: string, onPacket: (packet: Uint8Array) => void): Promise<() => void>;
   log(chatId: string): Promise<GameLog>;
@@ -97,6 +105,8 @@ export const tauriGameApi: GameApi = {
   setValue: (chatId, node, property, kind, value) =>
     done(settle(commands.gameSetValue(chatId, node, property, kind, value))),
   recent: (chatId, seconds) => settle(commands.gameRecent(chatId, seconds)),
+  assets: (chatId) => settle(commands.gameAssets(chatId)),
+  asset: (chatId, path) => settle(commands.gameAsset(chatId, path)),
   watch: async (chatId, onPacket) => {
     // The packets arrive as raw bytes (an ArrayBuffer), whatever the generated type says.
     const channel = new Channel<number[]>((message) => {
@@ -152,6 +162,8 @@ const NOTHING: GameStatus = {
   summons: [],
 };
 
+const NO_ASSETS: readonly GameAsset[] = [];
+
 /**
  * Calls closer together than this are one stretch of the agent's work: a pane the person closed
  * during it stays closed until the agent has been quiet this long.
@@ -175,6 +187,12 @@ export class GameStore {
   readonly #closed = new Set<string>();
   /** Chats being looked at now, so a burst of turn ends asks once. */
   readonly #looking = new Set<string>();
+  /** What each game chat's folder held when it was last listed: each asset's path and age. */
+  readonly #listed = new Map<string, ReadonlyMap<string, number>>();
+  /** The assets that appeared or changed since, for the chat to show until they are seen. */
+  readonly #fresh = new Map<string, readonly GameAsset[]>();
+  /** An asset the chat asked the pane to open. */
+  readonly #wanted = new Map<string, string>();
 
   constructor(api: GameApi, now: () => number = Date.now) {
     this.api = api;
@@ -234,10 +252,66 @@ export class GameStore {
     void this.api
       .look(chatId)
       .then(
-        (status) => this.#take(status),
+        (status) => {
+          this.#take(status);
+          this.#list(chatId);
+        },
         () => {},
       )
       .finally(() => this.#looking.delete(chatId));
+  }
+
+  /**
+   * Lists a game chat's assets again. The first list is what was there; from then on, what is
+   * new or changed since the list before is kept for the chat to show: the art a turn made.
+   */
+  #list(chatId: string): void {
+    if (!this.of(chatId)?.project) return;
+    void this.api.assets(chatId).then(
+      (list) => {
+        const before = this.#listed.get(chatId);
+        this.#listed.set(chatId, new Map(list.assets.map((asset) => [asset.path, asset.modified])));
+        if (!before) return;
+        const fresh = freshSince(before, list.assets);
+        if (fresh.length === 0) return;
+        const paths = new Set(fresh.map((asset) => asset.path));
+        const waiting = (this.#fresh.get(chatId) ?? []).filter((asset) => !paths.has(asset.path));
+        this.#fresh.set(chatId, [...fresh, ...waiting].slice(0, 24));
+        this.#changed();
+      },
+      () => {},
+    );
+  }
+
+  /** The assets a turn left in the chat's folder that the person has not looked at yet. */
+  freshAssets(chatId: string): readonly GameAsset[] {
+    return this.#fresh.get(chatId) ?? NO_ASSETS;
+  }
+
+  /** The person dismissed them. */
+  seenAssets(chatId: string): void {
+    if (this.#fresh.delete(chatId)) this.#changed();
+  }
+
+  /** The chat asks the pane to open one asset. */
+  wantAsset(chatId: string, path: string): void {
+    this.#wanted.set(chatId, path);
+    this.#fresh.delete(chatId);
+    this.#changed();
+  }
+
+  wantedAsset(chatId: string): string | null {
+    return this.#wanted.get(chatId) ?? null;
+  }
+
+  /** The pane opened it. */
+  shownAsset(chatId: string): void {
+    if (this.#wanted.delete(chatId)) this.#changed();
+  }
+
+  #changed(): void {
+    this.#version += 1;
+    for (const listener of [...this.#listeners]) listener();
   }
 
   /** The pane was opened: look for Godot again, and at the chat's folder. */

@@ -5,6 +5,9 @@
 import type {
   ChatGame,
   EngineProbe,
+  GameAsset,
+  GameAssetData,
+  GameAssets,
   GameConnected,
   GameInput,
   GameLog,
@@ -112,6 +115,104 @@ export const LOG: GameLog = {
 };
 
 /** The stand-in for Rust's games. */
+function base64(bytes: Uint8Array): string {
+  let text = "";
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  return btoa(text);
+}
+
+/** A quarter of a second of a falling tone: a real WAV, mono, 8 kHz, 16 bits. */
+function wav(): Uint8Array {
+  const [rate, count] = [8000, 2000];
+  const bytes = new Uint8Array(44 + count * 2);
+  const view = new DataView(bytes.buffer);
+  const text = (at: number, word: string) => {
+    for (let index = 0; index < word.length; index += 1) bytes[at + index] = word.charCodeAt(index);
+  };
+  text(0, "RIFF");
+  view.setUint32(4, 36 + count * 2, true);
+  text(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, "data");
+  view.setUint32(40, count * 2, true);
+  for (let index = 0; index < count; index += 1) {
+    const fade = 1 - index / count;
+    const value = Math.sin((index / rate) * 2 * Math.PI * (660 - index / 8)) * fade;
+    view.setInt16(44 + index * 2, Math.round(value * 30000), true);
+  }
+  return bytes;
+}
+
+/** The smallest model there is: one triangle in a .glb. */
+function glb(): Uint8Array {
+  const json = JSON.stringify({
+    asset: { version: "2.0" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0, name: "Crate" }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    buffers: [{ byteLength: 36 }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36, target: 34962 }],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: "VEC3",
+        min: [0, 0, 0],
+        max: [1, 1, 0],
+      },
+    ],
+  });
+  const padded = json + " ".repeat((4 - (json.length % 4)) % 4);
+  const total = 12 + 8 + padded.length + 8 + 36;
+  const bytes = new Uint8Array(total);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x46546c67, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, total, true);
+  view.setUint32(12, padded.length, true);
+  view.setUint32(16, 0x4e4f534a, true);
+  for (let index = 0; index < padded.length; index += 1)
+    bytes[20 + index] = padded.charCodeAt(index);
+  const at = 20 + padded.length;
+  view.setUint32(at, 36, true);
+  view.setUint32(at + 4, 0x004e4942, true);
+  [0, 0, 0, 1, 0, 0, 0, 1, 0].forEach((value, index) => {
+    view.setFloat32(at + 8 + index * 4, value, true);
+  });
+  return bytes;
+}
+
+/** A picture drawn here, as a PNG. Browser only. */
+async function png(
+  width: number,
+  height: number,
+  draw: (context: CanvasRenderingContext2D) => void,
+): Promise<Uint8Array> {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (context) draw(context);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  return blob ? new Uint8Array(await blob.arrayBuffer()) : new Uint8Array();
+}
+
+const asset = (
+  path: string,
+  kind: GameAsset["kind"],
+  bytes: number,
+  age: number,
+  tooLarge = false,
+): GameAsset => ({ path, kind, bytes, modified: 1_764_000_000 - age, too_large: tooLarge });
+
 export class FakeGame implements GameApi {
   /** Every call the pane made, as `name` or `name:argument`. */
   readonly calls: string[] = [];
@@ -121,6 +222,10 @@ export class FakeGame implements GameApi {
   readonly sent: { text: string; attachments: string[] }[] = [];
   /** Every picture it attached: whether it was a PNG, and its size. */
   readonly pastes: { name: string | null; bytes: number; png: boolean }[] = [];
+  /** What the pane put in the message box, as the box last held it. */
+  drafted = "";
+  /** Looks at the chat's folder again, as the end of a turn does (the preview sets it). */
+  look_: () => void = () => {};
   #status: GameStatus;
   readonly #listeners = new Set<(status: GameStatus) => void>();
   /** The pane's frame listeners, by chat: a test may push packets to one. */
@@ -148,6 +253,16 @@ export class FakeGame implements GameApi {
       { name: "double_jump", kind: "bool", value: 0, initial: 0, min: null, max: null, step: null },
     ],
   };
+  /** The folder's art, the newest first. */
+  assets_: GameAsset[] = [
+    asset("art/player/run.png", "picture", 412, 60),
+    asset("sound/jump.wav", "sound", 4044, 120),
+    asset("models/crate.glb", "model", 680, 180),
+    asset("art/title.png", "picture", 3120, 240),
+    asset("art/tiles/grass.png", "picture", 96, 300),
+    asset("models/tree.gltf", "model", 2210, 360),
+    asset("art/backdrop.png", "picture", 15_728_640, 420, true),
+  ];
   /** What the last seconds answer; a test may make the run one that cannot be played again. */
   unrepeatable: string | null = null;
   #replays = 0;
@@ -383,6 +498,44 @@ export class FakeGame implements GameApi {
       run_seconds: 48.5,
       inputs: 212,
     };
+  }
+  /** A turn made a picture: it is the folder's newest. */
+  made(path: string): void {
+    const newest = Math.max(...this.assets_.map((entry) => entry.modified));
+    this.assets_ = [
+      { path, kind: "picture", bytes: 300, modified: newest + 5, too_large: false },
+      ...this.assets_.filter((entry) => entry.path !== path),
+    ];
+  }
+  async assets(): Promise<GameAssets> {
+    this.calls.push("assets");
+    return { assets: [...this.assets_], cut: false };
+  }
+  async asset(_chatId: string, path: string): Promise<GameAssetData> {
+    this.calls.push(`asset:${path}`);
+    if (path.endsWith(".wav")) return { kind: "sound", mime: "audio/wav", base64: base64(wav()) };
+    if (path.endsWith(".glb"))
+      return { kind: "model", mime: "model/gltf-binary", base64: base64(glb()) };
+    if (path.endsWith(".gltf")) return { kind: "model", mime: "model/gltf+json", base64: "e30=" };
+    // A sheet of four frames, each a square with a figure a step further on; other pictures
+    // are one frame of the same.
+    const sheet = path.endsWith("run.png");
+    const [cell, frames] = sheet ? [32, 4] : path.endsWith("grass.png") ? [16, 1] : [180, 1];
+    const width = sheet ? cell * frames : path.endsWith("title.png") ? 320 : cell;
+    const bytes = await png(width, cell, (context) => {
+      for (let frame = 0; frame < frames; frame += 1) {
+        context.fillStyle = frame % 2 === 0 ? "#22303f" : "#2a3b4d";
+        context.fillRect(frame * cell, 0, sheet ? cell : width, cell);
+        context.fillStyle = "#f2c14e";
+        context.fillRect(
+          frame * cell + cell * 0.2 + frame * 3,
+          cell * 0.25,
+          cell * 0.3,
+          cell * 0.5,
+        );
+      }
+    });
+    return { kind: "picture", mime: "image/png", base64: base64(bytes) };
   }
   async watch(chatId: string, onPacket: (packet: Uint8Array) => void): Promise<() => void> {
     this.calls.push("watch");
