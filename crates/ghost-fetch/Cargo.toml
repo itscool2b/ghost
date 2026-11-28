@@ -1,0 +1,27 @@
+[package]
+name = "ghost-fetch"
+description = "Fetching a pinned file for Ghost: one HTTPS download checked against its size and hash, and a zip unpacked so that nothing lands outside its folder"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+reqwest.workspace = true
+# SHA-256 and SHA-512: a pin is whichever digest the publisher lists.
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+# The version the updater and ghost-devices already lock, inflating with the zlib-rs the
+# workspace already has.
+zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

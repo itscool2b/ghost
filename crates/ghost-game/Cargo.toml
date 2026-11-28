@@ -1,0 +1,46 @@
+[package]
+name = "ghost-game"
+description = "Games for Ghost: which engine a project is made with, Godot found or fetched and run out of sight, the bridge to the running game, and the tools agents play it with"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+ghost-fetch.workspace = true
+# The game in a job object (Windows) or a process group (Unix), as agents' processes and the
+# phone emulator are. The version ghost-process and ghost-devices already lock.
+process-wrap = { version = "=10.0.1", default-features = false, features = [
+    "tokio1",
+    "creation-flags",
+    "job-object",
+    "kill-on-drop",
+    "process-group",
+] }
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net"] }
+tracing.workspace = true
+# The run's token: two time-ordered ids, as the other grants' tokens are made.
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The "no console window" flag in the type the job object wrapper takes, and the foreground lock
+# that keeps a starting game from taking the keyboard.
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util", "net"] }
+
+[lints]
+workspace = true

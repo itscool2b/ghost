@@ -2165,6 +2165,7 @@ dependencies = [
 name = "ghost-devices"
 version = "0.1.0"
 dependencies = [
+ "ghost-fetch",
  "png",
  "process-wrap",
  "quick-xml",
@@ -2205,6 +2206,35 @@ dependencies = [
  "tracing",
  "unicode-segmentation",
  "uuid",
+]
+
+[[package]]
+name = "ghost-fetch"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "zip",
+]
+
+[[package]]
+name = "ghost-game"
+version = "0.1.0"
+dependencies = [
+ "ghost-fetch",
+ "process-wrap",
+ "serde",
+ "serde_json",
+ "specta",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+ "windows",
 ]
 
 [[package]]

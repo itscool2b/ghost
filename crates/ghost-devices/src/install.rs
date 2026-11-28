@@ -5,8 +5,7 @@
 //! only then unpacked; its entries may not leave the folder they are unpacked into. A package
 //! appears in the SDK folder whole or not at all.
 
-use std::io::{Read, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -344,182 +343,14 @@ impl Hasher {
     }
 }
 
-/// Unpacks a checked archive into the empty folder `into`. No entry may land outside it: not by
-/// its own path, and not through a link.
-///
-/// Folders and files are written first, while no link exists, so no write can pass through one.
-/// Links are made afterwards, each beside real folders only, and every one is then resolved for
-/// real: a link that ends up anywhere outside `into` fails the whole unpack, and one that points
-/// at nothing is dropped.
+/// Unpacks a checked archive into the empty folder `into` (see `ghost_fetch::unzip`: no entry may
+/// land outside it, by its own path or through a link), in the installer's own errors.
 fn unpack(archive: &Path, into: &Path) -> Result<(), Error> {
-    let bad = || Error::Download("The downloaded archive could not be unpacked.".into());
-    std::fs::create_dir_all(into)?;
-    let file = std::io::BufReader::new(std::fs::File::open(archive)?);
-    let mut zip = zip::ZipArchive::new(file).map_err(|_| bad())?;
-    let mut written = 0u64;
-    let mut links: Vec<(PathBuf, String)> = Vec::new();
-    for number in 0..zip.len() {
-        let mut entry = zip.by_index(number).map_err(|_| bad())?;
-        let relative = entry.enclosed_name().ok_or_else(|| {
-            Error::Download("The downloaded archive holds a path that leaves its folder.".into())
-        })?;
-        let target = into.join(&relative);
-        if entry.is_dir() {
-            std::fs::create_dir_all(&target)?;
-            continue;
-        }
-        if entry.is_symlink() {
-            let mut link = String::new();
-            entry
-                .by_ref()
-                .take(4096)
-                .read_to_string(&mut link)
-                .map_err(|_| bad())?;
-            links.push((relative, link));
-            continue;
-        }
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        // The size an entry declares is only a claim: what is really written is what counts,
-        // against the entry's own claim and against the limit for the whole archive.
-        let declared = entry.size();
-        let room = UNPACK_LIMIT.saturating_sub(written);
-        if declared > room {
-            return Err(Error::TooLarge);
-        }
-        let mode = entry.unix_mode();
-        // `create_new`: a second entry of the same name never overwrites the first.
-        let mut out = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&target)?;
-        let copied = std::io::copy(
-            &mut entry.by_ref().take(declared.saturating_add(1)),
-            &mut out,
-        )?;
-        written = written.saturating_add(copied);
-        if copied != declared {
-            return Err(bad());
-        }
-        out.flush()?;
-        drop(out);
-        make_runnable(&target, mode)?;
-    }
-    make_links(into, &links)
-}
-
-/// Makes the archive's links, then checks where each really leads.
-fn make_links(into: &Path, links: &[(PathBuf, String)]) -> Result<(), Error> {
-    if links.is_empty() {
-        return Ok(());
-    }
-    let mut made = Vec::new();
-    for (relative, link) in links {
-        check_link(relative, link)?;
-        let target = into.join(relative);
-        real_folders_only(into, relative)?;
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        if create_link(Path::new(link), &target)? {
-            made.push(target);
-        }
-    }
-    let top = std::fs::canonicalize(into)?;
-    for link in made {
-        match std::fs::canonicalize(&link) {
-            Ok(resolved) if resolved.starts_with(&top) => {}
-            Ok(_) => {
-                return Err(Error::Download(
-                    "The downloaded archive holds a link that leaves its folder.".into(),
-                ));
-            }
-            // It points at nothing: of no use, so it does not stay.
-            Err(_) => {
-                let _ = std::fs::remove_file(&link);
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Every folder above `relative` must be a real folder, not a link made a moment ago: a link
-/// placed "inside" another link would really be placed wherever that one leads.
-fn real_folders_only(into: &Path, relative: &Path) -> Result<(), Error> {
-    let mut path = into.to_owned();
-    let Some(parent) = relative.parent() else {
-        return Ok(());
-    };
-    for part in parent.components() {
-        path.push(part);
-        match std::fs::symlink_metadata(&path) {
-            Ok(found) if found.file_type().is_symlink() => {
-                return Err(Error::Download(
-                    "The downloaded archive holds a link inside a link.".into(),
-                ));
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-/// A link's text must be relative and, read as plain path parts from the entry's own folder,
-/// must not climb above the archive's top. Where it really leads is checked after it is made.
-fn check_link(relative: &Path, link: &str) -> Result<(), Error> {
-    let escapes =
-        || Error::Download("The downloaded archive holds a link that leaves its folder.".into());
-    let link_path = Path::new(link);
-    if link.is_empty() || link_path.is_absolute() {
-        return Err(escapes());
-    }
-    let mut depth = relative
-        .parent()
-        .map_or(0, |parent| parent.components().count()) as i64;
-    for part in link_path.components() {
-        match part {
-            Component::Normal(_) => depth += 1,
-            Component::ParentDir => {
-                depth -= 1;
-                if depth < 0 {
-                    return Err(escapes());
-                }
-            }
-            Component::CurDir => {}
-            Component::RootDir | Component::Prefix(_) => return Err(escapes()),
-        }
-    }
-    Ok(())
-}
-
-/// Makes the link, and says whether one was made. Windows archives hold no links; one there is
-/// left out.
-#[cfg(unix)]
-fn create_link(link: &Path, target: &Path) -> Result<bool, Error> {
-    std::os::unix::fs::symlink(link, target)?;
-    Ok(true)
-}
-
-#[cfg(not(unix))]
-fn create_link(_link: &Path, _target: &Path) -> Result<bool, Error> {
-    Ok(false)
-}
-
-#[cfg(unix)]
-fn make_runnable(target: &Path, mode: Option<u32>) -> Result<(), Error> {
-    use std::os::unix::fs::PermissionsExt;
-    if let Some(mode) = mode {
-        // The owner can always read and write what Ghost fetched; nothing is set-id.
-        let mode = (mode & 0o777) | 0o600;
-        std::fs::set_permissions(target, std::fs::Permissions::from_mode(mode))?;
-    }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn make_runnable(_target: &Path, _mode: Option<u32>) -> Result<(), Error> {
-    Ok(())
+    ghost_fetch::unzip(archive, into, UNPACK_LIMIT).map_err(|error| match error {
+        ghost_fetch::UnzipError::TooLarge => Error::TooLarge,
+        ghost_fetch::UnzipError::Io(error) => Error::Io(error),
+        ghost_fetch::UnzipError::Archive(why) => Error::Download(why.into()),
+    })
 }
 
 /// Moves the one folder an archive unpacked to into its place in the SDK, replacing what was
@@ -638,72 +469,6 @@ mod tests {
         assert!(unpack(&folder.path().join("missing.zip"), &folder.path().join("o")).is_err());
         std::fs::write(folder.path().join("junk.zip"), b"not a zip").unwrap();
         assert!(unpack(&folder.path().join("junk.zip"), &folder.path().join("o")).is_err());
-    }
-
-    #[test]
-    fn a_links_text_may_not_climb_above_the_archives_top() {
-        for (relative, link) in [
-            ("emulator/x", "../../outside"),
-            ("x", "../outside"),
-            ("x", "/etc/passwd"),
-            ("x", ""),
-            ("a/b/c", "../../../../up"),
-        ] {
-            assert!(check_link(Path::new(relative), link).is_err(), "{link}");
-        }
-        assert!(check_link(Path::new("emulator/lib64/libfoo.so"), "../lib/libfoo.so.1").is_ok());
-        assert!(check_link(Path::new("lib/libfoo.so"), "libfoo.so.1").is_ok());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn links_are_made_last_and_checked_for_where_they_really_lead() {
-        let folder = tempfile::tempdir().unwrap();
-        let into = folder.path().join("out");
-        std::fs::create_dir_all(into.join("emulator/lib")).unwrap();
-        std::fs::write(into.join("emulator/lib/libfoo.so.1"), b"lib").unwrap();
-        let link = |relative: &str, text: &str| (PathBuf::from(relative), text.to_owned());
-
-        // An ordinary library link, a link to a folder, and a link that points at nothing.
-        make_links(
-            &into,
-            &[
-                link("emulator/lib/libfoo.so", "libfoo.so.1"),
-                link("emulator/current", "lib"),
-                link("emulator/dangling", "nowhere"),
-            ],
-        )
-        .unwrap();
-        assert_eq!(
-            std::fs::read(into.join("emulator/lib/libfoo.so")).unwrap(),
-            b"lib"
-        );
-        assert_eq!(
-            std::fs::read(into.join("emulator/current/libfoo.so.1")).unwrap(),
-            b"lib"
-        );
-        assert!(std::fs::symlink_metadata(into.join("emulator/dangling")).is_err());
-
-        // The chain: `d/up` leads to the top, and a second link "inside" it would then be made
-        // at the top, pointing one above it. Each link's text alone passes the plain check.
-        let into = folder.path().join("chain");
-        std::fs::create_dir_all(into.join("d")).unwrap();
-        std::fs::write(folder.path().join("secret"), b"outside").unwrap();
-        let chained = make_links(&into, &[link("d/up", ".."), link("d/up/out", "..")]);
-        assert!(chained.is_err());
-        assert!(
-            std::fs::symlink_metadata(into.join("out")).is_err(),
-            "no link at the top"
-        );
-
-        // A link whose text is innocent but whose real target is outside, through another link.
-        let into = folder.path().join("through");
-        std::fs::create_dir_all(into.join("a/b")).unwrap();
-        let through = make_links(
-            &into,
-            &[link("a/b/top", "../.."), link("a/out", "b/top/..")],
-        );
-        assert!(through.is_err());
     }
 
     #[tokio::test]

@@ -27,6 +27,8 @@ ghost-drivers = { path = "crates/ghost-drivers" }
 ghost-config = { path = "crates/ghost-config" }
 ghost-remote = { path = "crates/ghost-remote" }
 ghost-devices = { path = "crates/ghost-devices" }
+ghost-fetch = { path = "crates/ghost-fetch" }
+ghost-game = { path = "crates/ghost-game" }
 
 # async + errors + logging
 # `signal`: the desktop's quit flow listens for SIGTERM, SIGINT and SIGHUP.
