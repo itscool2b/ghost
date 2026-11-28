@@ -143,9 +143,6 @@ export function PlanCard({
   const [draft, setDraft] = useState(approval.plan);
   const [note, setNote] = useState("");
   const [working, setWorking] = useState<"hand" | "send" | "accept" | null>(null);
-  // What this card sent back as a message of its own, to an agent that takes no words with a
-  // refusal: the resolution then carries no note to say so.
-  const [followed, setFollowed] = useState<"note" | "edits" | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const { request: ask, resolution } = item;
   const closed = resolution !== null || request?.gone === true;
@@ -182,17 +179,11 @@ export function PlanCard({
   };
   const sendNote = () => {
     if (onAddToPlan && note.trim())
-      void run("send", async () => {
-        await onAddToPlan(approval.decline.option_id, planNote(note));
-        setFollowed("note");
-      });
+      void run("send", () => onAddToPlan(approval.decline.option_id, planNote(note)));
   };
   const sendEdited = () => {
     if (onAddToPlan && edited)
-      void run("send", async () => {
-        await onAddToPlan(approval.decline.option_id, planRevision(draft));
-        setFollowed("edits");
-      });
+      void run("send", () => onAddToPlan(approval.decline.option_id, planRevision(draft)));
   };
   const acceptEdited = () => {
     if (onAcceptEdited && edited)
@@ -243,7 +234,7 @@ export function PlanCard({
     declined && resolution?.decision.type === "selected"
       ? (resolution.decision.note ?? null)
       : null;
-  const sentEdits = sent === null ? followed === "edits" : isPlanRevision(sent);
+  const sentEdits = sent !== null && isPlanRevision(sent);
   const outcome =
     resolution === null
       ? request?.gone
@@ -256,7 +247,7 @@ export function PlanCard({
         : declined
           ? sentEdits
             ? "Sent back with your edits."
-            : sent !== null || followed === "note"
+            : sent !== null
               ? "Sent back with your note."
               : `Declined. Tell ${agentName} what you want instead.`
           : permissionResolutionLabel(resolution, ask.options);

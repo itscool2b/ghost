@@ -176,6 +176,16 @@ async function inspect(engine, launcher) {
         ["decline:Are we keeping the scroll position?"],
         what("the note goes inside the refusal, with nothing added and no message after it"),
       );
+      // The answered card fades into the transcript: its colours are judged once it has.
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            // The working indicator under it never ends; everything else does.
+            .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+            .map((animation) => animation.finished.catch(() => {})),
+        ),
+      );
       assert.deepEqual(
         (await new AxeBuilder({ page }).include('[data-kind="plan-approval"]').analyze())
           .violations,
@@ -190,8 +200,9 @@ async function inspect(engine, launcher) {
       assert.deepEqual(await calls(), ["respond:deny"], what("a plain decline is one answer"));
       assert.equal(await page.getByTestId("plan-note-sent").count(), 0);
 
-      // An agent that takes no words with a refusal: the plan is declined and the note follows
-      // as the person's next message, and the field says so before it is written.
+      // An agent that takes no words with a refusal: the plan is declined, which ends its turn,
+      // and the note follows as the person's next message, under the declined plan. The field
+      // says so before the note is written.
       await page.goto(`${url}/?preview=plan&edits=none`);
       await waiting.getByRole("button", { name: "Request changes" }).click();
       assert.match(
@@ -201,8 +212,9 @@ async function inspect(engine, launcher) {
       );
       await note.fill("Fewer steps, please.");
       await waiting.getByRole("button", { name: "Send back" }).click();
-      await answered.getByText("Sent back with your note.").waitFor();
+      await answered.getByText("Declined. Tell Claude Code what you want instead.").waitFor();
       assert.deepEqual(await calls(), ["respond:deny"], what("declined first"));
+      assert.equal(await page.getByTestId("plan-note-sent").count(), 0);
       await page.getByText("Fewer steps, please.").first().waitFor();
 
       // Accept, by the keyboard from wherever the sheet has focus.
