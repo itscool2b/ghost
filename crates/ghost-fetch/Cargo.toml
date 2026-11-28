@@ -10,6 +10,9 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+# One entry of an archive is inflated by itself; the version and the zlib-rs the zip crate
+# already locks.
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"] }
 reqwest.workspace = true
 # SHA-256 and SHA-512: a pin is whichever digest the publisher lists.
 sha2.workspace = true

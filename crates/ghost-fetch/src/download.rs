@@ -56,7 +56,7 @@ pub enum DownloadError {
 }
 
 /// Whether `url` is HTTPS on the default port, with no credentials, to one of `hosts`.
-fn allowed(url: &reqwest::Url, hosts: &[&str]) -> bool {
+pub(crate) fn allowed(url: &reqwest::Url, hosts: &[&str]) -> bool {
     url.scheme() == "https"
         && url.port().is_none()
         && url.username().is_empty()
