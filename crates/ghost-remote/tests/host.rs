@@ -4505,7 +4505,7 @@ const SEALED_MOST: usize = 820 * 1024;
 const CUT: &str = "(cut: too long to show on this device)";
 
 /// Sends an open and returns its answer with the size of the frame it came in.
-async fn opened(phone: &mut Browser, relay: &mut Relay, chat_id: &str) -> (Value, usize) {
+async fn open_sized(phone: &mut Browser, relay: &mut Relay, chat_id: &str) -> (Value, usize) {
     let id = phone
         .send(relay, json!({ "op": "open", "chat_id": chat_id }))
         .await;
@@ -4525,7 +4525,7 @@ async fn a_step_too_large_for_one_message_opens_cut() {
     let mut relay = online(&rig).await;
     let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
     let owner = "auracode-remote:aaaaaaaaaaaaaaaa";
-    let (answer, size) = opened(&mut phone, &mut relay, "huge").await;
+    let (answer, size) = open_sized(&mut phone, &mut relay, "huge").await;
     assert!(size < SEALED_MOST, "{size} bytes went to the relay");
     assert_eq!(answer["ok"], true, "{}", answer["error"]);
     let items = answer["data"]["history"]["items"]
@@ -4554,7 +4554,7 @@ async fn the_whole_answer_to_an_open_fits_one_message() {
     let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
 
     // A page under the limit by itself, and over it with what stands beside it.
-    let (edge, size) = opened(&mut phone, &mut relay, "edge").await;
+    let (edge, size) = open_sized(&mut phone, &mut relay, "edge").await;
     assert!(size < SEALED_MOST, "{size} bytes went to the relay");
     assert_eq!(edge["ok"], true, "{}", edge["error"]);
     let items = edge["data"]["history"]["items"].as_array().expect("items");
@@ -4570,7 +4570,7 @@ async fn the_whole_answer_to_an_open_fits_one_message() {
 
     // What stands beside the history is itself most of a message: it is cut, and the newest
     // history still comes.
-    let (wide, size) = opened(&mut phone, &mut relay, "wide").await;
+    let (wide, size) = open_sized(&mut phone, &mut relay, "wide").await;
     assert!(size < SEALED_MOST, "{size} bytes went to the relay");
     assert_eq!(wide["ok"], true, "{}", wide["error"]);
     let said = wide["data"]["snapshot"]["last_error"]["message"]
