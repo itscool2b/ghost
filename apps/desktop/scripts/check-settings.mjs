@@ -228,6 +228,7 @@ try {
         browser: true,
         browser_passwords: true,
         mobile: true,
+        game: true,
         automatic_updates: false,
         coordinated_projects: false,
         speech_voice: null,

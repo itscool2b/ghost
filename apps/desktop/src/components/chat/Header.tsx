@@ -2,6 +2,7 @@ import { AgentMark } from "@ghost/ui/graphite";
 import {
   Ellipsis,
   FileDiff,
+  Gamepad2,
   Globe,
   MessageSquare,
   Play,
@@ -56,6 +57,7 @@ export function Header({
   view,
   browser,
   device,
+  game,
 }: {
   readonly state: ChatState;
   /**
@@ -106,6 +108,13 @@ export function Header({
    * header's opener for it, where the panel button was (owner, 9 November 2026).
    */
   readonly browser?: { readonly open: boolean; readonly onToggle: () => void };
+  /** The game beside the chat (the Game plugin), in Chat view, in chats that have a game. */
+  readonly game?: {
+    readonly open: boolean;
+    /** The agent playing the game while its pane is closed, by name. */
+    readonly agent: string | null;
+    readonly onToggle: () => void;
+  };
   /** The device beside the chat (the Mobile plugin), in Chat view while the plugin is on. */
   readonly device?: {
     readonly open: boolean;
@@ -281,6 +290,29 @@ export function Header({
             }}
           >
             <Smartphone size={16} />
+          </button>
+        ) : null}
+        {game ? (
+          <button
+            type="button"
+            className="g-button g-button-ghost g-button-icon g-button-28 chat-game-toggle"
+            aria-label={game.agent ? `Game: ${game.agent} is playing it` : "Game"}
+            title={
+              game.agent
+                ? `${game.agent} is playing the game (${commandKey()} Shift G)`
+                : `Game (${commandKey()} Shift G)`
+            }
+            aria-keyshortcuts="Control+Shift+G Meta+Shift+G"
+            aria-expanded={game.open}
+            data-testid="chat-game"
+            data-tour="game"
+            data-agent={game.agent ? "" : undefined}
+            onClick={(event) => {
+              event.currentTarget.focus();
+              game.onToggle();
+            }}
+          >
+            <Gamepad2 size={16} />
           </button>
         ) : null}
         {run ? (

@@ -117,6 +117,10 @@ pub struct ChatGame {
     pub agent: Option<String>,
     pub sound: bool,
     pub pid: Option<u32>,
+    /// Why no Godot on this computer runs the project, in words for the person: there is none
+    /// yet, or the project is newer than every one here. `None` when one does, and for projects
+    /// Ghost does not run itself.
+    pub godot_missing: Option<String>,
     /// The person asked for the game in a window of its own; its next start shows one.
     pub windowed: bool,
     /// The chat's agent has the game tools in the session that runs now. Without them the pane
@@ -388,7 +392,7 @@ impl Manager {
         let mut chats: Vec<ChatGame> = state
             .chats
             .iter()
-            .map(|(chat_id, chat)| chat_status(chat_id, chat, state.tools.contains_key(chat_id)))
+            .map(|(chat_id, chat)| chat_status(chat_id, chat, state.tools.contains_key(chat_id), &state.found))
             .collect();
         chats.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
         let mut summons: Vec<GameSummon> = state
@@ -1169,7 +1173,7 @@ impl Manager {
         state
             .chats
             .get(chat_id)
-            .map(|chat| chat_status(chat_id, chat, state.tools.contains_key(chat_id)))
+            .map(|chat| chat_status(chat_id, chat, state.tools.contains_key(chat_id), &state.found))
     }
 
     /// A session of `chat_id` was given the game tools, or let go of them. Said by the app's
@@ -1218,8 +1222,13 @@ impl Manager {
     }
 }
 
-fn chat_status(chat_id: &str, chat: &Chat, tools: bool) -> ChatGame {
+fn chat_status(chat_id: &str, chat: &Chat, tools: bool, found: &[Found]) -> ChatGame {
     let run = chat.run.as_ref();
+    let godot_missing = chat
+        .project
+        .as_ref()
+        .filter(|project| project.engine == GameEngine::Godot && project.unsupported.is_none())
+        .and_then(|project| godot::choose(project.version.as_deref(), found).err());
     ChatGame {
         chat_id: chat_id.to_owned(),
         project: chat.project.clone(),
@@ -1245,6 +1254,7 @@ fn chat_status(chat_id: &str, chat: &Chat, tools: bool) -> ChatGame {
         agent: chat.agent.clone(),
         sound: chat.sound,
         pid: run.and_then(|run| run.process.pid()),
+        godot_missing,
         windowed: chat.windowed,
         tools,
     }

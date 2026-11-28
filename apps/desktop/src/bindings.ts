@@ -102,6 +102,66 @@ export const commands = {
 	 *  release build refuses, so the window never acts as an agent there.
 	 */
 	mobileAgentCall: (chatId: string, tool: string, input: string) => typedError<MobileToolCheck, AppError>(__TAURI_INVOKE("mobile_agent_call", { chatId, tool, input })),
+	gameStatus: () => typedError<GameStatus, AppError>(__TAURI_INVOKE("game_status")),
+	/**
+	 *  A chat is shown, or its turn ended: what its folder holds now. Cheap (a few files are read),
+	 *  and it starts nothing.
+	 */
+	gameLook: (chatId: string) => typedError<GameStatus, AppError>(__TAURI_INVOKE("game_look", { chatId })),
+	/**  The pane was opened: look over the computer for Godot again, and at the chat's folder. */
+	gameRefresh: (chatId: string) => typedError<GameStatus, AppError>(__TAURI_INVOKE("game_refresh", { chatId })),
+	/**
+	 *  The person pressed Get Godot: download the pinned release from Godot's own releases, check it
+	 *  against the hash Godot publishes, and unpack it into Ghost's folder.
+	 */
+	gameFetchStart: () => typedError<null, AppError>(__TAURI_INVOKE("game_fetch_start")),
+	gameFetchCancel: () => typedError<null, AppError>(__TAURI_INVOKE("game_fetch_cancel")),
+	/**  The person pressed Play: start the chat's game (again), and let it run live. */
+	gameRun: (chatId: string, scene: string | null) => typedError<null, AppError>(__TAURI_INVOKE("game_run", { chatId, scene })),
+	gameStop: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("game_stop", { chatId })),
+	/**  Pause or resume the chat's game, or change how fast it runs. */
+	gameTime: (chatId: string, frozen: boolean | null, speed: number | null) => typedError<null, AppError>(__TAURI_INVOKE("game_time", { chatId, frozen, speed })),
+	/**  One frame of game time while the game is paused. */
+	gameStep: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("game_step", { chatId })),
+	/**  Whether the chat's game is heard. */
+	gameSound: (chatId: string, on: boolean) => typedError<null, AppError>(__TAURI_INVOKE("game_sound", { chatId, on })),
+	/**  The person's keys and mouse, at places of the picture they are watching. */
+	gameInput: (chatId: string, events: GameInput[]) => typedError<null, AppError>(__TAURI_INVOKE("game_input", { chatId, events })),
+	/**
+	 *  Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
+	 *  stream's own end. Answers the stream's number, for `game_unwatch`.
+	 */
+	gameWatch: (chatId: string, channel: Channel<GameFrame>) => typedError<number, AppError>(__TAURI_INVOKE("game_watch", { chatId, channel })),
+	/**  Ends the stream `game_watch` numbered `watch_id`, if it is still the chat's. */
+	gameUnwatch: (chatId: string, watchId: number) => typedError<null, AppError>(__TAURI_INVOKE("game_unwatch", { chatId, watchId })),
+	/**  The run's errors and what the game printed, for the pane's log. */
+	gameLog: (chatId: string) => typedError<GameLog, AppError>(__TAURI_INVOKE("game_log", { chatId })),
+	/**
+	 *  The person wants the game in a window of its own (or back out of sight): its next start does
+	 *  that. A running game is started again, since a window cannot change hands while it runs.
+	 */
+	gameWindow: (chatId: string, windowed: boolean) => typedError<null, AppError>(__TAURI_INVOKE("game_window", { chatId, windowed })),
+	/**  Opens the chat's project in Godot's own editor. */
+	gameOpenEditor: (chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("game_open_editor", { chatId })),
+	/**
+	 *  Saves a picture of the chat's game to the person's Pictures (or Downloads) folder and answers
+	 *  where it is.
+	 */
+	gamePicture: (chatId: string) => typedError<string, AppError>(__TAURI_INVOKE("game_picture", { chatId })),
+	/**
+	 *  The person turned Game on for this chat (a folder a game is about to be made in), or asked
+	 *  for the game tools in a chat whose folder became a game after its agent started. The chat's
+	 *  idle session starts again, since an agent's tools are fixed when its session starts.
+	 */
+	gameTurnOn: (chatId: string, on: boolean) => typedError<GameToolsChange, AppError>(__TAURI_INVOKE("game_turn_on", { chatId, on })),
+	/**  Whether the person turned Game on for this chat themselves. */
+	gameTurnedOn: (chatId: string) => typedError<boolean, AppError>(__TAURI_INVOKE("game_turned_on", { chatId })),
+	/**
+	 *  Runs one of the agents' game tools for a chat, as an agent's call would (`input` is its
+	 *  arguments, as JSON). Development builds only: the checks drive every tool through it. A
+	 *  release build refuses, so the window never acts as an agent there.
+	 */
+	gameAgentCall: (chatId: string, tool: string, input: string) => typedError<GameToolCheck, AppError>(__TAURI_INVOKE("game_agent_call", { chatId, tool, input })),
 	profilesList: () => typedError<ProfileMeta[], AppError>(__TAURI_INVOKE("profiles_list")),
 	profileActivate: (profileId: string) => typedError<AppInfo, AppError>(__TAURI_INVOKE("profile_activate", { profileId })),
 	appUpdateStatus: () => __TAURI_INVOKE<UpdateStatus>("app_update_status"),
@@ -1381,6 +1441,46 @@ export type ChatFolderContext = {
 
 export type ChatFolderMode = "direct" | "worktree";
 
+/**  One chat's game. */
+export type ChatGame = {
+	chat_id: string,
+	/**  What the chat's folder holds, once it has been looked at. */
+	project: GameProject | null,
+	state: GameState,
+	/**  Frozen by Ghost: an agent is between actions, or the person paused it. */
+	frozen: boolean,
+	speed: number | null,
+	fps: number | null,
+	/**  The scene that runs, as a path inside the project. */
+	scene: string,
+	width: number,
+	height: number,
+	/**  The engine that runs it, as it says ("4.7.2-stable (official)"). */
+	engine_version: string,
+	/**  Errors of this run, repeats counted; warnings apart. */
+	errors: number,
+	last_error: GameError | null,
+	/**  Why it ended, in words, when it has. */
+	ended: string | null,
+	/**  What an agent is doing with it now ("Holding ui_right"), for the pane. */
+	agent: string | null,
+	sound: boolean,
+	pid: number | null,
+	/**
+	 *  Why no Godot on this computer runs the project, in words for the person: there is none
+	 *  yet, or the project is newer than every one here. `None` when one does, and for projects
+	 *  Ghost does not run itself.
+	 */
+	godot_missing: string | null,
+	/**  The person asked for the game in a window of its own; its next start shows one. */
+	windowed: boolean,
+	/**
+	 *  The chat's agent has the game tools in the session that runs now. Without them the pane
+	 *  offers to restart the session with them.
+	 */
+	tools: boolean,
+};
+
 export type ChatImage = {
 	source: ChatImageSource,
 	name: string,
@@ -2255,6 +2355,105 @@ export type FolderState = "ok" | "missing" |
 /**  The OS refused access (macOS privacy). */
 "not_allowed";
 
+export type GameEngine = 
+/**  Godot 4, which Ghost runs itself. */
+"godot" | 
+/**  A game that is a web page (Three.js, Phaser and the like), which runs in Ghost's browser. */
+"web" | 
+/**  The engines Ghost connects to through their makers' own tools. */
+"unity" | "unreal" | "roblox" | 
+/**  Recognised and named, with no special support. */
+"bevy" | "love" | "pygame" | "game_maker" | "defold" | "mono_game";
+
+/**  One error or warning of the game's, with where in the project it happened when the engine said. */
+export type GameError = {
+	/**  "script", "error", "warning" or "shader". */
+	kind: string,
+	text: string,
+	/**  A path inside the project ("res://player.gd"), or empty. */
+	file: string,
+	line: number,
+	function: string,
+	/**  The project's own frames below it, innermost first, as "file:line in function". */
+	stack: string[],
+	/**  How many times it has happened in this run. */
+	count: number,
+};
+
+/**
+ *  One packet of a game's picture stream, sent to the page as raw bytes (the page reads an
+ *  `ArrayBuffer`): a byte of kind, then the payload (`ghost_game::Viewer`).
+ */
+export type GameFrame = number[];
+
+/**  Input from the pane, in the shape the game's bridge takes it. */
+export type GameInput = 
+/**  A key by its browser `code` ("KeyA", "ArrowLeft"). */
+{ t: "key"; code: string; down: boolean; text?: string; shift?: boolean; ctrl?: boolean; alt?: boolean } | 
+/**  A mouse button, at a place in the game's own pixels. */
+{ t: "mouse"; x: number | null; y: number | null; button: string; down: boolean } | { t: "move"; x: number | null; y: number | null; dx?: number | null; dy?: number | null } | { t: "wheel"; x: number | null; y: number | null; dy: number | null };
+
+/**  A run's errors and what it printed, for the pane's log. */
+export type GameLog = {
+	errors: GameError[],
+	/**  The last lines the game printed, oldest first. */
+	lines: string[],
+	/**  How many older lines are gone. */
+	dropped: number,
+};
+
+/**  What a folder's game is. */
+export type GameProject = {
+	engine: GameEngine,
+	/**  The game's own name, where the project states one. */
+	name: string | null,
+	/**  The engine version the project was made with ("4.7", "6000.0.23f1"), where it says. */
+	version: string | null,
+	/**  The library a web game is built on ("three", "phaser"). */
+	framework: string | null,
+	/**
+	 *  Why Ghost cannot run this project itself, in words for the person. `None` when it can, or
+	 *  when the engine is one Ghost connects to instead.
+	 */
+	unsupported: string | null,
+};
+
+export type GameState = 
+/**  Nothing runs. */
+"idle" | "starting" | "running" | 
+/**  It ran and ended; `ended` says how. */
+"ended";
+
+/**  What the pane shows. Sent whole on every change. */
+export type GameStatus = {
+	enabled: boolean,
+	godot: GodotStatus,
+	chats: ChatGame[],
+	/**  Chats an agent's tool asked to be shown, newest count each: the pane opens for them. */
+	summons: GameSummon[],
+};
+
+export type GameSummon = {
+	chat_id: string,
+	seq: number,
+};
+
+/**  What one of the agents' tools answered, for the development checks. */
+export type GameToolCheck = {
+	text: string,
+	/**  How many pictures came with it, and the size of them all in bytes. */
+	images: number,
+	image_length: number,
+	error: boolean,
+};
+
+/**  What turning Game on for a chat did to its agent. */
+export type GameToolsChange = 
+/**  The agent's session is starting again with the game tools. */
+"restarting" | 
+/**  The agent is busy or stopped: it gets the tools the next time its session starts. */
+"next_start";
+
 /**
  *  Settings' General page: what new chats start with, and how Ghost behaves while agents work
  *  in the background. Full auto stays the default; an agent's own restrictions still apply.
@@ -2322,6 +2521,12 @@ export type GeneralPreferences = {
 	 *  Ghost started (owner, 21 November 2026, docs/superpowers/plans/2026-11-21-mobile.md).
 	 */
 	mobile: boolean,
+	/**
+	 *  The Game universal plugin: the Game pane beside the chat and, in chats whose folder holds
+	 *  a game, the game tools agents get. On unless the person turns it off in Settings >
+	 *  Plugins & MCP; off stops every game Ghost started (owner, 27 November 2026, docs/game.md).
+	 */
+	game: boolean,
 	/**
 	 *  Look for a newer Ghost shortly after start and a few times a day, and show Update when
 	 *  there is one (owner, 18 November 2026: "an update button pops up for every merge"). It
@@ -2418,6 +2623,23 @@ export type GitWorkspace = {
 export type GlassEffect = "liquid_glass" | "vibrancy" | "mica" | "acrylic" | "none";
 
 export type GoAction = "back" | "forward" | "reload" | "stop";
+
+export type GodotFetch = { state: "idle" } | { state: "running"; received: number; total: number } | { state: "unpacking" } | { state: "failed"; message: string };
+
+/**  Godot on this computer. */
+export type GodotStatus = {
+	/**  The release Ghost fetches. */
+	pinned: string,
+	/**  Its download, in bytes; 0 where Godot publishes none for this computer. */
+	size: number,
+	/**  Ghost's own copy is here. */
+	fetched: boolean,
+	/**  Versions the person installed themselves that Ghost can use. */
+	found: string[],
+	/**  The computer has been looked over at least once. */
+	looked: boolean,
+	fetch: GodotFetch,
+};
 
 /**  The installed harness against its latest known release. */
 export type HarnessStatus = { state: "not_installed" } | 
@@ -4068,6 +4290,8 @@ export type SetupAction = { type: "visit"; step: SetupStep } | { type: "motion";
 { type: "browser_passwords"; enabled: boolean } | 
 /**  Turns the Mobile universal plugin on or off. */
 { type: "mobile"; enabled: boolean } | 
+/**  Turns the Game universal plugin on or off. */
+{ type: "game"; enabled: boolean } | 
 /**  Turns on or off looking for a newer Ghost by itself. */
 { type: "automatic_updates"; enabled: boolean } | 
 /**  Turns the coordinated projects experiment on or off. */

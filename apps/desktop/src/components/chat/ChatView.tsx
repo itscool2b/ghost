@@ -35,6 +35,7 @@ import type { Transport } from "../../lib/chat/transport";
 import { chatInterfaces, terminalSupported } from "../../lib/chatInterface";
 import { composerDraft } from "../../lib/composerDraft";
 import { errorMessage } from "../../lib/errors";
+import { gamePanels } from "../../lib/game";
 import { sameFolder } from "../../lib/gitWorkspace";
 import { useMediaQuery, usePageVisible } from "../../lib/hooks";
 import { inTauri } from "../../lib/ipc";
@@ -46,6 +47,7 @@ import { speechPlayer } from "../../lib/speech";
 import type { TerminalPanels } from "../../lib/terminalPanel";
 import { runLabel } from "../../lib/worktreeRun";
 import { type AnnotationTarget, BrowserPanel } from "../browser/BrowserPanel";
+import { GamePanel } from "../game/GamePanel";
 import { DevicePanel } from "../mobile/DevicePanel";
 import { AccountPicker } from "./AccountPicker";
 import { BackgroundTasks } from "./BackgroundTasks";
@@ -184,31 +186,59 @@ export function ChatView({
     mobileStore?.getVersion ?? noVersion,
     mobileStore?.getVersion ?? noVersion,
   );
+  // The game beside the chat (the Game plugin): open or not, per chat on this device. It shares
+  // the side with the device, the browser, Changes and the task panel.
+  const gameStore = transport.game ?? null;
+  useSyncExternalStore(gamePanels.subscribe, gamePanels.getVersion, gamePanels.getVersion);
+  useSyncExternalStore(
+    gameStore?.subscribe ?? noSubscribe,
+    gameStore?.getVersion ?? noVersion,
+    gameStore?.getVersion ?? noVersion,
+  );
+  // The side holds one pane. Opening `keep` closes the rest; a pane of the agent's that the
+  // person swaps for another pane stays closed for that stretch of the agent's work, while one
+  // that only made way for Changes or a task comes back when they close.
+  const clearSide = useCallback(
+    (keep: "browser" | "device" | "game" | "changes" | "task") => {
+      const swapped = keep === "browser" || keep === "device" || keep === "game";
+      if (keep !== "changes") setChangesOpen(false);
+      if (keep !== "task") setOpenTaskId(null);
+      if (keep !== "browser" && browserPanels.of(chatId).open) {
+        browserPanels.set(chatId, { open: false });
+      }
+      if (keep !== "device" && devicePanels.open(chatId)) {
+        devicePanels.set(chatId, false);
+        if (swapped) mobileStore?.closed(chatId);
+      }
+      if (keep !== "game" && gamePanels.open(chatId)) {
+        gamePanels.set(chatId, false);
+        if (swapped) gameStore?.closed(chatId);
+      }
+    },
+    [chatId, mobileStore, gameStore],
+  );
   const setBrowserOpen = useCallback(
     (open: boolean) => {
       browserPanels.set(chatId, { open });
-      if (open) {
-        setChangesOpen(false);
-        setOpenTaskId(null);
-        if (devicePanels.open(chatId)) {
-          devicePanels.set(chatId, false);
-          mobileStore?.closed(chatId);
-        }
-      }
+      if (open) clearSide("browser");
     },
-    [chatId, mobileStore],
+    [chatId, clearSide],
   );
   const setDeviceOpen = useCallback(
     (open: boolean) => {
       devicePanels.set(chatId, open);
       if (!open) mobileStore?.closed(chatId);
-      if (open) {
-        setChangesOpen(false);
-        setOpenTaskId(null);
-        if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
-      }
+      if (open) clearSide("device");
     },
-    [chatId, mobileStore],
+    [chatId, mobileStore, clearSide],
+  );
+  const setGameOpen = useCallback(
+    (open: boolean) => {
+      gamePanels.set(chatId, open);
+      if (!open) gameStore?.closed(chatId);
+      if (open) clearSide("game");
+    },
+    [chatId, gameStore, clearSide],
   );
   // The canvas takes the transcript's place above the composer; the drawing stays with the chat.
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -293,6 +323,7 @@ export function ChatView({
   // The browser's toggle as it is this render, for the shortcut (null while it is not offered).
   const browserToggle = useRef<(() => void) | null>(null);
   const deviceToggle = useRef<(() => void) | null>(null);
+  const gameToggle = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -336,6 +367,19 @@ export function ChatView({
       }
       if (
         (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "g" &&
+        !event.defaultPrevented &&
+        !document.querySelector("dialog[open]")
+      ) {
+        if (!gameToggle.current) return;
+        event.preventDefault();
+        gameToggle.current();
+        return;
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "j" &&
         !event.defaultPrevented &&
         !document.querySelector("dialog[open]")
@@ -367,19 +411,14 @@ export function ChatView({
   }, [store, active, terminals, chatId]);
 
   useEffect(() => {
-    if (!changesOpen) return;
-    setOpenTaskId(null);
-    if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
-    if (devicePanels.open(chatId)) devicePanels.set(chatId, false);
-  }, [changesOpen, chatId]);
+    if (changesOpen) clearSide("changes");
+  }, [changesOpen, clearSide]);
   const openTask = useCallback(
     (taskId: string) => {
-      setChangesOpen(false);
-      if (browserPanels.of(chatId).open) browserPanels.set(chatId, { open: false });
-      if (devicePanels.open(chatId)) devicePanels.set(chatId, false);
+      clearSide("task");
       setOpenTaskId(taskId);
     },
-    [chatId],
+    [clearSide],
   );
   const tasks = state.transcript.tasks;
   // The transcript's Open actions change only when a call's task or its title does, so a task's
@@ -435,9 +474,23 @@ export function ChatView({
     mobileStore?.usable() === true && interfaceView === "chat" && state.chat !== null;
   const deviceOpen = deviceUsable && devicePanels.open(chatId);
   deviceToggle.current = deviceUsable ? () => setDeviceOpen(!devicePanels.open(chatId)) : null;
-  // An agent that opens a page shows it, unless Changes, a task or the device holds the side.
+  // The Game pane: Chat view only, while the Game plugin is on, in chats that have a game (its
+  // folder holds one, one of its games runs, or the person turned Game on for it).
+  const gameUsable =
+    gameStore?.offered(chatId) === true && interfaceView === "chat" && state.chat !== null;
+  const gameOpen = gameUsable && gamePanels.open(chatId);
+  gameToggle.current = gameUsable ? () => setGameOpen(!gamePanels.open(chatId)) : null;
+  // What the chat's folder holds is looked at when the chat is shown and after each of its turns:
+  // a game the agent has just made gets its button without anything being reopened.
+  const lookAgain = `${chatId}:${status === "running" ? "busy" : "idle"}`;
+  useEffect(() => {
+    void lookAgain;
+    if (active && interfaceView === "chat") gameStore?.look(chatId);
+  }, [gameStore, chatId, active, interfaceView, lookAgain]);
+  // An agent that opens a page shows it, unless Changes, a task, the device or the game holds
+  // the side.
   const sideTaken = useRef(false);
-  sideTaken.current = changesOpen || openTaskId !== null || deviceOpen;
+  sideTaken.current = changesOpen || openTaskId !== null || deviceOpen || gameOpen;
   // An agent that calls on the chat's device opens its pane, before it even has a device (owner,
   // 24 November 2026: "the agent should be able to open the phone and start working"). The pane
   // takes the side from the browser, but never from Changes or a task the person has open: then
@@ -464,6 +517,21 @@ export function ChatView({
     deviceUsable &&
     !deviceOpen &&
     (summoned || (mobileStore?.held(chatId)?.agent ?? null) !== null);
+  // The same for the chat's game: an agent that runs or plays it opens its pane, taking the
+  // side from the browser and the device, but never from Changes or a task.
+  const gameSummoned = gameUsable && gameStore?.summoned(chatId) === true;
+  useEffect(() => {
+    if (!gameSummoned || !gameStore) return;
+    if (gamePanels.open(chatId)) {
+      gameStore.answer(chatId);
+      return;
+    }
+    if (sideHeld) return;
+    gameStore.answer(chatId);
+    setGameOpen(true);
+  }, [gameSummoned, sideHeld, chatId, gameStore, setGameOpen]);
+  const agentOnGame =
+    gameUsable && !gameOpen && (gameSummoned || (gameStore?.of(chatId)?.agent ?? null) !== null);
   useEffect(() => {
     if (!browserStore || !browserUsable) return;
     return browserStore.onEvent((event) => {
@@ -1276,6 +1344,15 @@ export function ChatView({
                   }
                 : undefined
             }
+            game={
+              gameUsable
+                ? {
+                    open: gameOpen,
+                    agent: agentOnGame ? agentName : null,
+                    onToggle: () => setGameOpen(!gameOpen),
+                  }
+                : undefined
+            }
             view={
               state.chat && terminalSupported(state.chat.agent_id, agents)
                 ? {
@@ -1686,7 +1763,19 @@ export function ChatView({
                 />
               ) : null}
             </div>
-            {deviceOpen && mobileStore ? (
+            {gameOpen && gameStore ? (
+              <GamePanel
+                key={chatId}
+                chatId={chatId}
+                store={gameStore}
+                narrow={!wide}
+                onClose={() => setGameOpen(false)}
+                agentId={state.chat.agent_id}
+                agentName={agentName}
+                toolsPossible={(state.chat.agent_host ?? { type: "native" }).type === "native"}
+                onOpenBrowser={browserUsable ? () => setBrowserOpen(true) : undefined}
+              />
+            ) : deviceOpen && mobileStore ? (
               <DevicePanel
                 key={chatId}
                 chatId={chatId}
