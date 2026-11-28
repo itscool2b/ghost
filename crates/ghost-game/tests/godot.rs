@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use ghost_game::{Config, GameInput, GameState, GodotFetch, Manager, ToolReply};
+use ghost_game::{Config, GameInput, GameState, GodotFetch, Manager, Starter, ToolReply};
 use serde_json::{Value, json};
 
 fn copy_fixture(to: &Path) -> std::io::Result<()> {
@@ -447,6 +447,95 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
         "{}",
         broken.text
     );
+
+    // The games Ghost starts from nothing load and play on this Godot, with the same tools: a
+    // player that stands on its floor, walks right and jumps, and a log with no errors.
+    for (starter, name, step, up) in [
+        (Starter::Godot2d, "Sky Hop", 100.0, -1.0),
+        (Starter::Godot3d, "Sky Hop 3D", 1.0, 1.0),
+    ] {
+        let folder = scratch.path().join(name);
+        std::fs::create_dir(&folder).unwrap();
+        let project = manager
+            .start_project("starter", &folder, starter)
+            .await
+            .unwrap();
+        assert_eq!(project.name.as_deref(), Some(name));
+        assert_eq!(project.version.as_deref(), Some("4.7"));
+        // A second press writes over nothing.
+        assert!(
+            manager
+                .start_project("starter", &folder, starter)
+                .await
+                .is_err()
+        );
+        let call = async |tool: &str, arguments: Value| {
+            let reply = manager.tool("starter", &folder, tool, &arguments).await;
+            println!(
+                "--- [{name}] {tool} {arguments}\n{}\n({} pictures, error {})",
+                reply.text,
+                reply.images.len(),
+                reply.error
+            );
+            reply
+        };
+        let number = async |code: &str| -> f64 {
+            let reply = call("game_eval", json!({ "code": code })).await;
+            assert!(!reply.error, "{}", reply.text);
+            reply
+                .text
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .parse()
+                .unwrap_or(f64::NAN)
+        };
+        let checked = call("game_check", json!({})).await;
+        assert!(checked.text.starts_with("All "), "{}", checked.text);
+        let started = call("game_run", json!({})).await;
+        assert!(
+            !started.error && started.images.len() == 1,
+            "{}",
+            started.text
+        );
+        let landed = call(
+            "game_wait_for",
+            json!({ "until": "scene.get_node(\"Player\").is_on_floor()", "timeout_ms": 3000 }),
+        )
+        .await;
+        assert!(
+            landed.text.starts_with("The condition became true"),
+            "{}",
+            landed.text
+        );
+        let x0 = number("scene.get_node(\"Player\").position.x").await;
+        let walked = call(
+            "game_act",
+            json!({ "steps": [{ "press": "ui_right", "ms": 500 }] }),
+        )
+        .await;
+        assert!(!walked.error && walked.images.len() == 2, "{}", walked.text);
+        let x1 = number("scene.get_node(\"Player\").position.x").await;
+        assert!(x1 - x0 >= step, "{name} walked from {x0} to {x1}");
+        let y0 = number("scene.get_node(\"Player\").position.y").await;
+        let jumped = call(
+            "game_act",
+            json!({ "steps": [{ "press": "ui_accept", "ms": 50 }, { "ms": 150 }], "shots": 0 }),
+        )
+        .await;
+        assert!(!jumped.error, "{}", jumped.text);
+        let y1 = number("scene.get_node(\"Player\").position.y").await;
+        assert!((y1 - y0) * up > 0.05, "{name} jumped from {y0} to {y1}");
+        let log = call("game_logs", json!({})).await;
+        assert!(
+            log.text.starts_with("No errors or warnings this run."),
+            "{}",
+            log.text
+        );
+        let stopped = call("game_stop", json!({})).await;
+        assert!(!stopped.error);
+    }
 
     // Off: nothing answers, and what ran is stopped.
     manager.set_enabled(false);

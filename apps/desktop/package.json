@@ -9,7 +9,7 @@
     "build": "tsc --noEmit -p . && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node --test scripts/build-env.test.mjs scripts/host-upgrade.test.mjs scripts/appimage-upgrade.test.mjs scripts/appimage-media.test.mjs scripts/uninstaller-hooks.test.mjs && vitest run",
+    "test": "node --test scripts/build-env.test.mjs scripts/host-upgrade.test.mjs scripts/appimage-upgrade.test.mjs scripts/appimage-media.test.mjs scripts/uninstaller-hooks.test.mjs scripts/game-starters.test.mjs && vitest run",
     "check:chat": "node scripts/check-chat.mjs",
     "check:customization": "node scripts/check-customization-suite.mjs",
     "check:fixtures": "node scripts/check-fixture-suite.mjs",
