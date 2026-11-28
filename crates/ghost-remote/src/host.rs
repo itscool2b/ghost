@@ -46,7 +46,7 @@ mod app;
 mod notify;
 mod session;
 mod uploads;
-use session::{Received, bot_answer, bot_links, closed, receive, refusal, seal};
+use session::{Received, bot_answer, bot_links, closed, receive, seal};
 pub(crate) use uploads::send_with;
 
 /// Browsers connected at once, proven or not.
@@ -55,6 +55,13 @@ const MAX_CONNECTIONS: usize = 32;
 const PROVE_WITHIN: Duration = Duration::from_secs(20);
 /// Calls one browser may have running at once.
 const MAX_CALLS: usize = 16;
+/// The most remote followers one open lets go of to get into a chat that is full.
+const MAX_EVICTIONS: usize = 4;
+/// How long a browser whose place in a chat was given to another waits before it may take one
+/// the same way. A page that is still there opens the chat again the moment it is told: without
+/// the wait, one page more than a chat takes would have them push each other out for ever.
+/// Short, so that a person who taps the chat on that device a little later is let in.
+const SETTLE: Duration = Duration::from_secs(5);
 /// Bot calls running at once.
 const MAX_BOT_CALLS: usize = 8;
 /// Live events queued for one browser before it is told to open its chat again.
@@ -121,6 +128,8 @@ struct Shared {
     link: Mutex<RemoteLink>,
     /// Sessions open per device.
     connected: Mutex<HashMap<String, usize>>,
+    /// Browsers whose place in a full chat was given to a newer one, and when ([`SETTLE`]).
+    let_go: Mutex<HashMap<String, Instant>>,
     /// When each link's bot last heard how a chat stands from one of its own calls, by link and
     /// chat. A state it has heard is not told again.
     heard: Mutex<HashMap<(String, String), i64>>,
@@ -179,6 +188,7 @@ impl Service {
             }),
             registry: Mutex::new(registry),
             connected: Mutex::new(HashMap::new()),
+            let_go: Mutex::new(HashMap::new()),
             heard: Mutex::new(HashMap::new()),
             told: Mutex::new(HashMap::new()),
             closing: AtomicBool::new(false),
@@ -1404,6 +1414,8 @@ struct Session {
 
 struct Connection {
     since: Instant,
+    /// When the browser last said anything. One that went away without closing says nothing.
+    heard: Instant,
     session: Option<Session>,
     /// The relay marked it as come in on the iPhone app's path (`k`), which no page can open:
     /// only then may a session be offered the app's features.
@@ -1510,6 +1522,15 @@ fn set_link(shared: &Shared, link: RemoteLink) {
 
 fn owner(cid: &str) -> String {
     format!("{WATCHER}:{cid}")
+}
+
+/// The browser an owner is, when it is one of this host's browsers: not the window's own view of
+/// a chat, and not a bot's wait.
+fn cid_of(owner: &str) -> Option<&str> {
+    owner
+        .strip_prefix(WATCHER)?
+        .strip_prefix(':')
+        .filter(|cid| !cid.is_empty())
 }
 
 /// One connection to the relay, until it ends.
@@ -1709,20 +1730,38 @@ impl Serving {
                 ));
             }
             FromRelay::Opened(cid) => {
-                if self.connections.len() >= MAX_CONNECTIONS {
-                    self.outbox
-                        .push(format!("m{cid} R{}", refusal(Refusal::Busy)));
-                    self.outbox.push(format!("c{cid}"));
-                } else {
-                    self.connections.insert(
-                        cid.to_owned(),
-                        Connection {
-                            since: Instant::now(),
-                            session: None,
-                            native: false,
-                        },
-                    );
+                // The list is full. Most of what fills it is browsers that went away without
+                // closing (a phone that slept), which the relay has not noticed yet: refusing
+                // the new one would keep a person out until it did. The one that has said
+                // nothing for longest is let go instead. If it is still there after all, its
+                // page finds its socket closed and connects again.
+                if self.connections.len() >= MAX_CONNECTIONS
+                    && let Some(quietest) = self
+                        .connections
+                        .iter()
+                        // One that never proved it holds a key goes before one that did: anything
+                        // can open a connection, and that must not put a paired browser out.
+                        .min_by_key(|(_, connection)| {
+                            let proven = connection
+                                .session
+                                .as_ref()
+                                .is_some_and(|session| session.proven);
+                            (proven, connection.heard)
+                        })
+                        .map(|(cid, _)| cid.clone())
+                {
+                    self.drop_connection(&quietest);
                 }
+                let now = Instant::now();
+                self.connections.insert(
+                    cid.to_owned(),
+                    Connection {
+                        since: now,
+                        heard: now,
+                        session: None,
+                        native: false,
+                    },
+                );
             }
             // The relay sends it right after `o`; a mark that comes once a session has begun
             // changes nothing that session was offered.
@@ -1753,6 +1792,7 @@ impl Serving {
                     self.outbox.push(format!("c{cid}"));
                     return None;
                 };
+                connection.heard = Instant::now();
                 match receive(
                     &self.shared,
                     &self.backend,

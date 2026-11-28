@@ -331,6 +331,13 @@ pub trait Backend: Send + Sync + 'static {
     ) -> BoxFuture<'a, Result<ChatAttach, BackendError>>;
     /// Stops everything `owner` follows and watches.
     fn release(&self, owner: &str);
+    /// The owners following `chat_id` now, the one that has followed longest first. A chat takes
+    /// only a few followers ([`Backend::attach`] answers `busy` beyond them), and a browser that
+    /// went away without closing still counts until the relay notices: the host lets the oldest
+    /// of its own go to make room. A backend that does not say has nothing to let go.
+    fn followers(&self, _chat_id: &str) -> Vec<String> {
+        Vec::new()
+    }
     /// The page of history before `before_seq` (`u32::MAX`: the newest).
     fn history<'a>(
         &'a self,

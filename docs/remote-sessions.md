@@ -625,7 +625,11 @@ never says it does.
 
 The computer also ends any connection that has not proved a key within twenty seconds, holds at
 most 32 connections, 16 running calls per browser and 8 running bot calls, and stops sending live
-events to a browser that falls 4 MiB behind (the page then opens the chat again). For Ghost for
+events to a browser that falls 4 MiB behind (the page then opens the chat again). A connection
+that arrives when all 32 places are taken is not refused: it takes the place of one that never
+proved a key, or, when every one did, of the one that has said nothing for longest, whose page
+connects again if it is still there. Anything can open a connection, so one that proved nothing
+never puts a paired browser out while another unproven one is there to go. For Ghost for
 iPhone's photos it holds, in memory only: at most 8 MiB a photo, 4 arriving at once and 16
 staged per session, 24 MiB per session and 64 MiB across every session on the computer. Each
 photo's whole size counts from its first request until nothing holds its bytes, a message
@@ -663,6 +667,36 @@ What made the page feel broken before 19 November 2026, and what each part does 
   drawing again, and folds repeated tool updates in history as the desktop does.
 - **A send that seemed to do nothing.** The message shows at once as "Sending" (or "Queued until
   this turn ends"), the box empties, and a refused send puts the text back with the reason.
+
+### A chat that would not open
+
+The owner's report of 27 November 2026: a chat that is working sometimes cannot be opened from
+the page, however often the page is loaded again. Three causes, found by reading the code and
+then played against the real app (`apps/relay/tests/native.mjs`):
+
+- **A chat full of sessions that are gone.** A chat takes four followers, the window's own view
+  among them. A phone that goes to sleep with a chat open keeps following it: its socket stays
+  up at the relay, and nothing tells the computer the page is gone. A few of those, which is
+  what watching a long turn from a phone leaves behind, and every new open was answered `busy`.
+  The computer now makes room: it lets go of the remote follower of longest standing, tells it
+  `lost`, and lets the new one in (`Backend::followers`, `host/session.rs`). It never closes the
+  window's view and never ends a bot's wait; when only those fill a chat, the answer is still
+  `busy`. A page that is in fact still there asks for the chat again the moment it hears
+  `lost`, and for five seconds it is not let in at another's cost, so one page more than a chat
+  takes cannot have them trade places for ever. It shows its list, with the reason.
+- **An answer a little too large.** The answer to `open` carries the chat as it stands and its
+  newest history. Only the history was cut to fit one sealed message, so a page of history a
+  little under the limit, with anything of size beside it (a long queued message, a long error,
+  a task's output), made an answer a little over it: `too_large`, every time, until the chat
+  changed. A long turn's newest page is about that size. The whole answer is fitted now: what
+  stands beside the history first, then the history in the room that is left.
+- **One step larger than a message.** A step of more than 600 KiB (a very long message, a very
+  large tool result) could not be sent in any page, so its chat could not be opened, and
+  "Earlier messages" failed at it. Such a step is sent with its long texts cut and marked
+  ("cut: too long to show on this device"); the computer keeps it whole.
+- **A tap that did nothing.** When an open was refused, the page went back to its list without a
+  word: the list had held the reason, and the list is off screen while a chat opens. The
+  reason is kept above the list now, and a chat that closes by itself says why.
 
 The page wears the computer's theme: `ready` carries `look` (the theme's id and Light, Dark or
 System from Settings > Appearance), the page checks the id against the themes it ships and keeps
@@ -745,6 +779,11 @@ the answer to an `ios` pairing carries `features`, so the app knows what it has 
 - An answer larger than one sealed message carries (600 KiB) is answered `too_large` instead:
   sealed, it could pass the relay's limit for one frame (2 MiB), and the relay would end the
   computer's whole connection, every device with it. An `open` answered so follows nothing.
+  `open` and `history` are made to fit before that: fewer steps, the rest being the next page,
+  and a single step too large by itself with its long texts cut ("A chat that would not open",
+  above). `too_large` is left for what cannot be cut, a picture for one.
+- `open` is answered `busy` only when the chat's followers are all the window's or bots': among
+  remote browsers the one of longest standing is let go (`lost`) for the new one.
 
 What only the app asks for runs in `crates/ghost-remote/src/host/app.rs`:
 
@@ -906,14 +945,24 @@ The computer pushes `chat` (a status changed), `frame` (live events of the follo
     reports a dark system, and `--shots <folder>` keeps screenshots. Midway it silences the
     phone's socket without closing it and expects the page back on a new one.
   - `node apps/relay/tests/native.mjs <ghost.exe> [--prompt]`: the real debug app in a data
-    folder of its own, paired from a separate browser and called by an MCP client. `--prompt`
-    also runs a turn through the development build's scripted agent.
+    folder of its own, paired from a separate browser and called by an MCP client. It opens one
+    chat from four sessions and freezes their pages, as a sleeping phone's are, then opens it
+    from a fifth, loads that page again, and wakes the first. `--prompt` also runs a turn
+    through the development build's scripted agent, sends a 700 KiB message in the window and
+    reads the chat back from a new session.
 
 ## Not done
 
 What comes next for bots (Ghost telling a bot when a chat finishes or needs it, results that carry
 proof, a whole task in one call, approval rules per link) is planned in
 [superpowers/plans/2026-11-23-bots-manage-tasks.md](superpowers/plans/2026-11-23-bots-manage-tasks.md).
+
+- **A relay that notices a browser is gone.** The relay ends a computer that is silent for 75
+  seconds, but not a browser: a phone that slept keeps its place at the relay, and at the
+  computer, until its socket is closed from one end. The computer works around that since 28
+  November 2026 (it makes room in a full chat and in a full list of connections). The cure is
+  the relay asking its browsers, which is a change to the relay and to what it costs to keep a
+  socket asleep.
 
 Security, from the review of 10 November 2026 (each is a known limit, not a surprise):
 

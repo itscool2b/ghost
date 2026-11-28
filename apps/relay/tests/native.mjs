@@ -2,9 +2,11 @@
  * Local native check (not part of any suite): the real debug app, in a data folder of its own,
  * reached through a relay on this machine from a separate browser and from an MCP client.
  *
- *   node apps/relay/tests/native.local.mjs <ghost.exe> [--prompt]
+ *   node apps/relay/tests/native.mjs <ghost.exe> [--prompt]
  *
- * `--prompt` also sends one short message to a real agent. Everything else starts no turn.
+ * `--prompt` also sends messages to the scripted agent a development build has. Everything else
+ * starts no turn. Build the relay (`pnpm run worker:build` in apps/relay) and the site
+ * (`pnpm run build` in apps/web) first.
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -202,12 +204,74 @@ try {
   await row.waitFor();
   console.log(`remote list shows: ${(await row.textContent()).replace(/\s+/g, " ")}`);
   await tab.screenshot({ path: join(shots, "phone-list.png") });
+
+  // A chat takes four followers. A phone that goes to sleep with the chat open still follows
+  // it: its page is frozen, its socket stays up, and nothing tells the computer it is gone.
+  // Four of those used to fill the chat for good. The next one to open it gets in.
+  const address = `${SITE}/remote?relay=ws://127.0.0.1:${RELAY_PORT}`;
+  const sleepers = [];
+  for (let n = 0; n < 4; n += 1) {
+    const sleeper = await phone.newPage();
+    await sleeper.goto(address);
+    await sleeper.locator(".remote-chat-row").first().click();
+    const shut = sleeper.locator(".remote-error");
+    await sleeper
+      .getByRole("textbox", { name: "Message" })
+      .or(shut)
+      .first()
+      .waitFor()
+      .catch(async (error) => {
+        await sleeper.screenshot({ path: join(shots, `session-${n + 1}.png`) });
+        const shown = (await sleeper.locator("body").textContent()).replace(/s+/g, " ");
+        throw new Error(`session ${n + 1} shows: ${shown.slice(0, 300)}`, { cause: error });
+      });
+    assert.equal(
+      await shut.count(),
+      0,
+      `session ${n + 1} could not open the chat: ${await shut.textContent().catch(() => "")}`,
+    );
+    const session = await phone.newCDPSession(sleeper);
+    await session.send("Page.setWebLifecycleState", { state: "frozen" });
+    sleepers.push({ page: sleeper, session });
+  }
   await row.click();
-  await tab.getByRole("textbox", { name: "Message" }).waitFor();
+  const refusedOpen = tab.locator(".remote-error");
+  const box = tab.getByRole("textbox", { name: "Message" });
+  await box
+    .or(refusedOpen)
+    .first()
+    .waitFor()
+    .catch(async (error) => {
+      await tab.screenshot({ path: join(shots, "fifth.png") });
+      const shown = (await tab.locator("body").textContent()).replace(/s+/g, " ");
+      throw new Error(`the fifth session shows: ${shown.slice(0, 300)}`, { cause: error });
+    });
+  assert.equal(
+    await refusedOpen.count(),
+    0,
+    `a chat four sleeping sessions follow did not open: ${await refusedOpen.textContent().catch(() => "")}`,
+  );
+  console.log("a chat four sleeping sessions follow opened for the fifth");
+  // Loading the page again gets in as well.
+  await tab.reload();
+  await tab.locator(".remote-chat-row").first().click();
+  await box.waitFor();
+  // The first sleeper wakes: it was told it lost the chat, asks for it again at once, and is
+  // not let in at this one's cost. It shows the list.
+  await sleepers[0].session.send("Page.setWebLifecycleState", { state: "active" });
+  await sleepers[0].page.locator(".remote-chat-row").first().waitFor();
+  assert.equal(await box.count(), 1, "the newer session kept the chat");
+  console.log("the session that woke returned to its list; the newer one kept the chat");
+  for (const sleeper of sleepers) await sleeper.page.close();
   await tab.getByText("Nothing here yet. Send a message.").waitFor();
 
   // A bot link, over MCP.
-  const link = await invoke("remote_create_bot", { name: "Check bot", full: false });
+  const link = await invoke("remote_create_bot", {
+    name: "Check bot",
+    level: "chats",
+    approve: false,
+    fullAccess: false,
+  });
   const local = (url) => url.replace(SITE, `http://127.0.0.1:${RELAY_PORT}`);
   const mcp = local(link.url);
   const ask = async (address, name, args = {}) => {
@@ -248,7 +312,12 @@ try {
     `a chat link reached a full control tool: ${refusal.slice(0, 200)}`,
   );
   console.log(`a chat link asking for set: ${refusal.slice(0, 160)}`);
-  const wide = await invoke("remote_create_bot", { name: "Full bot", full: true });
+  const wide = await invoke("remote_create_bot", {
+    name: "Full bot",
+    level: "full",
+    approve: false,
+    fullAccess: false,
+  });
   const options = await ask(local(wide.url), "set", { chat: created.id });
   const shown = options.result.content[0].text;
   assert.ok(!options.result.isError, shown);
@@ -303,6 +372,43 @@ try {
     console.log(read.trim());
     assert.match(read, /User: Say hello from the remote page/);
     assert.match(read, /Agent: /);
+
+    // One step larger than a sealed message carries, sent in the window: the chat used to
+    // answer `too_large` to every open from then on. It opens, with that step cut.
+    await invoke("chat_send", { chatId: created.id, text: "long ".repeat(140 * 1024) });
+    for (let tries = 0; tries < 120; tries += 1) {
+      const state = (await tab.locator(".remote-link").textContent()) ?? "";
+      if (/Idle|Stopped/.test(state)) break;
+      await new Promise((done) => setTimeout(done, 500));
+    }
+    const late = await phone.newPage();
+    await late.goto(address);
+    await late.locator(".remote-chat-row").first().click();
+    const lateRefused = late.locator(".remote-error");
+    const lateBox = late.getByRole("textbox", { name: "Message" });
+    await lateBox.or(lateRefused).first().waitFor();
+    assert.equal(
+      await lateRefused.count(),
+      0,
+      `a chat with a very large step did not open: ${await lateRefused.textContent().catch(() => "")}`,
+    );
+    // The step is on the newest page, or on the one before it, which is fitted the same way.
+    const cut = late.getByText("cut: too long to show on this device").first();
+    const earlier = late.getByRole("button", { name: "Earlier messages" });
+    for (let pages = 0; pages < 5 && !(await cut.count()); pages += 1) {
+      await cut.or(earlier).first().waitFor();
+      if (await cut.count()) break;
+      await earlier.click();
+      await cut.or(lateRefused).or(earlier).first().waitFor();
+      assert.equal(
+        await lateRefused.count(),
+        0,
+        `its earlier page did not come: ${await lateRefused.textContent().catch(() => "")}`,
+      );
+    }
+    await cut.waitFor();
+    console.log("a chat with a 700 KiB step opened, with that step cut");
+    await late.close();
   }
 
   // The phone's pickers against the real app: the chat's own models, one chosen, and what the

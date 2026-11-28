@@ -1340,6 +1340,13 @@ impl Backend for AppBackend {
         }
     }
 
+    fn followers(&self, chat_id: &str) -> Vec<String> {
+        self.state()
+            .chats()
+            .map(|chats| chats.manager.chat_followers(chat_id))
+            .unwrap_or_default()
+    }
+
     fn history<'a>(
         &'a self,
         chat_id: &'a str,

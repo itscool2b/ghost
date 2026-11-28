@@ -103,6 +103,10 @@ struct App {
     attached: AtomicUsize,
     /// What GitHub last said of each chat's pull request, as the app keeps it: an inbox's test.
     known: Mutex<HashMap<String, ghost_remote::PullRequest>>,
+    /// How many followers a chat takes, when a test sets it: one more is answered `busy`.
+    room: Mutex<Option<usize>>,
+    /// Who follows which chat, in the order they began.
+    following: Mutex<Vec<(String, String)>>,
 }
 
 fn chat(id: &str, status: SessionStatus) -> WorkspaceChat {
@@ -200,6 +204,9 @@ impl Backend for Bound {
     }
     fn release(&self, owner: &str) {
         self.app.release(owner);
+    }
+    fn followers(&self, chat_id: &str) -> Vec<String> {
+        self.app.followers(chat_id)
     }
     fn history<'a>(
         &'a self,
@@ -475,23 +482,53 @@ impl Backend for App {
         frames: Frames,
     ) -> BoxFuture<'a, Result<ChatAttach, BackendError>> {
         Box::pin(async move {
-            if !matches!(chat_id, "c1" | "big" | "slow" | "huge") {
+            if !matches!(chat_id, "c1" | "big" | "slow" | "huge" | "edge" | "wide") {
                 return Err(missing());
             }
             if chat_id == "slow" {
                 // A chat whose history takes a while to read.
                 tokio::time::sleep(Duration::from_millis(300)).await;
             }
+            {
+                // One chat per owner, as the app has it: what it followed before is let go
+                // first, whether or not this chat then has room.
+                let mut following = self.following.lock().expect("following");
+                following.retain(|(who, _)| who != owner);
+                let held = following.iter().filter(|(_, chat)| chat == chat_id).count();
+                if self
+                    .room
+                    .lock()
+                    .expect("room")
+                    .is_some_and(|room| held >= room)
+                {
+                    self.frames.lock().expect("frames").remove(owner);
+                    return Err(BackendError::new(
+                        "busy",
+                        "Too many views follow this chat.",
+                    ));
+                }
+                following.push((owner.into(), chat_id.into()));
+            }
             self.frames
                 .lock()
                 .expect("frames")
                 .insert(owner.into(), frames);
             let items = match chat_id {
-                "big" => (0..400).map(|seq| said(seq, &"x".repeat(4096))).collect(),
+                "big" | "wide" => (0..400).map(|seq| said(seq, &"x".repeat(4096))).collect(),
                 // One step larger than a sealed message carries: no page of it is small enough.
                 "huge" => vec![said(0, &"x".repeat(700 * 1024))],
+                // A page a little under what one message carries, as a long turn's newest is.
+                "edge" => (0..140).map(|seq| said(seq, &"x".repeat(4096))).collect(),
                 _ => vec![said(4, "Earlier answer")],
             };
+            // What the chat last failed with: nothing, a long text, a very long one.
+            let failed = match chat_id {
+                "edge" => 40 * 1024,
+                "wide" => 400 * 1024,
+                _ => 0,
+            };
+            let last_error = (failed > 0)
+                .then(|| json!({ "kind": "other", "message": "y".repeat(failed), "detail": null }));
             Ok(serde_json::from_value(json!({
                 "subscription_id": "s1",
                 "next_seq": 5,
@@ -499,7 +536,7 @@ impl Backend for App {
                     "chat": chat(chat_id, SessionStatus::Ready).chat,
                     "session": ghost_protocol::SessionInfo::default(),
                     "queue": [], "open_turn_id": null, "usage": null, "limits": null,
-                    "last_error": null, "auth": null,
+                    "last_error": last_error, "auth": null,
                     "storage": ghost_protocol::session::StorageStatus::default(),
                 },
                 "history": page(chat_id, items),
@@ -539,7 +576,21 @@ impl Backend for App {
     fn release(&self, owner: &str) {
         self.frames.lock().expect("frames").remove(owner);
         self.statuses.lock().expect("statuses").remove(owner);
+        self.following
+            .lock()
+            .expect("following")
+            .retain(|(who, _)| who != owner);
         self.released.lock().expect("released").push(owner.into());
+    }
+
+    fn followers(&self, chat_id: &str) -> Vec<String> {
+        self.following
+            .lock()
+            .expect("following")
+            .iter()
+            .filter(|(_, chat)| chat == chat_id)
+            .map(|(who, _)| who.clone())
+            .collect()
     }
 
     fn history<'a>(
@@ -4448,43 +4499,229 @@ async fn a_browser_is_offered_what_it_was_whatever_it_says() {
     relay.silent().await;
 }
 
-/// An answer too large to go in one sealed message would be a frame the relay ends the
-/// computer's whole connection for: it is answered `too_large`, and everything goes on.
+/// The most one sealed message is on its way to the relay: 600 KiB of text, sealed and encoded.
+const SEALED_MOST: usize = 820 * 1024;
+/// How a text that was cut to fit ends.
+const CUT: &str = "(cut: too long to show on this device)";
+
+/// Sends an open and returns its answer with the size of the frame it came in.
+async fn open_sized(phone: &mut Browser, relay: &mut Relay, chat_id: &str) -> (Value, usize) {
+    let id = phone
+        .send(relay, json!({ "op": "open", "chat_id": chat_id }))
+        .await;
+    let frame = relay.next().await;
+    let answer = phone.open(&frame);
+    assert_eq!(answer["re"], id, "{chat_id}");
+    (answer, frame.len())
+}
+
+/// A step larger than one sealed message carries used to keep its whole chat from opening: no
+/// page of it is small enough. The chat opens, with that step's text cut and said to be cut.
+/// (An answer that still cannot be made to fit is answered `too_large`, as a picture's test
+/// shows, and never sent: the relay ends the computer's whole connection for a frame too large.)
 #[tokio::test]
-async fn an_answer_too_large_to_send_says_so_and_the_session_goes_on() {
+async fn a_step_too_large_for_one_message_opens_cut() {
     let rig = rig().await;
     let mut relay = online(&rig).await;
     let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
     let owner = "auracode-remote:aaaaaaaaaaaaaaaa";
-    let id = phone
-        .send(&mut relay, json!({ "op": "open", "chat_id": "huge" }))
-        .await;
-    let frame = relay.next().await;
-    assert!(
-        frame.len() < 1024,
-        "{} bytes went to the relay",
-        frame.len()
-    );
-    assert_eq!(
-        phone.open(&frame),
-        json!({
-            "re": id, "ok": false,
-            "error": {
-                "code": "too_large",
-                "message": "The answer is too large to send to this device.",
-            },
-        })
-    );
-    // Told the open failed, the device follows nothing.
-    assert!(!rig.app.frames.lock().expect("frames").contains_key(owner));
-    // The connection and the session both go on.
+    let (answer, size) = open_sized(&mut phone, &mut relay, "huge").await;
+    assert!(size < SEALED_MOST, "{size} bytes went to the relay");
+    assert_eq!(answer["ok"], true, "{}", answer["error"]);
+    let items = answer["data"]["history"]["items"]
+        .as_array()
+        .expect("items");
+    assert_eq!(items.len(), 1);
+    let step = items[0].to_string();
+    assert!(step.contains(CUT), "the step says it was cut");
+    assert!(step.len() < 100 * 1024, "{} bytes of one step", step.len());
+    assert_eq!(items[0]["seq"], 0);
+    assert!(rig.app.frames.lock().expect("frames").contains_key(owner));
+    // The session goes on.
     let overview = phone.request(&mut relay, json!({ "op": "overview" })).await;
     assert_eq!(overview["ok"], true, "{overview}");
-    let opened = phone
+}
+
+/// The whole answer to an open goes in one message: the chat as it stands and its history
+/// together. The history used to be fitted alone, so a page a little under the limit with
+/// anything of size beside it (a long error, a queued message) made an answer a little over it,
+/// and that chat could not be opened however often the page was loaded again. A long turn's
+/// newest page is that size, which is why it was the working chats.
+#[tokio::test]
+async fn the_whole_answer_to_an_open_fits_one_message() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+
+    // A page under the limit by itself, and over it with what stands beside it.
+    let (edge, size) = open_sized(&mut phone, &mut relay, "edge").await;
+    assert!(size < SEALED_MOST, "{size} bytes went to the relay");
+    assert_eq!(edge["ok"], true, "{}", edge["error"]);
+    let items = edge["data"]["history"]["items"].as_array().expect("items");
+    assert!(items.len() < 140 && !items.is_empty());
+    assert_eq!(items.last().expect("newest")["seq"], 139);
+    assert_eq!(edge["data"]["history"]["has_more"], true);
+    assert_eq!(edge["data"]["history"]["before_seq"], items[0]["seq"]);
+    // What stands beside it is of a size to send whole, and is.
+    let said = edge["data"]["snapshot"]["last_error"]["message"]
+        .as_str()
+        .expect("message");
+    assert_eq!(said.len(), 40 * 1024);
+
+    // What stands beside the history is itself most of a message: it is cut, and the newest
+    // history still comes.
+    let (wide, size) = open_sized(&mut phone, &mut relay, "wide").await;
+    assert!(size < SEALED_MOST, "{size} bytes went to the relay");
+    assert_eq!(wide["ok"], true, "{}", wide["error"]);
+    let said = wide["data"]["snapshot"]["last_error"]["message"]
+        .as_str()
+        .expect("message");
+    assert!(
+        said.ends_with(CUT) && said.len() < 20 * 1024,
+        "{}",
+        said.len()
+    );
+    let items = wide["data"]["history"]["items"].as_array().expect("items");
+    assert!(items.len() >= 50, "{} steps", items.len());
+    assert_eq!(items.last().expect("newest")["seq"], 399);
+    assert_eq!(wide["data"]["history"]["has_more"], true);
+
+    // Earlier pages are fitted the same way.
+    let history = phone
+        .request(
+            &mut relay,
+            json!({ "op": "history", "chat_id": "c1", "before_seq": 4 }),
+        )
+        .await;
+    assert_eq!(history["ok"], true, "{history}");
+}
+
+fn follows(rig: &Rig, chat_id: &str) -> Vec<String> {
+    rig.app.followers(chat_id)
+}
+
+/// A chat takes only a few followers, and a phone that went to sleep with a chat open still
+/// follows it: nothing tells the computer it is gone. Such sessions used to fill a chat for
+/// good, and a new one was answered `busy` however often its page was loaded again. The remote
+/// follower of longest standing is let go and told, and the new one is let in.
+#[tokio::test]
+async fn a_full_chat_makes_room_for_the_browser_that_opens_it() {
+    let rig = rig().await;
+    *rig.app.room.lock().expect("room") = Some(2);
+    let mut relay = online(&rig).await;
+    // The window has the chat open, and so has a phone that then went to sleep.
+    rig.app
+        .attach("c1", "main", Arc::new(|_| true))
+        .await
+        .expect("the window");
+    let (mut asleep, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let first = asleep
         .request(&mut relay, json!({ "op": "open", "chat_id": "c1" }))
         .await;
-    assert_eq!(opened["ok"], true, "{opened}");
-    assert!(rig.app.frames.lock().expect("frames").contains_key(owner));
+    assert_eq!(first["ok"], true, "{first}");
+    assert_eq!(
+        follows(&rig, "c1"),
+        ["main", "auracode-remote:aaaaaaaaaaaaaaaa"]
+    );
+
+    // It wakes on a new connection and opens the chat: the chat is full.
+    let (mut awake, _, _) = pair(&rig, &mut relay, "bbbbbbbbbbbbbbbb").await;
+    let id = awake
+        .send(&mut relay, json!({ "op": "open", "chat_id": "c1" }))
+        .await;
+    // The session it left behind is told it lost the chat, in case a page is still there.
+    assert_eq!(
+        asleep.event(&mut relay).await,
+        json!({ "ev": "lost", "chat_id": "c1" })
+    );
+    let second = awake.reply(&mut relay, id).await;
+    assert_eq!(second["ok"], true, "{second}");
+    assert_eq!(
+        follows(&rig, "c1"),
+        ["main", "auracode-remote:bbbbbbbbbbbbbbbb"]
+    );
+    assert!(
+        rig.app
+            .frames
+            .lock()
+            .expect("frames")
+            .contains_key("auracode-remote:bbbbbbbbbbbbbbbb")
+    );
+
+    // A page that is in fact still there opens the chat again the moment it is told. It does
+    // not push the newer one out in turn: one page more than a chat takes would otherwise have
+    // them trade places for ever. It is told the chat is full.
+    let again = asleep
+        .request(&mut relay, json!({ "op": "open", "chat_id": "c1" }))
+        .await;
+    assert_eq!(again["error"]["code"], "busy", "{again}");
+    assert_eq!(
+        follows(&rig, "c1"),
+        ["main", "auracode-remote:bbbbbbbbbbbbbbbb"]
+    );
+    // Both sessions go on.
+    for phone in [&mut asleep, &mut awake] {
+        let overview = phone.request(&mut relay, json!({ "op": "overview" })).await;
+        assert_eq!(overview["ok"], true, "{overview}");
+    }
+}
+
+/// Room is made only among this computer's own remote browsers: never by closing the window's
+/// view of a chat, and never by ending a bot's wait on it.
+#[tokio::test]
+async fn a_full_chat_never_gives_away_the_windows_place_or_a_bots() {
+    let rig = rig().await;
+    *rig.app.room.lock().expect("room") = Some(2);
+    let mut relay = online(&rig).await;
+    for owner in ["main", "auracode-remote-bot:r1"] {
+        rig.app
+            .attach("c1", owner, Arc::new(|_| true))
+            .await
+            .expect("attach");
+    }
+    let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    let refused = phone
+        .request(&mut relay, json!({ "op": "open", "chat_id": "c1" }))
+        .await;
+    assert_eq!(refused["error"]["code"], "busy", "{refused}");
+    assert_eq!(follows(&rig, "c1"), ["main", "auracode-remote-bot:r1"]);
+    let released = rig.app.released.lock().expect("released").clone();
+    assert!(
+        !released
+            .iter()
+            .any(|owner| owner == "main" || owner.starts_with("auracode-remote-bot")),
+        "{released:?}"
+    );
+}
+
+/// The computer takes so many browsers at once. A new one used to be refused when the list was
+/// full, and what fills it is mostly browsers that went away without closing. One is let go
+/// instead: first one that never proved it holds a key (anything can open a connection, and that
+/// must not put a paired browser out), then the one that has said nothing for longest.
+#[tokio::test]
+async fn a_full_list_of_browsers_lets_one_go_instead_of_refusing_a_new_one() {
+    let rig = rig().await;
+    let mut relay = online(&rig).await;
+    let (mut phone, _, _) = pair(&rig, &mut relay, "aaaaaaaaaaaaaaaa").await;
+    // Thirty-one more connect and never say who they are: the list is full.
+    for n in 0..31 {
+        relay.send(format!("ox{n:015}")).await;
+    }
+    // Two more. Each time one of the unproven is let go, never the paired phone, though it has
+    // been quiet longest; and neither is refused.
+    let mut gone = Vec::new();
+    for cid in ["yyyyyyyyyyyyyyyy", "zzzzzzzzzzzzzzzz"] {
+        relay.send(format!("o{cid}")).await;
+        let frame = relay.next().await;
+        assert!(
+            frame.starts_with("cx") && frame.len() == 17,
+            "an unproven browser is let go: {frame}"
+        );
+        gone.push(frame);
+    }
+    assert_ne!(gone[0], gone[1]);
+    let overview = phone.request(&mut relay, json!({ "op": "overview" })).await;
+    assert_eq!(overview["ok"], true, "{overview}");
 }
 
 /// The app's Inbox in one call: each request a chat waits on with what it asks and its choices,

@@ -11,7 +11,7 @@ pub(super) enum Received {
     Refuse(Option<String>),
 }
 
-pub(super) fn refusal(reason: Refusal) -> String {
+fn refusal(reason: Refusal) -> String {
     serde_json::to_string(&Refused { reason }).unwrap_or_default()
 }
 
@@ -72,6 +72,7 @@ pub(super) fn closed(shared: &Shared, backend: &dyn Backend, cid: &str, connecti
         lock(&session.uploads).clear();
     }
     backend.release(&owner(cid));
+    lock(&shared.let_go).remove(cid);
     let Some(session) = connection.session else {
         return;
     };
@@ -291,11 +292,50 @@ fn reply(
     whole
 }
 
-/// Halves a page from its oldest end until it fits one message; the rest is the next page.
-pub(super) fn fit(page: &mut HistoryPage) {
-    while page.items.len() > 1
-        && serde_json::to_vec(&*page).map_or(0, |bytes| bytes.len()) > MAX_PLAINTEXT
-    {
+/// What an answer carries besides its data: the reply's own fields, with room to spare.
+const ENVELOPE: usize = 4 * 1024;
+/// Said at the end of a text that was cut to fit.
+const CUT: &str = "\n… (cut: too long to show on this device)";
+
+fn size_of<T: serde::Serialize>(value: &T) -> usize {
+    serde_json::to_vec(value).map_or(usize::MAX, |bytes| bytes.len())
+}
+
+/// `value` with every text in it longer than `longest` bytes cut to that and marked. `None` when
+/// the value does not read back as what it was, which leaves it as it is.
+fn shortened<T>(value: &T, longest: usize) -> Option<T>
+where
+    T: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn walk(value: &mut serde_json::Value, longest: usize) {
+        match value {
+            serde_json::Value::String(text) if text.len() > longest => {
+                let mut end = longest;
+                while !text.is_char_boundary(end) {
+                    end -= 1;
+                }
+                text.truncate(end);
+                text.push_str(CUT);
+            }
+            serde_json::Value::Array(items) => {
+                items.iter_mut().for_each(|item| walk(item, longest))
+            }
+            serde_json::Value::Object(fields) => {
+                fields.values_mut().for_each(|field| walk(field, longest));
+            }
+            _ => {}
+        }
+    }
+    let mut json = serde_json::to_value(value).ok()?;
+    walk(&mut json, longest);
+    serde_json::from_value(json).ok()
+}
+
+/// Makes a page fit in `room` bytes: halved from its oldest end, the rest being the next page,
+/// and when one step alone is larger than the room, that step's long texts cut. A chat whose
+/// newest step is very large opens anyway, with that step shortened, instead of not at all.
+pub(super) fn fit(page: &mut HistoryPage, room: usize) {
+    while page.items.len() > 1 && size_of(&*page) > room {
         let keep = page.items.len() / 2;
         page.items.drain(..page.items.len() - keep);
         if let Some(first) = page.items.first() {
@@ -304,6 +344,32 @@ pub(super) fn fit(page: &mut HistoryPage) {
             page.cut_turn_id.clone_from(&first.turn_id);
         }
     }
+    for longest in [64 * 1024, 16 * 1024, 4 * 1024, 512] {
+        if size_of(&*page) <= room {
+            return;
+        }
+        if let Some(shorter) = shortened(&page.items, longest) {
+            page.items = shorter;
+        }
+    }
+}
+
+/// Makes the whole answer to an open fit one sealed message: what is not history first (a long
+/// queued message, a task's output), then the history in the room that is left. Fitting the
+/// page alone left an answer a little over the limit whenever the page was a little under it,
+/// and such a chat could not be opened at all.
+pub(super) fn fit_open(attach: &mut ghost_protocol::session::ChatAttach) {
+    let most = MAX_PLAINTEXT - ENVELOPE;
+    for longest in [16 * 1024, 2 * 1024, 256] {
+        if size_of(&attach.snapshot) <= most / 2 {
+            break;
+        }
+        if let Some(shorter) = shortened(&attach.snapshot, longest) {
+            attach.snapshot = shorter;
+        }
+    }
+    let room = most.saturating_sub(size_of(&attach.snapshot));
+    fit(&mut attach.history, room);
 }
 
 pub(super) fn text_ok(text: &str) -> Result<(), BackendError> {
@@ -623,8 +689,54 @@ async fn perform(
                     })
                     .is_ok()
             });
-            let mut attach = backend.attach(&chat_id, &owner(cid), frames).await?;
-            fit(&mut attach.history);
+            let mine = owner(cid);
+            let mut attached = backend.attach(&chat_id, &mine, frames.clone()).await;
+            // A chat takes only a few followers, and a browser that went away without closing (a
+            // phone that slept) still follows it until the relay notices. Without this, a chat
+            // followed from a few such sessions could not be opened by a new one however often
+            // the page was loaded again. The remote follower of longest standing is let go and
+            // told, so a page that is in fact still there reads the chat again; then this one
+            // is let in. Never the window's own view, and never a bot's wait.
+            for _ in 0..MAX_EVICTIONS {
+                if !matches!(&attached, Err(error) if error.code == "busy") {
+                    break;
+                }
+                // Its own place was just given away: it waits, and the chat stays with those
+                // that have it. See `SETTLE`.
+                if lock(&shared.let_go)
+                    .get(cid)
+                    .is_some_and(|when| when.elapsed() < SETTLE)
+                {
+                    break;
+                }
+                let Some(oldest) = backend
+                    .followers(&chat_id)
+                    .into_iter()
+                    .find(|other| *other != mine && cid_of(other).is_some())
+                else {
+                    break;
+                };
+                backend.release(&oldest);
+                if let (Some(other), Ok(lost)) = (
+                    cid_of(&oldest),
+                    serde_json::to_string(&Event::Lost { chat_id: &chat_id }),
+                ) {
+                    let mut let_go = lock(&shared.let_go);
+                    // Marks that have run out go, so one left by a browser that closed as it
+                    // was let go does not stay for good.
+                    let_go.retain(|_, when| when.elapsed() < SETTLE);
+                    let_go.insert(other.to_owned(), Instant::now());
+                    drop(let_go);
+                    let _ = out.send(Out::Sealed {
+                        cid: other.to_owned(),
+                        json: lost,
+                        backlog: 0,
+                    });
+                }
+                attached = backend.attach(&chat_id, &mine, frames.clone()).await;
+            }
+            let mut attach = attached?;
+            fit_open(&mut attach);
             done(Data::Attach(Box::new(attach)))
         }
         Op::Close => {
@@ -636,7 +748,7 @@ async fn perform(
             before_seq,
         } => {
             let mut page = backend.history(&chat_id, before_seq).await?;
-            fit(&mut page);
+            fit(&mut page, MAX_PLAINTEXT - ENVELOPE);
             done(Data::History(Box::new(page)))
         }
         Op::Send {
