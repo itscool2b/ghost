@@ -442,6 +442,9 @@ fn command_for(logged: &LoggedCommand) -> (DriverCommand, Option<ReplyWait>) {
         LoggedCommand::EditPlan { request_id, plan } => {
             (DriverCommand::EditPlan { request_id, plan }, None)
         }
+        LoggedCommand::DeclinePlan { request_id, note } => {
+            (DriverCommand::DeclinePlan { request_id, note }, None)
+        }
         LoggedCommand::RespondPermission {
             request_id,
             option_id,

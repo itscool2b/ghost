@@ -1232,6 +1232,7 @@ impl SessionManager {
             request_id: request_id.to_owned(),
             option_id: option_id.clone(),
             plan: None,
+            note: None,
             reply,
         })
         .await
@@ -1251,6 +1252,28 @@ impl SessionManager {
             request_id: request_id.to_owned(),
             option_id: Some(option_id.to_owned()),
             plan: Some(plan.to_owned()),
+            note: None,
+            reply,
+        })
+        .await
+    }
+
+    /// Declines a plan waiting for approval with the person's words: the agent reads `note`
+    /// with the refusal, in the same turn, and keeps planning. Refused unless the request is a
+    /// plan approval, `option_id` is its reject-once answer and the agent takes words with a
+    /// refusal.
+    pub async fn decline_plan(
+        &self,
+        chat_id: &str,
+        request_id: &str,
+        option_id: &str,
+        note: &str,
+    ) -> Result<(), SessionError> {
+        self.ask(chat_id, |reply| ChatMsg::RespondPermission {
+            request_id: request_id.to_owned(),
+            option_id: Some(option_id.to_owned()),
+            plan: None,
+            note: Some(note.to_owned()),
             reply,
         })
         .await

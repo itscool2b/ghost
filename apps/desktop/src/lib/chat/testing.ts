@@ -312,15 +312,20 @@ export const ev = {
     by: Extract<GhostEvent, { type: "permission_resolved" }>["by"] = "user",
     /** The plan as the person edited it, on a plan accepted with edits. */
     plan?: string,
+    /** What the person wrote, on a plan declined with words. */
+    note?: string,
   ): GhostEvent => ({
     type: "permission_resolved",
     request_id: requestId,
     decision:
       optionId === null
         ? { type: "cancelled" }
-        : plan === undefined
-          ? { type: "selected", option_id: optionId }
-          : { type: "selected", option_id: optionId, plan },
+        : {
+            type: "selected",
+            option_id: optionId,
+            ...(plan === undefined ? {} : { plan }),
+            ...(note === undefined ? {} : { note }),
+          },
     by,
   }),
   question: (requestId: string): GhostEvent => ({
@@ -849,6 +854,11 @@ export class FakeTransport implements Transport {
   acceptPlan(chatId: string, requestId: string, optionId: string, plan: string): Promise<void> {
     this.#record("acceptPlan", [chatId, requestId, optionId, plan]);
     return this.handlers.acceptPlan?.(chatId, requestId, optionId, plan) ?? Promise.resolve();
+  }
+
+  declinePlan(chatId: string, requestId: string, optionId: string, note: string): Promise<void> {
+    this.#record("declinePlan", [chatId, requestId, optionId, note]);
+    return this.handlers.declinePlan?.(chatId, requestId, optionId, note) ?? Promise.resolve();
   }
 
   respondUi(chatId: string, requestId: string, answer: UiAnswer | null): Promise<void> {

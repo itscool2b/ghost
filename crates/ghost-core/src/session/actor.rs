@@ -267,6 +267,8 @@ pub(crate) enum ChatMsg {
         option_id: Option<String>,
         /// The plan as the person edited it, on a plan approval accepted with edits.
         plan: Option<String>,
+        /// What the person wrote, on a plan approval declined with words.
+        note: Option<String>,
         reply: oneshot::Sender<Result<(), SessionError>>,
     },
     RespondUi {
@@ -1556,9 +1558,10 @@ impl ChatActor {
                 request_id,
                 option_id,
                 plan,
+                note,
                 reply,
             } => {
-                let result = self.respond_permission(&request_id, option_id, plan);
+                let result = self.respond_permission(&request_id, option_id, plan, note);
                 drop(reply.send(result));
             }
             ChatMsg::RespondUi {
@@ -4426,12 +4429,19 @@ The person continues this conversation here, in your terminal. Reply only that y
 
     /// Answers a permission request. `plan` is the plan as the person edited it: taken only
     /// with an allow-once answer to a plan approval, from an agent that says it takes one
-    /// ([`plan_edit_refusal`]); anything else is refused and nothing reaches the agent.
+    /// ([`plan_edit_refusal`]); anything else is refused and nothing reaches the agent. `note`
+    /// is what the person wrote when sending a plan back: taken only with a reject-once answer
+    /// to a plan approval, from an agent that reads words with a refusal
+    /// ([`plan_note_refusal`]).
+    ///
+    /// A plan declined with nothing said ends its turn: the agent waits for the person instead
+    /// of guessing what they wanted ([`Self::end_declined_turn`]).
     fn respond_permission(
         &mut self,
         request_id: &str,
         option_id: Option<String>,
         plan: Option<String>,
+        note: Option<String>,
     ) -> Result<(), SessionError> {
         let Some(card) = self.normalizer.card(request_id) else {
             return Err(SessionError::RequestNotPending);
@@ -4460,15 +4470,45 @@ The person continues this conversation here, in your terminal. Reply only that y
                 {
                     return Err(SessionError::OptionInvalid(refusal.to_owned()));
                 }
-                PermissionDecision::Selected { option_id, plan }
+                if let Some(note) = &note
+                    && let Some(refusal) = plan_note_refusal(
+                        &card.request,
+                        &option_id,
+                        note,
+                        self.capabilities.as_ref(),
+                    )
+                {
+                    return Err(SessionError::OptionInvalid(refusal.to_owned()));
+                }
+                PermissionDecision::Selected {
+                    option_id,
+                    plan,
+                    note,
+                }
             }
             None if plan.is_some() => {
                 return Err(SessionError::OptionInvalid(
                     "A plan that is dismissed takes no edits.".to_owned(),
                 ));
             }
+            None if note.is_some() => {
+                return Err(SessionError::OptionInvalid(
+                    "A plan that is dismissed takes no note.".to_owned(),
+                ));
+            }
             None => PermissionDecision::Cancelled,
         };
+        // A plan approval answered with its reject-once option is a declined plan.
+        let declined = is_plan_approval(&card.request)
+            && matches!(&decision, PermissionDecision::Selected { option_id, .. } if card.request.options.iter().any(|o| &o.option_id == option_id && o.kind == ghost_protocol::PermissionOptionKind::RejectOnce));
+        let said = matches!(
+            &decision,
+            PermissionDecision::Selected { note: Some(_), .. }
+        );
+        let takes_notes = self
+            .capabilities
+            .as_ref()
+            .is_some_and(|capabilities| capabilities.plan_notes);
         if self.control_lists().workflow.effective.as_deref() == Some("plan")
             && card.request.kind == Some(ghost_protocol::ToolKind::SwitchMode)
             && matches!(&decision, PermissionDecision::Selected { option_id, .. } if card.request.options.iter().any(|o| &o.option_id == option_id && matches!(o.kind, ghost_protocol::PermissionOptionKind::AllowOnce | ghost_protocol::PermissionOptionKind::AllowAlways)))
@@ -4481,20 +4521,32 @@ The person continues this conversation here, in your terminal. Reply only that y
             }
             PermissionDecision::Cancelled => PermissionOutcome::Cancelled,
         };
-        // The edited plan goes first, so the answer that follows carries it.
-        if let PermissionDecision::Selected {
-            plan: Some(plan), ..
-        } = &decision
-        {
-            self.send_command(DriverCommand::EditPlan {
+        if declined && takes_notes {
+            // The refusal carries the person's words, or ends the turn when there are none.
+            let note = match &decision {
+                PermissionDecision::Selected { note, .. } => note.clone(),
+                PermissionDecision::Cancelled => None,
+            };
+            self.send_command(DriverCommand::DeclinePlan {
                 request_id: request_id.to_owned(),
-                plan: plan.clone(),
+                note,
+            });
+        } else {
+            // The edited plan goes first, so the answer that follows carries it.
+            if let PermissionDecision::Selected {
+                plan: Some(plan), ..
+            } = &decision
+            {
+                self.send_command(DriverCommand::EditPlan {
+                    request_id: request_id.to_owned(),
+                    plan: plan.clone(),
+                });
+            }
+            self.send_command(DriverCommand::RespondPermission {
+                request_id: request_id.to_owned(),
+                outcome,
             });
         }
-        self.send_command(DriverCommand::RespondPermission {
-            request_id: request_id.to_owned(),
-            outcome,
-        });
         let tag = self.open_tag(tag.as_deref());
         self.remember_answer(request_id, title, tag.clone());
         self.push(
@@ -4505,9 +4557,43 @@ The person continues this conversation here, in your terminal. Reply only that y
             },
             tag.as_deref(),
         );
+        if declined && !said {
+            self.end_declined_turn(takes_notes);
+        }
         self.refresh_attention();
         self.refresh_run_status();
         Ok(())
+    }
+
+    /// Ends the turn of a plan that was declined with nothing said, so the agent stops and waits
+    /// for the person, as declining a plan does in an agent's own terminal. Before this the
+    /// agent got a bare refusal and kept going: it guessed, or asked what was wanted, while the
+    /// person was still typing it. An agent told through `DeclinePlan` ends the turn itself
+    /// (`ends_it`); any other is interrupted. The queue is not held, as it is after Stop: what
+    /// the person says next is the point.
+    fn end_declined_turn(&mut self, ends_it: bool) {
+        if self.status != SessionStatus::Running {
+            return;
+        }
+        let Some((turn_id, tag)) = self.turn.as_mut().map(|turn| {
+            turn.interrupt_requested = true;
+            (turn.id.clone(), Arc::clone(&turn.tag))
+        }) else {
+            return;
+        };
+        if !ends_it {
+            self.send_command(DriverCommand::Interrupt);
+        }
+        for event in self
+            .normalizer
+            .resolve_turn_requests(&turn_id, ResolvedBy::Turn)
+        {
+            self.push_normalized(event, Some(Arc::clone(&tag)));
+        }
+        self.set_status(
+            SessionStatus::Cancelling,
+            Some("Plan declined; stopping the turn".into()),
+        );
     }
 
     fn respond_ui(
@@ -4769,6 +4855,7 @@ The person continues this conversation here, in your terminal. Reply only that y
                 decision: PermissionDecision::Selected {
                     option_id,
                     plan: None,
+                    note: None,
                 },
                 by: ResolvedBy::Auto,
             },
@@ -7970,6 +8057,57 @@ fn native_start(
 /// The longest plan a person may hand back edited, in bytes. Plans are a few kilobytes; this is
 /// far above any, and well under a frame.
 pub(crate) const MAX_EDITED_PLAN: usize = 64 * 1024;
+
+/// The longest note a person may send back with a declined plan, in bytes: room for a whole
+/// edited plan and the sentence that introduces it.
+pub(crate) const MAX_PLAN_NOTE: usize = MAX_EDITED_PLAN + 1024;
+
+/// Whether `request` asks to leave plan mode with a written plan: a mode switch whose input
+/// carries the plan, or carried one too long for its event (`session/normalize.rs` cuts a long
+/// input to a preview and stores the whole request apart).
+pub(crate) fn is_plan_approval(request: &PermissionRequest) -> bool {
+    request.kind == Some(ghost_protocol::ToolKind::SwitchMode)
+        && request.raw_input.as_ref().is_some_and(|input| {
+            input.get("plan").is_some_and(serde_json::Value::is_string)
+                || input.get("_auracode_truncated").is_some()
+        })
+}
+
+/// Why `note` cannot go to the agent with a refusal of `request` by `option_id`, or `None`
+/// when it can. Words are taken only for a plan approval, only with its reject-once answer, only
+/// by an agent that says it reads them with the refusal, and only as real text of a sane length.
+pub(crate) fn plan_note_refusal(
+    request: &PermissionRequest,
+    option_id: &str,
+    note: &str,
+    capabilities: Option<&ghost_protocol::Capabilities>,
+) -> Option<&'static str> {
+    if !capabilities.is_some_and(|capabilities| capabilities.plan_notes) {
+        return Some(
+            "This agent cannot be sent a note with a declined plan. Send it as a message instead.",
+        );
+    }
+    if !is_plan_approval(request) {
+        return Some("Only a plan waiting for approval takes a note.");
+    }
+    let declines = request.options.iter().any(|option| {
+        option.option_id == option_id
+            && option.kind == ghost_protocol::PermissionOptionKind::RejectOnce
+    });
+    if !declines {
+        return Some("A note goes with a declined plan, not an accepted one.");
+    }
+    if note.trim().is_empty() {
+        return Some("The note is empty.");
+    }
+    if note.len() > MAX_PLAN_NOTE {
+        return Some("The note is too long.");
+    }
+    if note.contains('\0') {
+        return Some("The note holds a character that cannot be sent.");
+    }
+    None
+}
 
 /// Why `plan` cannot be the answer to `request` with `option_id`, or `None` when it can. An
 /// edited plan is taken only for a request to leave plan mode that came with a plan, only with

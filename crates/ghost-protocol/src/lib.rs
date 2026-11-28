@@ -415,6 +415,11 @@ pub enum PermissionDecision {
         /// and absent from what is stored and sent then, so older records read as they did.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         plan: Option<String>,
+        /// What the person wrote when they sent a plan back: only on a plan approval declined
+        /// with words, by an agent that reads them with the refusal
+        /// ([`Capabilities::plan_notes`]). Absent otherwise, as `plan` is.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
     },
     Cancelled,
 }
@@ -859,6 +864,11 @@ pub struct Capabilities {
     /// it reports, and every record made before it existed, reads the same as before.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub plan_edits: bool,
+    /// A plan waiting for approval can be declined with the person's words: the agent reads
+    /// them with the refusal, in the same turn, and keeps planning. Written only when true, as
+    /// `plan_edits` is.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub plan_notes: bool,
     pub autonomy_levels: Vec<Autonomy>,
 }
 
@@ -893,6 +903,7 @@ mod tests {
         let plain = PermissionDecision::Selected {
             option_id: "allow".into(),
             plan: None,
+            note: None,
         };
         let stored = serde_json::to_value(&plain).unwrap();
         assert_eq!(
@@ -906,12 +917,37 @@ mod tests {
         let edited = PermissionDecision::Selected {
             option_id: "allow".into(),
             plan: Some("1. Build\n2. Test".into()),
+            note: None,
         };
         let stored = serde_json::to_value(&edited).unwrap();
         assert_eq!(stored["plan"], "1. Build\n2. Test");
         assert_eq!(
             serde_json::from_value::<PermissionDecision>(stored).unwrap(),
             edited
+        );
+        // A plan sent back with words keeps the words, and nothing else changes shape.
+        let noted = PermissionDecision::Selected {
+            option_id: "deny".into(),
+            plan: None,
+            note: Some("Which engines?".into()),
+        };
+        let stored = serde_json::to_value(&noted).unwrap();
+        assert_eq!(
+            stored,
+            serde_json::json!({"type": "selected", "option_id": "deny", "note": "Which engines?"})
+        );
+        assert_eq!(
+            serde_json::from_value::<PermissionDecision>(stored).unwrap(),
+            noted
+        );
+        // Capabilities written before plans could be declined with words still read, and one
+        // without the capability is written as it always was.
+        let before = serde_json::to_value(Capabilities::default()).unwrap();
+        assert!(before.get("plan_notes").is_none());
+        assert!(
+            !serde_json::from_value::<Capabilities>(before)
+                .unwrap()
+                .plan_notes
         );
     }
     use serde_json::json;
@@ -1132,6 +1168,7 @@ mod tests {
                 decision: PermissionDecision::Selected {
                     option_id: "allow".into(),
                     plan: None,
+                    note: None,
                 },
                 by: ResolvedBy::Auto,
             },

@@ -1204,6 +1204,16 @@ export class ChatStore {
     await accept.call(this.#transport, this.chatId, requestId, optionId, plan);
   }
 
+  /**
+   * Declines a plan waiting for approval with the person's words, which the agent reads with
+   * the refusal. Rejects where this agent takes none, so the card can say so and keep the note.
+   */
+  async declinePlan(requestId: string, optionId: string, note: string): Promise<void> {
+    const decline = this.#transport.declinePlan;
+    if (!decline) throw new Error("This agent cannot be sent a note with a declined plan.");
+    await decline.call(this.#transport, this.chatId, requestId, optionId, note);
+  }
+
   /** Answers a question (`null` dismisses it). */
   respondUi(requestId: string, answer: UiAnswer | null): Promise<void> {
     return this.#answer(requestId, () => this.#transport.respondUi(this.chatId, requestId, answer));

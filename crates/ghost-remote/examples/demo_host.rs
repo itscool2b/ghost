@@ -1191,6 +1191,7 @@ impl Backend for Shared {
                         Some(option_id) => PermissionDecision::Selected {
                             option_id,
                             plan: None,
+                            note: None,
                         },
                         None => PermissionDecision::Cancelled,
                     },

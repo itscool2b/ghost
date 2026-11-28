@@ -6190,6 +6190,7 @@ fn permission_resolved(seq: u32, id: &str) -> HistoryItem {
             decision: ghost_protocol::PermissionDecision::Selected {
                 option_id: "allow".into(),
                 plan: None,
+                note: None,
             },
             by: ghost_protocol::ResolvedBy::User,
         },

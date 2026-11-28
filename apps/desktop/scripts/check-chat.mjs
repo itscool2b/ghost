@@ -2175,7 +2175,7 @@ async function inspect(engine, launcher) {
     );
 
     // A plan waiting for review: the plan as prose, Accept plan, and Request changes, which
-    // sends the note and declines the plan so the agent keeps planning with it. The rest of the
+    // declines the plan with the note inside the refusal, so the agent keeps planning with it. The rest of the
     // card (edits, the keyboard, the look) is check-plan.mjs's.
     await page.goto(`${url}/?preview=plan`);
     const plan = page.locator('[data-kind="plan-approval"]').first();
@@ -2190,7 +2190,7 @@ async function inspect(engine, launcher) {
     await page
       .locator('[data-kind="plan-approval"][data-resolved="true"]')
       .first()
-      .getByText("Sent back to keep planning.")
+      .getByText("Sent back with your note.")
       .waitFor();
     await page
       .getByText("Also keep the scroll position when switching projects.")

@@ -1781,6 +1781,21 @@
   color: var(--g-green);
 }
 
+/* What the person wrote when they sent the plan back: their words, under what was decided. */
+.chat-plan-sent {
+  width: fit-content;
+  max-width: 100%;
+  margin: var(--g-space-8) 0 0;
+  padding: var(--g-space-8) var(--g-space-12);
+  border-radius: var(--g-radius-16);
+  background-color: var(--ui-paper);
+  color: var(--ui-paper-ink);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-permission-dock .chat-plan {
     animation: none;

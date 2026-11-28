@@ -67,6 +67,7 @@ export function PermissionCard({
   agentName = "The agent",
   onAddToPlan,
   onAcceptPlanEdited,
+  planNotes = false,
   planBuild,
 }: {
   readonly item: PermissionItem;
@@ -87,6 +88,8 @@ export function PermissionCard({
     acceptOptionId: string,
     plan: string,
   ) => Promise<void>;
+  /** The agent reads a note with the declined plan itself, in the same turn. */
+  readonly planNotes?: boolean;
   /** A plan card's Accept and build with: the chat's Build with takes the accepted plan. */
   readonly planBuild?: PlanBuild;
 } & BlobProps) {
@@ -133,6 +136,7 @@ export function PermissionCard({
             ? (acceptOptionId, edited) => onAcceptPlanEdited(ask.request_id, acceptOptionId, edited)
             : undefined
         }
+        notesInline={planNotes}
         build={
           planBuild && resolution === null
             ? { label: planBuild.label, onBuild: () => planBuild.run(ask.request_id, plan) }

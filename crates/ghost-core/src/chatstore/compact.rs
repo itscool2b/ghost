@@ -1519,6 +1519,7 @@ mod tests {
                             decision: PermissionDecision::Selected {
                                 option_id: "allow".into(),
                                 plan: None,
+                                note: None,
                             },
                             by: ResolvedBy::User,
                         }

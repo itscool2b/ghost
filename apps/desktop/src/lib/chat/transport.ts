@@ -38,6 +38,7 @@ import {
   chatBlob,
   chatCancelQueued,
   chatCreate,
+  chatDeclinePlan,
   chatDetach,
   chatEditQueued,
   chatForceStop,
@@ -149,6 +150,12 @@ export interface Transport {
    * takes one (`capabilities.plan_edits`); the core refuses it otherwise.
    */
   acceptPlan?(chatId: string, requestId: string, optionId: string, plan: string): Promise<void>;
+  /**
+   * Declines a plan waiting for approval with the person's words, which the agent reads with
+   * the refusal. Offered only where the agent takes them (`capabilities.plan_notes`); the core
+   * refuses it otherwise.
+   */
+  declinePlan?(chatId: string, requestId: string, optionId: string, note: string): Promise<void>;
   respondUi(chatId: string, requestId: string, answer: UiAnswer | null): Promise<void>;
   setOption(chatId: string, optionId: string, value: ConfigValue): Promise<SessionLists>;
   setControl?(chatId: string, change: SessionControlChange): Promise<SessionLists>;
@@ -204,6 +211,7 @@ export const tauriTransport: Transport = {
   stop: chatStop,
   respondPermission: chatRespondPermission,
   acceptPlan: chatAcceptPlan,
+  declinePlan: chatDeclinePlan,
   respondUi: chatRespondUi,
   setOption: chatSetOption,
   setAutonomy: chatSetAutonomy,

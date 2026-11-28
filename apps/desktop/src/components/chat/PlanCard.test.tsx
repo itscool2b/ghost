@@ -2,9 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PermissionRequest } from "../../bindings";
 import {
+  isPlanRevision,
   planEdited,
-  planFeedback,
   planMeta,
+  planNote,
   planParts,
   planRevision,
   planSections,
@@ -30,7 +31,7 @@ const request = (overrides: Partial<PermissionRequest> = {}): PermissionRequest 
   ...overrides,
 });
 
-const item = (ask: PermissionRequest, resolved: string | null = null) =>
+const item = (ask: PermissionRequest, resolved: string | null = null, note?: string) =>
   ({
     kind: "permission",
     key: ask.request_id,
@@ -38,7 +39,14 @@ const item = (ask: PermissionRequest, resolved: string | null = null) =>
     resolution:
       resolved === null
         ? null
-        : { by: "user", decision: { type: "selected", option_id: resolved } },
+        : {
+            by: "user",
+            decision: {
+              type: "selected",
+              option_id: resolved,
+              ...(note === undefined ? {} : { note }),
+            },
+          },
   }) as unknown as PermissionItem;
 
 describe("a plan waiting for review", () => {
@@ -135,7 +143,48 @@ describe("a plan waiting for review", () => {
         onLoadBlob={() => {}}
       />,
     );
-    expect(declined).toContain("Sent back to keep planning.");
+    // A plan declined with nothing said ended the agent's turn: the next word is the person's.
+    expect(declined).toContain("Declined. Tell The agent what you want instead.");
+    expect(declined).not.toContain("plan-note-sent");
+  });
+
+  it("shows what went back with a declined plan: the note itself, or that it was the edits", () => {
+    const card = (note: string) =>
+      renderToStaticMarkup(
+        <PermissionCard
+          item={item(request(), "deny", note)}
+          request={undefined}
+          onRespond={() => {}}
+          agentName="Claude Code"
+          blobs={new Map()}
+          onLoadBlob={() => {}}
+        />,
+      );
+    const noted = card("are we doing Unity?");
+    expect(noted).toContain("Sent back with your note.");
+    expect(noted).toMatch(/data-testid="plan-note-sent"[^>]*>are we doing Unity\?</);
+    // An edited plan sent back is not repeated under the plan it replaces.
+    const edited = card(planRevision("# Ship it\n\n1. Only the picker"));
+    expect(edited).toContain("Sent back with your edits.");
+    expect(edited).not.toContain("plan-note-sent");
+  });
+
+  it("says where a note goes before it is written", () => {
+    // Static markup shows the review foot; the note's own field is covered by check-plan.mjs.
+    const html = renderToStaticMarkup(
+      <PermissionCard
+        item={item(request())}
+        request={undefined}
+        onRespond={() => {}}
+        agentName="Claude Code"
+        onAddToPlan={async () => {}}
+        planNotes
+        blobs={new Map()}
+        onLoadBlob={() => {}}
+      />,
+    );
+    expect(html).toContain("Request changes");
+    expect(html).toContain("Decline");
   });
 
   it("shows an accepted plan as the person edited it, and says so", () => {
@@ -248,10 +297,12 @@ describe("a plan waiting for review", () => {
     );
   });
 
-  it("asks the agent to fold the note into the plan", () => {
-    expect(planFeedback("  also cover Codex  ")).toBe(
-      "Before implementing, add this to the plan and show me the updated plan:\n\nalso cover Codex",
-    );
+  it("sends a note as the person wrote it, with nothing put around it", () => {
+    // It was once wrapped in "add this to the plan and show me the updated plan", which turned
+    // a question into an order to rewrite the plan.
+    expect(planNote("  are we doing Unity?  ")).toBe("are we doing Unity?");
+    expect(isPlanRevision(planNote("I want fewer steps"))).toBe(false);
+    expect(isPlanRevision(planRevision("# A"))).toBe(true);
   });
 });
 

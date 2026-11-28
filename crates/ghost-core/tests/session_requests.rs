@@ -320,6 +320,7 @@ async fn answer_crossing_withdrawal() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::User
         )]
@@ -411,6 +412,7 @@ async fn concurrent_permissions() {
             PermissionDecision::Selected {
                 option_id: "no".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::User
         )]
@@ -493,6 +495,7 @@ async fn two_subscribers() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::User
         )]
@@ -708,6 +711,7 @@ async fn native_autonomy_report_answers_open_cards() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::Auto
         )]
@@ -777,6 +781,7 @@ async fn native_autonomy_report_recomputes_pending_decisions() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::Auto
         )]
@@ -787,6 +792,7 @@ async fn native_autonomy_report_recomputes_pending_decisions() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::Auto
         )],
@@ -1393,6 +1399,7 @@ async fn full_auto_records_auto_answers() {
             decision: PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             by: ResolvedBy::Auto,
         }
@@ -1519,6 +1526,7 @@ async fn a_plan_accepted_with_edits_reaches_the_agent_before_the_answer() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: Some(edited.into()),
+                note: None,
             },
             ResolvedBy::User
         )]
@@ -1581,8 +1589,258 @@ async fn an_agent_that_takes_no_edited_plans_is_never_sent_one() {
             PermissionDecision::Selected {
                 option_id: "once".into(),
                 plan: None,
+                note: None,
             },
             ResolvedBy::User
         )]
     );
+}
+
+fn declines(commands: &[LoggedCommand]) -> Vec<Option<String>> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            LoggedCommand::DeclinePlan { request_id, note } if request_id == "plan" => {
+                Some(note.clone())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn interrupts(commands: &[LoggedCommand]) -> usize {
+    commands
+        .iter()
+        .filter(|command| matches!(command, LoggedCommand::Interrupt))
+        .count()
+}
+
+fn answers(commands: &[LoggedCommand], id: &str) -> usize {
+    commands
+        .iter()
+        .filter(|command| {
+            matches!(command, LoggedCommand::RespondPermission { request_id, .. } if request_id == id)
+        })
+        .count()
+}
+
+/// A plan sent back with words: the words go to the agent inside the refusal, as one command in
+/// place of the bare answer, the turn goes on so the agent can answer them, and the record of
+/// the answer keeps them. Every other use of a note is refused, and a refusal sends nothing.
+#[tokio::test(start_paused = true)]
+async fn a_plan_declined_with_a_note_carries_the_note_in_the_refusal() {
+    let mut ready = ready_info("n1");
+    ready.capabilities.plan_notes = true;
+    let (driver, handle) = ScriptedDriver::new(vec![
+        Step::Emit(DriverEvent::Ready(ready)),
+        Step::Expect(CommandMatch::Prompt),
+        card("edit", Some(ToolKind::Edit)),
+        Step::Expect(CommandMatch::RespondPermission {
+            request_id: Some("edit".into()),
+        }),
+        plan_card("plan", "1. Build"),
+        Step::Expect(CommandMatch::Any),
+        end_turn(StopReason::EndTurn),
+    ]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    let sink = Sink::new("main");
+    h.manager
+        .attach(&chat.id, sink.clone())
+        .await
+        .expect("attach");
+    h.status(&chat.id, SessionStatus::Ready).await;
+    h.manager
+        .send(&chat.id, "plan it".into())
+        .await
+        .expect("send");
+    sink.wait_for("the first card", |event| {
+        matches!(event, GhostEvent::PermissionRequested(request) if request.request_id == "edit")
+    })
+    .await;
+    let note = "are we doing Unity?";
+    // An ordinary request is not a plan: it takes no note, and declining it ends nothing.
+    let refused = h.manager.decline_plan(&chat.id, "edit", "no", note).await;
+    assert!(
+        matches!(&refused, Err(SessionError::OptionInvalid(why)) if why.contains("Only a plan")),
+        "{refused:?}"
+    );
+    h.manager
+        .respond_permission(&chat.id, "edit", Some("no".into()))
+        .await
+        .expect("answer");
+    sink.wait_for("the plan", |event| {
+        matches!(event, GhostEvent::PermissionRequested(request) if request.request_id == "plan")
+    })
+    .await;
+    assert_eq!(
+        interrupts(&handle.commands()),
+        0,
+        "an ordinary no ends no turn"
+    );
+    let long = "x".repeat(64 * 1024 + 1025);
+    for (option, text, why) in [
+        ("once", note, "not an accepted one"),
+        ("always", note, "not an accepted one"),
+        ("missing", note, "isn't one of this request's options"),
+        ("no", "  \n ", "empty"),
+        ("no", long.as_str(), "too long"),
+        ("no", "why\0", "cannot be sent"),
+    ] {
+        let refused = h.manager.decline_plan(&chat.id, "plan", option, text).await;
+        assert!(
+            matches!(&refused, Err(SessionError::OptionInvalid(said)) if said.contains(why)),
+            "{option}: {refused:?}"
+        );
+    }
+    assert!(
+        declines(&handle.commands()).is_empty(),
+        "a refusal sends nothing"
+    );
+    assert!(resolution(&sink.events(), "plan").is_empty());
+    h.manager
+        .decline_plan(&chat.id, "plan", "no", note)
+        .await
+        .expect("decline with a note");
+    sink.wait_for("the turn ends", |event| {
+        matches!(event, GhostEvent::TurnEnded { .. })
+    })
+    .await;
+    let commands = handle.commands();
+    assert_eq!(declines(&commands), [Some(note.to_owned())]);
+    assert_eq!(
+        answers(&commands, "plan"),
+        0,
+        "the refusal is the one answer"
+    );
+    assert_eq!(
+        interrupts(&commands),
+        0,
+        "the agent answers the note in this turn"
+    );
+    assert_eq!(
+        resolution(&sink.events(), "plan"),
+        [(
+            PermissionDecision::Selected {
+                option_id: "no".into(),
+                plan: None,
+                note: Some(note.into()),
+            },
+            ResolvedBy::User
+        )]
+    );
+}
+
+/// A plan declined with nothing said ends its turn, so the agent waits for the person instead of
+/// carrying on with a bare refusal. An agent that is told through the refusal ends the turn
+/// itself; nothing else is sent.
+#[tokio::test(start_paused = true)]
+async fn a_plan_declined_with_nothing_said_ends_its_turn() {
+    let mut ready = ready_info("n1");
+    ready.capabilities.plan_notes = true;
+    let (driver, handle) = ScriptedDriver::new(vec![
+        Step::Emit(DriverEvent::Ready(ready)),
+        Step::Expect(CommandMatch::Prompt),
+        plan_card("plan", "1. Build"),
+        Step::Expect(CommandMatch::Any),
+        end_turn(StopReason::Cancelled),
+    ]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    let sink = Sink::new("main");
+    h.manager
+        .attach(&chat.id, sink.clone())
+        .await
+        .expect("attach");
+    h.status(&chat.id, SessionStatus::Ready).await;
+    h.manager
+        .send(&chat.id, "plan it".into())
+        .await
+        .expect("send");
+    sink.wait_for("the plan", |event| {
+        matches!(event, GhostEvent::PermissionRequested(_))
+    })
+    .await;
+    h.manager
+        .respond_permission(&chat.id, "plan", Some("no".into()))
+        .await
+        .expect("decline");
+    sink.wait_for("the turn ends", |event| {
+        matches!(event, GhostEvent::TurnEnded { .. })
+    })
+    .await;
+    h.status(&chat.id, SessionStatus::Ready).await;
+    let commands = handle.commands();
+    assert_eq!(declines(&commands), [None]);
+    assert_eq!(answers(&commands, "plan"), 0);
+    assert_eq!(interrupts(&commands), 0, "the refusal ends the turn itself");
+    assert_eq!(
+        resolution(&sink.events(), "plan"),
+        [(
+            PermissionDecision::Selected {
+                option_id: "no".into(),
+                plan: None,
+                note: None,
+            },
+            ResolvedBy::User
+        )]
+    );
+}
+
+/// An agent that reads no words with a refusal is never sent any: a note is refused and the plan
+/// stays waiting. Declining its plan still ends the turn, by the answer and then an interrupt,
+/// so what the person says next is not behind an agent that carried on.
+#[tokio::test(start_paused = true)]
+async fn an_agent_that_takes_no_note_is_declined_and_then_interrupted() {
+    let (driver, handle) = ScriptedDriver::new(vec![
+        ready_step("n1"),
+        Step::Expect(CommandMatch::Prompt),
+        plan_card("plan", "1. Build"),
+        Step::Expect(CommandMatch::RespondPermission {
+            request_id: Some("plan".into()),
+        }),
+        Step::Expect(CommandMatch::Interrupt),
+        end_turn(StopReason::Cancelled),
+    ]);
+    let h = Harness::new(vec![driver]);
+    let chat = h.chat().await;
+    let sink = Sink::new("main");
+    h.manager
+        .attach(&chat.id, sink.clone())
+        .await
+        .expect("attach");
+    h.status(&chat.id, SessionStatus::Ready).await;
+    h.manager
+        .send(&chat.id, "plan it".into())
+        .await
+        .expect("send");
+    sink.wait_for("the plan", |event| {
+        matches!(event, GhostEvent::PermissionRequested(_))
+    })
+    .await;
+    let refused = h
+        .manager
+        .decline_plan(&chat.id, "plan", "no", "fewer steps")
+        .await;
+    assert!(
+        matches!(&refused, Err(SessionError::OptionInvalid(why)) if why.contains("cannot be sent a note")),
+        "{refused:?}"
+    );
+    assert!(
+        resolution(&sink.events(), "plan").is_empty(),
+        "still waiting"
+    );
+    h.manager
+        .respond_permission(&chat.id, "plan", Some("no".into()))
+        .await
+        .expect("decline");
+    sink.wait_for("the turn ends", |event| {
+        matches!(event, GhostEvent::TurnEnded { .. })
+    })
+    .await;
+    h.status(&chat.id, SessionStatus::Ready).await;
+    let commands = handle.commands();
+    assert!(declines(&commands).is_empty());
+    assert_eq!(answers(&commands, "plan"), 1);
+    assert_eq!(interrupts(&commands), 1);
 }

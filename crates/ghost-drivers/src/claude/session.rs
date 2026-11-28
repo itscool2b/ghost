@@ -169,6 +169,19 @@ fn usage_limits(payload: &Value) -> Vec<LimitWindow> {
         })
         .unwrap_or_default()
 }
+/// What the model reads when the person declines a plan and says nothing more.
+const PLAN_DECLINED: &str = "The person declined this plan.";
+
+/// What the model reads when the person sends a plan back with words: the refusal, their words
+/// as they wrote them, and that this is still planning. A question gets an answer and a change
+/// gets a revised plan; neither is an approval to start.
+fn plan_note(note: &str) -> String {
+    format!(
+        "The person has not approved this plan. They wrote:\n\n{}\n\nAnswer or revise the plan as they ask. You are still in plan mode: do not start implementing until a plan is approved.",
+        note.trim()
+    )
+}
+
 fn result_reason(frame: &Value, stream_reason: Option<&str>) -> StopReason {
     let terminal = frame["terminal_reason"].as_str().unwrap_or_default();
     let subtype = frame["subtype"].as_str().unwrap_or_default();
@@ -750,6 +763,7 @@ impl Session {
                 slash_commands: true,
                 add_dirs: true,
                 plan_edits: true,
+                plan_notes: true,
                 autonomy_levels: vec![Autonomy::FullAuto, Autonomy::AutoEdit, Autonomy::Ask],
                 ..Default::default()
             },
@@ -960,6 +974,22 @@ impl Session {
                     && approval.request["input"]["plan"].is_string()
                 {
                     approval.request["input"]["plan"] = Value::String(plan);
+                }
+            }
+            DriverCommand::DeclinePlan { request_id, note } => {
+                // Claude Code hands a refusal's message to the model as the tool's result, so
+                // the person's words arrive with the refusal and the model answers them in the
+                // same turn. With no words, `interrupt` ends the turn there, as declining a
+                // plan does in Claude Code's own terminal: the model waits for the person
+                // instead of guessing what they wanted.
+                if self.approvals.remove(&request_id).is_some() {
+                    let response = match note {
+                        Some(note) => json!({"behavior":"deny","message":plan_note(&note)}),
+                        None => {
+                            json!({"behavior":"deny","message":PLAN_DECLINED,"interrupt":true})
+                        }
+                    };
+                    self.response(&request_id, response);
                 }
             }
             DriverCommand::RespondPermission {

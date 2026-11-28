@@ -846,6 +846,85 @@ async fn an_edited_plan_is_what_claude_is_told_was_approved() {
     h.stop().await;
 }
 
+/// A plan declined with the person's words: Claude is refused with those words as the refusal's
+/// message, which it hands the model as the tool's result, so the model reads the refusal and the
+/// words together and answers in the same turn. A plan declined with nothing said is refused
+/// with `interrupt`, which ends the turn there; Claude reports it as an aborted turn, which is a
+/// cancelled one and not a failure.
+#[tokio::test(start_paused = true)]
+async fn a_declined_plan_carries_the_persons_words_or_ends_the_turn() {
+    let mut h = Harness::start().await;
+    h.ready().await;
+    h.prompt();
+    h.wire().await;
+    let ask = |id: &str| json!({"type":"control_request","request_id":id,"request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","display_name":"ExitPlanMode","input":{"plan":"# Ship it\n\n1. Build"}}});
+    h.send(ask("noted")).await;
+    loop {
+        if let DriverEvent::Permission { .. } = h.event().await {
+            break;
+        }
+    }
+    h.tx.send(DriverCommand::DeclinePlan {
+        request_id: "noted".into(),
+        note: Some("  are we doing Unity?\n".into()),
+    })
+    .expect("decline with a note");
+    let reply = h.wire().await;
+    let response = &reply["response"]["response"];
+    assert_eq!(reply["response"]["request_id"], "noted");
+    assert_eq!(response["behavior"], "deny");
+    let message = response["message"].as_str().expect("a message");
+    assert!(
+        message.starts_with(
+            "The person has not approved this plan. They wrote:\n\nare we doing Unity?\n\n"
+        ),
+        "{message}"
+    );
+    assert!(message.contains("still in plan mode"), "{message}");
+    assert!(
+        response.get("interrupt").is_none(),
+        "the turn goes on: the model answers the note"
+    );
+    // A second answer to the same request sends nothing more.
+    h.tx.send(DriverCommand::DeclinePlan {
+        request_id: "noted".into(),
+        note: None,
+    })
+    .expect("a stale decline");
+
+    h.send(ask("bare")).await;
+    loop {
+        if let DriverEvent::Permission { .. } = h.event().await {
+            break;
+        }
+    }
+    h.tx.send(DriverCommand::DeclinePlan {
+        request_id: "bare".into(),
+        note: None,
+    })
+    .expect("decline");
+    let reply = h.wire().await;
+    assert_eq!(reply["response"]["request_id"], "bare");
+    assert_eq!(
+        reply["response"]["response"],
+        json!({"behavior":"deny","message":"The person declined this plan.","interrupt":true})
+    );
+    // What Claude Code 2.1 sends after such a refusal (read from the real CLI on 27 November
+    // 2026): the turn ends as aborted, with an error subtype that is not a failure here.
+    h.send(json!({"type":"result","subtype":"error_during_execution","stop_reason":"tool_use","terminal_reason":"aborted_tools","is_error":true,"errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"]})).await;
+    loop {
+        if let DriverEvent::TurnEnded {
+            stop_reason, error, ..
+        } = h.event().await
+        {
+            assert_eq!(stop_reason, StopReason::Cancelled);
+            assert!(error.is_none(), "{error:?}");
+            break;
+        }
+    }
+    h.stop().await;
+}
+
 /// A chat whose Claude keeps the person's settings in `config`.
 fn with_settings(mut setup: SessionSetup, config: &std::path::Path) -> SessionSetup {
     setup
