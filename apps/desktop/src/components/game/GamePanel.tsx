@@ -1,12 +1,18 @@
 import "./game.css";
+// The note beside what was pointed at is the browser's own, and wears its styles.
+import "../browser/browser.css";
 import { AgentMark } from "@ghost/ui/graphite";
 import {
   AppWindow,
   Camera,
+  Crosshair,
   Gamepad2,
+  History,
+  Joystick,
   Pause,
   Play,
   RotateCw,
+  SlidersHorizontal,
   Square,
   StepForward,
   TriangleAlert,
@@ -16,14 +22,25 @@ import {
 } from "lucide-react";
 import {
   type CSSProperties,
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
-import type { ChatGame, GameInput, GameLog, GodotStatus, Starter } from "../../bindings";
+import type {
+  ChatGame,
+  GameInput,
+  GameLog,
+  GamePicked,
+  GameRecent,
+  GameTunables,
+  GodotStatus,
+  Starter,
+} from "../../bindings";
 import { FileLinkContext } from "../../lib/chat/fileLinks";
 import { errorMessage } from "../../lib/errors";
 import {
@@ -33,12 +50,78 @@ import {
   KeyboardSender,
   megabytes,
   mouseButton,
+  PAD_REST,
+  type PadState,
+  padEvents,
+  padRelease,
   SPEEDS,
   STARTERS,
 } from "../../lib/game";
+import {
+  areaOf,
+  keepText,
+  num,
+  pickedLabel,
+  pointText,
+  recentText,
+  type turned,
+} from "../../lib/gameTell";
 import { ScreenPlayer, type ScreenState, videoPoint } from "../../lib/screen";
+import { AnnotationComposer } from "../browser/AnnotationComposer";
+import type { AnnotationTarget } from "../browser/BrowserPanel";
 import { commandKey } from "../chat/Keys";
 import { connected, EngineConnect } from "./EngineConnect";
+import { markedPicture, pngFrom, TuneSheet, themeColor } from "./GameTell";
+
+/** A box in the stage's own pixels: where a note is put beside. */
+interface Anchor {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** An element's size as it is laid out, kept up as it changes. */
+function useSize(element: RefObject<HTMLElement | null>): { width: number; height: number } {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const node = element.current;
+    if (!node) return;
+    const measure = () => {
+      const box = node.getBoundingClientRect();
+      setSize((now) =>
+        now.width === box.width && now.height === box.height
+          ? now
+          : { width: box.width, height: box.height },
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const watching = new ResizeObserver(measure);
+    watching.observe(node);
+    return () => watching.disconnect();
+  }, [element]);
+  return size;
+}
+
+/** How many controllers the window sees. One shows up at its first press. */
+function useControllers(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const look = () => {
+      const pads = typeof navigator.getGamepads === "function" ? navigator.getGamepads() : [];
+      setCount([...pads].filter((pad) => pad?.connected).length);
+    };
+    look();
+    window.addEventListener("gamepadconnected", look);
+    window.addEventListener("gamepaddisconnected", look);
+    return () => {
+      window.removeEventListener("gamepadconnected", look);
+      window.removeEventListener("gamepaddisconnected", look);
+    };
+  }, []);
+  return count;
+}
 
 /** How long what the agent did stays in the header after its call, so a run of calls reads as one. */
 export const AGENT_LINGER_MS = 1200;
@@ -75,9 +158,12 @@ export function GamePanel({
   agentName,
   toolsPossible,
   onOpenBrowser,
+  annotation,
 }: {
   readonly chatId: string;
   readonly store: GameStore;
+  /** How the pane hands a note to the chat: something pointed at, the last seconds of play. */
+  readonly annotation?: AnnotationTarget;
   /** The window is too narrow for two panes: the pane covers the chat's work area. */
   readonly narrow: boolean;
   readonly onClose: () => void;
@@ -95,6 +181,20 @@ export function GamePanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  /** What the pointer is for when it is not the game's: choosing something in the picture. */
+  const [pointing, setPointing] = useState<"tell" | "tune" | null>(null);
+  const [picked, setPicked] = useState<{ node: GamePicked; anchor: Anchor } | null>(null);
+  const [recent, setRecent] = useState<GameRecent | null>(null);
+  /** The node whose values the Tune sheet shows. */
+  const [tuned, setTuned] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  /** The game ran when pointing froze it, so it runs again when pointing ends. */
+  const thaw = useRef(false);
+  /** The picture as the pane shows it, for the image a note carries. */
+  const shown = useRef<HTMLCanvasElement | null>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const stageSize = useSize(stage);
   const fail = useCallback((error: unknown) => setProblem(errorMessage(error)), []);
   const doing = useLingering(game?.agent ?? null, AGENT_LINGER_MS);
   // Opening the pane looks for Godot again, and at what the chat's folder holds now.
@@ -144,6 +244,123 @@ export function GamePanel({
   const name = game?.project?.name ?? null;
   const title = name ?? "Game";
 
+  const stopPointing = useCallback(() => {
+    setPointing(null);
+    setPicked(null);
+    setNoteError(null);
+    if (thaw.current) {
+      thaw.current = false;
+      api.time(chatId, false, null).catch(fail);
+    }
+  }, [api, chatId, fail]);
+  const startPointing = (purpose: "tell" | "tune") => {
+    setProblem(null);
+    setRecent(null);
+    setLogOpen(false);
+    if (purpose === "tell") setTuned(null);
+    // What moves cannot be pointed at: the game stands still while the person chooses.
+    if (pointing === null && game && !game.frozen) {
+      thaw.current = true;
+      api.time(chatId, true, null).catch(fail);
+    }
+    setPicked(null);
+    setNoteError(null);
+    setPointing(purpose);
+  };
+  const onPicked = (node: GamePicked | null, anchor: Anchor) => {
+    if (!node) {
+      setNotice("Nothing is drawn there. Click something in the picture.");
+      return;
+    }
+    if (pointing === "tune") {
+      setTuned(node.script_on || node.path);
+      stopPointing();
+      return;
+    }
+    setNoteError(null);
+    setNotice(null);
+    setPicked({ node, anchor });
+  };
+  const keepRecent = () => {
+    setProblem(null);
+    if (pointing) stopPointing();
+    setLogOpen(false);
+    setTuned(null);
+    api.recent(chatId, 15).then((kept) => {
+      setNoteError(null);
+      setRecent(kept);
+    }, fail);
+  };
+  const deliver = async (text: string, how: "send" | "add") => {
+    if (!annotation || !game) return;
+    setSending(true);
+    setNoteError(null);
+    try {
+      const pictured = annotation.images !== false;
+      let message: string;
+      let image: Uint8Array | null = null;
+      if (picked) {
+        if (pictured && shown.current)
+          image = await markedPicture(
+            shown.current,
+            areaOf(picked.node),
+            game.width,
+            themeColor("--g-volt", "rgb(59, 130, 246)"),
+          );
+        message = pointText(
+          text,
+          picked.node,
+          { name, width: game.width, height: game.height },
+          image !== null,
+        );
+      } else if (recent) {
+        if (pictured) image = await pngFrom(recent.picture);
+        message = recentText(text, recent, name, image !== null);
+      } else return;
+      const why = await (how === "send" ? annotation.send : annotation.add)(message, image);
+      if (why) {
+        setNoteError(why);
+        return;
+      }
+      setRecent(null);
+      stopPointing();
+      setNotice(how === "send" ? `Sent to ${agentName}.` : "Added to the message box.");
+    } catch (error) {
+      setNoteError(errorMessage(error));
+    } finally {
+      setSending(false);
+    }
+  };
+  const keepTuned = async (tunables: GameTunables, changes: ReturnType<typeof turned>) => {
+    if (!annotation) return "This chat cannot take a message now.";
+    const why = await annotation.send(keepText(tunables, changes, name), null);
+    if (!why) setNotice(`Sent to ${agentName}.`);
+    return why;
+  };
+  // What was being pointed at or tuned belongs to the run that showed it.
+  useEffect(() => {
+    if (running) return;
+    thaw.current = false;
+    setPointing(null);
+    setPicked(null);
+    setRecent(null);
+    setTuned(null);
+  }, [running]);
+  const note = picked
+    ? { subject: pickedLabel(picked.node), anchor: picked.anchor }
+    : recent
+      ? {
+          subject: `The last ${Math.max(1, Math.round(num(recent.seconds)))} seconds of play`,
+          // Over the foot of the picture, in the middle.
+          anchor: {
+            x: Math.max(8, stageSize.width / 2 - 190),
+            y: Math.max(0, stageSize.height - 12),
+            width: 0,
+            height: 0,
+          },
+        }
+      : null;
+
   return (
     <aside
       className="game-panel"
@@ -151,6 +368,14 @@ export function GamePanel({
       data-testid="game-panel"
       data-full={narrow ? "" : undefined}
       data-state={game?.state ?? "idle"}
+      data-pointing={pointing ?? undefined}
+      onKeyDown={(event) => {
+        // Esc gives the pointer back to the game. A note that is open takes its own Esc first.
+        if (event.key === "Escape" && pointing && !event.defaultPrevented) {
+          event.preventDefault();
+          stopPointing();
+        }
+      }}
     >
       <div className="game-head">
         {/* The game's name, and in its place while the agent works, what it is doing: the
@@ -227,12 +452,17 @@ export function GamePanel({
           </button>
         </p>
       ) : null}
-      <div className="game-stage">
+      <div className="game-stage" ref={stage}>
         {status === null || game === null ? null : (
           <Stage
             chatId={chatId}
             api={api}
             game={game}
+            pointing={pointing !== null && picked === null}
+            marked={picked?.node ?? null}
+            shown={shown}
+            stage={stage}
+            onPicked={onPicked}
             godot={status.godot}
             agentName={agentName}
             toolsPossible={toolsPossible}
@@ -245,6 +475,41 @@ export function GamePanel({
         )}
         {logOpen && game ? (
           <LogSheet chatId={chatId} api={api} game={game} onClose={() => setLogOpen(false)} />
+        ) : null}
+        {tuned !== null && running && pointing === null && !logOpen ? (
+          <TuneSheet
+            chatId={chatId}
+            api={api}
+            node={tuned}
+            agentName={agentName}
+            canKeep={annotation !== undefined}
+            onKeep={keepTuned}
+            onPoint={() => startPointing("tune")}
+            onClose={() => setTuned(null)}
+          />
+        ) : null}
+        {note && annotation && running ? (
+          <AnnotationComposer
+            subject={note.subject}
+            placeholder={picked ? "What is wrong with this?" : "What went wrong?"}
+            noteOptional={picked === null}
+            testId="game-note"
+            anchor={note.anchor}
+            page={stageSize}
+            controls={annotation.controls}
+            agentName={agentName}
+            images={annotation.images}
+            sending={sending}
+            error={noteError}
+            onSend={(text) => void deliver(text, "send")}
+            onAdd={(text) => void deliver(text, "add")}
+            onCancel={() => {
+              setNoteError(null);
+              // Back to choosing: the pointer still picks until Esc or the button.
+              if (picked) setPicked(null);
+              else setRecent(null);
+            }}
+          />
         ) : null}
         {/* Notices float over the foot of the stage, so the picture does not move for them. */}
         {problem || notice ? (
@@ -278,6 +543,18 @@ export function GamePanel({
           onRestart={() => play(game.scene === "" ? null : game.scene)}
           onNotice={setNotice}
           onError={fail}
+          agentName={agentName}
+          canTell={annotation !== undefined}
+          pointing={pointing === "tell"}
+          tuning={tuned !== null}
+          onPoint={() => (pointing === "tell" ? stopPointing() : startPointing("tell"))}
+          onRecent={keepRecent}
+          onTune={() => {
+            if (pointing) stopPointing();
+            setLogOpen(false);
+            setRecent(null);
+            setTuned((now) => (now === null ? "." : null));
+          }}
         />
       ) : null}
     </aside>
@@ -297,10 +574,20 @@ function Stage({
   onStartProject,
   onOpenBrowser,
   onError,
+  pointing,
+  marked,
+  shown,
+  stage,
+  onPicked,
 }: {
   readonly chatId: string;
   readonly api: GameApi;
   readonly game: ChatGame;
+  readonly pointing: boolean;
+  readonly marked: GamePicked | null;
+  readonly shown: RefObject<HTMLCanvasElement | null>;
+  readonly stage: RefObject<HTMLDivElement | null>;
+  readonly onPicked: (node: GamePicked | null, anchor: Anchor) => void;
   readonly godot: GodotStatus;
   readonly agentName: string;
   readonly toolsPossible: boolean;
@@ -311,7 +598,19 @@ function Stage({
   readonly onError: (error: unknown) => void;
 }) {
   const project = game.project;
-  if (game.state === "running") return <Screen chatId={chatId} api={api} game={game} />;
+  if (game.state === "running")
+    return (
+      <Screen
+        chatId={chatId}
+        api={api}
+        game={game}
+        pointing={pointing}
+        marked={marked}
+        shown={shown}
+        stage={stage}
+        onPicked={onPicked}
+      />
+    );
   if (game.state === "starting")
     return (
       <div className="game-message" role="status" data-testid="game-starting">
@@ -553,12 +852,34 @@ function Screen({
   chatId,
   api,
   game,
+  pointing,
+  marked,
+  shown,
+  stage,
+  onPicked,
 }: {
   readonly chatId: string;
   readonly api: GameApi;
   readonly game: ChatGame;
+  /** The pointer chooses something in the picture instead of playing. */
+  readonly pointing: boolean;
+  /** What a note is being written about: it stays outlined. */
+  readonly marked: GamePicked | null;
+  /** Given the picture's canvas, for the image a note carries. */
+  readonly shown: RefObject<HTMLCanvasElement | null>;
+  readonly stage: RefObject<HTMLDivElement | null>;
+  readonly onPicked: (node: GamePicked | null, anchor: Anchor) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  /** What is under the pointer while it chooses. */
+  const [hover, setHover] = useState<GamePicked | null>(null);
+  const asking = useRef({
+    seq: 0,
+    at: 0,
+    busy: false,
+    next: null as { x: number; y: number } | null,
+  });
+  const pad = useRef<PadState>(PAD_REST);
   const player = useRef<ScreenPlayer | null>(null);
   const [state, setState] = useState<ScreenState>({ kind: "waiting" });
   const [focused, setFocused] = useState(false);
@@ -616,6 +937,119 @@ function Screen({
     pressed.current.clear();
   };
 
+  useEffect(() => {
+    shown.current = canvas.current;
+    return () => {
+      shown.current = null;
+    };
+  }, [shown]);
+
+  // While the pointer chooses, nothing of the person's stays held in the game.
+  useEffect(() => {
+    if (!pointing) {
+      setHover(null);
+      asking.current.seq += 1;
+      asking.current.next = null;
+      return;
+    }
+    keys.releaseAll();
+    for (const button of pressed.current)
+      void api.input(chatId, [{ t: "mouse", x: 0, y: 0, button, down: false }]).catch(() => {});
+    pressed.current.clear();
+  }, [pointing, keys, api, chatId]);
+
+  /** Asks what is under a point, one question at a time, the newest place winning. */
+  const ask = (at: { x: number; y: number }) => {
+    const state = asking.current;
+    state.next = at;
+    if (state.busy) return;
+    const run = () => {
+      const place = state.next;
+      if (!place) return;
+      state.next = null;
+      state.busy = true;
+      const seq = state.seq;
+      api
+        .pick(chatId, place.x, place.y)
+        .then(
+          (found) => {
+            if (seq === state.seq) setHover(found);
+          },
+          () => {},
+        )
+        .finally(() => {
+          state.busy = false;
+          run();
+        });
+    };
+    run();
+  };
+
+  /** A box of the game's own pixels as the stage's, for the note beside it. */
+  const anchorOf = (area: readonly number[]): Anchor => {
+    const element = canvas.current;
+    const around = stage.current;
+    if (!element || !around || game.width <= 0) return { x: 8, y: 8, width: 0, height: 0 };
+    const box = element.getBoundingClientRect();
+    const outer = around.getBoundingClientRect();
+    const scale = box.width / game.width;
+    const [x = 0, y = 0, width = 0, height = 0] = area;
+    return {
+      x: box.left - outer.left + x * scale,
+      y: box.top - outer.top + y * scale,
+      width: width * scale,
+      height: height * scale,
+    };
+  };
+
+  // A controller plays the game while the picture has the keyboard. A game that reads the
+  // computer's controllers itself is sent none: it would hear every press twice.
+  const [focusedNow, setFocusedNow] = useState(false);
+  const padOn = focusedNow && !pointing && game.joypads === 0;
+  useEffect(() => {
+    if (!padOn || typeof navigator.getGamepads !== "function") return;
+    let frame = 0;
+    const read = () => {
+      const found = [...navigator.getGamepads()].find((entry) => entry?.connected);
+      if (found) {
+        const { events, state } = padEvents(pad.current, found);
+        pad.current = state;
+        if (events.length > 0) void api.input(chatId, events).catch(() => {});
+      }
+      frame = requestAnimationFrame(read);
+    };
+    frame = requestAnimationFrame(read);
+    return () => {
+      cancelAnimationFrame(frame);
+      const release = padRelease(pad.current);
+      pad.current = PAD_REST;
+      if (release.length > 0) void api.input(chatId, release).catch(() => {});
+    };
+  }, [padOn, api, chatId]);
+
+  /** A box of the game's pixels as a share of the picture, for the outline over it. */
+  const outline = (node: GamePicked, kind: "hover" | "marked") => {
+    if (game.width <= 0 || game.height <= 0) return null;
+    const [x, y, width, height] = areaOf(node);
+    return (
+      <span
+        className="game-pick"
+        data-kind={kind}
+        data-testid={kind === "hover" ? "game-pick-hover" : "game-pick-marked"}
+        style={
+          {
+            left: `${(x / game.width) * 100}%`,
+            top: `${(y / game.height) * 100}%`,
+            width: `${(width / game.width) * 100}%`,
+            height: `${(height / game.height) * 100}%`,
+          } as CSSProperties
+        }
+      >
+        <span className="game-pick-label">{pickedLabel(node)}</span>
+      </span>
+    );
+  };
+
   // The frame has the picture's own shape (the game's, until the first frame says), as large as
   // the stage allows: what is said over the picture's foot is then on the picture.
   const shape =
@@ -625,7 +1059,12 @@ function Screen({
         ? { width: game.width, height: game.height }
         : { width: 16, height: 9 };
   return (
-    <div className="game-screen" data-state={state.kind} data-frozen={game.frozen ? "" : undefined}>
+    <div
+      className="game-screen"
+      data-state={state.kind}
+      data-frozen={game.frozen ? "" : undefined}
+      data-pointing={pointing ? "" : undefined}
+    >
       <div
         className="game-frame"
         style={{ "--game-w": shape.width, "--game-h": shape.height } as CSSProperties}
@@ -643,17 +1082,40 @@ function Screen({
           tabIndex={0}
           data-testid="game-canvas"
           onContextMenu={(event) => event.preventDefault()}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setFocused(true);
+            setFocusedNow(true);
+          }}
           onBlur={() => {
             setFocused(false);
+            setFocusedNow(false);
             keys.releaseAll();
             releaseButtons();
+          }}
+          onPointerLeave={() => {
+            if (!pointing) return;
+            asking.current.seq += 1;
+            asking.current.next = null;
+            setHover(null);
           }}
           onPointerDown={(event) => {
             const button = mouseButton(event.button);
             const at = point(event);
             if (!button || !at) return;
             event.currentTarget.focus();
+            if (pointing) {
+              if (button !== "left") return;
+              // The click asks for itself: what is outlined may be a moment old.
+              asking.current.seq += 1;
+              api.pick(chatId, at.x, at.y).then(
+                (found) => {
+                  setHover(null);
+                  onPicked(found, anchorOf(found ? areaOf(found) : [at.x, at.y, 0, 0]));
+                },
+                () => onPicked(null, anchorOf([at.x, at.y, 0, 0])),
+              );
+              return;
+            }
             event.currentTarget.setPointerCapture(event.pointerId);
             pressed.current.add(button);
             send([
@@ -664,6 +1126,10 @@ function Screen({
           onPointerMove={(event) => {
             const at = point(event);
             if (!at) return;
+            if (pointing) {
+              ask(at);
+              return;
+            }
             move.current = at;
             if (moving.current) return;
             moving.current = requestAnimationFrame(() => {
@@ -682,24 +1148,33 @@ function Screen({
           onPointerCancel={releaseButtons}
           onWheel={(event) => {
             const at = point(event);
-            if (!at) return;
+            if (!at || pointing) return;
             // One notch of a wheel is about 100 pixels.
             const notches = Math.max(-8, Math.min(8, event.deltaY / 100));
             send([{ t: "wheel", x: at.x, y: at.y, dy: notches }]);
           }}
           onKeyDown={(event) => {
+            // While the pointer chooses, keys are the pane's (Esc ends it), not the game's.
+            if (pointing) return;
             if (keys.down(event.nativeEvent)) event.preventDefault();
           }}
           onKeyUp={(event) => {
             if (keys.up(event.nativeEvent)) event.preventDefault();
           }}
         />
-        {state.kind === "live" && !focused && !game.frozen ? (
+        {pointing && hover ? outline(hover, "hover") : null}
+        {marked ? outline(marked, "marked") : null}
+        {state.kind === "live" && pointing ? (
+          <span className="game-hint" data-testid="game-pointing">
+            Click what you mean. Esc to go back.
+          </span>
+        ) : null}
+        {state.kind === "live" && !pointing && !marked && !focused && !game.frozen ? (
           <span className="game-hint" data-testid="game-hint">
             Click to play
           </span>
         ) : null}
-        {state.kind === "live" && game.frozen ? (
+        {state.kind === "live" && !pointing && !marked && game.frozen ? (
           <span className="game-hint" data-testid="game-frozen">
             {game.agent ? "Frozen while the agent plays" : "Paused"}
           </span>
@@ -717,6 +1192,13 @@ function Controls({
   onRestart,
   onNotice,
   onError,
+  agentName,
+  canTell,
+  pointing,
+  tuning,
+  onPoint,
+  onRecent,
+  onTune,
 }: {
   readonly chatId: string;
   readonly api: GameApi;
@@ -724,7 +1206,16 @@ function Controls({
   readonly onRestart: () => void;
   readonly onNotice: (text: string) => void;
   readonly onError: (error: unknown) => void;
+  readonly agentName: string;
+  /** The chat can be handed a note. */
+  readonly canTell: boolean;
+  readonly pointing: boolean;
+  readonly tuning: boolean;
+  readonly onPoint: () => void;
+  readonly onRecent: () => void;
+  readonly onTune: () => void;
 }) {
+  const controllers = useControllers();
   const speed = game.speed ?? 1;
   const fps = Math.round(game.fps ?? 0);
   // The next speed up, and round to the slowest after the fastest.
@@ -764,10 +1255,67 @@ function Controls({
           {speed}x
         </button>
       </span>
+      <span className="game-controls-group">
+        {canTell ? (
+          <>
+            <button
+              type="button"
+              className="g-button g-button-ghost g-button-icon g-button-28"
+              aria-label={`Point at something for ${agentName}`}
+              aria-pressed={pointing}
+              title={
+                pointing
+                  ? "Stop pointing (Esc)"
+                  : `Point at what is wrong: the game freezes, you click it, and ${agentName} gets the node, its scene and its script`
+              }
+              data-testid="game-point"
+              onClick={onPoint}
+            >
+              <Crosshair size={15} />
+            </button>
+            <button
+              type="button"
+              className="g-button g-button-ghost g-button-icon g-button-28"
+              aria-label={`Send the last 15 seconds to ${agentName}`}
+              title={`Send the last 15 seconds: ${agentName} gets pictures of what you just played and can play the same run again`}
+              data-testid="game-recent"
+              onClick={onRecent}
+            >
+              <History size={15} />
+            </button>
+          </>
+        ) : null}
+        <button
+          type="button"
+          className="g-button g-button-ghost g-button-icon g-button-28"
+          aria-label="Tune values"
+          aria-pressed={tuning}
+          title="Tune values: turn the numbers a script exports while the game runs"
+          data-testid="game-tune"
+          onClick={onTune}
+        >
+          <SlidersHorizontal size={15} />
+        </button>
+      </span>
       <output className="game-meter-text" data-testid="game-fps" aria-label="Frames a second">
         {game.frozen ? "Frozen" : `${fps} fps`}
         {game.width > 0 ? ` · ${game.width}×${game.height}` : ""}
       </output>
+      {controllers > 0 || game.joypads > 0 ? (
+        <span
+          className="game-pad"
+          role="img"
+          aria-label="A controller is connected"
+          title={
+            game.joypads > 0
+              ? "The game reads your controller itself."
+              : "Your controller plays the game while the picture has the keyboard: click the game first."
+          }
+          data-testid="game-pad"
+        >
+          <Joystick size={14} />
+        </span>
+      ) : null}
       <span className="game-controls-group">
         <button
           type="button"

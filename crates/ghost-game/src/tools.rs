@@ -16,7 +16,7 @@ use crate::manager::{GameState, Manager, TURNED_OFF, ToolReply};
 use crate::{Error, check, run};
 
 /// Every tool, as agents name them.
-pub const TOOLS: [&str; 14] = [
+pub const TOOLS: [&str; 15] = [
     "game_status",
     "game_check",
     "game_run",
@@ -31,6 +31,7 @@ pub const TOOLS: [&str; 14] = [
     "game_eval",
     "game_perf",
     "game_time",
+    "game_replay",
 ];
 
 /// How long the game has to answer an ordinary question.
@@ -80,6 +81,7 @@ pub fn label(tool: &str, arguments: &Value) -> String {
         "game_logs" => "Reading the log".into(),
         "game_eval" => "Running code".into(),
         "game_perf" => "Measuring".into(),
+        "game_replay" => "Replaying your play".into(),
         "game_time" => match arguments["frozen"].as_bool() {
             Some(true) => "Freezing".into(),
             Some(false) => "Resuming".into(),
@@ -111,6 +113,11 @@ pub async fn call(
         Some(project) => project.engine == GameEngine::Web,
         None => true,
     } || (tool == "game_run" && arguments["url"].is_string());
+    if tool == "game_replay" && web {
+        return ToolReply::failed(
+            "Replays are for games Ghost runs itself (Godot). A web game is played in the browser, where its input is the person's own.",
+        );
+    }
     if web
         && tool != "game_status"
         && let Some(browser) = manager.web()
@@ -235,6 +242,26 @@ async fn dispatch(
                 .ask(chat_id, "perf", json!({"frames": frames}), ACTION)
                 .await?;
             Ok(ToolReply::text(measured(&reply.value)))
+        }
+        "game_replay" => {
+            let id = required(arguments, "replay")?;
+            let until = arguments["until_s"].as_f64();
+            let reply = manager.replay(chat_id, folder, id, until).await?;
+            let strip = reply.value["strip"].as_u64().unwrap_or(0);
+            let text = format!(
+                "Played the run again from a fresh start with the same seed: {} inputs over {:.1} s of game time, as fast as the game goes (what game_set and game_eval did in the first run is done again too). It is frozen where the replay ends, so game_tree, game_inspect and game_eval read the game as it was then.\n{}{}",
+                reply.value["inputs"].as_u64().unwrap_or(0),
+                reply.value["game_ms"].as_f64().unwrap_or(0.0) / 1000.0,
+                if strip > 1 {
+                    format!(
+                        "First picture: its last stretch in {strip} frames, left to right and top to bottom. Second picture: where it ended."
+                    )
+                } else {
+                    "The picture is where it ended.".to_owned()
+                },
+                fresh(manager, chat_id)
+            );
+            Ok(pictures(text, reply))
         }
         "game_time" => {
             let frozen = arguments["frozen"].as_bool();

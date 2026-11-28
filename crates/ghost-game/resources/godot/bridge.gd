@@ -17,14 +17,42 @@ const MAX_MESSAGE := 4 * 1024 * 1024
 const MAX_OUTLINE := 500
 const MAX_CHILDREN := 30
 const MAX_PENDING_ERRORS := 200
+## The most inputs a run's tape keeps. A pointer that never rests fills it in about five minutes;
+## keys alone take hours.
+const MAX_TAPE := 20000
+## And the most code and values it keeps, in characters.
+const MAX_TAPE_CODE := 1024 * 1024
+## A small picture of the game is kept this often, in steps, and this many are kept: the last
+## fifteen seconds.
+const RECENT_EVERY := 30
+const RECENT_KEEP := 31
 
 var _peer := StreamPeerTCP.new()
 var _greeted := false
 var _inbox := PackedByteArray()
 
 ## Frozen by Ghost: the tree is paused, and the game's own pause is remembered underneath.
+## `_frozen` is what Ghost asked for and `_stopped` what the tree is now. They meet after a
+## frame is drawn and never in the middle of one, so every step the game takes is a whole one,
+## its physics and then its nodes, and a replay can take the very same steps.
 var _frozen := false
+var _stopped := false
 var _game_paused := false
+## Steps of the game taken since it began: frames in which it ran. Frozen frames are not steps.
+var _tick := 0
+## This frame is a step.
+var _running := false
+## Everything done to the game from outside, by Ghost's pane or by an agent: every input, and
+## every value set and piece of code run in it. Each is [step, phase, event]. Phase 1 was done
+## while that step ran; phase 0 was done while the game stood still before it.
+var _tape: Array = []
+var _tape_full := false
+## The code on the tape, in characters: a tape is kept small enough to hand back.
+var _tape_code := 0
+## A replay is giving the tape back: what it does is written by the replay itself.
+var _replaying := false
+## Small pictures of the last seconds: [step, Image].
+var _recent: Array = []
 var _speed := 1.0
 var _deadline := 0
 
@@ -56,6 +84,12 @@ func _ready() -> void:
 	_peer.connect_to_host(endpoint[0], int(endpoint[1]))
 	RenderingServer.frame_post_draw.connect(_after_draw)
 	_install_logger()
+	# A run started to be replayed stands still once its first step is taken. Not before it:
+	# that step is where the engine puts the first scene in the tree, and a game stopped
+	# before it would have its scene a step early, one step ahead of the run it repeats.
+	# Nothing can have been given to a game in its first step, so nothing is missed.
+	if OS.get_environment("GHOST_GAME_HOLD") == "1":
+		_frozen = true
 
 func _install_logger() -> void:
 	# Godot 4.5 and later hand errors to a Logger with their file and line. Its script is apart,
@@ -79,11 +113,16 @@ func report(entry: Dictionary) -> void:
 
 func _process(_delta: float) -> void:
 	_frame += 1
+	_running = not _stopped
+	if _running:
+		_tick += 1
 	_pump()
 	if not _job.is_empty():
-		_advance_job()
+		# An action moves on only in a step; one that waits for the game to thaw waits a frame.
+		if _running:
+			_advance_job()
 		return
-	if _frozen:
+	if _stopped:
 		OS.delay_msec(15)
 		return
 	# Live: the game runs at a fixed step with no clock of its own, so real time is kept here.
@@ -120,6 +159,7 @@ func _pump() -> void:
 			"window": DisplayServer.window_get_native_handle(DisplayServer.WINDOW_HANDLE),
 			"project": str(ProjectSettings.get_setting("application/config/name", "")),
 			"renderer": RenderingServer.get_current_rendering_driver_name(),
+			"joypads": Input.get_connected_joypads().size(),
 		})
 	var available := _peer.get_available_bytes()
 	if available > 0:
@@ -231,6 +271,14 @@ func _handle(message: Dictionary) -> void:
 				_set_frozen(false)
 		"tree":
 			_reply(id, _outline())
+		"pick":
+			_pick(id, message)
+		"tune":
+			_tune(id, message)
+		"recent":
+			_reply_recent(id, message)
+		"replay":
+			_start_replay(id, message)
 		"inspect":
 			_inspect(id, message)
 		"set":
@@ -250,15 +298,21 @@ func _job_or_refuse(id, job: Dictionary) -> void:
 	_job = job
 
 func _set_frozen(frozen: bool) -> void:
-	if frozen == _frozen:
+	if _frozen and not frozen:
+		_deadline = 0
+	_frozen = frozen
+
+## Makes the tree what Ghost asked for. Called once a frame is drawn, so the game stops and
+## starts between steps.
+func _settle_frozen() -> void:
+	if _frozen == _stopped:
 		return
-	if frozen:
+	if _frozen:
 		_game_paused = get_tree().paused
 		get_tree().paused = true
 	else:
 		get_tree().paused = _game_paused
-		_deadline = 0
-	_frozen = frozen
+	_stopped = _frozen
 
 # ---------- input ----------
 
@@ -299,9 +353,59 @@ func _button(name: String) -> int:
 	return MOUSE_BUTTON_LEFT
 
 ## One input from the pane or from an action: a key, an input action, the mouse.
+## Gives the game an input and writes it on the run's tape.
 func _inject(event: Dictionary) -> bool:
+	if not _apply(event):
+		return false
+	if _running:
+		_record(event, _tick, 1)
+	else:
+		_record(event, _tick + 1, 0)
+	return true
+
+func _record(event: Dictionary, tick: int, phase: int) -> void:
+	var code := str(event.get("code", "")).length() + str(event.get("value", "")).length()
+	if _tape.size() >= MAX_TAPE or _tape_code + code > MAX_TAPE_CODE:
+		_tape_full = true
+		return
+	_tape_code += code
+	_tape.append([tick, phase, event])
+
+## Writes on the tape something done now that is not input.
+func _record_now(event: Dictionary) -> void:
+	if _replaying:
+		return
+	if _running:
+		_record(event, _tick, 1)
+	else:
+		_record(event, _tick + 1, 0)
+
+func _apply(event: Dictionary) -> bool:
 	var down := bool(event.get("down", true))
 	match str(event.get("t", "")):
+		# What a replay gives back besides input. Never taken from the pane: Ghost sends these
+		# only as part of a tape this bridge wrote.
+		"set":
+			if not _replaying:
+				return false
+			_set_property(null, event)
+		"eval":
+			if not _replaying:
+				return false
+			_eval(null, str(event.get("code", "")))
+		"pad":
+			var pad := InputEventJoypadButton.new()
+			pad.device = 0
+			pad.button_index = clampi(int(event.get("button", 0)), 0, JOY_BUTTON_MAX - 1)
+			pad.pressed = down
+			pad.pressure = 1.0 if down else 0.0
+			Input.parse_input_event(pad)
+		"axis":
+			var stick := InputEventJoypadMotion.new()
+			stick.device = 0
+			stick.axis = clampi(int(event.get("axis", 0)), 0, JOY_AXIS_MAX - 1)
+			stick.axis_value = clampf(float(event.get("value", 0)), -1.0, 1.0)
+			Input.parse_input_event(stick)
 		"key":
 			var keycode := _keycode(str(event.get("code", "")))
 			if keycode == KEY_NONE:
@@ -422,6 +526,84 @@ func _release_held() -> void:
 		_press(name, false)
 	_held = []
 
+## A replay: a run that has not taken a step yet is given a tape's inputs at the steps they were
+## given, as fast as the game can go, and stands still at the end with pictures of its last
+## stretch. The game is in the state the first run was in, as far as it draws no numbers and
+## reads no clock of its own.
+func _start_replay(id, message: Dictionary) -> void:
+	if _tick > 1 or not _frozen:
+		_refuse(id, "A replay starts with a run that stands at its first step.")
+		return
+	var events: Array = []
+	for raw in message.get("events", []):
+		if raw is Array and raw.size() == 3 and raw[2] is Dictionary:
+			events.append([int(raw[0]), int(raw[1]), raw[2]])
+	var until := clampi(int(message.get("until", 1)), 1, 60 * 60 * 30)
+	var window := clampi(int(message.get("window", 900)), 1, until)
+	var shots := clampi(int(message.get("shots", 12)), 0, 12)
+	_job_or_refuse(id, {
+		"kind": "replay", "id": id, "events": events, "next": 0, "until": until,
+		"from": until - window, "shots": shots, "strip": [],
+		"every": maxi(1, int(ceil(float(window) / maxf(1.0, shots)))),
+		"max": int(message.get("max", 1568)),
+	})
+	if not _job.is_empty() and _job.get("id") == id:
+		_set_frozen(false)
+
+## Gives the game the tape's inputs that belong at `tick` and `phase`.
+func _replay_events(tick: int, phase: int) -> void:
+	var events: Array = _job["events"]
+	var next := int(_job["next"])
+	while next < events.size():
+		var entry: Array = events[next]
+		var at := int(entry[0])
+		if at > tick or (at == tick and int(entry[1]) > phase):
+			break
+		if at == tick and int(entry[1]) == phase:
+			_replaying = true
+			var took := _apply(entry[2])
+			_replaying = false
+			if took:
+				_record(entry[2], tick, phase)
+		next += 1
+	_job["next"] = next
+
+## Lets go of everything a tape left pressed, so a game that is played on is not stuck with it.
+func _release_tape() -> void:
+	var down := {}
+	for entry in _tape:
+		var event: Dictionary = entry[2]
+		var kind := str(event.get("t", ""))
+		var key := ""
+		if kind == "set" or kind == "eval":
+			continue
+		match kind:
+			"key":
+				key = "key:" + str(event.get("code", ""))
+			"action":
+				key = "action:" + str(event.get("name", ""))
+			"mouse":
+				key = "mouse:" + str(event.get("button", "left"))
+			"pad":
+				key = "pad:" + str(int(event.get("button", 0)))
+			"axis":
+				key = "axis:" + str(int(event.get("axis", 0)))
+		if key == "":
+			continue
+		var held := bool(event.get("down", true))
+		if kind == "axis":
+			held = absf(float(event.get("value", 0))) > 0.001
+		if held:
+			down[key] = event
+		else:
+			down.erase(key)
+	for key in down:
+		var release: Dictionary = (down[key] as Dictionary).duplicate()
+		release["down"] = false
+		if release.get("t") == "axis":
+			release["value"] = 0.0
+		_inject(release)
+
 ## Once a frame, before the game's own nodes run.
 func _advance_job() -> void:
 	match str(_job.get("kind")):
@@ -455,6 +637,10 @@ func _advance_job() -> void:
 					_held.append(name)
 			_job["left"] = int(_job["left"]) - 1
 			_job["done"] = int(_job["done"]) + 1
+		"replay":
+			_replay_events(_tick, 1)
+			if _tick >= int(_job["until"]):
+				_job["finishing"] = true
 		"wait":
 			var expression: Expression = _job["expression"]
 			var scene := get_tree().current_scene
@@ -493,6 +679,10 @@ func _picture(limit: int) -> Image:
 ## The pictures taken along an action, side by side in reading order, each small.
 func _strip(frames: Array) -> Image:
 	var cell: Image = frames[0]
+	for frame in frames:
+		# A window that changed size along the way: every cell takes the first one's.
+		if (frame as Image).get_size() != cell.get_size():
+			(frame as Image).resize(cell.get_width(), cell.get_height(), Image.INTERPOLATE_BILINEAR)
 	var columns := mini(frames.size(), 4)
 	var rows := int(ceil(float(frames.size()) / columns))
 	var gap := 4
@@ -507,12 +697,20 @@ func _strip(frames: Array) -> Image:
 				int(index / columns) * (cell.get_height() + gap)))
 	return strip
 
-## After every frame is drawn: pictures for the pane and for the action under way.
+## After every frame is drawn: pictures for the pane and for the action under way, and then the
+## game is stopped or started if Ghost asked for that during the frame.
 func _after_draw() -> void:
-	if not _greeted:
-		return
+	if _greeted:
+		_drawn()
+	_settle_frozen()
+
+func _drawn() -> void:
 	if not _job.is_empty():
 		_finish_job_frame()
+	if _running and _tick % RECENT_EVERY == 0:
+		_recent.append([_tick, _picture(320)])
+		if _recent.size() > RECENT_KEEP:
+			_recent.pop_front()
 	var due := _frame % (30 if _frozen and _job.is_empty() else _watch_every) == 0
 	if _watching and due and _sent - _acked < 2:
 		var image := _picture(_watch_max)
@@ -534,7 +732,8 @@ func _after_draw() -> void:
 			"fps": Performance.get_monitor(Performance.TIME_FPS),
 			"nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 			"scene": scene.scene_file_path if scene != null else "",
-			"paused_by_game": _game_paused if _frozen else get_tree().paused,
+			"paused_by_game": _game_paused if _stopped else get_tree().paused,
+			"tick": _tick, "joypads": Input.get_connected_joypads().size(),
 		})
 
 func _finish_job_frame() -> void:
@@ -546,8 +745,35 @@ func _finish_job_frame() -> void:
 			_reply(id, {"images": 1, "width": image.get_width(), "height": image.get_height(),
 				"frozen": _frozen})
 			_send_image(id, image, 0.9)
+		"replay":
+			if not _job.get("finishing", false):
+				var seen: Array = _job["strip"]
+				var since := _tick - int(_job["from"])
+				if _running and int(_job["shots"]) > 0 and since > 0 \
+						and since % int(_job["every"]) == 0 and seen.size() < 12:
+					seen.append(_picture(360))
+				# What was given while the game stood still before the next step goes in now,
+				# after this frame and before that step's physics.
+				_replay_events(_tick + 1, 0)
+				return
+			_set_frozen(true)
+			var last := _picture(int(_job["max"]))
+			var pictures: Array = _job["strip"]
+			var given := int(_job["next"])
+			_job = {}
+			_reply(id, {"images": 2 if pictures.size() > 1 else 1, "frames": _tick,
+				"game_ms": _tick * STEP_USEC / 1000.0, "inputs": given,
+				"strip": pictures.size() if pictures.size() > 1 else 0,
+				"width": last.get_width(), "height": last.get_height()})
+			if pictures.size() > 1:
+				_send_image(id, _strip(pictures), 0.8)
+			_send_image(id, last, 0.9)
+			_release_tape()
 		"act":
 			if not _job.get("finishing", false):
+				# Not before the game has thawed: the first picture is of its first step.
+				if not _running:
+					return
 				var done := int(_job["done"])
 				var strip: Array = _job["strip"]
 				if int(_job["shots"]) > 0 and done % int(_job["every"]) == 0 and strip.size() < 12:
@@ -629,6 +855,188 @@ func _where(node: Node) -> Dictionary:
 			var at := camera.unproject_position(position)
 			out["at"] = [snappedf(at.x, 0.1), snappedf(at.y, 0.1)]
 	return out
+
+## The last seconds of the run: its whole tape, and small pictures of the stretch asked for.
+func _reply_recent(id, message: Dictionary) -> void:
+	var seconds := clampf(float(message.get("seconds", 15)), 1.0, 15.0)
+	var from := _tick - int(seconds * 60.0)
+	var frames: Array = []
+	for entry in _recent:
+		if int(entry[0]) > from:
+			frames.append((entry[1] as Image).duplicate())
+	var chosen: Array = []
+	if frames.size() > 12:
+		for index in 12:
+			chosen.append(frames[int(round(index * (frames.size() - 1) / 11.0))])
+	else:
+		chosen = frames
+	# A run too young to have a picture in the ring still shows where it stands.
+	if chosen.is_empty():
+		chosen = [_picture(320)]
+	_reply(id, {"images": 1, "tick": _tick, "events": _tape, "full": _tape_full,
+		"pictures": chosen.size(), "seconds": minf(seconds, _tick / 60.0)})
+	_send_image(id, _strip(chosen), 0.8)
+
+func _box_of(points: Array) -> Array:
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	for point in points:
+		low = low.min(point)
+		high = high.max(point)
+	return [snappedf(low.x, 0.1), snappedf(low.y, 0.1),
+		snappedf(high.x - low.x, 0.1), snappedf(high.y - low.y, 0.1)]
+
+func _corners(transform: Transform2D, rect: Rect2) -> Array:
+	return _box_of([transform * rect.position, transform * Vector2(rect.end.x, rect.position.y),
+		transform * rect.end, transform * Vector2(rect.position.x, rect.end.y)])
+
+## The box a node covers in the picture, [x, y, width, height], or nothing when it has no
+## extent Ghost can tell (a plain Node2D, a node off screen, a node that is hidden).
+func _box(node: Node) -> Array:
+	if node is Control:
+		var control := node as Control
+		if not control.is_visible_in_tree() or control.size.x <= 0 or control.size.y <= 0:
+			return []
+		return _corners(control.get_global_transform_with_canvas(), Rect2(Vector2.ZERO, control.size))
+	if node is CanvasItem:
+		var item := node as CanvasItem
+		if not item.is_visible_in_tree():
+			return []
+		var rect := Rect2()
+		if node is Sprite2D:
+			if (node as Sprite2D).texture != null:
+				rect = (node as Sprite2D).get_rect()
+		elif node is AnimatedSprite2D:
+			var animated := node as AnimatedSprite2D
+			var frames := animated.sprite_frames
+			if frames != null and frames.has_animation(animated.animation) \
+					and frames.get_frame_count(animated.animation) > 0:
+				var texture := frames.get_frame_texture(animated.animation, animated.frame)
+				if texture != null:
+					var size := texture.get_size()
+					rect = Rect2(animated.offset - (size / 2.0 if animated.centered else Vector2.ZERO), size)
+		elif node is CollisionShape2D:
+			var shape := (node as CollisionShape2D).shape
+			if shape != null and shape.has_method("get_rect"):
+				rect = shape.call("get_rect")
+		elif node is Polygon2D:
+			var polygon := (node as Polygon2D).polygon
+			if polygon.size() >= 3:
+				var low := Vector2(INF, INF)
+				var high := Vector2(-INF, -INF)
+				for corner in polygon:
+					low = low.min(corner)
+					high = high.max(corner)
+				rect = Rect2(low + (node as Polygon2D).offset, high - low)
+		elif node.is_class("TileMapLayer"):
+			var used: Rect2i = node.call("get_used_rect")
+			var tiles = node.get("tile_set")
+			if tiles != null and used.size != Vector2i.ZERO:
+				var tile := Vector2(tiles.get("tile_size"))
+				rect = Rect2(Vector2(used.position) * tile, Vector2(used.size) * tile)
+		if rect.size.x <= 0 or rect.size.y <= 0:
+			return []
+		return _corners(item.get_global_transform_with_canvas(), rect)
+	if node is VisualInstance3D:
+		var visual := node as VisualInstance3D
+		var camera := get_viewport().get_camera_3d()
+		if camera == null or not visual.is_visible_in_tree():
+			return []
+		var bounds := visual.get_aabb()
+		if bounds.size == Vector3.ZERO:
+			return []
+		var points: Array = []
+		for index in 8:
+			var corner := visual.global_transform * bounds.get_endpoint(index)
+			if camera.is_position_behind(corner):
+				return []
+			points.append(camera.unproject_position(corner))
+		return _box_of(points)
+	return []
+
+func _find_at(node: Node, point: Vector2, state: Dictionary) -> void:
+	if node == self or int(state["seen"]) >= 5000:
+		return
+	state["seen"] = int(state["seen"]) + 1
+	var box := _box(node)
+	if box.size() == 4 and point.x >= box[0] and point.y >= box[1] \
+			and point.x <= box[0] + box[2] and point.y <= box[1] + box[3]:
+		var area := float(box[2]) * float(box[3])
+		# What fills most of the picture is the ground everything stands on: it is the answer
+		# only when nothing smaller is under the pointer.
+		var ground := area > float(state["screen"]) * 0.6
+		var best = state["ground"] if ground else state["best"]
+		if best == null or area <= float(best[1]):
+			state["ground" if ground else "best"] = [node, area, box]
+	for child in node.get_children():
+		_find_at(child, point, state)
+
+## The node under a point of the picture, for a person who points at what is wrong: what it is,
+## where it is defined, and the script that drives it (its own, or the nearest above it).
+func _pick(id, message: Dictionary) -> void:
+	var point := Vector2(float(message.get("x", 0)), float(message.get("y", 0)))
+	var size := get_viewport().get_visible_rect().size
+	var state := {"seen": 0, "screen": size.x * size.y, "best": null, "ground": null}
+	_find_at(get_tree().root, point, state)
+	var found = state["best"] if state["best"] != null else state["ground"]
+	if found == null:
+		_reply(id, {"found": false})
+		return
+	var node: Node = found[0]
+	var result := {"found": true, "path": str(node.get_path()), "name": str(node.name),
+		"class": node.get_class(), "box": found[2]}
+	var text := _text_of(node)
+	if text != "":
+		result["text"] = text
+	var holder := node.owner if node.owner != null else node
+	if holder.scene_file_path != "":
+		result["scene"] = holder.scene_file_path
+		result["in_scene"] = str(holder.get_path_to(node))
+	var driven := node
+	while driven != null:
+		var script := driven.get_script() as Script
+		if script != null and script.resource_path != "":
+			result["script"] = script.resource_path
+			result["script_on"] = str(driven.get_path())
+			break
+		driven = driven.get_parent()
+	_reply(id, result)
+
+## The values a person may turn while the game runs: what a node's script exports as a number
+## or a switch, with the range its author gave.
+func _tune(id, message: Dictionary) -> void:
+	var node := _node_of(message)
+	if node == null:
+		_refuse(id, "No such node now.")
+		return
+	var script := node.get_script() as Script
+	var values: Array = []
+	for property in node.get_property_list():
+		var usage := int(property["usage"])
+		if not (usage & PROPERTY_USAGE_SCRIPT_VARIABLE and usage & PROPERTY_USAGE_EDITOR):
+			continue
+		var type := int(property["type"])
+		if type != TYPE_FLOAT and type != TYPE_INT and type != TYPE_BOOL:
+			continue
+		var name := str(property["name"])
+		var entry := {"name": name, "value": node.get(name),
+			"type": "bool" if type == TYPE_BOOL else ("int" if type == TYPE_INT else "float")}
+		if script != null:
+			var first = script.get_property_default_value(name)
+			if first != null:
+				entry["default"] = first
+		if int(property["hint"]) == PROPERTY_HINT_RANGE:
+			var parts := str(property["hint_string"]).split(",")
+			if parts.size() >= 2 and parts[0].is_valid_float() and parts[1].is_valid_float():
+				entry["min"] = float(parts[0])
+				entry["max"] = float(parts[1])
+				if parts.size() >= 3 and parts[2].is_valid_float():
+					entry["step"] = float(parts[2])
+		values.append(entry)
+		if values.size() >= 24:
+			break
+	_reply(id, {"path": str(node.get_path()), "name": str(node.name), "class": node.get_class(),
+		"script": script.resource_path if script != null else "", "values": values})
 
 func _text_of(node: Node) -> String:
 	for property in ["text", "placeholder_text"]:
@@ -748,11 +1156,14 @@ func _set_property(id, message: Dictionary) -> void:
 	if value == null and text.strip_edges() != "null":
 		value = text
 	node.set(property, value)
+	# By its path: the ref it may have been named by belongs to an outline that is gone later.
+	_record_now({"t": "set", "node": str(node.get_path()), "property": property, "value": text})
 	_reply(id, {"value": _shown(node.get(property))})
 
 ## Runs GDScript inside the game: one expression, or the body of a function that may `return`.
 ## `tree`, `scene` and `root` are there to use.
 func _eval(id, code: String) -> void:
+	_record_now({"t": "eval", "code": code})
 	var scene := get_tree().current_scene
 	var arguments := [get_tree(), scene, get_tree().root]
 	if not code.contains("\n"):

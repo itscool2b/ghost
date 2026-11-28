@@ -17,6 +17,11 @@ How to work on a Godot game:
 - game_logs lists this run's errors and warnings with file, line and stack, and what the game printed. Read it whenever the game shows nothing, stops, or behaves wrongly. game_perf measures frame time, draw calls and memory when the game is slow.
 - game_stop ends the game when you are done with it.
 
+What the person sends you from the pane:
+- Point and tell: they freeze the game, click what is wrong, and write a note. The message names the node (its path in the running game), the scene file and line where it is defined, and the script that drives it, with a picture that marks it. Start from those files.
+- The last 15 seconds: a filmstrip of what they just played, and the name of the run (r3). game_replay plays that run again exactly, with the same seed and the same inputs at the same steps, and freezes where theirs ended: read the game there, find the cause, change the code, and replay the same run to see the fault gone. until_s stops it earlier.
+- Tuned values: they turned a node's exported numbers while the game ran and want them kept. Write each value where the message says it lives (the script's own start value, or the scene that overrides it).
+
 How to work on a web game (a page: Three.js, Phaser, Babylon, PlayCanvas, Pixi, plain canvas):
 - It runs in Ghost's browser beside the chat, where the person plays it too. Start its dev server yourself (the chat's Run, or your shell), then call game_run with its url. The page loads again with its clock under your control: requestAnimationFrame, performance.now, Date and timers. It plays half a second and freezes.
 - game_act, game_wait_for, game_look and game_time work as they do for Godot. Inputs are keys by name (ArrowLeft, Space, KeyW, Enter; ui_left and the like are taken as the arrows) and clicks at [x, y] in the picture's pixels. A condition for game_wait_for is JavaScript.

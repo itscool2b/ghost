@@ -41,6 +41,10 @@ export function notePosition(
  */
 export function AnnotationComposer({
   annotation,
+  subject: givenSubject,
+  placeholder,
+  noteOptional = false,
+  testId = "browser-note",
   anchor,
   page,
   controls,
@@ -53,7 +57,14 @@ export function AnnotationComposer({
   onCancel,
   onRemove,
 }: {
-  readonly annotation: Annotation;
+  /** What was picked on a page. Without one, `subject` says what the note is about. */
+  readonly annotation?: Annotation;
+  /** What the note is about, for a note that is not about a page's elements (the game's). */
+  readonly subject?: string;
+  readonly placeholder?: string;
+  /** The note may go with no words of the person's: what it carries says enough. */
+  readonly noteOptional?: boolean;
+  readonly testId?: string;
   /** What it points at, in the page area's CSS pixels. */
   readonly anchor: { x: number; y: number; width: number; height: number };
   readonly page: { width: number; height: number };
@@ -68,7 +79,7 @@ export function AnnotationComposer({
   readonly onAdd: (note: string) => void;
   readonly onCancel: () => void;
   /** Takes one element off a note about several. */
-  readonly onRemove: (index: number) => void;
+  readonly onRemove?: (index: number) => void;
 }) {
   const [note, setNote] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
@@ -87,21 +98,26 @@ export function AnnotationComposer({
   }, [note]);
 
   const at = notePosition(anchor, page, size);
-  const many = annotation.elements.length > 1;
-  const area = annotation.pick.mode === "area";
-  const subject = area
-    ? `The area marked${annotation.elements[0] ? ` around ${elementLabel(annotation.elements[0])}` : ""}`
-    : many
-      ? `${annotation.elements.length} elements`
-      : elementLabel(annotation.elements[0] as Annotation["elements"][number]);
-  const empty = !note.trim();
+  const elements = annotation?.elements ?? [];
+  const many = elements.length > 1;
+  const area = annotation?.pick.mode === "area";
+  const subject =
+    givenSubject ??
+    (area
+      ? `The area marked${elements[0] ? ` around ${elementLabel(elements[0])}` : ""}`
+      : many
+        ? `${elements.length} elements`
+        : elements[0]
+          ? elementLabel(elements[0])
+          : "");
+  const empty = !noteOptional && !note.trim();
   return (
     <div
       ref={box}
       className="browser-note"
       role="dialog"
       aria-label="Annotation"
-      data-testid="browser-note"
+      data-testid={testId}
       style={{ left: at.left, top: at.top } as CSSProperties}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.defaultPrevented) {
@@ -127,7 +143,7 @@ export function AnnotationComposer({
       </div>
       {many ? (
         <ol className="browser-note-elements">
-          {annotation.elements.map((element, index) => (
+          {elements.map((element, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the same element may be picked twice; its place tells them apart
             <li key={`${element.selector}-${index}`}>
               <span className="browser-note-number" aria-hidden="true">
@@ -140,7 +156,7 @@ export function AnnotationComposer({
                 type="button"
                 className="g-button g-button-ghost g-button-icon g-button-24"
                 aria-label={`Take ${elementLabel(element)} off the note`}
-                onClick={() => onRemove(index)}
+                onClick={() => onRemove?.(index)}
               >
                 <X size={12} />
               </button>
@@ -152,7 +168,9 @@ export function AnnotationComposer({
         ref={field}
         className="browser-note-field"
         aria-label={`Note to ${agentName}`}
-        placeholder={area ? "What should change here?" : "What should change about this?"}
+        placeholder={
+          placeholder ?? (area ? "What should change here?" : "What should change about this?")
+        }
         value={note}
         disabled={sending}
         onChange={(event) => setNote(event.target.value)}

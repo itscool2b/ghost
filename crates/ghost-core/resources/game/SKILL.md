@@ -14,6 +14,7 @@ Use it without being asked: whenever you make or change a game, run it and play 
 5. `game_tree` reads the running scene (refs like `g12`, classes, positions on screen, text); `game_inspect` one node's values; `game_look` a picture. `game_set` and `game_eval` change the running game for this run only, to try values and set tests up.
 6. `game_logs` lists errors and warnings with file, line and stack, and what the game printed. `game_perf` measures frame time, draw calls and memory.
 7. `game_time` unfreezes the game for the person to play live; `game_stop` ends it.
+8. `game_replay` plays again a run the person kept for you from the pane ("Send the last 15 seconds"): same seed, same inputs at the same steps, frozen where theirs ended.
 
 A web game (Three.js, Phaser and the like) runs in Ghost's browser beside the chat instead: start its dev server, call `game_run` with its `url`, and the same frozen clock, `game_act`, `game_wait_for`, `game_look` and `game_time` work on the page. `game_eval` and conditions are JavaScript there, `game_tree` lists a Three.js scene (a Phaser game when it keeps itself on `globalThis.__GHOST_GAME__`), and `game_logs` reads the page's console.
 

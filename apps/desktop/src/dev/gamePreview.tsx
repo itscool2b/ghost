@@ -11,7 +11,7 @@
  */
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { GameStatus } from "../bindings";
+import type { ComposerAttachment, ComposerInput, GameStatus } from "../bindings";
 import { ChatView } from "../components/chat/ChatView";
 import {
   attachResult,
@@ -238,8 +238,44 @@ function Preview() {
               autonomy_levels: ["full_auto"],
             },
           }),
+        // A message with no picture goes this way.
+        send: async (_chat, text) => {
+          game.sent.push({ text, attachments: [] });
+          return { prompt_id: `p${game.sent.length}`, queued: false, position: 0 } as never;
+        },
       }),
     );
+    // A message box that keeps what the pane hands it, for the checks to read.
+    const files: ComposerAttachment[] = [];
+    let draft: ComposerInput = { text: "", attachments: [], mentions: [] };
+    transport.composer = {
+      ...transport.composer,
+      draft: async () => ({
+        input: draft,
+        files: files.filter((file) => draft.attachments.includes(file.id)),
+      }),
+      saveDraft: async (_id, input) => {
+        draft = input;
+      },
+      paste: async (_id, bytes, name) => {
+        const png =
+          bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+        game.pastes.push({ name: name ?? null, bytes: bytes.length, png });
+        const item: ComposerAttachment = {
+          id: `paste-${game.pastes.length}`,
+          name: name ?? "Pasted image.png",
+          mime: "image/png",
+          bytes: bytes.length,
+          image: true,
+        };
+        files.push(item);
+        return item;
+      },
+      send: async (_id, input) => {
+        game.sent.push({ text: input.text, attachments: [...input.attachments] });
+        return { prompt_id: `p${game.sent.length}`, queued: false, position: 0 } as never;
+      },
+    } as typeof transport.composer;
     gamePanels.set(CHAT, params.get("closed") === null);
     return { chat, transport: Object.assign(transport, { game: new GameStore(game) }) };
   });

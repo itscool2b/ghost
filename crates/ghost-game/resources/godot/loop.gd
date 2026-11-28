@@ -5,6 +5,12 @@
 extends SceneTree
 
 func _initialize() -> void:
+	# Ghost names the run's seed, so the same run can be played again with the same numbers. It
+	# reaches randi() and its like; a game that calls randomize() itself, or makes a
+	# RandomNumberGenerator of its own, draws its own.
+	var wanted := OS.get_environment("GHOST_GAME_SEED")
+	if wanted.is_valid_int():
+		seed(int(wanted))
 	var folder := (get_script() as Script).resource_path.get_base_dir()
 	var bridge_script: Script = load(folder.path_join("bridge.gd"))
 	if bridge_script == null:

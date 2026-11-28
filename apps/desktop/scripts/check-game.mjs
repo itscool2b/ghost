@@ -453,6 +453,280 @@ export async function checkGame(browser, url, out, engine) {
         `${label}: the button says the agent plays`,
       );
 
+      // Telling the agent. Point: the game freezes, what is under the pointer is outlined and
+      // named, a click opens the note, and the note goes with the node, its scene, its script
+      // and a picture that marks it.
+      await open("running");
+      const live = panel.getByTestId("game-canvas");
+      await live.waitFor();
+      await page.evaluate((chat) => window.gameFixture.frame(chat, 960, 540, 300), CHAT);
+      await until(
+        async () => (await live.getAttribute("width")) === "960",
+        `${label}: a frame to point at`,
+      );
+      const sent = () => page.evaluate(() => [...window.gameFixture.sent]);
+      const pastes = () => page.evaluate(() => [...window.gameFixture.pastes]);
+      // A place in the picture's own 960 by 540, as a place on the page.
+      const place = async (x, y) => {
+        const box = await live.boundingBox();
+        return { x: box.x + (x / 960) * box.width, y: box.y + (y / 540) * box.height };
+      };
+      const point = panel.getByTestId("game-point");
+      assert.equal(await point.getAttribute("aria-pressed"), "false");
+      await point.click();
+      await called(page, "time:true:same", label);
+      assert.equal(await point.getAttribute("aria-pressed"), "true");
+      await panel.getByTestId("game-pointing").waitFor();
+      // Over the player: outlined, with its name. Nothing goes to the game while pointing.
+      const inputsBefore = (await inputs(page)).length;
+      const player = await place(320, 430);
+      await page.mouse.move(player.x, player.y);
+      const hover = panel.getByTestId("game-pick-hover");
+      await hover.waitFor();
+      assert.equal(await hover.textContent(), "Sprite2D");
+      {
+        const [frame, box] = [await live.boundingBox(), await hover.boundingBox()];
+        // The player was drawn at 300, 400, 40 by 60 of 960 by 540.
+        assert.ok(
+          Math.abs(box.x - (frame.x + (300 / 960) * frame.width)) < 2 &&
+            Math.abs(box.width - (40 / 960) * frame.width) < 2,
+          `${label}: the outline is on the player: ${JSON.stringify(box)}`,
+        );
+      }
+      await axe(page, `${label} pointing`);
+      await shot("pointing");
+      // The sky: nothing to outline, and a click says so.
+      const sky = await place(600, 120);
+      await page.mouse.move(sky.x, sky.y);
+      await until(async () => (await hover.count()) === 0, `${label}: nothing outlined in the sky`);
+      await page.mouse.click(sky.x, sky.y);
+      await until(
+        async () =>
+          /Nothing is drawn there/.test(
+            (await panel
+              .getByTestId("game-notice")
+              .textContent()
+              .catch(() => "")) ?? "",
+          ),
+        `${label}: a click on nothing says so`,
+      );
+      assert.equal(await page.getByTestId("game-note").count(), 0);
+      // The player: the note opens beside it.
+      await page.mouse.click(player.x, player.y);
+      const note = page.getByTestId("game-note");
+      await note.waitFor();
+      await panel.getByTestId("game-pick-marked").waitFor();
+      assert.match(await note.textContent(), /^Sprite2D/);
+      assert.equal(
+        (await inputs(page)).length,
+        inputsBefore,
+        `${label}: pointing sends the game nothing`,
+      );
+      const send = note.getByRole("button", { name: /^Send to / });
+      assert.equal(await send.isDisabled(), true, `${label}: a pointed note needs words`);
+      await axe(page, `${label} point note`);
+      await shot("point-note");
+      await note.getByRole("textbox").fill("It sinks into the floor when it lands");
+      await send.click();
+      await until(async () => (await sent()).length === 1, `${label}: the note is sent`);
+      {
+        const [message] = await sent();
+        assert.match(
+          message.text,
+          /^It sinks into the floor when it lands\n\nPointed at in the game \(Moon Hop\)/,
+        );
+        assert.match(message.text, /- Sprite2D at \/root\/Main\/Player\/Sprite2D/);
+        assert.match(message.text, /Defined in res:\/\/player\.tscn:9 as Sprite2D/);
+        assert.match(message.text, /Script: res:\/\/player\.gd \(on \/root\/Main\/Player\)/);
+        assert.match(message.text, /48×72 at \(360, 480\) in a 1152×648 picture/);
+        assert.match(message.text, /The attached image shows it outlined/);
+        assert.equal(message.attachments.length, 1);
+        const [picture] = await pastes();
+        assert.ok(picture.png && picture.bytes > 500, `${label}: a PNG goes with it`);
+      }
+      // Sent: the note is gone, the pointer is the game's again, and the game runs as before.
+      await until(async () => (await note.count()) === 0, `${label}: the note closes`);
+      assert.equal(await point.getAttribute("aria-pressed"), "false");
+      await called(page, "time:false:same", label);
+      // Esc gives the pointer back without sending anything.
+      await point.click();
+      await panel.getByTestId("game-pointing").waitFor();
+      await live.focus();
+      await page.keyboard.press("Escape");
+      await until(
+        async () => (await point.getAttribute("aria-pressed")) === "false",
+        `${label}: Esc ends pointing`,
+      );
+      assert.equal((await sent()).length, 1);
+
+      // The last 15 seconds: pictures of what was just played and the run's name, with or
+      // without words.
+      await panel.getByTestId("game-recent").click();
+      await called(page, "recent:15", label);
+      await note.waitFor();
+      assert.match(await note.textContent(), /The last 15 seconds of play/);
+      assert.equal(
+        await note.getByRole("button", { name: /^Send to / }).isDisabled(),
+        false,
+        `${label}: the last seconds may go without words`,
+      );
+      await axe(page, `${label} recent note`);
+      await shot("recent-note");
+      await note.getByRole("textbox").fill("The jump did nothing here");
+      await note.getByRole("button", { name: /^Send to / }).click();
+      await until(async () => (await sent()).length === 2, `${label}: the last seconds are sent`);
+      {
+        const message = (await sent())[1];
+        assert.match(
+          message.text,
+          /^The jump did nothing here\n\nThe last 15 seconds of my play in Moon Hop are in the attached filmstrip: 12 pictures/,
+        );
+        assert.match(message.text, /The run is 48\.5 seconds long\./);
+        assert.match(
+          message.text,
+          /game_replay and replay "r1": the same seed and the same 212 inputs/,
+        );
+        assert.equal(message.attachments.length, 1);
+        assert.ok((await pastes())[1].png, `${label}: the filmstrip goes as a PNG`);
+      }
+      // A run that cannot be played again says why instead of naming a replay.
+      await page.evaluate(() => {
+        window.gameFixture.unrepeatable =
+          "This run was given more input than Ghost keeps, so it cannot be played again. The pictures are what it looked like.";
+      });
+      await panel.getByTestId("game-recent").click();
+      await note.waitFor();
+      await note.getByRole("button", { name: /^Send to / }).click();
+      await until(async () => (await sent()).length === 3, `${label}: sent without a replay`);
+      {
+        const message = (await sent())[2];
+        assert.match(message.text, /cannot be played again/);
+        assert.doesNotMatch(message.text, /game_replay/);
+      }
+
+      // Tune: the values the scene's script exports, turned while the game runs, then kept.
+      const tune = panel.getByTestId("game-tune");
+      await tune.click();
+      const sheet = panel.getByTestId("game-tune-sheet");
+      await sheet.waitFor();
+      await called(page, "tunables:.", label);
+      assert.equal(await tune.getAttribute("aria-pressed"), "true");
+      await until(
+        async () => (await sheet.getByTestId("game-tunable").count()) === 4,
+        `${label}: four values`,
+      );
+      assert.match(await sheet.textContent(), /Tune Main/);
+      const keep = sheet.getByTestId("game-tune-keep");
+      assert.equal(await keep.isDisabled(), true, `${label}: nothing to keep yet`);
+      // A range its author gave, and one made from the value itself.
+      const jump = sheet.getByRole("slider", { name: "jump_height" });
+      assert.deepEqual(
+        [
+          await jump.getAttribute("min"),
+          await jump.getAttribute("max"),
+          await jump.getAttribute("step"),
+        ],
+        ["0", "320", "4"],
+      );
+      const speed = sheet.getByRole("slider", { name: "speed" });
+      assert.deepEqual(
+        [await speed.getAttribute("min"), await speed.getAttribute("max")],
+        ["0", "400"],
+      );
+      await axe(page, `${label} tune`);
+      await shot("tune");
+      await jump.focus();
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("ArrowRight");
+      await until(
+        async () => (await calls(page)).includes("set:/root/Main:jump_height=104"),
+        `${label}: the game is told the turned value`,
+      );
+      await sheet.getByRole("switch", { name: "double_jump" }).check();
+      await called(page, "set:/root/Main:double_jump=1", label);
+      assert.equal(await keep.isDisabled(), false);
+      await keep.click();
+      await until(async () => (await sent()).length === 4, `${label}: the values are handed over`);
+      {
+        const message = (await sent())[3];
+        assert.match(message.text, /^Keep these values I tuned while Moon Hop ran\./);
+        assert.match(message.text, /On Main \(Node2D\) at \/root\/Main, script res:\/\/main\.gd:/);
+        assert.match(message.text, /- jump_height = 104 \(was 96\)/);
+        assert.match(message.text, /- double_jump = true \(was false\)/);
+        assert.doesNotMatch(message.text, /speed/);
+        assert.equal(message.attachments.length, 0);
+      }
+      await until(async () => await keep.isDisabled(), `${label}: kept values are the new start`);
+      // Reset goes back to what was kept.
+      await jump.focus();
+      await page.keyboard.press("ArrowLeft");
+      await called(page, "set:/root/Main:jump_height=100", label);
+      await sheet.getByTestId("game-tune-reset").click();
+      await called(page, "set:/root/Main:jump_height=104", label);
+      // Something else, by pointing at it: a node whose script exports nothing says so.
+      await sheet.getByTestId("game-tune-point").click();
+      await panel.getByTestId("game-pointing").waitFor();
+      assert.equal(await sheet.count(), 0, `${label}: the sheet is out of the way while pointing`);
+      const again = await place(320, 430);
+      await page.mouse.click(again.x, again.y);
+      await called(page, "tunables:/root/Main/Player", label);
+      await sheet.getByTestId("game-tune-none").waitFor();
+      assert.match(await sheet.textContent(), /Tune Player/);
+      await tune.click();
+      await until(async () => (await sheet.count()) === 0, `${label}: the sheet closes`);
+
+      // A controller: its buttons and sticks go to the game in Godot's numbers while the
+      // picture has the keyboard, and are let go when it loses it.
+      await page.evaluate(() => {
+        const state = {
+          buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+          axes: [0, 0, 0, 0],
+        };
+        window.fakePad = state;
+        navigator.getGamepads = () => [{ connected: true, mapping: "standard", ...state }];
+        window.dispatchEvent(new Event("gamepadconnected"));
+      });
+      await panel.getByTestId("game-pad").waitFor();
+      await live.click({ position: { x: 5, y: 5 } });
+      const padAt = (await inputs(page)).length;
+      await page.evaluate(() => {
+        window.fakePad.buttons[0] = { pressed: true, value: 1 };
+        window.fakePad.buttons[4] = { pressed: true, value: 1 };
+        window.fakePad.buttons[7] = { pressed: true, value: 0.5 };
+        window.fakePad.axes[0] = -0.71;
+        window.fakePad.axes[1] = 0.05;
+      });
+      const padInputs = async () =>
+        (await inputs(page))
+          .slice(padAt)
+          .filter((event) => event.t === "pad" || event.t === "axis");
+      await until(async () => (await padInputs()).length >= 4, `${label}: the controller is heard`);
+      assert.deepEqual(
+        (await padInputs()).map((event) =>
+          event.t === "pad"
+            ? `pad ${event.button} ${event.down}`
+            : `axis ${event.axis} ${event.value}`,
+        ),
+        ["pad 0 true", "pad 9 true", "axis 0 -0.7", "axis 5 0.5"],
+        `${label}: buttons in Godot's numbers, a stick in twentieths past its dead zone, a trigger as an axis`,
+      );
+      await page.getByTestId("chat-game").focus();
+      await until(
+        async () => (await padInputs()).length >= 8,
+        `${label}: what the controller held is let go`,
+      );
+      assert.deepEqual(
+        (await padInputs())
+          .slice(4)
+          .map((event) =>
+            event.t === "pad"
+              ? `pad ${event.button} ${event.down}`
+              : `axis ${event.axis} ${event.value}`,
+          )
+          .sort(),
+        ["axis 0 0", "axis 5 0", "pad 0 false", "pad 9 false"],
+      );
+
       // A narrow window: the pane covers the chat's work area instead of sitting beside it.
       await open("ready");
       await page.setViewportSize({ width: 900, height: 800 });
@@ -478,8 +752,8 @@ export async function checkGame(browser, url, out, engine) {
       assert.equal(await settings.getByRole("switch", { name: "Game" }).isChecked(), true);
       assert.equal(
         await settings.locator(".plugins-universal-tools li").count(),
-        14,
-        `${label}: fourteen tools`,
+        15,
+        `${label}: fifteen tools`,
       );
       assert.match(await settings.textContent(), /only in a chat whose folder holds a game/);
       assert.match(await settings.textContent(), /runs code inside your game/);

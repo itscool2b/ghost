@@ -126,6 +126,9 @@ pub struct ChatGame {
     /// The chat's agent has the game tools in the session that runs now. Without them the pane
     /// offers to restart the session with them.
     pub tools: bool,
+    /// Controllers the game itself reads on this computer. When it reads one, the pane sends it
+    /// none of its own.
+    pub joypads: u32,
 }
 
 /// A run's errors and what it printed, for the pane's log.
@@ -175,6 +178,16 @@ pub enum GameInput {
         y: f32,
         dy: f32,
     },
+    /// A controller's button, by Godot's number for it (0 is the bottom face button).
+    Pad {
+        button: u8,
+        down: bool,
+    },
+    /// A controller's stick or trigger: Godot's axis number and where it stands, -1 to 1.
+    Axis {
+        axis: u8,
+        value: f32,
+    },
 }
 
 impl GameInput {
@@ -193,8 +206,135 @@ impl GameInput {
             }
             GameInput::Move { x, y, dx, dy } => finite(&[*x, *y, *dx, *dy]),
             GameInput::Wheel { x, y, dy } => finite(&[*x, *y, *dy]),
+            GameInput::Pad { button, .. } => *button < 32,
+            GameInput::Axis { axis, value } => {
+                *axis < 8 && value.is_finite() && (-1.0..=1.0).contains(value)
+            }
         }
     }
+}
+
+/// What is under a point of the game's picture, for a person who points at what is wrong.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct GamePicked {
+    /// The node's path in the running game ("/root/Main/Player/Sprite2D").
+    pub path: String,
+    pub name: String,
+    pub class: String,
+    /// What it says, when it shows text.
+    pub text: String,
+    /// The scene file it is defined in ("res://player.tscn"), its path inside that scene, and
+    /// the line of the file where it begins.
+    pub scene: String,
+    pub in_scene: String,
+    pub scene_line: Option<u32>,
+    /// The script that drives it, its own or the nearest above it, and the node that script
+    /// is on.
+    pub script: String,
+    pub script_on: String,
+    /// Where it is in the picture, in the game's own pixels: x, y, width, height.
+    pub area: [f32; 4],
+}
+
+/// One value a person may turn while the game runs.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct GameTunable {
+    pub name: String,
+    /// "float", "int" or "bool" (a switch: 0 or 1).
+    pub kind: String,
+    pub value: f64,
+    /// What the script starts it at, when it says.
+    pub initial: Option<f64>,
+    /// The range and step its author gave, when they gave one.
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub step: Option<f64>,
+}
+
+/// A node's tunable values.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct GameTunables {
+    pub path: String,
+    pub name: String,
+    pub class: String,
+    pub script: String,
+    pub values: Vec<GameTunable>,
+}
+
+/// The last seconds of a run, as the person just played them.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct GameRecent {
+    /// The name an agent gives `game_replay` to play the run again ("r3"). `None` when the
+    /// run cannot be played again; `unrepeatable` says why.
+    pub replay: Option<String>,
+    pub unrepeatable: Option<String>,
+    /// Small pictures of the stretch, left to right and top to bottom (JPEG).
+    pub picture: Vec<u8>,
+    pub pictures: u32,
+    /// How long the stretch is, and how long the whole run is, in seconds of game time.
+    pub seconds: f32,
+    pub run_seconds: f32,
+    /// How many inputs the run was given from its start.
+    pub inputs: u32,
+}
+
+/// A run kept to be played again: what it began from and every input it was given.
+#[derive(Debug, Clone)]
+struct Replay {
+    id: String,
+    seed: u32,
+    scene: Option<String>,
+    events: Value,
+    ticks: u64,
+}
+
+/// How one start begins: which of the chat's starts it is, the window that owns the game's,
+/// and the seed of the run it repeats, when it repeats one.
+struct Begin {
+    generation: u64,
+    owner_window: Option<i64>,
+    replayed: Option<u32>,
+}
+
+/// How many runs a chat keeps to be played again.
+const REPLAYS_KEPT: usize = 8;
+
+/// A seed for a run's random numbers.
+fn fresh_seed() -> u32 {
+    // The low bits of a version 7 id are random.
+    (uuid::Uuid::now_v7().as_u128() & 0xffff_ffff) as u32
+}
+
+/// The line of a scene file where a node begins: `[node name="Sprite" parent="Player"]`.
+fn scene_line(text: &str, in_scene: &str) -> Option<u32> {
+    let (parent, name) = match in_scene.rsplit_once('/') {
+        Some((parent, name)) => (Some(parent), name),
+        None => (None, in_scene),
+    };
+    let named = |line: &str, key: &str, value: &str| line.contains(&format!("{key}=\"{value}\""));
+    let mut root = None;
+    for (index, line) in text.lines().enumerate() {
+        if !line.starts_with("[node ") {
+            continue;
+        }
+        let number = u32::try_from(index + 1).ok()?;
+        let top = !line.contains(" parent=\"");
+        if top && root.is_none() {
+            root = Some(number);
+        }
+        match (in_scene, parent) {
+            // The scene's own root is its first node, whatever the running game calls it.
+            (".", _) if top => return Some(number),
+            (_, None) if named(line, "name", name) && named(line, "parent", ".") => {
+                return Some(number);
+            }
+            (_, Some(parent)) if named(line, "name", name) && named(line, "parent", parent) => {
+                return Some(number);
+            }
+            _ => {}
+        }
+    }
+    None.or(root.filter(|_| in_scene == "."))
 }
 
 /// What a tool answers: words, and the pictures that go with them (JPEG).
@@ -240,6 +380,11 @@ struct Run {
     speed: f32,
     fps: f32,
     scene: String,
+    /// What the run's random numbers began from, and the scene it was asked to run.
+    seed: u32,
+    asked_scene: Option<String>,
+    /// Controllers the game itself sees on this computer.
+    joypads: u32,
     /// Copies the bridge's frames to the chat's viewers; ends with the run.
     forward: tokio::task::JoinHandle<()>,
 }
@@ -268,6 +413,9 @@ struct Chat {
     frames: watch::Sender<Option<Arc<Frame>>>,
     /// Counts this chat's starts, so what an earlier one left behind cannot touch a later one.
     generation: u64,
+    /// Runs kept to be played again, oldest first, and how many were ever kept.
+    replays: Vec<Replay>,
+    replay_seq: u32,
 }
 
 impl Chat {
@@ -287,6 +435,8 @@ impl Chat {
             windowed: false,
             frames: watch::channel(None).0,
             generation: 0,
+            replays: Vec::new(),
+            replay_seq: 0,
         }
     }
 }
@@ -675,6 +825,18 @@ impl Manager {
         folder: &Path,
         scene: Option<&str>,
     ) -> Result<(), Error> {
+        self.run_from(chat_id, folder, scene, None).await
+    }
+
+    /// [`Manager::run`], and with `replayed` a run that begins from that seed and stands still
+    /// before its first step, to be given a replay.
+    async fn run_from(
+        &self,
+        chat_id: &str,
+        folder: &Path,
+        scene: Option<&str>,
+        replayed: Option<u32>,
+    ) -> Result<(), Error> {
         if !self.enabled() {
             return Err(Error::Refused(TURNED_OFF.into()));
         }
@@ -747,7 +909,17 @@ impl Manager {
         };
         self.changed();
         let result = self
-            .start(chat_id, folder, scene, &program, generation, owner_window)
+            .start(
+                chat_id,
+                folder,
+                scene,
+                &program,
+                Begin {
+                    generation,
+                    owner_window,
+                    replayed,
+                },
+            )
             .await;
         // A start that was overtaken (the chat stopped it, or started again) leaves nothing: its
         // game is let go, which ends it.
@@ -783,9 +955,14 @@ impl Manager {
         folder: &Path,
         scene: Option<&str>,
         program: &Path,
-        generation: u64,
-        owner_window: Option<i64>,
+        begin: Begin,
     ) -> Result<Run, Error> {
+        let Begin {
+            generation,
+            owner_window,
+            replayed,
+        } = begin;
+        let seed = replayed.unwrap_or_else(fresh_seed);
         let root = self.inner.config.root.clone();
         let main_loop = tokio::task::spawn_blocking(move || run::write_scripts(&root))
             .await
@@ -802,6 +979,8 @@ impl Manager {
                 token: listening.token(),
                 scene,
                 owner_window,
+                seed,
+                held: replayed.is_some(),
             },
             move |line| {
                 let mut state = printer.state();
@@ -850,10 +1029,13 @@ impl Manager {
         });
         Ok(Run {
             scene: scene.unwrap_or_default().to_owned(),
+            seed,
+            asked_scene: scene.map(str::to_owned),
+            joypads: hello.joypads,
             bridge,
             process,
             hello,
-            frozen: false,
+            frozen: replayed.is_some(),
             speed: 1.0,
             fps: 0.0,
             forward,
@@ -899,13 +1081,16 @@ impl Manager {
                         .chars()
                         .take(300)
                         .collect();
+                    let joypads = stats["joypads"].as_u64().unwrap_or(0).min(16) as u32;
                     let same = (run.fps - fps).abs() < 0.5
                         && run.frozen == frozen
                         && (run.speed - speed).abs() < 0.01
-                        && run.scene == scene;
+                        && run.scene == scene
+                        && run.joypads == joypads;
                     if same {
                         return;
                     }
+                    run.joypads = joypads;
                     run.fps = fps;
                     run.frozen = frozen;
                     run.speed = speed;
@@ -1186,6 +1371,309 @@ impl Manager {
             .ok_or_else(|| Error::Bridge("The game sent no picture.".into()))
     }
 
+    /// What is under a point of the game's picture, in the game's own pixels: the person points
+    /// at what is wrong. `None` when nothing is there.
+    pub async fn pick(
+        &self,
+        chat_id: &str,
+        folder: &Path,
+        x: f32,
+        y: f32,
+    ) -> Result<Option<GamePicked>, Error> {
+        if !(x.is_finite() && y.is_finite()) {
+            return Err(Error::Refused("That is not a place in the picture.".into()));
+        }
+        let reply = self
+            .ask(
+                chat_id,
+                "pick",
+                json!({ "x": x, "y": y }),
+                Duration::from_secs(5),
+            )
+            .await?;
+        let value = &reply.value;
+        if value["found"].as_bool() != Some(true) {
+            return Ok(None);
+        }
+        // What the game says of itself is data: cut to size, and shown as text only.
+        let word = |key: &str| -> String {
+            value[key]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .filter(|ch| !ch.is_control())
+                .take(300)
+                .collect()
+        };
+        let mut area = [0.0f32; 4];
+        for (index, slot) in area.iter_mut().enumerate() {
+            let number = value["box"][index].as_f64().unwrap_or(0.0) as f32;
+            *slot = if number.is_finite() {
+                number.clamp(-100_000.0, 100_000.0)
+            } else {
+                0.0
+            };
+        }
+        let scene = word("scene");
+        let in_scene = word("in_scene");
+        // The line is read from the project's own file, never from what the game said beyond
+        // which file: a scene outside the project is not opened.
+        let scene_line = match run::checked_scene(&scene) {
+            Ok(inside) if !in_scene.is_empty() => {
+                let file = folder.join(inside.trim_start_matches("res://"));
+                let wanted = in_scene.clone();
+                tokio::task::spawn_blocking(move || {
+                    let size = std::fs::metadata(&file).ok()?.len();
+                    if size > 4 * 1024 * 1024 {
+                        return None;
+                    }
+                    scene_line(&std::fs::read_to_string(&file).ok()?, &wanted)
+                })
+                .await
+                .ok()
+                .flatten()
+            }
+            _ => None,
+        };
+        Ok(Some(GamePicked {
+            path: word("path"),
+            name: word("name"),
+            class: word("class"),
+            text: word("text"),
+            scene,
+            in_scene,
+            scene_line,
+            script: word("script"),
+            script_on: word("script_on"),
+            area,
+        }))
+    }
+
+    /// The values of a node a person may turn while the game runs.
+    pub async fn tunables(&self, chat_id: &str, node: &str) -> Result<GameTunables, Error> {
+        let reply = self
+            .ask(
+                chat_id,
+                "tune",
+                json!({ "node": node }),
+                Duration::from_secs(5),
+            )
+            .await?;
+        let value = &reply.value;
+        let word = |value: &Value| -> String {
+            value
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .filter(|ch| !ch.is_control())
+                .take(300)
+                .collect()
+        };
+        let number = |value: &Value| match value {
+            Value::Bool(on) => Some(f64::from(u8::from(*on))),
+            other => other.as_f64().filter(|number| number.is_finite()),
+        };
+        let values = value["values"]
+            .as_array()
+            .map(|values| {
+                values
+                    .iter()
+                    .take(24)
+                    .filter_map(|entry| {
+                        let kind = word(&entry["type"]);
+                        if !matches!(kind.as_str(), "float" | "int" | "bool") {
+                            return None;
+                        }
+                        Some(GameTunable {
+                            name: word(&entry["name"]),
+                            kind,
+                            value: number(&entry["value"])?,
+                            initial: number(&entry["default"]),
+                            min: number(&entry["min"]),
+                            max: number(&entry["max"]),
+                            step: number(&entry["step"]).filter(|step| *step > 0.0),
+                        })
+                    })
+                    .filter(|tunable| !tunable.name.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(GameTunables {
+            path: word(&value["path"]),
+            name: word(&value["name"]),
+            class: word(&value["class"]),
+            script: word(&value["script"]),
+            values,
+        })
+    }
+
+    /// Sets one tunable value of the running game, from the pane's slider. `kind` is the
+    /// tunable's own.
+    pub async fn set_value(
+        &self,
+        chat_id: &str,
+        node: &str,
+        property: &str,
+        kind: &str,
+        value: f64,
+    ) -> Result<(), Error> {
+        let named = !property.is_empty()
+            && property.len() <= 64
+            && property
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_');
+        if !named || !value.is_finite() {
+            return Err(Error::Refused("That is not a value of this node.".into()));
+        }
+        let text = match kind {
+            "bool" => (value != 0.0).to_string(),
+            "int" => format!("{}", value.round() as i64),
+            "float" => format!("{value}"),
+            _ => return Err(Error::Refused("That value cannot be turned here.".into())),
+        };
+        self.ask(
+            chat_id,
+            "set",
+            json!({ "node": node, "property": property, "value": text }),
+            Duration::from_secs(5),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// The last `seconds` of the chat's run as small pictures, and the whole run kept to be
+    /// played again: what the person hands the agent when something just went wrong.
+    pub async fn recent(&self, chat_id: &str, seconds: f32) -> Result<GameRecent, Error> {
+        let seconds = if seconds.is_finite() {
+            seconds.clamp(1.0, 15.0)
+        } else {
+            15.0
+        };
+        let reply = self
+            .ask(
+                chat_id,
+                "recent",
+                json!({ "seconds": seconds }),
+                Duration::from_secs(10),
+            )
+            .await?;
+        let value = reply.value;
+        let picture = reply
+            .pictures
+            .into_iter()
+            .next()
+            .map(|picture| picture.jpeg)
+            .ok_or_else(|| Error::Bridge("The game sent no picture.".into()))?;
+        // Whole numbers, however the game wrote them.
+        let whole = |value: &Value| value.as_f64().filter(|n| *n >= 0.0).map(|n| n as u64);
+        let ticks = whole(&value["tick"]).unwrap_or(0);
+        let events = value["events"].clone();
+        // What a replay will give back: what was done up to the step the run stands at. Something
+        // done while it stood still after that step (a look at its state) is not part of it.
+        let inputs = events.as_array().map_or(0, |events| {
+            events
+                .iter()
+                .filter(|event| whole(&event[0]).is_some_and(|tick| tick <= ticks))
+                .count()
+        });
+        let full = value["full"].as_bool().unwrap_or(false);
+        let mut state = self.state();
+        let chat = state
+            .chats
+            .get_mut(chat_id)
+            .ok_or_else(|| Error::Refused("This chat is gone.".into()))?;
+        let Some(run) = chat.run.as_ref() else {
+            return Err(Error::Refused("This chat's game is not running.".into()));
+        };
+        let (replay, unrepeatable) = if full {
+            (
+                None,
+                Some(
+                    "This run was given more input than Ghost keeps, so it cannot be played again. The pictures are what it looked like."
+                        .to_owned(),
+                ),
+            )
+        } else if ticks == 0 {
+            (None, Some("The game has not taken a step yet.".to_owned()))
+        } else {
+            chat.replay_seq += 1;
+            let id = format!("r{}", chat.replay_seq);
+            let kept = Replay {
+                id: id.clone(),
+                seed: run.seed,
+                scene: run.asked_scene.clone(),
+                events,
+                ticks,
+            };
+            chat.replays.push(kept);
+            if chat.replays.len() > REPLAYS_KEPT {
+                chat.replays.remove(0);
+            }
+            (Some(id), None)
+        };
+        Ok(GameRecent {
+            replay,
+            unrepeatable,
+            picture,
+            pictures: value["pictures"].as_u64().unwrap_or(1).min(12) as u32,
+            seconds: value["seconds"].as_f64().unwrap_or(0.0) as f32,
+            run_seconds: ticks as f32 / 60.0,
+            inputs: u32::try_from(inputs).unwrap_or(u32::MAX),
+        })
+    }
+
+    /// Plays a kept run again: the game starts afresh from the same seed, standing still, is
+    /// given the same inputs at the same steps as fast as it can go, and stands still again at
+    /// `until_seconds` of game time (the kept run's end when not given).
+    pub(crate) async fn replay(
+        &self,
+        chat_id: &str,
+        folder: &Path,
+        id: &str,
+        until_seconds: Option<f64>,
+    ) -> Result<Reply, Error> {
+        let kept = {
+            let state = self.state();
+            let chat = state
+                .chats
+                .get(chat_id)
+                .ok_or_else(|| Error::Refused("This chat is gone.".into()))?;
+            chat.replays
+                .iter()
+                .find(|replay| replay.id == id)
+                .cloned()
+                .ok_or_else(|| {
+                    let known: Vec<&str> =
+                        chat.replays.iter().map(|replay| replay.id.as_str()).collect();
+                    Error::Refused(if known.is_empty() {
+                        "No run has been kept to replay. The person keeps one with \"Send the last 15 seconds\" in the Game pane.".to_owned()
+                    } else {
+                        format!("No replay \"{id}\" is kept. Kept: {}.", known.join(", "))
+                    })
+                })?
+        };
+        let until = match until_seconds {
+            Some(seconds) if seconds.is_finite() && seconds > 0.0 => {
+                ((seconds * 60.0).round() as u64).clamp(1, kept.ticks)
+            }
+            _ => kept.ticks,
+        };
+        self.run_from(chat_id, folder, kept.scene.as_deref(), Some(kept.seed))
+            .await?;
+        // As fast as the game can go; a heavy game may not go faster than it plays.
+        let patience = Duration::from_secs(30 + until / 30);
+        self.ask(
+            chat_id,
+            "replay",
+            json!({
+                "events": kept.events, "until": until, "window": 900, "shots": 12,
+                "max": 1568,
+            }),
+            patience,
+        )
+        .await
+    }
+
     /// Whether the chat's game gets a window of its own from its next start on. The person's
     /// choice, from the pane.
     pub fn set_windowed(&self, chat_id: &str, windowed: bool) {
@@ -1319,5 +1807,112 @@ fn chat_status(chat_id: &str, chat: &Chat, tools: bool, found: &[Found]) -> Chat
         godot_missing,
         windowed: chat.windowed,
         tools,
+        joypads: run.map_or(0, |run| run.joypads),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_picked_node_is_found_in_its_scene_file() {
+        let scene = "[gd_scene load_steps=2 format=3]\n\n[ext_resource type=\"Script\" path=\"res://main.gd\" id=\"1\"]\n\n[node name=\"Main\" type=\"Node2D\"]\nscript = ExtResource(\"1\")\n\n[node name=\"Player\" type=\"Polygon2D\" parent=\".\"]\n\n[node name=\"Hud\" type=\"Label\" parent=\".\"]\n\n[node name=\"Sprite\" type=\"Sprite2D\" parent=\"Player\"]\n\n[node name=\"Sprite\" type=\"Sprite2D\" parent=\"Enemy/Body\"]\n";
+        // The scene's own top node, whatever it is called where it runs.
+        assert_eq!(scene_line(scene, "."), Some(5));
+        assert_eq!(scene_line(scene, "Player"), Some(8));
+        assert_eq!(scene_line(scene, "Hud"), Some(10));
+        // Two nodes of one name are told apart by what they hang from.
+        assert_eq!(scene_line(scene, "Player/Sprite"), Some(12));
+        assert_eq!(scene_line(scene, "Enemy/Body/Sprite"), Some(14));
+        // A node made by a script is in no file.
+        assert_eq!(scene_line(scene, "Bullet"), None);
+        assert_eq!(scene_line(scene, "Player/Bullet"), None);
+        assert_eq!(scene_line("", "."), None);
+    }
+
+    #[test]
+    fn a_controllers_input_is_a_button_or_a_stick_within_its_range() {
+        assert!(
+            GameInput::Pad {
+                button: 0,
+                down: true
+            }
+            .sane()
+        );
+        assert!(
+            GameInput::Pad {
+                button: 14,
+                down: false
+            }
+            .sane()
+        );
+        assert!(
+            !GameInput::Pad {
+                button: 200,
+                down: true
+            }
+            .sane()
+        );
+        assert!(
+            GameInput::Axis {
+                axis: 1,
+                value: -1.0
+            }
+            .sane()
+        );
+        assert!(
+            GameInput::Axis {
+                axis: 5,
+                value: 0.25
+            }
+            .sane()
+        );
+        assert!(
+            !GameInput::Axis {
+                axis: 1,
+                value: 1.5
+            }
+            .sane()
+        );
+        assert!(
+            !GameInput::Axis {
+                axis: 1,
+                value: f32::NAN
+            }
+            .sane()
+        );
+        assert!(
+            !GameInput::Axis {
+                axis: 9,
+                value: 0.0
+            }
+            .sane()
+        );
+        // As the pane sends them.
+        let pad: GameInput =
+            serde_json::from_value(json!({ "t": "pad", "button": 3, "down": true })).unwrap();
+        assert_eq!(
+            pad,
+            GameInput::Pad {
+                button: 3,
+                down: true
+            }
+        );
+        let axis: GameInput =
+            serde_json::from_value(json!({ "t": "axis", "axis": 0, "value": 0.5 })).unwrap();
+        assert_eq!(
+            axis,
+            GameInput::Axis {
+                axis: 0,
+                value: 0.5
+            }
+        );
+    }
+
+    #[test]
+    fn every_run_draws_its_own_seed() {
+        let seeds: std::collections::HashSet<u32> = (0..64).map(|_| fresh_seed()).collect();
+        assert!(seeds.len() > 48, "{} different seeds of 64", seeds.len());
     }
 }
