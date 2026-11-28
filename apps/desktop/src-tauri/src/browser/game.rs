@@ -649,18 +649,28 @@ fn inspected(found: &Value) -> String {
 fn perf_lines(measured: &Value) -> String {
     let number = |key: &str| measured[key].as_f64().unwrap_or(0.0);
     let could = number("could_run_at_fps");
-    let mut lines = vec![format!(
-        "Over {:.0} frames run flat out: {:.2} ms a frame on average, {:.2} ms at worst. That is {:.0} frames a second, {}.",
-        number("frames"),
-        number("frame_ms"),
-        number("worst_ms"),
-        could,
-        if could >= 60.0 {
-            "above the 60 a display shows"
-        } else {
-            "BELOW the 60 a display shows: it will stutter on this computer"
-        }
-    )];
+    // A page's clock is coarse (a tenth of a millisecond, to keep pages from timing each other):
+    // a frame quicker than that reads as no time at all.
+    let mut lines = vec![if number("frame_ms") < 0.05 {
+        format!(
+            "Over {:.0} frames run flat out: each took less than the page's clock can time (under 0.1 ms), at worst {:.2} ms. The game's own code is far faster than the 60 frames a second a display shows.",
+            number("frames"),
+            number("worst_ms"),
+        )
+    } else {
+        format!(
+            "Over {:.0} frames run flat out: {:.2} ms a frame on average, {:.2} ms at worst. That is {:.0} frames a second, {}.",
+            number("frames"),
+            number("frame_ms"),
+            number("worst_ms"),
+            could,
+            if could >= 60.0 {
+                "above the 60 a display shows"
+            } else {
+                "BELOW the 60 a display shows: it will stutter on this computer"
+            }
+        )
+    }];
     let mut second = format!(
         "Canvases {:.0}, elements on the page {:.0}",
         number("canvases"),
@@ -812,5 +822,12 @@ mod tests {
             "canvases": 1, "nodes": 12, "memory_mb": null,
         }));
         assert!(slow.contains("BELOW the 60") && !slow.contains("script memory"));
+        // Too quick to time: said as that, never as zero milliseconds and a million frames.
+        let instant = perf_lines(&json!({
+            "frames": 30, "frame_ms": 0.0, "worst_ms": 0.0, "could_run_at_fps": 1000000.0,
+            "canvases": 1, "nodes": 8, "memory_mb": 2.0,
+        }));
+        assert!(instant.contains("less than the page's clock can time"));
+        assert!(!instant.contains("1000000") && !instant.contains("0.00 ms a frame"));
     }
 }

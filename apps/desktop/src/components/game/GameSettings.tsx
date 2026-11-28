@@ -116,8 +116,9 @@ export function GameSettings({
                 <strong>Other engines</strong>
                 <span>
                   A web game (Three.js, Phaser and the like) runs in Ghost's browser beside the
-                  chat. Unity, Unreal Engine and Roblox projects are recognised, and are worked on
-                  in their own editors with their makers' agent tools.
+                  chat, where the agent plays it with the same tools and the same frozen time.
+                  Unity, Unreal Engine and Roblox projects are recognised, and are worked on in
+                  their own editors with their makers' agent tools.
                 </span>
               </div>
             </div>

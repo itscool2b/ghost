@@ -3,8 +3,8 @@
 Ghost runs a chat's game beside the chat. The person plays it in the **Game pane** with the
 keyboard and the mouse; the chat's agent runs, sees and plays the same game through the
 `ghost_game` tools, with time frozen while it thinks. The plan, with the research behind it and
-what is still to come (web games in the pane, Start a game, Connect cards for Unity, Unreal and
-Roblox, point and tell, replays, assets, export), is
+what is still to come (Start a game, Connect cards for Unity, Unreal and Roblox, point and tell,
+replays, assets, export), is
 [superpowers/plans/2026-11-27-game.md](superpowers/plans/2026-11-27-game.md). This page says how
 what is built works.
 
@@ -13,7 +13,7 @@ what is built works.
 | Engine | What Ghost does |
 | --- | --- |
 | Godot 4 (GDScript) | Runs it itself, in the pane. Everything on this page. |
-| Web (Three.js, Phaser, Babylon, PlayCanvas, Pixi and the like) | Recognised. It runs in Ghost's browser beside the chat, as any page does. |
+| Web (Three.js, Phaser, Babylon, PlayCanvas, Pixi, plain canvas) | Runs in Ghost's browser beside the chat, and the agent plays it there with the same tools and the same frozen time. See "Web games". |
 | Unity, Unreal Engine, Roblox | Recognised and named. Their own editors run the game, and their makers' agent tools drive them. |
 | Bevy, LÖVE, Pygame, GameMaker, Defold, MonoGame | Recognised and named. The agent runs them from its shell. |
 
@@ -82,6 +82,35 @@ opens beside the chat, as the Device pane does for an agent's call, and stays cl
 person closed it during that stretch of work. What the agent is doing ("Holding ui_right") takes
 the game's name's place in the pane's header.
 
+## Web games
+
+A web game is a page, so it runs where pages do: the tab in front of the chat's browser, where
+the person plays it with real keys and a real mouse. The game tools of a web project (and of a
+chat whose folder holds no game Ghost knows, where the game may be a plain page) go to that
+browser instead of to Godot (`WebGames` in `ghost-game`, `browser/game.rs` in the desktop).
+
+- **`game_run` with a `url`** opens the game's address (the agent starts its dev server first),
+  marks the tab's page as a game in the page's own session storage, and loads it again. That
+  wakes **Ghost's game clock** in the page (`browser/game.js`, injected with the page agent
+  before the page's own scripts): `requestAnimationFrame`, `performance.now`, `Date` and timers
+  read a clock Ghost holds. Every other page keeps its own time, untouched.
+- Live, the game's clock follows real time, a frame for each of the display's. Frozen, no frame
+  and no timer runs. `game_act` steps it in fixed 1/60 s steps with keys by name (`ArrowLeft`,
+  `Space`, `KeyW`; Godot's `ui_left` and the like are taken as the arrows) and clicks in the
+  picture's pixels, then answers with the filmstrip and the last frame, read from the game's
+  canvas in the frame's own task. A game with no canvas gets the browser's picture of the page.
+- `game_wait_for` and `game_eval` take JavaScript. `game_tree` lists a Three.js scene (three
+  announces its scenes to `__THREE_DEVTOOLS__`, which the clock defines first) or a Phaser game
+  that keeps itself on `globalThis.__GHOST_GAME__`. `game_logs` reads the page's console.
+  `game_check` and `game_set` are Godot's and say so.
+- **A page's passwords never reach an agent**, as with the browser tools: every answer that
+  carries the page's own text has the page's password values taken out, read before the call and
+  after it, and is withheld when they cannot be read. The tools that read a page's insides or
+  run code in it (`game_eval`, `game_tree`, `game_inspect`) work only in a page the agent
+  marked as a game.
+- What it does not reach: frames and workers of other origins keep real time, and input is the
+  page's own events (`isTrusted` is false), which games do not check.
+
 ## Who may do what
 
 - **Only the person**: get Godot, turn Game on for a chat, give the game a window of its own,
@@ -141,11 +170,13 @@ the game's name's place in the pane's header.
 - `pnpm --filter @ghost/desktop exec node scripts/check-game.mjs` (`?preview=game`): every state
   of the pane in both appearances and both engines, its keys and mouse, its controls, the log,
   the agent's line and summons, the narrow window and Settings > Game, with axe.
+- `node scripts/check-web-game.mjs`: the game clock itself in Chromium and WebKit, on a small
+  canvas game: asleep until marked, live, frozen, half a second of a key as exactly thirty frames
+  and 100 pixels, timers on the game's clock, clicks, the filmstrip, waits, the outline.
 - `vitest`: `lib/game.test.ts`.
 
 ## Still to come
 
-Web games in the pane with the same frozen time (the browser host gets a game tab), Start a game
-from New chat, Connect cards for Unity, Unreal and Roblox, pointing at a thing in the game to tell
-the agent about it, sending the last seconds of play as a replay, a controller, live tuning
-sliders, an assets view, and export. They are in the plan, in that order.
+Start a game from New chat, Connect cards for Unity, Unreal and Roblox, pointing at a thing in
+the game to tell the agent about it, sending the last seconds of play as a replay, a controller,
+live tuning sliders, an assets view, and export. They are in the plan, in that order.
