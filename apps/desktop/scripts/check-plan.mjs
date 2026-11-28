@@ -176,15 +176,19 @@ async function inspect(engine, launcher) {
         ["decline:Are we keeping the scroll position?"],
         what("the note goes inside the refusal, with nothing added and no message after it"),
       );
-      // The answered card fades into the transcript: its colours are judged once it has.
+      // The answered card fades into the transcript: its colours are judged once it has. The
+      // wait is bounded: WebKit keeps some finished-looking animations pending for ever.
       await page.evaluate(() =>
-        Promise.all(
-          document
-            .getAnimations()
-            // The working indicator under it never ends; everything else does.
-            .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
-            .map((animation) => animation.finished.catch(() => {})),
-        ),
+        Promise.race([
+          Promise.all(
+            document
+              .getAnimations()
+              // The working indicator under it never ends; everything else does.
+              .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+              .map((animation) => animation.finished.catch(() => {})),
+          ),
+          new Promise((done) => setTimeout(done, 1500)),
+        ]),
       );
       assert.deepEqual(
         (await new AxeBuilder({ page }).include('[data-kind="plan-approval"]').analyze())
