@@ -756,6 +756,176 @@
   background-color: rgb(var(--m-k) / 0.13);
 }
 
+/* --------------------------------------------------------------------------------- games */
+
+/* The Game pane close up, standing in its panel and running off its foot. */
+.games-panel {
+  display: grid;
+  place-items: end center;
+  padding: 64px 24px 0;
+}
+
+/* A Game pane drawn in CSS: a frozen game, and the strip of pictures one action gives back. */
+.gamepane {
+  box-sizing: border-box;
+  width: min(100%, 440px);
+  margin-bottom: -28px;
+  padding: 14px 14px 44px;
+  border-radius: 18px 18px 0 0;
+  background-color: var(--m-surface);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  color: var(--m-ink);
+  font-family: var(--g-sans);
+  text-align: left;
+}
+
+.gamepane-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.gamepane-title {
+  font-weight: 500;
+}
+
+.gamepane-state {
+  overflow: hidden;
+  color: var(--s-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The game: a night sky, a ledge to reach, the ground, and the player picked out. */
+.gamepane-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 10px;
+  background-color: var(--m-window);
+  box-shadow: inset 0 0 0 1px var(--m-rim);
+}
+
+.gamepane-moon {
+  position: absolute;
+  top: 16%;
+  right: 14%;
+  width: 11%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background-color: rgb(var(--m-k) / 0.16);
+}
+
+.gamepane-ledge {
+  position: absolute;
+  bottom: 46%;
+  left: 56%;
+  width: 26%;
+  height: 5%;
+  border-radius: 3px;
+  background-color: rgb(var(--m-k) / 0.22);
+}
+
+.gamepane-ground {
+  position: absolute;
+  inset: auto 0 0;
+  height: 18%;
+  background-color: rgb(var(--m-k) / 0.1);
+}
+
+/* The player, as the pane outlines what is pointed at, with its name over it. */
+.gamepane-pick {
+  position: absolute;
+  bottom: 18%;
+  left: 24%;
+  width: 7%;
+  height: 22%;
+  border-radius: 3px;
+  background-color: var(--m-ink);
+  box-shadow:
+    0 0 0 3px var(--m-window),
+    0 0 0 4px rgb(var(--m-k) / 0.7);
+}
+
+.gamepane-label {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: -4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background-color: var(--m-raised);
+  box-shadow: inset 0 0 0 1px var(--m-rim);
+  color: var(--m-ink);
+  font-family: var(--g-mono);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* Four pictures of one jump, left to right: what the agent sees of an action. */
+.gamepane-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gamepane-strip li {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 6px;
+  background-color: var(--m-window);
+  box-shadow: inset 0 0 0 1px var(--m-rim);
+}
+
+.gamepane-strip li::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 18%;
+  background-color: rgb(var(--m-k) / 0.1);
+}
+
+.gamepane-strip i {
+  position: absolute;
+  bottom: 18%;
+  left: 18%;
+  width: 9%;
+  height: 26%;
+  border-radius: 2px;
+  background-color: var(--m-ink);
+}
+
+.gamepane-strip li:nth-child(2) i {
+  bottom: 40%;
+  left: 36%;
+}
+
+.gamepane-strip li:nth-child(3) i {
+  bottom: 52%;
+  left: 54%;
+}
+
+.gamepane-strip li:nth-child(4) i {
+  bottom: 44%;
+  left: 70%;
+}
+
+.gamepane-note {
+  margin-top: 10px;
+  padding: 0 2px;
+  color: var(--s-soft);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 /* ----------------------------------------------------------------------- two halves */
 
 /* A heading in the left half and its rows in the right half (downloads, questions). */

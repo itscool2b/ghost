@@ -116,7 +116,16 @@ test("public pages are prerendered dark, whole without JavaScript", async () => 
   // No label stands over a heading (no eyebrows): every part's heading is the first thing in
   // its column.
   const heads = home.match(/<div class="(?:split-text|stat-head|two-col-head[^"]*)"><h2 /g) ?? [];
-  assert.equal(heads.length, 5, "agents, the handoff, from anywhere, download and questions");
+  assert.equal(
+    heads.length,
+    6,
+    "agents, the handoff, games, from anywhere, download and questions",
+  );
+  // Games: its three statements and the pane's picture are in the markup, the picture hidden
+  // from assistive technology.
+  assert.match(home, /<h2 id="games-title" class="title">Make games\. <span class="tone">/);
+  assert.match(home, /<div class="gamepane" aria-hidden="true">/);
+  assert.equal((home.match(/<ul class="away-list">/g) ?? []).length, 2);
   assert.match(home, /<div class="wrap"><h2 id="features-title" class="title everything-title">/);
   for (const [, head] of home.matchAll(/<h2 [^>]*class="title[^"]*">([\s\S]*?)<\/h2>/g))
     assert.match(head, /<span class="tone">/, "every heading is two tones");
