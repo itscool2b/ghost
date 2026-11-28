@@ -721,7 +721,12 @@ async fn perform(
                     cid_of(&oldest),
                     serde_json::to_string(&Event::Lost { chat_id: &chat_id }),
                 ) {
-                    lock(&shared.let_go).insert(other.to_owned(), Instant::now());
+                    let mut let_go = lock(&shared.let_go);
+                    // Marks that have run out go, so one left by a browser that closed as it
+                    // was let go does not stay for good.
+                    let_go.retain(|_, when| when.elapsed() < SETTLE);
+                    let_go.insert(other.to_owned(), Instant::now());
+                    drop(let_go);
                     let _ = out.send(Out::Sealed {
                         cid: other.to_owned(),
                         json: lost,

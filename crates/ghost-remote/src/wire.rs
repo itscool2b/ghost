@@ -177,7 +177,8 @@ pub enum Refusal {
     Unknown,
     /// This build does not speak the browser's version.
     Version,
-    /// Too many browsers are connected.
+    /// Too many browsers are connected. Not said since 28 November 2026 (a full list lets one
+    /// go instead); a page may still hear it from a computer with an older Ghost.
     Busy,
     /// The device is paired with another workspace of this computer than the one open now.
     Elsewhere,
