@@ -266,7 +266,12 @@ try {
   await tab.getByText("Nothing here yet. Send a message.").waitFor();
 
   // A bot link, over MCP.
-  const link = await invoke("remote_create_bot", { name: "Check bot", full: false });
+  const link = await invoke("remote_create_bot", {
+    name: "Check bot",
+    level: "chats",
+    approve: false,
+    fullAccess: false,
+  });
   const local = (url) => url.replace(SITE, `http://127.0.0.1:${RELAY_PORT}`);
   const mcp = local(link.url);
   const ask = async (address, name, args = {}) => {
@@ -307,7 +312,12 @@ try {
     `a chat link reached a full control tool: ${refusal.slice(0, 200)}`,
   );
   console.log(`a chat link asking for set: ${refusal.slice(0, 160)}`);
-  const wide = await invoke("remote_create_bot", { name: "Full bot", full: true });
+  const wide = await invoke("remote_create_bot", {
+    name: "Full bot",
+    level: "full",
+    approve: false,
+    fullAccess: false,
+  });
   const options = await ask(local(wide.url), "set", { chat: created.id });
   const shown = options.result.content[0].text;
   assert.ok(!options.result.isError, shown);
@@ -382,7 +392,21 @@ try {
       0,
       `a chat with a very large step did not open: ${await lateRefused.textContent().catch(() => "")}`,
     );
-    await late.getByText("cut: too long to show on this device").first().waitFor();
+    // The step is on the newest page, or on the one before it, which is fitted the same way.
+    const cut = late.getByText("cut: too long to show on this device").first();
+    const earlier = late.getByRole("button", { name: "Earlier messages" });
+    for (let pages = 0; pages < 5 && !(await cut.count()); pages += 1) {
+      await cut.or(earlier).first().waitFor();
+      if (await cut.count()) break;
+      await earlier.click();
+      await cut.or(lateRefused).or(earlier).first().waitFor();
+      assert.equal(
+        await lateRefused.count(),
+        0,
+        `its earlier page did not come: ${await lateRefused.textContent().catch(() => "")}`,
+      );
+    }
+    await cut.waitFor();
     console.log("a chat with a 700 KiB step opened, with that step cut");
     await late.close();
   }
