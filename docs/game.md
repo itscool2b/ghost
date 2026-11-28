@@ -42,8 +42,11 @@ A Godot project in C#, and a Godot 3 project, are named and declined in words
   loses the keyboard, so a game is never left with a key stuck. Ctrl and Command chords stay
   Ghost's, which is how a keyboard leaves the game (Ctrl+Shift+G).
 - **Under the picture**: Pause and Resume, Step (one frame, while paused), the speed (0.25x to
-  2x), sound (off until asked for), a picture saved to Pictures, a window of the game's own (the
-  game starts again in it, at full speed), start again, and Stop.
+  2x), then Point, the last 15 seconds and Tune ("Telling the agent", below), sound (off until
+  asked for), a picture saved to Pictures, a window of the game's own (the game starts again in
+  it, at full speed), start again, and Stop.
+- **A controller** plugged into the computer plays the game while the picture has the keyboard:
+  click the game first. A small mark beside the frame rate says one is connected.
 - **Errors** are counted in the pane's header. The count opens the log: each error and warning
   with its file and line (a click opens the file in the person's editor), then what the game
   printed.
@@ -51,6 +54,31 @@ A Godot project in C#, and a Godot 3 project, are named and declined in words
 - **Settings > Game** has the switch (on by default), what agents get, and whether Godot is here.
   Off stops every game Ghost started, takes the pane out of the app and makes every tool answer
   that Game is off, in running chats too.
+
+## Telling the agent
+
+A person can judge what an agent cannot: whether it feels right. Three controls under the
+picture turn that into something the agent can act on. Godot games only, for now.
+
+- **Point.** The game freezes and the pointer chooses instead of playing: what is under it is
+  outlined and named, and a click opens a note beside it, the same note the browser's Annotate
+  writes. Send goes to the chat now (or queues after its turn), Add to chat puts it in the
+  message box. The message carries the person's words, then the node (its path in the running
+  game), the scene file and the line where it is defined, the script that drives it (its own,
+  or the nearest above it), where it is in the picture, and a picture with it outlined. Esc
+  gives the pointer back, and the game runs again if it ran before.
+- **The last 15 seconds.** What the person just played, as a filmstrip of twelve small
+  pictures, with or without words. The run is kept under a name (r1, r2, ...; the last eight of
+  a chat) and the message tells the agent to play it again with `game_replay`: the game starts
+  afresh with the same random seed and is given the same inputs at the same steps, as fast as it
+  can go, and freezes where the person's run ended. The agent reads the game there, changes the
+  code, and plays the same run again to see the fault gone.
+- **Tune.** The numbers and switches a script exports (`@export`), as sliders that change the
+  running game as they move. A range the script gives (`@export_range`) is the slider's; without
+  one it runs from nothing to twice the value. The sheet opens on the running scene; the target
+  button chooses another node by pointing at it. Turned values are in this run only: **Keep**
+  sends the agent what changed and what it was, to write into the script or the scene, and
+  Reset puts them back.
 
 ## The agent plays it
 
@@ -72,6 +100,18 @@ it the tools**, which starts the idle session again.
 | `game_wait_for` | Run until a GDScript expression is true, or the time is up |
 | `game_logs`, `game_perf` | Errors with file, line and stack, and printed lines; frame time, draw calls, memory |
 | `game_time` | Freeze, resume, change the speed |
+| `game_replay` | Play again a run the person kept: same seed, same inputs at the same steps, frozen where theirs ended (or at `until_s`) |
+
+**A run can be played again exactly.** Everything done to a game from outside is written on the
+run's tape with the step it happened at: every key, click and controller input, from the pane
+or from an agent's `game_act`, and every `game_set` and `game_eval`. A replay gives the tape
+back to a fresh run that began from the same seed. It is exact for a game that draws its random
+numbers from `randi()` and its like and reads no clock: the real-engine test replays a run an
+agent set up, an agent played and a person played live, and ends with the same frame count,
+score and position. A game that calls `randomize()`, makes its own `RandomNumberGenerator` or
+reads the system time may differ, and the tool's description says so. A tape keeps 20 000
+events (a pointer that never rests fills it in about five minutes; keys alone take hours);
+past that the run cannot be replayed and the message says so.
 
 **Frozen time.** A game an agent runs is frozen between its calls, so nothing moves while it
 thinks. `game_act` plays its steps in fixed steps of 1/60 s, as fast as the computer can, then
@@ -138,7 +178,8 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
 
 - **Only the person**: get Godot, start a game from one of Ghost's starters, turn Game on for a
   chat, add another engine's server to a project, give the game a window of its own, open
-  Godot's editor, turn Game off. None of these is a tool, and `helper.rs` tests that no tool
+  Godot's editor, point at something, keep a run for the agent, turn a value from the pane, turn
+  Game off. None of these is a tool, and `helper.rs` tests that no tool
   name fetches, installs, exports, publishes or uploads, and that none takes a chat or a folder.
 - **An agent**: a native Chat session only (not Terminal chats, not agents on another computer),
   through a loopback listener with a per-session token that goes when the session does
@@ -146,6 +187,15 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   grant's own: the folder the session started in. Game's switch is read on every call.
 - `game_eval` and `game_set` run inside the person's own game. An agent can already do as much
   by editing the game's scripts, and Settings says so plainly.
+- **A replay is the game's own run given back to it.** The tape comes from the game and goes
+  only to a fresh run of the same project, so code on it (what `game_eval` ran) runs where it
+  ran before and nowhere else. An agent can replay only a run the person kept, by its name, in
+  its own chat. Kept runs live in memory and go when Ghost quits.
+- **What pointing reads.** The node's name, text, scene and script are the game's own words:
+  cut to size and sent as data. The scene's line is read by Ghost from the project's own file,
+  and only a path inside the project is opened (`run::checked_scene`).
+- A value turned from the pane is one of the node's own, named by a plain name, and a number or
+  a switch: `set_value` refuses anything else.
 - **The game is not trusted.** It connects to a loopback listener made for that run and must show
   the run's token before anything else. From then on it can only answer and send pictures: every
   message is bounded, and what it says (node names, text, printed lines, errors) is cut to size
@@ -176,6 +226,20 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   only while a pane watches, at most two in flight) and an answer's pictures. `--fixed-fps` makes
   every frame exactly 1/60 s of game time; the bridge itself keeps real time while a person
   plays, and lets go of it while an agent acts.
+- **Whole steps.** The game is stopped and started only after a frame is drawn, never in the
+  middle of one, so every step it takes is a whole one (its physics, then its nodes). The
+  bridge counts those steps and stamps the tape with them. A run started for a replay
+  (`GHOST_GAME_HOLD`) takes its first step and then stands still: that step is where the engine
+  puts the first scene in the tree, and a game stopped before it would be one step ahead of the
+  run it repeats. The seed is `GHOST_GAME_SEED`, set by `loop.gd` before anything loads.
+- **Pointing** asks the bridge what is at a point: the smallest box that holds it among
+  controls, sprites, collision shapes, polygons, tile layers and the projected bounds of 3D
+  meshes, with whatever fills most of the picture counted only when nothing smaller is there.
+- **A controller.** The pane reads the browser's standard gamepad and sends what changed in
+  Godot's own numbers (the triggers are axes there), sticks in twentieths past a dead zone. A
+  game that reads the computer's controllers itself is sent none, or it would hear every press
+  twice; it says how many it sees. Ghost has no controller to test with: the pane's side is
+  checked with a stand-in gamepad, and a real one is unverified.
 - **Errors** come from Godot's own `Logger` (4.5 and later), with file, line and the project's
   stack frames; the same error again is counted, not listed again.
 - **The pane** (`components/game/GamePanel.tsx`, `lib/game.ts`) draws the pictures with the
@@ -200,9 +264,15 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
 - `node --test scripts/game-starters.test.mjs`: the canvas starter's own little server answers
   this computer only (a request under another name is refused), and serves no hidden file and
   nothing outside its folder. The real-Godot test loads and plays both Godot starters.
-- `vitest`: `lib/game.test.ts`.
+- `vitest`: `lib/game.test.ts`, `lib/gameTell.test.ts` (the words of each note, slider ranges, a
+  controller's input).
+- The real-engine test also points at the fixture's player and its score (the node, its scene
+  and line, its script), turns an exported value, keeps a run that an agent set up and played
+  and a person played live, and replays it to the same frame, twice, the second time stopped
+  early. `check-game.mjs` plays Point, the last 15 seconds, Tune and a stand-in controller.
 
 ## Still to come
 
-Pointing at a thing in the game to tell the agent about it, sending the last seconds of play as a replay, a controller,
-live tuning sliders, an assets view, and export. They are in the plan, in that order.
+An assets view, and export. They are in the plan, in that order. Pointing, replays and tuning
+are for Godot games: a web game is played in the browser with the person's own input, which
+Ghost does not record, and its page is annotated with the browser's own Annotate.
