@@ -3,64 +3,64 @@
     "channel": "stable",
     "signed": true,
     "publisher_signed": false,
-    "version": "0.10.0",
-    "pub_date": "2026-11-28T01:41:46-05:00",
-    "notes": "Ghost can now run the game you are building.",
-    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/SHA256SUMS",
+    "version": "0.12.1",
+    "pub_date": "2026-11-28T04:22:32-05:00",
+    "notes": "Remote.\nStart a game from nothing, and bring Unity, Unreal and Roblox along.\nYour agent can play web games too.",
+    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/SHA256SUMS",
     "downloads": [
       {
         "kind": "macos_universal_dmg",
         "label": "macOS · Apple silicon and Intel",
         "requirements": "macOS 13.3 or newer",
-        "file": "Ghost_0.10.0_universal.dmg",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/Ghost_0.10.0_universal.dmg",
-        "sha256": "0853b1280ecb6537c9e9892abf9035148d386a36ae306cb1425529764fbff38e",
-        "bytes": 235498037
+        "file": "Ghost_0.12.1_universal.dmg",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/Ghost_0.12.1_universal.dmg",
+        "sha256": "d64b5dc9d93245802c11bbd506ae792d8757d24cbf9b0daddc45508b5ac8ec06",
+        "bytes": 236133344
       },
       {
         "kind": "windows_x64_nsis",
         "label": "Windows · x64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "Ghost_0.10.0_x64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/Ghost_0.10.0_x64-setup.exe",
-        "sha256": "de37d1c44cc98311a2513cf03860494e4ca8784bf74b9d7bd42c657e969f994e",
-        "bytes": 191824975
+        "file": "Ghost_0.12.1_x64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/Ghost_0.12.1_x64-setup.exe",
+        "sha256": "ce29a20fb2548312c965ce2ec767079ad04f92d0e305f5cd8d533aad6e345303",
+        "bytes": 192079961
       },
       {
         "kind": "windows_arm64_nsis",
         "label": "Windows · ARM64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "Ghost_0.10.0_arm64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/Ghost_0.10.0_arm64-setup.exe",
-        "sha256": "abb49bcb633231705375810dd375a27d3b4a2abbed5e15ce102a5c13cf897145",
-        "bytes": 189253155
+        "file": "Ghost_0.12.1_arm64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/Ghost_0.12.1_arm64-setup.exe",
+        "sha256": "e4d740c9a1b90cd968c8d1b7ab6c1458a2442f5c46db64cae32238fdae5120a9",
+        "bytes": 189474327
       },
       {
         "kind": "linux_x64_appimage",
         "label": "Linux · AppImage",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "Ghost_0.10.0_amd64.AppImage",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/Ghost_0.10.0_amd64.AppImage",
-        "sha256": "d37b49aaa0074fed67294c57b796c38d9c65605983b7a20434a8ec07995b320a",
-        "bytes": 288455160
+        "file": "Ghost_0.12.1_amd64.AppImage",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/Ghost_0.12.1_amd64.AppImage",
+        "sha256": "e4c26660cbfc5e3de8cc42aacd2af9998b313abb20ffe2ec1ba75d972cbfb36c",
+        "bytes": 288856568
       },
       {
         "kind": "linux_x64_deb",
         "label": "Linux · Debian and Ubuntu",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "Ghost_0.10.0_amd64.deb",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/Ghost_0.10.0_amd64.deb",
-        "sha256": "0b43255f5d7189504e72b39688cb91c8971011bfd3579513ea9d58f77c485af8",
-        "bytes": 206913540
+        "file": "Ghost_0.12.1_amd64.deb",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/Ghost_0.12.1_amd64.deb",
+        "sha256": "68981800cab00ef613ea1531b9a8b766e3fb24bdaf0a2e6491e0e38abab9b3b2",
+        "bytes": 207386730
       },
       {
         "kind": "linux_x64_rpm",
         "label": "Linux · Fedora and other RPM systems",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "Ghost-0.10.0-1.x86_64.rpm",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.10.0/Ghost-0.10.0-1.x86_64.rpm",
-        "sha256": "989fd89d1de2590c9ad4de7b14b81f45b83ef60f0faaeb5a0c500797fec4dbcc",
-        "bytes": 206919120
+        "file": "Ghost-0.12.1-1.x86_64.rpm",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.12.1/Ghost-0.12.1-1.x86_64.rpm",
+        "sha256": "620939d6af22ed7f588cbb6a8f9c40a0de76a8e22b2c70a2d7295c020e9f9f08",
+        "bytes": 207396028
       }
     ]
   }
