@@ -125,15 +125,18 @@ pub async fn download_entry(
         }
         bytes.extend_from_slice(&chunk);
     }
-    let pin_owned = (pin.url.to_owned(), pin.sha256.to_owned(), pin);
+    // Inflating ten megabytes is work for a thread that may block: the pin goes there by value.
+    let (url, sha256) = (pin.url.to_owned(), pin.sha256.to_owned());
+    let (offset, packed, size) = (pin.offset, pin.packed, pin.size);
     let unpacked = tokio::task::spawn_blocking(move || {
-        let (url, sha256, pin) = pin_owned;
         unpack_entry(
             &bytes,
             &EntryPin {
                 url: &url,
+                offset,
+                packed,
+                size,
                 sha256: &sha256,
-                ..pin
             },
         )
     })
