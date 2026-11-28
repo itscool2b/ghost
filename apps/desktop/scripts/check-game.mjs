@@ -727,6 +727,191 @@ export async function checkGame(browser, url, out, engine) {
         ["axis 0 0", "axis 5 0", "pad 0 false", "pad 9 false"],
       );
 
+      // Assets: the folder's pictures, sounds and models, the newest first.
+      await open("running");
+      await panel.getByTestId("game-view-assets").click();
+      const assets = panel.getByTestId("game-assets");
+      await assets.waitFor();
+      await called(page, "assets", label);
+      const cards = assets.getByTestId("game-asset");
+      await until(async () => (await cards.count()) === 7, `${label}: seven assets`);
+      assert.equal(await panel.getByTestId("game-canvas").isVisible(), false);
+      assert.equal(
+        await panel.getByTestId("game-pause").count(),
+        0,
+        `${label}: no game controls over assets`,
+      );
+      assert.match(await assets.getByTestId("game-assets-all").textContent(), /All\s*7/);
+      assert.match(await assets.getByTestId("game-assets-picture").textContent(), /Pictures\s*4/);
+      assert.match(await assets.getByTestId("game-assets-sound").textContent(), /Sounds\s*1/);
+      assert.match(await assets.getByTestId("game-assets-model").textContent(), /Models\s*2/);
+      assert.equal(await cards.first().getAttribute("data-path"), "art/player/run.png");
+      // Pictures are read once their card is in sight; one too large to read is not asked for.
+      await until(
+        async () =>
+          (await cards.first().locator("img").count()) === 1 &&
+          (await cards
+            .first()
+            .locator("img")
+            .evaluate((img) => img.naturalWidth)) === 128,
+        `${label}: the sheet's thumbnail`,
+      );
+      assert.ok(!(await calls(page)).includes("asset:art/backdrop.png"));
+      assert.ok(
+        !(await calls(page)).includes("asset:sound/jump.wav"),
+        `${label}: a sound is read when it is opened`,
+      );
+      await axe(page, `${label} assets`);
+      await shot("assets");
+      // By kind and by name.
+      await assets.getByTestId("game-assets-sound").click();
+      await until(async () => (await cards.count()) === 1, `${label}: one sound`);
+      await assets.getByTestId("game-assets-all").click();
+      await assets.getByRole("searchbox").fill("tiles grass");
+      await until(async () => (await cards.count()) === 1, `${label}: found by folder and name`);
+      await assets.getByRole("searchbox").fill("nothing like this");
+      await assets.getByTestId("game-assets-no-match").waitFor();
+      await assets.getByRole("searchbox").fill("");
+      await until(async () => (await cards.count()) === 7, `${label}: all again`);
+
+      // A sprite sheet: its size, its frames guessed from its shape, and the frames in turn.
+      await cards.first().click();
+      const detail = assets.getByTestId("game-asset-detail");
+      await detail.waitFor();
+      await until(
+        async () =>
+          /128×32 · 4 frames of 32×32/.test(
+            await detail.getByTestId("game-asset-size").textContent(),
+          ),
+        `${label}: the sheet is cut into four`,
+      );
+      const sheetFrames = detail.getByTestId("game-asset-frames");
+      await sheetFrames.waitFor();
+      assert.equal(await sheetFrames.getAttribute("width"), "32");
+      // Less motion was asked for: the frames wait for the person.
+      const playFrames = detail.getByTestId("game-asset-play-frames");
+      assert.equal(await playFrames.getAttribute("aria-pressed"), "false");
+      assert.equal(await sheetFrames.getAttribute("data-frame"), "0");
+      await playFrames.click();
+      await until(
+        async () => Number(await sheetFrames.getAttribute("data-frame")) > 0,
+        `${label}: the frames play`,
+      );
+      await axe(page, `${label} asset picture`);
+      await shot("asset-sheet");
+      // Cut another way: one frame is the whole picture.
+      await detail.getByRole("spinbutton", { name: "Frames across" }).fill("1");
+      await until(
+        async () => (await detail.getByTestId("game-asset-size").textContent()).trim() === "128×32",
+        `${label}: one frame`,
+      );
+      assert.equal(await sheetFrames.count(), 0);
+      // Its path goes to the message box.
+      await detail.getByTestId("game-asset-add").click();
+      await until(
+        async () =>
+          (await page.evaluate(() => window.gameFixture.drafted)).includes("`art/player/run.png`"),
+        `${label}: the path is in the message box`,
+      );
+      await page.keyboard.press("Escape");
+      await until(
+        async () => (await detail.count()) === 0,
+        `${label}: Esc goes back to the assets`,
+      );
+
+      // A sound: its shape and its length, and it plays.
+      await assets.locator('[data-path="sound/jump.wav"]').click();
+      await detail.waitFor();
+      await called(page, "asset:sound/jump.wav", label);
+      const soundLength = async () =>
+        (await detail.getByTestId("game-asset-length").textContent()).trim();
+      await until(
+        async () => (await soundLength()) !== "Reading it",
+        `${label}: the sound is read`,
+      );
+      if (/cannot/.test(await soundLength())) {
+        // A browser built without sound says so instead of showing nothing.
+        assert.notEqual(engine, "chromium", `${label}: Chromium reads the sound`);
+        assert.equal(await detail.getByTestId("game-asset-play").isDisabled(), true);
+      } else {
+        assert.equal(await soundLength(), "0.25 s · mono");
+        await until(
+          async () =>
+            Number(await detail.getByTestId("game-asset-wave").getAttribute("data-drawn")) >= 24,
+          `${label}: its shape is drawn`,
+        );
+        const playSound = detail.getByTestId("game-asset-play");
+        await playSound.click();
+        // A quarter of a second: it plays and ends by itself.
+        await until(
+          async () => (await playSound.getAttribute("aria-pressed")) === "false",
+          `${label}: the sound ends`,
+        );
+      }
+      await axe(page, `${label} asset sound`);
+      await shot("asset-sound");
+      await detail.getByRole("button", { name: "Back to the assets" }).click();
+
+      // A model: a .glb turns under the pointer (where the window can draw in 3D at all); a
+      // .gltf says why it does not open; a file too large says so and is never read.
+      await assets.locator('[data-path="models/crate.glb"]').click();
+      const model = detail.getByTestId("game-asset-model");
+      await model.waitFor();
+      await until(
+        async () => (await model.getAttribute("data-state")) !== "loading",
+        `${label}: the model is read`,
+        15000,
+      );
+      if ((await model.getAttribute("data-state")) === "failed") {
+        // A browser with no 3D drawing says so instead of showing nothing.
+        await detail.getByTestId("game-asset-model-failed").waitFor();
+        assert.notEqual(engine, "chromium", `${label}: Chromium draws the model`);
+      }
+      await axe(page, `${label} asset model`);
+      await shot("asset-model");
+      await detail.getByRole("button", { name: "Back to the assets" }).click();
+      await assets.locator('[data-path="models/tree.gltf"]').click();
+      await detail.getByTestId("game-asset-gltf").waitFor();
+      await detail.getByRole("button", { name: "Back to the assets" }).click();
+      await assets.locator('[data-path="art/backdrop.png"]').click();
+      assert.match(await detail.getByTestId("game-asset-too-large").textContent(), /15\.0 MB/);
+      assert.ok(!(await calls(page)).includes("asset:art/backdrop.png"));
+      await detail.getByRole("button", { name: "Back to the assets" }).click();
+      // Back to the game: it never stopped.
+      await panel.getByTestId("game-view-game").click();
+      await panel.getByTestId("game-canvas").waitFor();
+      assert.ok(!(await calls(page)).includes("stop"), `${label}: the game kept running`);
+
+      // What a turn leaves in the folder is said above the message box, and opens in Assets.
+      assert.equal(await page.getByTestId("game-new-assets").count(), 0);
+      await page.evaluate(() => {
+        window.gameFixture.made("art/enemy/slime.png");
+        window.gameFixture.look_();
+      });
+      const fresh = page.getByTestId("game-new-assets");
+      await fresh.waitFor();
+      assert.match(await fresh.textContent(), /1 new asset/);
+      await axe(page, `${label} new assets`, "[data-testid=game-new-assets]");
+      await shot("new-assets");
+      await fresh.getByTestId("game-new-asset").click();
+      await detail.waitFor();
+      assert.equal(await detail.getAttribute("aria-label"), "slime.png");
+      await until(
+        async () => (await fresh.count()) === 0,
+        `${label}: seen assets are not said again`,
+      );
+      await page.evaluate(() => window.gameFixture.look_());
+      await page.waitForTimeout(200);
+      assert.equal(await fresh.count(), 0, `${label}: an unchanged folder says nothing`);
+      // Dismissed without opening.
+      await page.evaluate(() => {
+        window.gameFixture.made("art/enemy/bat.png");
+        window.gameFixture.look_();
+      });
+      await fresh.waitFor();
+      await fresh.getByRole("button", { name: "Dismiss the new assets" }).click();
+      await until(async () => (await fresh.count()) === 0, `${label}: dismissed`);
+
       // A narrow window: the pane covers the chat's work area instead of sitting beside it.
       await open("ready");
       await page.setViewportSize({ width: 900, height: 800 });

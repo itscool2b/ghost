@@ -145,6 +145,17 @@ export const commands = {
 	 */
 	gameRecent: (chatId: string, seconds: number | null) => typedError<GameRecent, AppError>(__TAURI_INVOKE("game_recent", { chatId, seconds })),
 	/**
+	 *  The pictures, sounds and models of the chat's folder, the newest first, for the pane's
+	 *  Assets view. Links are not followed and hidden folders, dependencies and builds are not
+	 *  entered.
+	 */
+	gameAssets: (chatId: string) => typedError<GameAssets, AppError>(__TAURI_INVOKE("game_assets", { chatId })),
+	/**
+	 *  Reads one asset by the path [`game_assets`] listed it under. Only a picture, a sound or a
+	 *  model inside the chat's own folder is read, through no link, up to the size its kind allows.
+	 */
+	gameAsset: (chatId: string, path: string) => typedError<GameAssetData, AppError>(__TAURI_INVOKE("game_asset", { chatId, path })),
+	/**
 	 *  Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
 	 *  stream's own end. Answers the stream's number, for `game_unwatch`.
 	 */
@@ -1162,6 +1173,9 @@ export type AppInfo = {
 
 /**  Appearance belongs to the active profile on this device, just like motion preferences. */
 export type AppearancePreference = "system" | "light" | "dark";
+
+/**  What an asset is, by its file's name. */
+export type AssetKind = "picture" | "sound" | "model";
 
 /**  A sign-in command the user runs in a terminal with their own binary. */
 export type AuthCommand = {
@@ -2403,6 +2417,35 @@ export type FolderScope =
 export type FolderState = "ok" | "missing" | 
 /**  The OS refused access (macOS privacy). */
 "not_allowed";
+
+/**  One asset of the project. */
+export type GameAsset = {
+	/**  Its path inside the project, with forward slashes ("art/player/run.png"). */
+	path: string,
+	kind: AssetKind,
+	/**  Its size in bytes (4 GiB and more reads as 4 GiB). */
+	bytes: number,
+	/**  When it last changed, in seconds since 1970: what is new comes first. */
+	modified: number,
+	/**  Larger than Ghost reads to show it: listed, not previewed. */
+	too_large: boolean,
+};
+
+/**  One asset of the chat's folder, for the person to look at or hear. */
+export type GameAssetData = {
+	kind: AssetKind,
+	/**  What the file is, by its name ("image/png", "audio/ogg", "model/gltf-binary"). */
+	mime: string,
+	base64: string,
+};
+
+/**  What a folder holds. */
+export type GameAssets = {
+	/**  The newest first. */
+	assets: GameAsset[],
+	/**  The folder holds more than Ghost lists. */
+	cut: boolean,
+};
 
 /**  What connecting an engine's own agent tools to a project did. */
 export type GameConnected = 

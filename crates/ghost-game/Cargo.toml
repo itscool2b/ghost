@@ -10,6 +10,10 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+# An asset is read through handles that follow no link, as the chat's image previews are (the
+# versions ghost-core locks).
+cap-fs-ext = "4.0.3"
+cap-std = "4.0.3"
 ghost-fetch.workspace = true
 # The game in a job object (Windows) or a process group (Unix), as agents' processes and the
 # phone emulator are. The version ghost-process and ghost-devices already lock.

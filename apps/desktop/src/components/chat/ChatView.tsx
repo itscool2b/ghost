@@ -47,6 +47,7 @@ import { speechPlayer } from "../../lib/speech";
 import type { TerminalPanels } from "../../lib/terminalPanel";
 import { runLabel } from "../../lib/worktreeRun";
 import { type AnnotationTarget, BrowserPanel } from "../browser/BrowserPanel";
+import { NewAssets } from "../game/AssetsView";
 import { GamePanel } from "../game/GamePanel";
 import { DevicePanel } from "../mobile/DevicePanel";
 import { AccountPicker } from "./AccountPicker";
@@ -1467,6 +1468,16 @@ export function ChatView({
                     </TaskLinkContext.Provider>
                   )}
                   <div className="chat-dock">
+                    {gameUsable && gameStore && gameStore.freshAssets(chatId).length > 0 ? (
+                      <NewAssets
+                        assets={gameStore.freshAssets(chatId)}
+                        onOpen={(path) => {
+                          gameStore.wantAsset(chatId, path);
+                          setGameOpen(true);
+                        }}
+                        onDismiss={() => gameStore.seenAssets(chatId)}
+                      />
+                    ) : null}
                     {handover ? (
                       <p
                         className="conversation-notice"

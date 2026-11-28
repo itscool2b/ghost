@@ -897,3 +897,427 @@ button.game-log-where:focus-visible {
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------- assets */
+
+/* The stage stays in the pane while the assets show, so the game it holds keeps running. */
+.game-stage[hidden] {
+  display: none;
+}
+
+/* Game or Assets: two words in the header, the one that shows pressed. */
+.game-views {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-2);
+  min-width: 0;
+  margin: 0 var(--g-space-4) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.game-views > .g-button,
+.game-assets-kinds > .g-button {
+  color: var(--g-fg-3);
+}
+
+.game-views > .g-button[aria-pressed="true"],
+.game-assets-kinds > .g-button[aria-pressed="true"] {
+  background-color: var(--g-hover);
+  color: var(--g-fg-1);
+}
+
+.game-assets {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.game-assets-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-space-6);
+  padding: 0 var(--g-space-12) var(--g-space-8);
+}
+
+.game-assets-kinds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.game-assets-count {
+  color: var(--g-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-assets-find {
+  flex: 1;
+  min-width: 96px;
+  height: 28px;
+  padding: 0 var(--g-space-12);
+  border: 0;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--g-surface-1);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-1);
+  font: inherit;
+  font-size: var(--g-text-ui);
+}
+
+.game-assets-find::placeholder {
+  color: var(--g-fg-3);
+}
+
+.game-assets-find:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: 1px;
+}
+
+.game-assets-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--g-space-8);
+  min-height: 0;
+  padding: 0 var(--g-space-12) var(--g-space-12);
+  overflow: auto;
+}
+
+.game-assets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--g-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-asset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-2);
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--g-space-6);
+  border: 0;
+  border-radius: var(--g-radius-12);
+  background: none;
+  color: var(--g-fg-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.game-asset:hover {
+  background-color: var(--g-hover);
+}
+
+.game-asset:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: -2px;
+}
+
+/* A picture as it is, a sound or a model by its mark. */
+.game-asset-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--g-radius-8);
+  background-color: var(--g-surface-1);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-3);
+}
+
+.game-asset-thumb > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Pixel art stays sharp: a small picture is drawn in whole pixels. */
+.game-asset-thumb > img[data-small] {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.game-asset-name {
+  overflow: hidden;
+  color: var(--g-fg-1);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-asset-meta {
+  overflow: hidden;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-assets-more {
+  align-self: center;
+}
+
+.game-asset-said {
+  margin: 0;
+  padding: var(--g-space-8) var(--g-space-12);
+}
+
+/* One asset, opened over the list. */
+.game-asset-detail {
+  position: absolute;
+  inset: 0 var(--g-space-8) var(--g-space-8);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--g-radius-12);
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-2);
+  font-size: var(--g-text-ui);
+  line-height: var(--g-leading-ui);
+  animation: game-notice-in var(--g-dur-panel) var(--g-ease) both;
+}
+
+.game-asset-detail .game-log-head h2 {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--g-space-8);
+}
+
+.game-asset-stage {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  margin: var(--g-space-4) var(--g-space-12) 0;
+  overflow: hidden;
+  border-radius: var(--g-radius-8);
+  background-color: var(--g-surface-1);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+}
+
+.game-asset-picture {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Small pictures and the frames of a sheet are shown large, in whole pixels. */
+.game-asset-stage[data-small] > .game-asset-picture,
+.game-asset-frames {
+  width: min(100%, 320px);
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.game-asset-stage[data-kind="sound"] {
+  padding: var(--g-space-16);
+}
+
+.game-asset-wave {
+  width: 100%;
+  height: min(100%, 160px);
+  color: var(--g-fg-2);
+}
+
+.game-asset-controls {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-space-8) var(--g-space-12);
+  padding: var(--g-space-8) var(--g-space-12) 0;
+}
+
+.game-asset-controls > .game-note {
+  flex: 1;
+  min-width: 120px;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-asset-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-6);
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+}
+
+.game-asset-field > input {
+  width: 48px;
+  height: 24px;
+  padding: 0 var(--g-space-6);
+  border: 0;
+  border-radius: var(--g-radius-6);
+  background-color: var(--g-surface-1);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-1);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-asset-field > input:focus-visible {
+  outline: 2px solid var(--g-focus);
+  outline-offset: 1px;
+}
+
+.game-asset-model {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  margin: var(--g-space-4) var(--g-space-12) 0;
+  overflow: hidden;
+  border-radius: var(--g-radius-8);
+  background-color: var(--g-surface-1);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+}
+
+.game-asset-model > canvas {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.game-asset-model > .game-note {
+  position: absolute;
+  max-width: 80%;
+  text-align: center;
+}
+
+.game-asset-model[data-state="failed"] > canvas {
+  visibility: hidden;
+}
+
+.game-asset-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-6);
+  padding: var(--g-space-8) var(--g-space-8) var(--g-space-8) var(--g-space-12);
+}
+
+.game-asset-foot > .game-note {
+  flex: 1;
+  min-width: 0;
+}
+
+/* What a turn left in the folder, above the message box. */
+.game-new-assets {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-6);
+  min-width: 0;
+  margin: 0 0 var(--g-space-6);
+  padding: var(--g-space-2) var(--g-space-4) var(--g-space-2) var(--g-space-12);
+  border-radius: var(--g-radius-pill);
+  background-color: var(--ui-menu-fill);
+  box-shadow: inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-2);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+}
+
+.game-new-assets-text {
+  flex: none;
+  color: var(--g-fg-1);
+}
+
+.game-new-assets-list {
+  display: flex;
+  flex: 1;
+  gap: var(--g-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.game-new-assets-item {
+  min-width: 0;
+}
+
+.game-new-asset {
+  max-width: 100%;
+  color: var(--g-fg-2);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+}
+
+.game-new-asset-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-new-assets-close {
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-asset-detail {
+    animation: none;
+  }
+}
+
+/* Makers of art and sound, each by its own guide: a quiet line under the assets. */
+.game-makers {
+  width: 100%;
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+}
+
+.game-makers > summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.game-makers > summary:focus-visible {
+  border-radius: var(--g-radius-6);
+  outline: 2px solid var(--g-focus);
+  outline-offset: 2px;
+}
+
+.game-makers > .game-note {
+  margin: var(--g-space-6) 0;
+}
+
+.game-makers-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

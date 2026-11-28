@@ -70,6 +70,7 @@ import { ScreenPlayer, type ScreenState, videoPoint } from "../../lib/screen";
 import { AnnotationComposer } from "../browser/AnnotationComposer";
 import type { AnnotationTarget } from "../browser/BrowserPanel";
 import { commandKey } from "../chat/Keys";
+import { AssetsView } from "./AssetsView";
 import { connected, EngineConnect } from "./EngineConnect";
 import { markedPicture, pngFrom, TuneSheet, themeColor } from "./GameTell";
 
@@ -181,6 +182,14 @@ export function GamePanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  /** What the pane shows: the game, or the folder's pictures, sounds and models. */
+  const [view, setView] = useState<"game" | "assets">("game");
+  const wantedAsset = store.wantedAsset(chatId);
+  // The chat asked for an asset: the pane turns to them.
+  useEffect(() => {
+    if (wantedAsset !== null) setView("assets");
+  }, [wantedAsset]);
+  const assetShown = useCallback(() => store.shownAsset(chatId), [store, chatId]);
   /** What the pointer is for when it is not the game's: choosing something in the picture. */
   const [pointing, setPointing] = useState<"tell" | "tune" | null>(null);
   const [picked, setPicked] = useState<{ node: GamePicked; anchor: Anchor } | null>(null);
@@ -403,7 +412,30 @@ export function GamePanel({
           </output>
         </span>
         <span className="game-head-end">
-          {game && errors > 0 ? (
+          {game?.project ? (
+            <fieldset className="game-views">
+              <legend className="sr-only">What the pane shows</legend>
+              <button
+                type="button"
+                className="g-button g-button-ghost g-button-28"
+                aria-pressed={view === "game"}
+                data-testid="game-view-game"
+                onClick={() => setView("game")}
+              >
+                Game
+              </button>
+              <button
+                type="button"
+                className="g-button g-button-ghost g-button-28"
+                aria-pressed={view === "assets"}
+                data-testid="game-view-assets"
+                onClick={() => setView("assets")}
+              >
+                Assets
+              </button>
+            </fieldset>
+          ) : null}
+          {view === "assets" ? null : game && errors > 0 ? (
             <button
               type="button"
               className="g-button g-button-ghost g-button-28 game-errors"
@@ -452,7 +484,17 @@ export function GamePanel({
           </button>
         </p>
       ) : null}
-      <div className="game-stage" ref={stage}>
+      {view === "assets" && game?.project ? (
+        <AssetsView
+          chatId={chatId}
+          api={api}
+          agentName={agentName}
+          wanted={wantedAsset}
+          onWantedShown={assetShown}
+          onAdd={annotation ? (text) => annotation.add(text, null) : undefined}
+        />
+      ) : null}
+      <div className="game-stage" ref={stage} hidden={view === "assets" && Boolean(game?.project)}>
         {status === null || game === null ? null : (
           <Stage
             chatId={chatId}
@@ -535,7 +577,7 @@ export function GamePanel({
           </div>
         ) : null}
       </div>
-      {running && game ? (
+      {running && game && view === "game" ? (
         <Controls
           chatId={chatId}
           api={api}

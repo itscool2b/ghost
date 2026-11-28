@@ -176,6 +176,7 @@ function statusFor(state: string): GameStatus {
 
 /** One stand-in for the page (StrictMode builds the state twice). */
 let shared: FakeGame | null = null;
+let sharedStore: GameStore | undefined;
 
 function Preview() {
   const [fixture] = useState(() => {
@@ -256,6 +257,7 @@ function Preview() {
       }),
       saveDraft: async (_id, input) => {
         draft = input;
+        game.drafted = input.text;
       },
       paste: async (_id, bytes, name) => {
         const png =
@@ -277,7 +279,12 @@ function Preview() {
       },
     } as typeof transport.composer;
     gamePanels.set(CHAT, params.get("closed") === null);
-    return { chat, transport: Object.assign(transport, { game: new GameStore(game) }) };
+    // One store for the one stand-in game: React runs this twice in development, and a second
+    // store would be one no view reads.
+    sharedStore ??= new GameStore(game);
+    const store = sharedStore;
+    game.look_ = () => store.look(CHAT);
+    return { chat, transport: Object.assign(transport, { game: store }) };
   });
   return (
     <main className="chat-app" style={{ display: "flex", flexDirection: "column" }}>
