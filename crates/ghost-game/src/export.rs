@@ -309,7 +309,14 @@ pub async fn export(
     root: &Path,
     downloads: &Path,
 ) -> Result<GameExport, Error> {
-    let name = file_name(&project.name);
+    // The game's own name, or its folder's when the project states none.
+    let name = file_name(
+        project
+            .name
+            .as_deref()
+            .or_else(|| folder.file_name().and_then(|name| name.to_str()))
+            .unwrap_or("game"),
+    );
     let (served, what) = match project.engine {
         GameEngine::Godot => {
             let program = godot.ok_or_else(|| {
@@ -466,7 +473,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let project = |engine| GameProject {
             engine,
-            name: "Harbor".into(),
+            name: Some("Harbor".into()),
             version: None,
             framework: None,
             unsupported: None,
