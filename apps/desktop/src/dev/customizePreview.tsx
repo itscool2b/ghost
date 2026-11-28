@@ -7,10 +7,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import type { AppInfo } from "../bindings";
 import { type CustomizeServices, SettingsScreen } from "../components/settings/SettingsScreen";
+import { GameStore } from "../lib/game";
 import { MobileStore } from "../lib/mobile";
 import type { SetupApi } from "../lib/setup";
 import { WorkspaceStore } from "../lib/workspace";
 import { createBrowserSettingsFixture } from "./browserSettingsFixture";
+import { FakeGame } from "./gameFixture";
 import { createInstructionsFixture } from "./instructionsFixture";
 import { FakeMobile } from "./mobileFixture";
 import { pluginFixture } from "./pluginLibraryPreview";
@@ -68,6 +70,7 @@ export function createCustomizeFixture() {
     memory: createProjectMemoryFixture().api,
     browser: createBrowserSettingsFixture().store,
     mobile: new MobileStore(new FakeMobile()),
+    game: new GameStore(new FakeGame()),
     plugins: {
       api: {
         snapshot: async () => pluginFixture("plugins"),

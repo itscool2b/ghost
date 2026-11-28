@@ -474,11 +474,14 @@ export function ChatView({
     mobileStore?.usable() === true && interfaceView === "chat" && state.chat !== null;
   const deviceOpen = deviceUsable && devicePanels.open(chatId);
   deviceToggle.current = deviceUsable ? () => setDeviceOpen(!devicePanels.open(chatId)) : null;
-  // The Game pane: Chat view only, while the Game plugin is on, in chats that have a game (its
-  // folder holds one, one of its games runs, or the person turned Game on for it).
+  // The Game pane: Chat view only, while the Game plugin is on. Its button is in the header of
+  // chats that have a game (the folder holds one, one of its games runs, or the person turned
+  // Game on for it) and of any chat whose pane is open; elsewhere it is in the More menu, since
+  // most chats are not games.
   const gameUsable =
-    gameStore?.offered(chatId) === true && interfaceView === "chat" && state.chat !== null;
+    gameStore?.usable() === true && interfaceView === "chat" && state.chat !== null;
   const gameOpen = gameUsable && gamePanels.open(chatId);
+  const gameOffered = gameUsable && (gameOpen || gameStore?.offered(chatId) === true);
   gameToggle.current = gameUsable ? () => setGameOpen(!gamePanels.open(chatId)) : null;
   // What the chat's folder holds is looked at when the chat is shown and after each of its turns:
   // a game the agent has just made gets its button without anything being reopened.
@@ -519,7 +522,7 @@ export function ChatView({
     (summoned || (mobileStore?.held(chatId)?.agent ?? null) !== null);
   // The same for the chat's game: an agent that runs or plays it opens its pane, taking the
   // side from the browser and the device, but never from Changes or a task.
-  const gameSummoned = gameUsable && gameStore?.summoned(chatId) === true;
+  const gameSummoned = gameOffered && gameStore?.summoned(chatId) === true;
   useEffect(() => {
     if (!gameSummoned || !gameStore) return;
     if (gamePanels.open(chatId)) {
@@ -531,7 +534,7 @@ export function ChatView({
     setGameOpen(true);
   }, [gameSummoned, sideHeld, chatId, gameStore, setGameOpen]);
   const agentOnGame =
-    gameUsable && !gameOpen && (gameSummoned || (gameStore?.of(chatId)?.agent ?? null) !== null);
+    gameOffered && !gameOpen && (gameSummoned || (gameStore?.of(chatId)?.agent ?? null) !== null);
   useEffect(() => {
     if (!browserStore || !browserUsable) return;
     return browserStore.onEvent((event) => {
@@ -1344,8 +1347,9 @@ export function ChatView({
                   }
                 : undefined
             }
+            onGame={gameUsable && !gameOffered ? () => setGameOpen(true) : undefined}
             game={
-              gameUsable
+              gameOffered
                 ? {
                     open: gameOpen,
                     agent: agentOnGame ? agentName : null,

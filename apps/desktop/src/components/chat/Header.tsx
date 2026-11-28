@@ -58,6 +58,7 @@ export function Header({
   browser,
   device,
   game,
+  onGame,
 }: {
   readonly state: ChatState;
   /**
@@ -108,6 +109,8 @@ export function Header({
    * header's opener for it, where the panel button was (owner, 9 November 2026).
    */
   readonly browser?: { readonly open: boolean; readonly onToggle: () => void };
+  /** Opens the Game pane from the More menu, in chats that have no game yet. */
+  readonly onGame?: () => void;
   /** The game beside the chat (the Game plugin), in Chat view, in chats that have a game. */
   readonly game?: {
     readonly open: boolean;
@@ -370,7 +373,7 @@ export function Header({
               </span>
             ) : null}
           </div>
-          {onGit || onTerminal || tools || onHistory || compact ? (
+          {onGit || onTerminal || tools || onHistory || compact || onGame ? (
             <div className="chat-header-actions">
               {onGit ? (
                 <button type="button" className="g-menu-item" onClick={item(onGit)}>
@@ -387,6 +390,18 @@ export function Header({
                 >
                   {terminalOpen ? "Hide terminal" : "Show terminal"}
                   <Keys keys={[commandKey(), "`"]} />
+                </button>
+              ) : null}
+              {onGame ? (
+                <button
+                  type="button"
+                  className="g-menu-item"
+                  data-testid="chat-game-open"
+                  aria-keyshortcuts="Control+Shift+G Meta+Shift+G"
+                  onClick={item(onGame)}
+                >
+                  Game
+                  <Keys keys={[commandKey(), "Shift", "G"]} />
                 </button>
               ) : null}
               {tools ? (
