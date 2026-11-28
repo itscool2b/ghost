@@ -11,7 +11,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use crate::bridge::Reply;
-use crate::detect::{Engine, Project};
+use crate::detect::{GameEngine, GameProject};
 use crate::manager::{GameState, Manager, TURNED_OFF, ToolReply};
 use crate::{Error, check, run};
 
@@ -124,7 +124,7 @@ async fn dispatch(
     manager: &Manager,
     chat_id: &str,
     folder: &Path,
-    project: Option<&Project>,
+    project: Option<&GameProject>,
     tool: &str,
     arguments: &Value,
 ) -> Result<ToolReply, Error> {
@@ -283,7 +283,7 @@ fn fresh(manager: &Manager, chat_id: &str) -> String {
     }
 }
 
-async fn status(manager: &Manager, chat_id: &str, project: Option<&Project>) -> ToolReply {
+async fn status(manager: &Manager, chat_id: &str, project: Option<&GameProject>) -> ToolReply {
     manager.looked().await;
     let mut lines = Vec::new();
     match project {
@@ -306,7 +306,7 @@ async fn status(manager: &Manager, chat_id: &str, project: Option<&Project>) -> 
                 lines.push(why.clone());
             }
             match project.engine {
-                Engine::Godot if project.unsupported.is_none() => {
+                GameEngine::Godot if project.unsupported.is_none() => {
                     match manager.godot_for(project) {
                         Ok(program) => lines.push(format!(
                             "Godot: {} (use this path to run Godot yourself, for example headless tests).",
@@ -317,12 +317,12 @@ async fn status(manager: &Manager, chat_id: &str, project: Option<&Project>) -> 
                         )),
                     }
                 }
-                Engine::Godot => {}
-                Engine::Web => lines.push(
+                GameEngine::Godot => {}
+                GameEngine::Web => lines.push(
                     "A web game runs in Ghost's browser: start its dev server and open it with browser_navigate."
                         .to_owned(),
                 ),
-                Engine::Unity | Engine::Unreal | Engine::Roblox => lines.push(format!(
+                GameEngine::Unity | GameEngine::Unreal | GameEngine::Roblox => lines.push(format!(
                     "Ghost does not run {} itself. Its maker's own agent tools drive its editor; the person connects them in the Game pane.",
                     project.engine.name()
                 )),
@@ -371,10 +371,10 @@ async fn status(manager: &Manager, chat_id: &str, project: Option<&Project>) -> 
 async fn check_scripts(
     manager: &Manager,
     folder: &Path,
-    project: Option<&Project>,
+    project: Option<&GameProject>,
 ) -> Result<ToolReply, Error> {
     let project = project
-        .filter(|project| project.engine == Engine::Godot)
+        .filter(|project| project.engine == GameEngine::Godot)
         .ok_or_else(|| Error::Refused("game_check is for Godot projects.".into()))?;
     if let Some(why) = &project.unsupported {
         return Err(Error::Refused(why.clone()));

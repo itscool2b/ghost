@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use ghost_game::{Config, Fetch, GameState, InputEvent, Manager, ToolReply};
+use ghost_game::{Config, GameInput, GameState, GodotFetch, Manager, ToolReply};
 use serde_json::{Value, json};
 
 fn copy_fixture(to: &Path) -> std::io::Result<()> {
@@ -89,7 +89,7 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
         for _ in 0..600 {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let status = manager.status();
-            if let Fetch::Failed { message } = &status.godot.fetch {
+            if let GodotFetch::Failed { message } = &status.godot.fetch {
                 panic!("the fetch failed: {message}");
             }
             if status.godot.fetched {
@@ -103,7 +103,7 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
         "Godot was fetched: {:?}",
         status.godot
     );
-    assert_eq!(status.godot.fetch, Fetch::Idle);
+    assert_eq!(status.godot.fetch, GodotFetch::Idle);
 
     let said = tool(&manager, &game, "game_status", json!({})).await;
     assert!(
@@ -362,7 +362,7 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
     let from = player_x(&manager, &game).await;
     manager.input(
         "chat",
-        &[InputEvent::Key {
+        &[GameInput::Key {
             code: "ArrowRight".into(),
             down: true,
             text: String::new(),
@@ -374,7 +374,7 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
     tokio::time::sleep(Duration::from_millis(500)).await;
     manager.input(
         "chat",
-        &[InputEvent::Key {
+        &[GameInput::Key {
             code: "ArrowRight".into(),
             down: false,
             text: String::new(),

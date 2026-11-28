@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use tokio::sync::watch;
 
 use crate::bridge::{Bridge, Event, Frame, Hello, Listening, Reply};
-use crate::detect::{Engine, Project};
+use crate::detect::{GameEngine, GameProject};
 use crate::godot::{self, Found};
 use crate::output::Output;
 use crate::run::{self, Launch, Running};
@@ -46,11 +46,11 @@ pub struct GameStatus {
     pub godot: GodotStatus,
     pub chats: Vec<ChatGame>,
     /// Chats an agent's tool asked to be shown, newest count each: the pane opens for them.
-    pub summons: Vec<Summon>,
+    pub summons: Vec<GameSummon>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
-pub struct Summon {
+pub struct GameSummon {
     pub chat_id: String,
     pub seq: u32,
 }
@@ -68,12 +68,12 @@ pub struct GodotStatus {
     pub found: Vec<String>,
     /// The computer has been looked over at least once.
     pub looked: bool,
-    pub fetch: Fetch,
+    pub fetch: GodotFetch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(tag = "state", rename_all = "snake_case")]
-pub enum Fetch {
+pub enum GodotFetch {
     Idle,
     Running { received: u32, total: u32 },
     Unpacking,
@@ -96,7 +96,7 @@ pub enum GameState {
 pub struct ChatGame {
     pub chat_id: String,
     /// What the chat's folder holds, once it has been looked at.
-    pub project: Option<Project>,
+    pub project: Option<GameProject>,
     pub state: GameState,
     /// Frozen by Ghost: an agent is between actions, or the person paused it.
     pub frozen: bool,
@@ -137,7 +137,7 @@ pub struct GameLog {
 /// Input from the pane, in the shape the game's bridge takes it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "t", rename_all = "snake_case")]
-pub enum InputEvent {
+pub enum GameInput {
     /// A key by its browser `code` ("KeyA", "ArrowLeft").
     Key {
         code: String,
@@ -173,22 +173,22 @@ pub enum InputEvent {
     },
 }
 
-impl InputEvent {
+impl GameInput {
     /// Whether it is input a person could have made: short names, real numbers.
     fn sane(&self) -> bool {
         let finite = |numbers: &[f32]| numbers.iter().all(|n| n.is_finite() && n.abs() < 1.0e6);
         match self {
-            InputEvent::Key { code, text, .. } => {
+            GameInput::Key { code, text, .. } => {
                 !code.is_empty()
                     && code.len() <= 32
                     && code.chars().all(|ch| ch.is_ascii_alphanumeric())
                     && text.chars().count() <= 2
             }
-            InputEvent::Mouse { x, y, button, .. } => {
+            GameInput::Mouse { x, y, button, .. } => {
                 finite(&[*x, *y]) && matches!(button.as_str(), "left" | "right" | "middle")
             }
-            InputEvent::Move { x, y, dx, dy } => finite(&[*x, *y, *dx, *dy]),
-            InputEvent::Wheel { x, y, dy } => finite(&[*x, *y, *dy]),
+            GameInput::Move { x, y, dx, dy } => finite(&[*x, *y, *dx, *dy]),
+            GameInput::Wheel { x, y, dy } => finite(&[*x, *y, *dy]),
         }
     }
 }
@@ -240,7 +240,7 @@ impl Drop for Run {
 
 struct Chat {
     folder: PathBuf,
-    project: Option<Project>,
+    project: Option<GameProject>,
     looked: bool,
     starting: bool,
     run: Option<Run>,
@@ -282,7 +282,7 @@ struct State {
     enabled: bool,
     found: Vec<Found>,
     looked: bool,
-    fetch: Fetch,
+    fetch: GodotFetch,
     fetch_cancel: Arc<AtomicBool>,
     chats: HashMap<String, Chat>,
     summons: HashMap<String, u32>,
@@ -351,7 +351,7 @@ impl Manager {
                     enabled: true,
                     found: Vec::new(),
                     looked: false,
-                    fetch: Fetch::Idle,
+                    fetch: GodotFetch::Idle,
                     fetch_cancel: Arc::default(),
                     chats: HashMap::new(),
                     summons: HashMap::new(),
@@ -391,10 +391,10 @@ impl Manager {
             .map(|(chat_id, chat)| chat_status(chat_id, chat, state.tools.contains_key(chat_id)))
             .collect();
         chats.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
-        let mut summons: Vec<Summon> = state
+        let mut summons: Vec<GameSummon> = state
             .summons
             .iter()
-            .map(|(chat_id, seq)| Summon {
+            .map(|(chat_id, seq)| GameSummon {
                 chat_id: chat_id.clone(),
                 seq: *seq,
             })
@@ -470,7 +470,7 @@ impl Manager {
     }
 
     /// What `folder` holds, for the chat. The folder is the chat's own: the caller owns the chat.
-    pub async fn look(&self, chat_id: &str, folder: &Path) -> Option<Project> {
+    pub async fn look(&self, chat_id: &str, folder: &Path) -> Option<GameProject> {
         let at = folder.to_owned();
         let project = tokio::task::spawn_blocking(move || crate::detect(&at))
             .await
@@ -515,10 +515,13 @@ impl Manager {
     pub fn fetch_start(&self) {
         let cancel = {
             let mut state = self.state();
-            if matches!(state.fetch, Fetch::Running { .. } | Fetch::Unpacking) {
+            if matches!(
+                state.fetch,
+                GodotFetch::Running { .. } | GodotFetch::Unpacking
+            ) {
                 return;
             }
-            state.fetch = Fetch::Running {
+            state.fetch = GodotFetch::Running {
                 received: 0,
                 total: godot::release()
                     .map_or(0, |release| u32::try_from(release.size).unwrap_or(u32::MAX)),
@@ -533,9 +536,9 @@ impl Manager {
             let report = move |progress: ghost_fetch::Progress| {
                 let whole = progress.received >= progress.total;
                 reporter.state().fetch = if whole {
-                    Fetch::Unpacking
+                    GodotFetch::Unpacking
                 } else {
-                    Fetch::Running {
+                    GodotFetch::Running {
                         received: u32::try_from(progress.received).unwrap_or(u32::MAX),
                         total: u32::try_from(progress.total).unwrap_or(u32::MAX),
                     }
@@ -544,8 +547,8 @@ impl Manager {
             };
             let result = godot::fetch(&manager.inner.config.root, &report, &cancel).await;
             manager.state().fetch = match result {
-                Ok(_) | Err(Error::Cancelled) => Fetch::Idle,
-                Err(error) => Fetch::Failed {
+                Ok(_) | Err(Error::Cancelled) => GodotFetch::Idle,
+                Err(error) => GodotFetch::Failed {
                     message: error.to_string(),
                 },
             };
@@ -626,8 +629,8 @@ impl Manager {
             return Err(Error::Refused(why.clone()));
         }
         match project.engine {
-            Engine::Godot => {}
-            Engine::Web => {
+            GameEngine::Godot => {}
+            GameEngine::Web => {
                 return Err(Error::Refused(
                     "This is a web game. Start its dev server and open it in Ghost's browser (browser_navigate)."
                         .into(),
@@ -971,11 +974,11 @@ impl Manager {
 
     /// Input from the pane. Nothing is sent to a game that is not running, and input a person
     /// could not have made is dropped.
-    pub fn input(&self, chat_id: &str, events: &[InputEvent]) {
+    pub fn input(&self, chat_id: &str, events: &[GameInput]) {
         let Ok(bridge) = self.bridge(chat_id) else {
             return;
         };
-        let events: Vec<&InputEvent> = events
+        let events: Vec<&GameInput> = events
             .iter()
             .filter(|event| event.sane())
             .take(64)
@@ -1143,7 +1146,7 @@ impl Manager {
         let project = self
             .look(chat_id, folder)
             .await
-            .filter(|project| project.engine == Engine::Godot)
+            .filter(|project| project.engine == GameEngine::Godot)
             .ok_or_else(|| Error::Refused("This chat's folder holds no Godot project.".into()))?;
         self.look_once().await;
         let program = self.godot_for(&project).map_err(Error::Refused)?;
@@ -1193,7 +1196,7 @@ impl Manager {
     }
 
     /// The Godot a project would run on, for a tool to tell an agent where it is.
-    pub(crate) fn godot_for(&self, project: &Project) -> Result<PathBuf, String> {
+    pub(crate) fn godot_for(&self, project: &GameProject) -> Result<PathBuf, String> {
         let state = self.state();
         godot::choose(project.version.as_deref(), &state.found).map(|godot| godot.program.clone())
     }

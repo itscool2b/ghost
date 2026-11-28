@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
-use ghost_game::{Config, DEFAULT_RUNNING, GameLog, GameStatus, InputEvent, Manager as Games};
+use ghost_game::{Config, DEFAULT_RUNNING, GameInput, GameLog, GameStatus, Manager as Games};
 use serde::Serialize;
 use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse};
 use tauri::{AppHandle, Emitter, Manager as _, State};
@@ -435,7 +435,7 @@ pub async fn game_sound(
 pub async fn game_input(
     games: State<'_, Games>,
     chat_id: String,
-    events: Vec<InputEvent>,
+    events: Vec<GameInput>,
 ) -> Result<(), AppError> {
     games.input(&chat_id, &events);
     Ok(())

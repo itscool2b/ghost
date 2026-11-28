@@ -10,7 +10,7 @@ const READ_LIMIT: u64 = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
-pub enum Engine {
+pub enum GameEngine {
     /// Godot 4, which Ghost runs itself.
     Godot,
     /// A game that is a web page (Three.js, Phaser and the like), which runs in Ghost's browser.
@@ -28,29 +28,29 @@ pub enum Engine {
     MonoGame,
 }
 
-impl Engine {
+impl GameEngine {
     /// The engine's name as its makers write it.
     pub fn name(self) -> &'static str {
         match self {
-            Engine::Godot => "Godot",
-            Engine::Web => "Web",
-            Engine::Unity => "Unity",
-            Engine::Unreal => "Unreal Engine",
-            Engine::Roblox => "Roblox",
-            Engine::Bevy => "Bevy",
-            Engine::Love => "LÖVE",
-            Engine::Pygame => "Pygame",
-            Engine::GameMaker => "GameMaker",
-            Engine::Defold => "Defold",
-            Engine::MonoGame => "MonoGame",
+            GameEngine::Godot => "Godot",
+            GameEngine::Web => "Web",
+            GameEngine::Unity => "Unity",
+            GameEngine::Unreal => "Unreal Engine",
+            GameEngine::Roblox => "Roblox",
+            GameEngine::Bevy => "Bevy",
+            GameEngine::Love => "LÖVE",
+            GameEngine::Pygame => "Pygame",
+            GameEngine::GameMaker => "GameMaker",
+            GameEngine::Defold => "Defold",
+            GameEngine::MonoGame => "MonoGame",
         }
     }
 }
 
 /// What a folder's game is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
-pub struct Project {
-    pub engine: Engine,
+pub struct GameProject {
+    pub engine: GameEngine,
     /// The game's own name, where the project states one.
     pub name: Option<String>,
     /// The engine version the project was made with ("4.7", "6000.0.23f1"), where it says.
@@ -62,8 +62,8 @@ pub struct Project {
     pub unsupported: Option<String>,
 }
 
-impl Project {
-    fn of(engine: Engine) -> Self {
+impl GameProject {
+    fn of(engine: GameEngine) -> Self {
         Self {
             engine,
             name: None,
@@ -75,7 +75,7 @@ impl Project {
 
     /// Whether Ghost runs this game itself, so its own game tools apply.
     pub fn runs_in_ghost(&self) -> bool {
-        matches!(self.engine, Engine::Godot | Engine::Web) && self.unsupported.is_none()
+        matches!(self.engine, GameEngine::Godot | GameEngine::Web) && self.unsupported.is_none()
     }
 }
 
@@ -134,9 +134,9 @@ fn ini_value(text: &str, key: &str) -> Option<String> {
     })
 }
 
-fn godot(folder: &Path, names: &[(String, bool)]) -> Option<Project> {
+fn godot(folder: &Path, names: &[(String, bool)]) -> Option<GameProject> {
     let text = read(&folder.join("project.godot"))?;
-    let mut project = Project::of(Engine::Godot);
+    let mut project = GameProject::of(GameEngine::Godot);
     project.name = ini_value(&text, "config/name").filter(|name| !name.is_empty());
     let features = ini_value(&text, "config/features").unwrap_or_default();
     // `PackedStringArray("4.7", "GL Compatibility")`: the version is the entry that reads as one.
@@ -187,7 +187,7 @@ const WEB_FRAMEWORKS: [(&str, &str); 11] = [
     ("melonjs", "melonjs"),
 ];
 
-fn web(folder: &Path) -> Option<Project> {
+fn web(folder: &Path) -> Option<GameProject> {
     let text = read(&folder.join("package.json"))?;
     let package: serde_json::Value = serde_json::from_str(&text).ok()?;
     let depends = |name: &str| {
@@ -196,7 +196,7 @@ fn web(folder: &Path) -> Option<Project> {
             .any(|section| package[*section].get(name).is_some())
     };
     let (_, framework) = WEB_FRAMEWORKS.iter().find(|(name, _)| depends(name))?;
-    let mut project = Project::of(Engine::Web);
+    let mut project = GameProject::of(GameEngine::Web);
     project.framework = Some((*framework).to_owned());
     project.name = package["name"]
         .as_str()
@@ -205,9 +205,9 @@ fn web(folder: &Path) -> Option<Project> {
     Some(project)
 }
 
-fn unity(folder: &Path) -> Option<Project> {
+fn unity(folder: &Path) -> Option<GameProject> {
     let text = read(&folder.join("ProjectSettings").join("ProjectVersion.txt"))?;
-    let mut project = Project::of(Engine::Unity);
+    let mut project = GameProject::of(GameEngine::Unity);
     project.version = text.lines().find_map(|line| {
         line.strip_prefix("m_EditorVersion:")
             .map(|version| version.trim().to_owned())
@@ -215,9 +215,9 @@ fn unity(folder: &Path) -> Option<Project> {
     Some(project)
 }
 
-fn unreal(folder: &Path, names: &[(String, bool)]) -> Option<Project> {
+fn unreal(folder: &Path, names: &[(String, bool)]) -> Option<GameProject> {
     let file = with_extension(names, "uproject")?;
-    let mut project = Project::of(Engine::Unreal);
+    let mut project = GameProject::of(GameEngine::Unreal);
     project.name = Path::new(file)
         .file_stem()
         .and_then(|stem| stem.to_str())
@@ -241,7 +241,7 @@ fn mentions(folder: &Path, file: &str, word: &str) -> bool {
 
 /// What game `folder` holds, or `None` when it is not one Ghost knows. It reads a handful of
 /// small files and blocks while it does: call it from a thread that may.
-pub fn detect(folder: &Path) -> Option<Project> {
+pub fn detect(folder: &Path) -> Option<GameProject> {
     let names = top(folder);
     if has(&names, "project.godot") {
         return godot(folder, &names);
@@ -256,7 +256,7 @@ pub fn detect(folder: &Path) -> Option<Project> {
         || with_extension(&names, "rbxl").is_some()
         || with_extension(&names, "rbxlx").is_some()
     {
-        return Some(Project::of(Engine::Roblox));
+        return Some(GameProject::of(GameEngine::Roblox));
     }
     if has(&names, "package.json")
         && let Some(project) = web(folder)
@@ -264,28 +264,28 @@ pub fn detect(folder: &Path) -> Option<Project> {
         return Some(project);
     }
     if has(&names, "game.project") {
-        return Some(Project::of(Engine::Defold));
+        return Some(GameProject::of(GameEngine::Defold));
     }
     if with_extension(&names, "yyp").is_some() {
-        return Some(Project::of(Engine::GameMaker));
+        return Some(GameProject::of(GameEngine::GameMaker));
     }
     if has(&names, "Cargo.toml") && mentions(folder, "Cargo.toml", "\nbevy") {
-        return Some(Project::of(Engine::Bevy));
+        return Some(GameProject::of(GameEngine::Bevy));
     }
     if has(&names, "main.lua") && (has(&names, "conf.lua") || mentions(folder, "main.lua", "love."))
     {
-        return Some(Project::of(Engine::Love));
+        return Some(GameProject::of(GameEngine::Love));
     }
     if ["requirements.txt", "pyproject.toml"]
         .iter()
         .any(|file| has(&names, file) && mentions(folder, file, "pygame"))
     {
-        return Some(Project::of(Engine::Pygame));
+        return Some(GameProject::of(GameEngine::Pygame));
     }
     if let Some(file) = with_extension(&names, "csproj")
         && mentions(folder, file, "monogame")
     {
-        return Some(Project::of(Engine::MonoGame));
+        return Some(GameProject::of(GameEngine::MonoGame));
     }
     None
 }
@@ -310,7 +310,7 @@ mod tests {
     fn a_godot_4_project_is_one_ghost_runs() {
         let game = folder(&[("project.godot", GODOT)]);
         let project = detect(game.path()).unwrap();
-        assert_eq!(project.engine, Engine::Godot);
+        assert_eq!(project.engine, GameEngine::Godot);
         assert_eq!(project.name.as_deref(), Some("Moon Hop"));
         assert_eq!(project.version.as_deref(), Some("4.7"));
         assert!(project.runs_in_ghost());
@@ -323,7 +323,7 @@ mod tests {
             "config_version=4\n[application]\nconfig/name=\"Old\"\n",
         )]);
         let project = detect(old.path()).unwrap();
-        assert_eq!(project.engine, Engine::Godot);
+        assert_eq!(project.engine, GameEngine::Godot);
         assert!(project.unsupported.as_deref().unwrap().contains("Godot 3"));
         assert!(!project.runs_in_ghost());
 
@@ -335,7 +335,7 @@ mod tests {
             ("Game.csproj", "<Project Sdk=\"Godot.NET.Sdk/4.7.0\" />"),
         ]);
         let project = detect(sharp.path()).unwrap();
-        assert_eq!(project.engine, Engine::Godot, "not MonoGame");
+        assert_eq!(project.engine, GameEngine::Godot, "not MonoGame");
         assert!(project.unsupported.as_deref().unwrap().contains("C#"));
     }
 
@@ -346,7 +346,7 @@ mod tests {
             r#"{"name":"orbit","dependencies":{"three":"^0.170.0"},"devDependencies":{"vite":"^6"}}"#,
         )]);
         let project = detect(three.path()).unwrap();
-        assert_eq!(project.engine, Engine::Web);
+        assert_eq!(project.engine, GameEngine::Web);
         assert_eq!(project.framework.as_deref(), Some("three"));
         assert_eq!(project.name.as_deref(), Some("orbit"));
         assert!(project.runs_in_ghost());
@@ -370,18 +370,18 @@ mod tests {
             "m_EditorVersion: 6000.0.23f1\nm_EditorVersionWithRevision: 6000.0.23f1 (abc)\n",
         )]);
         let project = detect(unity.path()).unwrap();
-        assert_eq!(project.engine, Engine::Unity);
+        assert_eq!(project.engine, GameEngine::Unity);
         assert_eq!(project.version.as_deref(), Some("6000.0.23f1"));
         assert!(!project.runs_in_ghost());
 
         let unreal = folder(&[("Shooter.uproject", r#"{"EngineAssociation":"5.8"}"#)]);
         let project = detect(unreal.path()).unwrap();
-        assert_eq!(project.engine, Engine::Unreal);
+        assert_eq!(project.engine, GameEngine::Unreal);
         assert_eq!(project.name.as_deref(), Some("Shooter"));
         assert_eq!(project.version.as_deref(), Some("5.8"));
 
         let roblox = folder(&[("default.project.json", "{}")]);
-        assert_eq!(detect(roblox.path()).unwrap().engine, Engine::Roblox);
+        assert_eq!(detect(roblox.path()).unwrap().engine, GameEngine::Roblox);
     }
 
     #[test]
@@ -389,18 +389,24 @@ mod tests {
         for (files, engine) in [
             (
                 vec![("Cargo.toml", "[dependencies]\nbevy = \"0.18\"\n")],
-                Engine::Bevy,
+                GameEngine::Bevy,
             ),
-            (vec![("main.lua", "function love.draw() end")], Engine::Love),
-            (vec![("requirements.txt", "pygame==2.6\n")], Engine::Pygame),
-            (vec![("game.project", "[project]\n")], Engine::Defold),
-            (vec![("Thing.yyp", "{}")], Engine::GameMaker),
+            (
+                vec![("main.lua", "function love.draw() end")],
+                GameEngine::Love,
+            ),
+            (
+                vec![("requirements.txt", "pygame==2.6\n")],
+                GameEngine::Pygame,
+            ),
+            (vec![("game.project", "[project]\n")], GameEngine::Defold),
+            (vec![("Thing.yyp", "{}")], GameEngine::GameMaker),
             (
                 vec![(
                     "Game.csproj",
                     "<PackageReference Include=\"MonoGame.Framework.DesktopGL\" />",
                 )],
-                Engine::MonoGame,
+                GameEngine::MonoGame,
             ),
         ] {
             let game = folder(&files);

@@ -21,10 +21,10 @@ mod output;
 mod run;
 pub mod tools;
 
-pub use detect::{Engine, Project, detect};
+pub use detect::{GameEngine, GameProject, detect};
 pub use manager::{
-    ChatGame, Config, DEFAULT_RUNNING, Fetch, GameError, GameLog, GameState, GameStatus,
-    GodotStatus, IDLE, InputEvent, Manager, Summon, TURNED_OFF, ToolReply, Viewer,
+    ChatGame, Config, DEFAULT_RUNNING, GameError, GameInput, GameLog, GameState, GameStatus,
+    GameSummon, GodotFetch, GodotStatus, IDLE, Manager, TURNED_OFF, ToolReply, Viewer,
 };
 
 use std::path::Path;
