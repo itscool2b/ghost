@@ -838,22 +838,21 @@ button.game-log-where:focus-visible {
   appearance: none;
 }
 
+/* The track is as tall as the thumb, with its line drawn through the middle: the thumb then
+ * sits on the line in every engine with no offset of its own. */
 .game-tune-slider::-webkit-slider-runnable-track {
-  height: 2px;
-  border-radius: 1px;
-  background-color: var(--g-line);
+  height: 12px;
+  background: linear-gradient(var(--g-line), var(--g-line)) center / 100% 2px no-repeat;
 }
 
 .game-tune-slider::-moz-range-track {
-  height: 2px;
-  border-radius: 1px;
-  background-color: var(--g-line);
+  height: 12px;
+  background: linear-gradient(var(--g-line), var(--g-line)) center / 100% 2px no-repeat;
 }
 
 .game-tune-slider::-webkit-slider-thumb {
   width: 12px;
   height: 12px;
-  margin-top: -5px;
   border: 0;
   border-radius: 50%;
   background-color: var(--g-fg-1);
