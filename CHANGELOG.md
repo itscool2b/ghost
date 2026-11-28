@@ -10,6 +10,10 @@ that changes the app adds its own line in the same pull request; see "Changelog"
 [docs/developing-in-ghost.md](docs/developing-in-ghost.md). `node .github/scripts/check-changelog.mjs`
 checks the format, and with `--dates` checks each day against the time GitHub says it merged.
 
+## 2026-11-28
+
+- Declining a plan works the way you expect. When you ask for changes, your note now reaches the agent together with the refusal, in your own words, so it answers your question or changes the plan right away instead of asking what you wanted. Decline now stops the agent, so you can say what you want instead. The answered plan shows the note you sent. ([#230](https://github.com/itscool2b/ghost/pull/230))
+
 ## 2026-11-27
 
 - Notifications are easier to spot: the bell lights up with a count and swings when something new arrives, such as an agent update. The sidebar has an Automations row. Dictation uses the small built-in voice model by default, so it starts fast and keeps up as you talk; the larger model is now a download you choose in Settings > Voice, and Ghost no longer fetches it by itself. ([#229](https://github.com/itscool2b/ghost/pull/229))
