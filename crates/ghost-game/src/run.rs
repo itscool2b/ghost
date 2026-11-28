@@ -62,6 +62,11 @@ pub struct Launch<'a> {
     /// Ghost's own window, which the game's window is owned by so that it has no taskbar entry
     /// and can sit off-screen. Without one the game's window shows as any window does.
     pub owner_window: Option<i64>,
+    /// What the game's random numbers start from. Ghost names it so that a run can be played
+    /// again with the same numbers.
+    pub seed: u32,
+    /// Start standing still, before the first step: a run that is about to be given a replay.
+    pub held: bool,
 }
 
 /// The arguments Godot is started with.
@@ -130,12 +135,17 @@ pub fn start(
         .args(arguments(launch))
         .env("GHOST_GAME_BRIDGE", launch.bridge_address)
         .env("GHOST_GAME_TOKEN", launch.token)
+        .env("GHOST_GAME_SEED", launch.seed.to_string())
         .env_remove("GHOST_GAME_SCENE")
+        .env_remove("GHOST_GAME_HOLD")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(scene) = launch.scene {
         command.env("GHOST_GAME_SCENE", checked_scene(scene)?);
+    }
+    if launch.held {
+        command.env("GHOST_GAME_HOLD", "1");
     }
     let mut wrapped = CommandWrap::from(command);
     wrapped.wrap(KillOnDrop);
@@ -228,6 +238,8 @@ mod tests {
             token: "t",
             scene: None,
             owner_window,
+            seed: 7,
+            held: false,
         };
         let plain: Vec<String> = arguments(&launch(None))
             .iter()

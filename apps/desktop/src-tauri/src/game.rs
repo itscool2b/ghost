@@ -471,6 +471,61 @@ pub async fn game_input(
     Ok(())
 }
 
+/// What is under a point of the game's picture, in the game's own pixels, for the pane's Point:
+/// the person freezes the game and clicks what is wrong. Nothing there answers `None`.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_pick(
+    state: State<'_, AppState>,
+    games: State<'_, Games>,
+    chat_id: String,
+    x: f32,
+    y: f32,
+) -> Result<Option<ghost_game::GamePicked>, AppError> {
+    let folder = folder_of(&state, &chat_id).await?;
+    Ok(games.pick(&chat_id, &folder, x, y).await?)
+}
+
+/// The values of a node the person may turn while the game runs, for the pane's Tune.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_tunables(
+    games: State<'_, Games>,
+    chat_id: String,
+    node: String,
+) -> Result<ghost_game::GameTunables, AppError> {
+    Ok(games.tunables(&chat_id, &node).await?)
+}
+
+/// Turns one value of the running game. It changes this run only: the person hands what they
+/// keep to the agent, which writes it into the project.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_set_value(
+    games: State<'_, Games>,
+    chat_id: String,
+    node: String,
+    property: String,
+    kind: String,
+    value: f64,
+) -> Result<(), AppError> {
+    Ok(games
+        .set_value(&chat_id, &node, &property, &kind, value)
+        .await?)
+}
+
+/// The last seconds of the chat's run as small pictures, and the run kept for the agent to play
+/// again (`game_replay`). The person's action: what they just played goes to the agent.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_recent(
+    games: State<'_, Games>,
+    chat_id: String,
+    seconds: f32,
+) -> Result<ghost_game::GameRecent, AppError> {
+    Ok(games.recent(&chat_id, seconds).await?)
+}
+
 /// Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
 /// stream's own end. Answers the stream's number, for `game_unwatch`.
 #[tauri::command]

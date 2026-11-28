@@ -46,6 +46,8 @@ pub struct Hello {
     pub window: i64,
     pub project: String,
     pub renderer: String,
+    /// Controllers the game itself sees on this computer.
+    pub joypads: u32,
 }
 
 /// One picture of the game for the pane.
@@ -182,6 +184,7 @@ impl Listening {
                 window: message["window"].as_i64().unwrap_or(0),
                 project: text("project"),
                 renderer: text("renderer"),
+                joypads: number("joypads").min(16),
             };
             return Ok((Bridge::start(read, write, Arc::new(on_event)), hello));
         }

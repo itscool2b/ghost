@@ -25,9 +25,9 @@ pub mod tools;
 
 pub use detect::{GameEngine, GameProject, detect};
 pub use manager::{
-    ChatGame, Config, DEFAULT_RUNNING, GameError, GameInput, GameLog, GameState, GameStatus,
-    GameSummon, GodotFetch, GodotStatus, IDLE, Manager, TURNED_OFF, ToolReply, Viewer, WebFuture,
-    WebGames,
+    ChatGame, Config, DEFAULT_RUNNING, GameError, GameInput, GameLog, GamePicked, GameRecent,
+    GameState, GameStatus, GameSummon, GameTunable, GameTunables, GodotFetch, GodotStatus, IDLE,
+    Manager, TURNED_OFF, ToolReply, Viewer, WebFuture, WebGames,
 };
 pub use probe::EngineProbe;
 pub use starter::Starter;

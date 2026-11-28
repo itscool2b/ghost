@@ -235,6 +235,19 @@ pub(crate) fn tools() -> Value {
                 },
                 "additionalProperties": false
             }
+        },
+        {
+            "name": "game_replay",
+            "description": "Play again a run the person kept for you with \"Send the last 15 seconds\" in the Game pane (their message names it, like r3). The game starts afresh with the same random seed and is given exactly the inputs they gave, at the same steps, as fast as it can go; it freezes where their run ended (or at until_s). You get a filmstrip of the last stretch and the last frame, and can then read the game as it was at that moment with game_tree, game_inspect and game_eval. Exact for a game that takes its random numbers from randi() and its like and reads no clock; a game that calls randomize() or the system time may differ. Godot games only. After you change the code, replay the same run to see whether the fault is gone.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "replay": { "type": "string", "description": "The kept run's name, as the person's message gives it (r1, r2, ...)." },
+                    "until_s": { "type": "number", "description": "Stop this many seconds of game time into the run instead of at its end, to look at an earlier moment." }
+                },
+                "required": ["replay"],
+                "additionalProperties": false
+            }
         }
     ])
 }
@@ -323,7 +336,7 @@ mod tests {
     fn every_tool_has_a_strict_schema_and_a_description() {
         let tools = tools();
         let tools = tools.as_array().unwrap();
-        assert_eq!(tools.len(), 14);
+        assert_eq!(tools.len(), 15);
         for tool in tools {
             let name = tool["name"].as_str().unwrap();
             assert!(name.starts_with("game_"), "{name}");

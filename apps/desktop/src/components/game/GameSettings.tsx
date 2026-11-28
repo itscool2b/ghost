@@ -21,6 +21,7 @@ const AGENT_TOOLS: readonly (readonly [string, string])[] = [
   ["game_eval", "Run code in the game"],
   ["game_perf", "Measure speed"],
   ["game_time", "Freeze and resume"],
+  ["game_replay", "Replay what you played"],
 ];
 
 /**

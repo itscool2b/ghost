@@ -392,6 +392,201 @@ async fn a_real_godot_is_fetched_and_plays_the_fixture() {
     );
     drop(viewer);
 
+    // Point: the node under a place in the picture, and where it is defined.
+    let at = player_x(&manager, &game).await as f32;
+    let picked = manager
+        .pick("chat", &game, at, 300.0)
+        .await
+        .unwrap()
+        .expect("the player is under the pointer");
+    assert_eq!(
+        (
+            picked.name.as_str(),
+            picked.class.as_str(),
+            picked.path.as_str()
+        ),
+        ("Player", "Polygon2D", "/root/Main/Player")
+    );
+    assert_eq!(
+        (
+            picked.scene.as_str(),
+            picked.in_scene.as_str(),
+            picked.scene_line
+        ),
+        ("res://main.tscn", "Player", Some(8))
+    );
+    assert_eq!(
+        (picked.script.as_str(), picked.script_on.as_str()),
+        ("res://main.gd", "/root/Main")
+    );
+    assert!(
+        (picked.area[2] - 40.0).abs() < 1.0 && (picked.area[0] - (at - 20.0)).abs() < 1.5,
+        "{:?} with the player at {at}",
+        picked.area
+    );
+    let label = manager
+        .pick("chat", &game, 24.0, 28.0)
+        .await
+        .unwrap()
+        .expect("the score is under the pointer");
+    assert_eq!(
+        (label.name.as_str(), label.class.as_str()),
+        ("Hud", "Label")
+    );
+    assert!(label.text.starts_with("Score "), "{}", label.text);
+    assert!(
+        manager
+            .pick("chat", &game, 600.0, 500.0)
+            .await
+            .unwrap()
+            .is_none(),
+        "nothing is drawn there"
+    );
+    assert!(manager.pick("chat", &game, f32::NAN, 0.0).await.is_err());
+
+    // Tune: what the script exports, turned while the game runs.
+    let speed_of = |tunables: &ghost_game::GameTunables| {
+        tunables
+            .values
+            .iter()
+            .find(|value| value.name == "speed")
+            .cloned()
+            .expect("speed is exported")
+    };
+    let tunables = manager.tunables("chat", ".").await.unwrap();
+    assert_eq!(
+        (tunables.script.as_str(), tunables.path.as_str()),
+        ("res://main.gd", "/root/Main")
+    );
+    let speed = speed_of(&tunables);
+    assert_eq!((speed.kind.as_str(), speed.initial), ("float", Some(200.0)));
+    assert!(
+        tunables.values.iter().all(|value| value.name != "frames"),
+        "what a script does not export is not offered"
+    );
+    manager
+        .set_value("chat", ".", "speed", "float", 300.0)
+        .await
+        .unwrap();
+    assert_eq!(
+        speed_of(&manager.tunables("chat", ".").await.unwrap()).value,
+        300.0
+    );
+    assert!(
+        manager
+            .set_value("chat", ".", "speed = 1; x", "float", 1.0)
+            .await
+            .is_err(),
+        "a value's name is a name"
+    );
+    assert!(
+        manager
+            .set_value("chat", ".", "speed", "text", 1.0)
+            .await
+            .is_err()
+    );
+
+    // The last seconds, and the run again. A fresh run is set up by an agent, played by its
+    // action and then by the person's own keys, kept, and replayed: the replay ends in the
+    // very state the first run did, to the frame.
+    let again = tool(&manager, &game, "game_run", json!({})).await;
+    assert!(!again.error, "{}", again.text);
+    let set = tool(
+        &manager,
+        &game,
+        "game_set",
+        json!({"node": ".", "property": "speed", "value": "330"}),
+    )
+    .await;
+    assert!(!set.error, "{}", set.text);
+    let acted = tool(
+        &manager,
+        &game,
+        "game_act",
+        json!({"steps": [
+            {"press": "ui_right", "ms": 400},
+            {"press": "ui_accept", "ms": 50},
+            {"press": "ui_left", "ms": 100},
+        ]}),
+    )
+    .await;
+    assert!(!acted.error, "{}", acted.text);
+    tool(&manager, &game, "game_time", json!({"frozen": false})).await;
+    let key = |down| GameInput::Key {
+        code: "ArrowRight".into(),
+        down,
+        text: String::new(),
+        shift: false,
+        ctrl: false,
+        alt: false,
+    };
+    manager.input("chat", &[key(true)]);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    manager.input("chat", &[key(false)]);
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    tool(&manager, &game, "game_time", json!({"frozen": true})).await;
+    // A frame for the freeze to take hold: the game stops between steps, never inside one.
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    async fn state(manager: &Manager, folder: &Path) -> String {
+        let reply = tool(
+            manager,
+            folder,
+            "game_eval",
+            json!({"code": "[scene.frames, Globals.score, scene.get_node(\"Player\").position.x, scene.speed]"}),
+        )
+        .await;
+        assert!(!reply.error, "{}", reply.text);
+        reply.text.lines().next().unwrap_or_default().to_owned()
+    }
+    let first = state(&manager, &game).await;
+    let recent = manager.recent("chat", 15.0).await.unwrap();
+    assert!(is_jpeg(&recent.picture));
+    assert!(recent.unrepeatable.is_none(), "{:?}", recent.unrepeatable);
+    assert!(recent.inputs >= 8, "{} inputs", recent.inputs);
+    assert!(
+        recent.run_seconds > 1.0 && recent.seconds <= recent.run_seconds + 0.01,
+        "{} s of a {} s run",
+        recent.seconds,
+        recent.run_seconds
+    );
+    let name = recent.replay.expect("the run is kept");
+    assert_eq!(name, "r1");
+    let replayed = tool(&manager, &game, "game_replay", json!({"replay": name})).await;
+    assert!(!replayed.error, "{}", replayed.text);
+    assert_eq!(
+        replayed.images.len(),
+        2,
+        "its last stretch and its last frame"
+    );
+    assert!(replayed.images.iter().all(|image| is_jpeg(image)));
+    assert!(
+        replayed.text.contains("frozen where the replay ends"),
+        "{}",
+        replayed.text
+    );
+    assert_eq!(
+        state(&manager, &game).await,
+        first,
+        "the replay ends where the run did"
+    );
+    // And an earlier moment of it: a fifth of a second in, twelve steps.
+    let early = tool(
+        &manager,
+        &game,
+        "game_replay",
+        json!({"replay": "r1", "until_s": 0.2}),
+    )
+    .await;
+    assert!(!early.error, "{}", early.text);
+    let early_state = state(&manager, &game).await;
+    assert!(early_state.starts_with("[12, 0, "), "{early_state}");
+    let unknown = tool(&manager, &game, "game_replay", json!({"replay": "r9"})).await;
+    assert!(
+        unknown.error && unknown.text.contains("Kept: r1"),
+        "{}",
+        unknown.text
+    );
+
     // Another scene by name, then stop.
     let scene = tool(
         &manager,
