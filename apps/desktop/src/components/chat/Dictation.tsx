@@ -511,13 +511,7 @@ export function Wave({
   }, [source]);
   return (
     <div className="dictation-wave" data-quiet={quiet ? "" : undefined}>
-      <meter
-        ref={meter}
-        className="sr-only"
-        aria-label="Microphone level"
-        min={0}
-        max={1}
-      />
+      <meter ref={meter} className="sr-only" aria-label="Microphone level" min={0} max={1} />
       {/* No fallback content: the meter above is what assistive technology reads. */}
       <canvas ref={canvas} className="dictation-wave-canvas" />
     </div>

@@ -682,6 +682,12 @@ export const commands = {
 	 *  plans.
 	 */
 	chatAcceptPlan: (chatId: string, requestId: string, optionId: string, plan: string) => typedError<null, AppError>(__TAURI_INVOKE("chat_accept_plan", { chatId, requestId, optionId, plan })),
+	/**
+	 *  Declines a plan waiting for approval with the person's words, which the agent reads with the
+	 *  refusal and keeps planning with. The core refuses it unless the request is a plan approval,
+	 *  the option is its reject-once answer and the agent takes words with a refusal.
+	 */
+	chatDeclinePlan: (chatId: string, requestId: string, optionId: string, note: string) => typedError<null, AppError>(__TAURI_INVOKE("chat_decline_plan", { chatId, requestId, optionId, note })),
 	/**  Answers a question card; `null` dismisses it. */
 	chatRespondUi: (chatId: string, requestId: string, answer: UiAnswer | null) => typedError<null, AppError>(__TAURI_INVOKE("chat_respond_ui", { chatId, requestId, answer })),
 	/**  Changes one of the agent's options and returns the lists after the change (35 s at most). */
@@ -1280,6 +1286,12 @@ export type Capabilities = {
 	 *  it reports, and every record made before it existed, reads the same as before.
 	 */
 	plan_edits?: boolean,
+	/**
+	 *  A plan waiting for approval can be declined with the person's words: the agent reads
+	 *  them with the refusal, in the same turn, and keeps planning. Written only when true, as
+	 *  `plan_edits` is.
+	 */
+	plan_notes?: boolean,
 	autonomy_levels: Autonomy[],
 };
 
@@ -3186,7 +3198,13 @@ export type PermissionDecision = { type: "selected"; option_id: string;
  *  was accepted with edits ([`Capabilities::plan_edits`]). `None` for every other answer,
  *  and absent from what is stored and sent then, so older records read as they did.
  */
-plan?: string | null } | { type: "cancelled" };
+plan?: string | null;
+/**
+ *  What the person wrote when they sent a plan back: only on a plan approval declined
+ *  with words, by an agent that reads them with the refusal
+ *  ([`Capabilities::plan_notes`]). Absent otherwise, as `plan` is.
+ */
+note?: string | null } | { type: "cancelled" };
 
 export type PermissionOption = {
 	option_id: string,

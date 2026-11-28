@@ -139,30 +139,71 @@ async function inspect(engine, launcher) {
       await open();
       await waiting.getByRole("button", { name: "Edit" }).click();
       await editor.fill("# Keep the active chat visible\n\n1. Only scroll it into view.");
+      const calls = () => page.evaluate(() => window.planPreview.calls());
       await waiting.getByRole("button", { name: "Send back edited" }).click();
-      await answered.getByText("Sent back to keep planning.").waitFor();
-      await page
-        .getByText("I edited the plan. Use this version in place of yours")
-        .first()
-        .waitFor();
+      await answered.getByText("Sent back with your edits.").waitFor();
+      // The edited plan went inside the refusal itself: one call, and no message beside it.
+      assert.equal((await calls()).length, 1, what("one call for an edited plan sent back"));
+      assert.match(
+        (await calls())[0],
+        /^decline:I edited the plan\. Use this version in place of yours/,
+        what("the edited plan goes with the refusal"),
+      );
+      assert.equal(await page.getByTestId("plan-note-sent").count(), 0);
       // A declined plan is still the agent's own.
       await answered.getByText("Give each project a clearer heading row.").waitFor();
 
-      // Request changes: a note, sent by the keyboard.
+      // Request changes: a note, sent by the keyboard. It goes with the refusal, as written:
+      // nothing is put around it, so a question stays a question.
       await open();
       await waiting.getByRole("button", { name: "Request changes" }).click();
       const note = waiting.getByLabel("What should change?");
       assert.equal(await note.evaluate((node) => node === document.activeElement), true);
-      await note.fill("Also keep the scroll position.");
+      assert.match(
+        await note.getAttribute("placeholder"),
+        /Claude Code reads it with the plan and keeps planning\.$/,
+        what("where the note goes"),
+      );
+      await note.fill("Are we keeping the scroll position?");
       await page.keyboard.press("Control+Enter");
-      await answered.getByText("Sent back to keep planning.").waitFor();
-      await page.getByText("Also keep the scroll position.").first().waitFor();
+      await answered.getByText("Sent back with your note.").waitFor();
+      assert.equal(
+        await answered.getByTestId("plan-note-sent").textContent(),
+        "Are we keeping the scroll position?",
+      );
+      assert.deepEqual(
+        await calls(),
+        ["decline:Are we keeping the scroll position?"],
+        what("the note goes inside the refusal, with nothing added and no message after it"),
+      );
+      assert.deepEqual(
+        (await new AxeBuilder({ page }).include('[data-kind="plan-approval"]').analyze())
+          .violations,
+        [],
+        what("a plan sent back with a note"),
+      );
 
-      // Decline says nothing more.
+      // Decline says nothing more, and says the next word is the person's.
       await open();
       await waiting.getByRole("button", { name: "Decline" }).click();
-      await answered.getByText("Sent back to keep planning.").waitFor();
-      assert.equal(await page.getByText("I edited the plan.").count(), 0);
+      await answered.getByText("Declined. Tell Claude Code what you want instead.").waitFor();
+      assert.deepEqual(await calls(), ["respond:deny"], what("a plain decline is one answer"));
+      assert.equal(await page.getByTestId("plan-note-sent").count(), 0);
+
+      // An agent that takes no words with a refusal: the plan is declined and the note follows
+      // as the person's next message, and the field says so before it is written.
+      await page.goto(`${url}/?preview=plan&edits=none`);
+      await waiting.getByRole("button", { name: "Request changes" }).click();
+      assert.match(
+        await note.getAttribute("placeholder"),
+        /It goes to Claude Code as your next message\.$/,
+        what("where the note goes without words on a refusal"),
+      );
+      await note.fill("Fewer steps, please.");
+      await waiting.getByRole("button", { name: "Send back" }).click();
+      await answered.getByText("Sent back with your note.").waitFor();
+      assert.deepEqual(await calls(), ["respond:deny"], what("declined first"));
+      await page.getByText("Fewer steps, please.").first().waitFor();
 
       // Accept, by the keyboard from wherever the sheet has focus.
       await open();

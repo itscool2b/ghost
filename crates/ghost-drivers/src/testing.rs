@@ -538,6 +538,7 @@ impl Runner {
             }
             DriverCommand::Interrupt
             | DriverCommand::EditPlan { .. }
+            | DriverCommand::DeclinePlan { .. }
             | DriverCommand::RespondPermission { .. }
             | DriverCommand::RespondUi { .. }
             | DriverCommand::Shutdown { .. } => {}

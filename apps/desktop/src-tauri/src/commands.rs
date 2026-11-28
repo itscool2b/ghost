@@ -594,6 +594,24 @@ pub async fn chat_accept_plan(
         .await?)
 }
 
+/// Declines a plan waiting for approval with the person's words, which the agent reads with the
+/// refusal and keeps planning with. The core refuses it unless the request is a plan approval,
+/// the option is its reject-once answer and the agent takes words with a refusal.
+#[tauri::command]
+#[specta::specta]
+pub async fn chat_decline_plan(
+    state: State<'_, AppState>,
+    chat_id: String,
+    request_id: String,
+    option_id: String,
+    note: String,
+) -> Result<(), AppError> {
+    Ok(state
+        .sessions()?
+        .decline_plan(&chat_id, &request_id, &option_id, &note)
+        .await?)
+}
+
 /// Answers a question card; `null` dismisses it.
 #[tauri::command]
 #[specta::specta]

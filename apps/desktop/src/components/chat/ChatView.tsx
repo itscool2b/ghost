@@ -815,23 +815,29 @@ export function ChatView({
   useEffect(() => () => onCommands?.([]), [onCommands]);
 
   /**
-   * A plan sent back with a note or with the person's edits: the words go into the running turn
-   * first, then the plan is declined, so the agent reads the decline and the words together and
-   * keeps planning with them. Without steering the words wait in the queue for the next turn.
+   * A plan sent back with a note or with the person's edits. Where the agent reads words with a
+   * refusal (`capabilities.plan_notes`), they go inside the decline itself: the agent reads both
+   * together, in the same turn, and keeps planning. Before 27 November 2026 the plan was declined
+   * with nothing said and the words waited in the queue, so the agent asked what was wanted while
+   * the answer sat behind its turn (the owner: "it queues it? then does a tool call for what I
+   * wanna change"). For any other agent the plan is declined, which ends its turn, and the words
+   * go as the person's next message.
    */
+  const planNotes =
+    state.lists?.capabilities?.plan_notes === true && transport.declinePlan !== undefined;
   const addToPlan = useCallback(
     async (requestId: string, declineOptionId: string, text: string) => {
-      const turn = store.getSnapshot().openTurnId;
-      const steerable =
-        store.getSnapshot().session?.status === "running" &&
-        store.getSnapshot().lists?.capabilities?.steer === true &&
-        transport.composer?.steer !== undefined &&
-        turn !== null;
-      const steered = steerable ? await store.steer(turn as string, text) : false;
+      if (
+        store.getSnapshot().lists?.capabilities?.plan_notes === true &&
+        transport.declinePlan !== undefined
+      ) {
+        await store.declinePlan(requestId, declineOptionId, text);
+        return;
+      }
       await store.respondPermission(requestId, declineOptionId);
-      if (!steered) await store.send(text);
+      await store.send(text);
     },
-    [store, transport.composer],
+    [store, transport.declinePlan],
   );
   /** A plan accepted as the person edited it, where this chat's agent takes an edited plan. */
   const planEdits =
@@ -969,6 +975,7 @@ export function ChatView({
         void store.respondPermission(requestId, optionId),
       onAddToPlan: addToPlan,
       onAcceptPlanEdited: planEdits ? acceptPlanEdited : undefined,
+      planNotes,
       planBuild,
       agentName:
         agents?.find((entry) => entry.id === state.chat?.agent_id)?.name ?? state.chat?.agent_name,
@@ -1008,6 +1015,7 @@ export function ChatView({
       addToPlan,
       planEdits,
       acceptPlanEdited,
+      planNotes,
       planBuild,
       agents,
       state.chat?.agent_id,
@@ -1585,6 +1593,7 @@ export function ChatView({
                                   agentName={agent?.name ?? state.chat?.agent_name}
                                   onAddToPlan={addToPlan}
                                   onAcceptPlanEdited={planEdits ? acceptPlanEdited : undefined}
+                                  planNotes={planNotes}
                                   planBuild={planBuild}
                                   blobs={state.blobs}
                                   onLoadBlob={(sha256) => void store.loadBlob(sha256)}

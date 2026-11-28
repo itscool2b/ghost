@@ -3,9 +3,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { PermissionOption, PermissionRequest } from "../../bindings";
 import type { RequestState } from "../../lib/chat/chatStore";
 import {
+  isPlanRevision,
   planEdited,
-  planFeedback,
   planMeta,
+  planNote,
   planParts,
   planRevision,
   planSections,
@@ -16,7 +17,7 @@ import { errorMessage } from "../../lib/errors";
 import { Answer } from "../Markdown";
 import { commandKey, Keys } from "./Keys";
 
-export { planFeedback } from "../../lib/chat/plan";
+export { planNote } from "../../lib/chat/plan";
 
 /** The plan an agent asks to leave plan mode with, and the options that accept or decline it. */
 export interface PlanApproval {
@@ -92,8 +93,12 @@ type Mode = "review" | "editing" | "noting";
  * - **Edit** opens the plan's own text. An agent that takes an edited plan is told the edited
  *   text is the approved plan (Accept edited plan); any agent can be sent it back to keep
  *   planning with (Send back edited).
- * - **Request changes** declines it with a note the agent keeps planning with.
- * - **Decline** declines it and says nothing more.
+ * - **Request changes** declines it with a note. The agent reads the note with the refusal, in
+ *   the same turn, and answers it or revises the plan (`notesInline`); an agent that takes no
+ *   words with a refusal gets the note as the person's next message.
+ * - **Decline** declines it and says nothing more: the agent's turn ends there, and it waits for
+ *   what the person says next (owner, 27 November 2026, of the agent carrying on after a bare
+ *   decline: "decline doesn't work").
  */
 export function PlanCard({
   item,
@@ -103,6 +108,7 @@ export function PlanCard({
   onRespond,
   onAddToPlan,
   onAcceptEdited,
+  notesInline = false,
   build,
 }: {
   readonly item: PermissionItem;
@@ -118,6 +124,12 @@ export function PlanCard({
    */
   readonly onAcceptEdited?: (acceptOptionId: string, plan: string) => Promise<void>;
   /**
+   * The agent reads what is sent back with the refusal itself, in the same turn
+   * (`capabilities.plan_notes`). Otherwise the note follows as the person's next message, and
+   * the card says so.
+   */
+  readonly notesInline?: boolean;
+  /**
    * The chat's Build with, when accepting can hand the plan to it (lib/roles.ts): its name,
    * and the hand-over, which resolves once the builder has the plan.
    */
@@ -131,6 +143,9 @@ export function PlanCard({
   const [draft, setDraft] = useState(approval.plan);
   const [note, setNote] = useState("");
   const [working, setWorking] = useState<"hand" | "send" | "accept" | null>(null);
+  // What this card sent back as a message of its own, to an agent that takes no words with a
+  // refusal: the resolution then carries no note to say so.
+  const [followed, setFollowed] = useState<"note" | "edits" | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const { request: ask, resolution } = item;
   const closed = resolution !== null || request?.gone === true;
@@ -167,11 +182,17 @@ export function PlanCard({
   };
   const sendNote = () => {
     if (onAddToPlan && note.trim())
-      void run("send", () => onAddToPlan(approval.decline.option_id, planFeedback(note)));
+      void run("send", async () => {
+        await onAddToPlan(approval.decline.option_id, planNote(note));
+        setFollowed("note");
+      });
   };
   const sendEdited = () => {
     if (onAddToPlan && edited)
-      void run("send", () => onAddToPlan(approval.decline.option_id, planRevision(draft)));
+      void run("send", async () => {
+        await onAddToPlan(approval.decline.option_id, planRevision(draft));
+        setFollowed("edits");
+      });
   };
   const acceptEdited = () => {
     if (onAcceptEdited && edited)
@@ -214,6 +235,15 @@ export function PlanCard({
       ?.querySelectorAll("h1, h2, h3, h4, h5, h6")
       [index]?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
+  const declined =
+    resolution?.decision.type === "selected" &&
+    resolution.decision.option_id === approval.decline.option_id;
+  // What went back inside the refusal: a note, or the plan as the person edited it.
+  const sent =
+    declined && resolution?.decision.type === "selected"
+      ? (resolution.decision.note ?? null)
+      : null;
+  const sentEdits = sent === null ? followed === "edits" : isPlanRevision(sent);
   const outcome =
     resolution === null
       ? request?.gone
@@ -223,9 +253,12 @@ export function PlanCard({
         ? approvedEdit === null
           ? "Plan accepted."
           : "Plan accepted with your edits."
-        : resolution.decision.type === "selected" &&
-            resolution.decision.option_id === approval.decline.option_id
-          ? "Sent back to keep planning."
+        : declined
+          ? sentEdits
+            ? "Sent back with your edits."
+            : sent !== null || followed === "note"
+              ? "Sent back with your note."
+              : `Declined. Tell ${agentName} what you want instead.`
           : permissionResolutionLabel(resolution, ask.options);
   const canChange = onAddToPlan !== undefined || onAcceptEdited !== undefined;
   return (
@@ -317,7 +350,13 @@ export function PlanCard({
           )}
           {outcome}
         </p>
-      ) : (
+      ) : null}
+      {outcome !== null && sent !== null && !sentEdits ? (
+        <blockquote className="chat-plan-sent" data-testid="plan-note-sent">
+          {sent}
+        </blockquote>
+      ) : null}
+      {outcome !== null ? null : (
         <footer className="chat-plan-foot">
           {mode === "noting" ? (
             <form
@@ -334,7 +373,11 @@ export function PlanCard({
                 rows={3}
                 value={note}
                 disabled={busy}
-                placeholder={`${agentName} keeps planning with your note.`}
+                placeholder={
+                  notesInline
+                    ? `A question or a change. ${agentName} reads it with the plan and keeps planning.`
+                    : `A question or a change. It goes to ${agentName} as your next message.`
+                }
                 // biome-ignore lint/a11y/noAutofocus: the person just asked to write this note.
                 autoFocus
                 onChange={(event) => setNote(event.currentTarget.value)}

@@ -939,7 +939,9 @@ impl Session {
                     self.send(ui::response(&dialog.frame, answer));
                 }
             }
-            DriverCommand::EditPlan { .. } | DriverCommand::RespondPermission { .. } => {}
+            DriverCommand::EditPlan { .. }
+            | DriverCommand::DeclinePlan { .. }
+            | DriverCommand::RespondPermission { .. } => {}
             DriverCommand::Steer {
                 turn_id,
                 parts,

@@ -407,6 +407,16 @@ export async function chatAcceptPlan(
   await settle(commands.chatAcceptPlan(chatId, requestId, optionId, plan));
 }
 
+/** Declines a plan waiting for approval with the person's words, which go with the refusal. */
+export async function chatDeclinePlan(
+  chatId: string,
+  requestId: string,
+  optionId: string,
+  note: string,
+): Promise<void> {
+  await settle(commands.chatDeclinePlan(chatId, requestId, optionId, note));
+}
+
 /** Answers a question card; `null` dismisses it. */
 export async function chatRespondUi(
   chatId: string,

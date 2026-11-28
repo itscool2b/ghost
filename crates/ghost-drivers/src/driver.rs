@@ -270,6 +270,15 @@ pub enum DriverCommand {
     /// approval that follows with this text as the approved plan. Sent only to a driver whose
     /// capabilities say `plan_edits`, and only for a request that carries a plan.
     EditPlan { request_id: String, plan: String },
+    /// Declines a pending plan approval. With `note`, the agent reads the person's words with
+    /// the refusal, in the same turn, and keeps planning. Without one, the turn ends there and
+    /// the agent waits for the person. Sent only to a driver whose capabilities say
+    /// `plan_notes`, and only for a request that is a plan approval; it stands in for the
+    /// `RespondPermission` that would have declined it.
+    DeclinePlan {
+        request_id: String,
+        note: Option<String>,
+    },
     RespondPermission {
         request_id: String,
         outcome: PermissionOutcome,
@@ -585,6 +594,10 @@ pub enum LoggedCommand {
         request_id: String,
         plan: String,
     },
+    DeclinePlan {
+        request_id: String,
+        note: Option<String>,
+    },
     RespondPermission {
         request_id: String,
         /// `None` = cancelled.
@@ -637,6 +650,10 @@ impl From<&DriverCommand> for LoggedCommand {
             DriverCommand::EditPlan { request_id, plan } => LoggedCommand::EditPlan {
                 request_id: request_id.clone(),
                 plan: plan.clone(),
+            },
+            DriverCommand::DeclinePlan { request_id, note } => LoggedCommand::DeclinePlan {
+                request_id: request_id.clone(),
+                note: note.clone(),
             },
             DriverCommand::RespondPermission {
                 request_id,
@@ -795,6 +812,20 @@ mod tests {
                 json!({"type": "prompt", "turn_id": "019a", "parts": [{"type": "text", "text": "Reply with exactly: ok"}]}),
             ),
             (DriverCommand::Interrupt, json!({"type": "interrupt"})),
+            (
+                DriverCommand::DeclinePlan {
+                    request_id: "t.p0".into(),
+                    note: Some("Which engines?".into()),
+                },
+                json!({"type": "decline_plan", "request_id": "t.p0", "note": "Which engines?"}),
+            ),
+            (
+                DriverCommand::DeclinePlan {
+                    request_id: "t.p0".into(),
+                    note: None,
+                },
+                json!({"type": "decline_plan", "request_id": "t.p0", "note": null}),
+            ),
             (
                 DriverCommand::RespondPermission {
                     request_id: "t.p1".into(),

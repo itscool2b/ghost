@@ -38,6 +38,8 @@ export interface TurnActions extends BlobProps {
     acceptOptionId: string,
     plan: string,
   ) => Promise<void>;
+  /** The agent reads a note with the declined plan itself (`capabilities.plan_notes`). */
+  readonly planNotes?: boolean;
   /** A plan card's Accept and build with, when the chat's Build with can take the plan. */
   readonly planBuild?: PlanBuild;
   /** The chat's agent, as plan cards name it. */
@@ -196,6 +198,7 @@ export const TurnView = memo(function TurnView({
                   agentName={actions.agentName}
                   onAddToPlan={actions.onAddToPlan}
                   onAcceptPlanEdited={actions.onAcceptPlanEdited}
+                  planNotes={actions.planNotes}
                   planBuild={actions.planBuild}
                   blobs={actions.blobs}
                   onLoadBlob={actions.onLoadBlob}

@@ -136,6 +136,7 @@ const NATIVE_REWIND_CAPABILITIES: Capabilities = {
   slash_commands: true,
   add_dirs: true,
   plan_edits: true,
+  plan_notes: true,
   autonomy_levels: ["full_auto", "auto_edit", "ask"],
 };
 
@@ -1162,6 +1163,9 @@ function Preview() {
       : [];
     let wait: QueueWait | null = queued?.wait ?? null;
     const queueCalls: string[] = [];
+    // What a plan card asked of the agent, for the plan check to read.
+    const planCalls: string[] = [];
+    Object.assign(window, { planPreview: { calls: () => [...planCalls] } });
     // Each preview send is its own turn, as a session would make it.
     let sends = 0;
     Object.assign(window, { queuePreview: { calls: () => [...queueCalls] } });
@@ -1427,10 +1431,16 @@ function Preview() {
           wait = { reason: "starting" };
           publish([ev.session(header())]);
         },
-        respondPermission: async (_chatId, requestId, optionId) =>
-          publish([ev.permissionResolved(requestId, optionId)]),
+        respondPermission: async (_chatId, requestId, optionId) => {
+          planCalls.push(`respond:${optionId}`);
+          publish([ev.permissionResolved(requestId, optionId)]);
+        },
         acceptPlan: async (_chatId, requestId, optionId, plan) =>
           publish([ev.permissionResolved(requestId, optionId, "user", plan)]),
+        declinePlan: async (_chatId, requestId, optionId, note) => {
+          planCalls.push(`decline:${note}`);
+          publish([ev.permissionResolved(requestId, optionId, "user", undefined, note)]);
+        },
         send: async (_chatId, text) => {
           sends += 1;
           const turn = sends === 1 ? "preview-send" : `preview-send-${sends}`;

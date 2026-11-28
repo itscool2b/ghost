@@ -72,12 +72,24 @@ export function planEdited(original: string, draft: string): boolean {
   return draft.trim() !== "" && draft.trim() !== original.trim();
 }
 
-/** What Request changes sends the agent with the declined plan. */
-export function planFeedback(note: string): string {
-  return `Before implementing, add this to the plan and show me the updated plan:\n\n${note.trim()}`;
+/**
+ * What Request changes sends the agent with the declined plan: the person's words, as written.
+ * Nothing is put around them (owner, 27 November 2026): they were once wrapped in "add this to
+ * the plan and show me the updated plan", which turned a plain question into an order to rewrite
+ * the plan. The agent is told by the refusal itself that the plan is not approved.
+ */
+export function planNote(note: string): string {
+  return note.trim();
 }
+
+const REVISION_LEAD = "I edited the plan.";
 
 /** What sending an edited plan back sends the agent with the declined plan. */
 export function planRevision(plan: string): string {
-  return `I edited the plan. Use this version in place of yours, and show me the plan again before implementing:\n\n${plan.trim()}`;
+  return `${REVISION_LEAD} Use this version in place of yours, and show me the plan again before implementing:\n\n${plan.trim()}`;
+}
+
+/** Whether what went back with a declined plan was the person's edited plan, not a note. */
+export function isPlanRevision(note: string): boolean {
+  return note.startsWith(REVISION_LEAD);
 }
