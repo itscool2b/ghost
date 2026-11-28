@@ -46,7 +46,7 @@ mod app;
 mod notify;
 mod session;
 mod uploads;
-use session::{Received, bot_answer, bot_links, closed, receive, refusal, seal};
+use session::{Received, bot_answer, bot_links, closed, receive, seal};
 pub(crate) use uploads::send_with;
 
 /// Browsers connected at once, proven or not.

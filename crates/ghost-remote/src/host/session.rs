@@ -11,7 +11,7 @@ pub(super) enum Received {
     Refuse(Option<String>),
 }
 
-pub(super) fn refusal(reason: Refusal) -> String {
+fn refusal(reason: Refusal) -> String {
     serde_json::to_string(&Refused { reason }).unwrap_or_default()
 }
 
