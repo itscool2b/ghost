@@ -14,7 +14,15 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ChatGame, GameInput, GameLog, GodotStatus } from "../../bindings";
 import { FileLinkContext } from "../../lib/chat/fileLinks";
 import { errorMessage } from "../../lib/errors";
@@ -583,82 +591,95 @@ function Screen({
     pressed.current.clear();
   };
 
+  // The frame has the picture's own shape (the game's, until the first frame says), as large as
+  // the stage allows: what is said over the picture's foot is then on the picture.
+  const shape =
+    state.kind === "live"
+      ? { width: state.width, height: state.height }
+      : game.width > 0 && game.height > 0
+        ? { width: game.width, height: game.height }
+        : { width: 16, height: 9 };
   return (
     <div className="game-screen" data-state={state.kind} data-frozen={game.frozen ? "" : undefined}>
-      {state.kind === "waiting" ? (
-        <span className="game-progress game-progress-over" aria-hidden="true" />
-      ) : null}
-      {/* biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: the picture is a game that takes the pointer and the keyboard as its own window would (role application) */}
-      <canvas
-        ref={canvas}
-        className="game-canvas"
-        role="application"
-        aria-label={`The game. Click it and your keys and mouse go to the game. ${commandKey()} Shift G closes the pane and gives the keyboard back.`}
-        aria-roledescription="game"
-        tabIndex={0}
-        data-testid="game-canvas"
-        onContextMenu={(event) => event.preventDefault()}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          keys.releaseAll();
-          releaseButtons();
-        }}
-        onPointerDown={(event) => {
-          const button = mouseButton(event.button);
-          const at = point(event);
-          if (!button || !at) return;
-          event.currentTarget.focus();
-          event.currentTarget.setPointerCapture(event.pointerId);
-          pressed.current.add(button);
-          send([
-            { t: "move", x: at.x, y: at.y },
-            { t: "mouse", x: at.x, y: at.y, button, down: true },
-          ]);
-        }}
-        onPointerMove={(event) => {
-          const at = point(event);
-          if (!at) return;
-          move.current = at;
-          if (moving.current) return;
-          moving.current = requestAnimationFrame(() => {
-            moving.current = 0;
-            const latest = move.current;
-            move.current = null;
-            if (latest) send([{ t: "move", x: latest.x, y: latest.y }]);
-          });
-        }}
-        onPointerUp={(event) => {
-          const button = mouseButton(event.button);
-          const at = point(event);
-          if (!button || !pressed.current.delete(button)) return;
-          send([{ t: "mouse", x: at?.x ?? 0, y: at?.y ?? 0, button, down: false }]);
-        }}
-        onPointerCancel={releaseButtons}
-        onWheel={(event) => {
-          const at = point(event);
-          if (!at) return;
-          // One notch of a wheel is about 100 pixels.
-          const notches = Math.max(-8, Math.min(8, event.deltaY / 100));
-          send([{ t: "wheel", x: at.x, y: at.y, dy: notches }]);
-        }}
-        onKeyDown={(event) => {
-          if (keys.down(event.nativeEvent)) event.preventDefault();
-        }}
-        onKeyUp={(event) => {
-          if (keys.up(event.nativeEvent)) event.preventDefault();
-        }}
-      />
-      {state.kind === "live" && !focused && !game.frozen ? (
-        <span className="game-hint" data-testid="game-hint">
-          Click to play
-        </span>
-      ) : null}
-      {state.kind === "live" && game.frozen ? (
-        <span className="game-hint" data-testid="game-frozen">
-          {game.agent ? "Frozen while the agent plays" : "Paused"}
-        </span>
-      ) : null}
+      <div
+        className="game-frame"
+        style={{ "--game-w": shape.width, "--game-h": shape.height } as CSSProperties}
+      >
+        {state.kind === "waiting" ? (
+          <span className="game-progress game-progress-over" aria-hidden="true" />
+        ) : null}
+        {/* biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: the picture is a game that takes the pointer and the keyboard as its own window would (role application) */}
+        <canvas
+          ref={canvas}
+          className="game-canvas"
+          role="application"
+          aria-label={`The game. Click it and your keys and mouse go to the game. ${commandKey()} Shift G closes the pane and gives the keyboard back.`}
+          aria-roledescription="game"
+          tabIndex={0}
+          data-testid="game-canvas"
+          onContextMenu={(event) => event.preventDefault()}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            keys.releaseAll();
+            releaseButtons();
+          }}
+          onPointerDown={(event) => {
+            const button = mouseButton(event.button);
+            const at = point(event);
+            if (!button || !at) return;
+            event.currentTarget.focus();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            pressed.current.add(button);
+            send([
+              { t: "move", x: at.x, y: at.y },
+              { t: "mouse", x: at.x, y: at.y, button, down: true },
+            ]);
+          }}
+          onPointerMove={(event) => {
+            const at = point(event);
+            if (!at) return;
+            move.current = at;
+            if (moving.current) return;
+            moving.current = requestAnimationFrame(() => {
+              moving.current = 0;
+              const latest = move.current;
+              move.current = null;
+              if (latest) send([{ t: "move", x: latest.x, y: latest.y }]);
+            });
+          }}
+          onPointerUp={(event) => {
+            const button = mouseButton(event.button);
+            const at = point(event);
+            if (!button || !pressed.current.delete(button)) return;
+            send([{ t: "mouse", x: at?.x ?? 0, y: at?.y ?? 0, button, down: false }]);
+          }}
+          onPointerCancel={releaseButtons}
+          onWheel={(event) => {
+            const at = point(event);
+            if (!at) return;
+            // One notch of a wheel is about 100 pixels.
+            const notches = Math.max(-8, Math.min(8, event.deltaY / 100));
+            send([{ t: "wheel", x: at.x, y: at.y, dy: notches }]);
+          }}
+          onKeyDown={(event) => {
+            if (keys.down(event.nativeEvent)) event.preventDefault();
+          }}
+          onKeyUp={(event) => {
+            if (keys.up(event.nativeEvent)) event.preventDefault();
+          }}
+        />
+        {state.kind === "live" && !focused && !game.frozen ? (
+          <span className="game-hint" data-testid="game-hint">
+            Click to play
+          </span>
+        ) : null}
+        {state.kind === "live" && game.frozen ? (
+          <span className="game-hint" data-testid="game-frozen">
+            {game.agent ? "Frozen while the agent plays" : "Paused"}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
