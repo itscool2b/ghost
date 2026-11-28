@@ -1551,9 +1551,18 @@ impl Manager {
             .next()
             .map(|picture| picture.jpeg)
             .ok_or_else(|| Error::Bridge("The game sent no picture.".into()))?;
-        let ticks = value["tick"].as_u64().unwrap_or(0);
+        // Whole numbers, however the game wrote them.
+        let whole = |value: &Value| value.as_f64().filter(|n| *n >= 0.0).map(|n| n as u64);
+        let ticks = whole(&value["tick"]).unwrap_or(0);
         let events = value["events"].clone();
-        let inputs = events.as_array().map_or(0, Vec::len);
+        // What a replay will give back: what was done up to the step the run stands at. Something
+        // done while it stood still after that step (a look at its state) is not part of it.
+        let inputs = events.as_array().map_or(0, |events| {
+            events
+                .iter()
+                .filter(|event| whole(&event[0]).is_some_and(|tick| tick <= ticks))
+                .count()
+        });
         let full = value["full"].as_bool().unwrap_or(false);
         let mut state = self.state();
         let chat = state
