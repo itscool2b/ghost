@@ -135,7 +135,11 @@ pub fn validate(def: &McpDefinition) -> Result<(), StoreError> {
         || !key(&def.name)
         || matches!(
             def.name.replace('-', "_").as_str(),
-            "ghost_project_memory" | "ghost_browser" | "ghost_mobile" | "ghost_project"
+            "ghost_project_memory"
+                | "ghost_browser"
+                | "ghost_mobile"
+                | "ghost_game"
+                | "ghost_project"
         )
         || def.project_id.as_ref().is_some_and(|p| !valid_uuid(p))
     {
@@ -878,6 +882,8 @@ pub(crate) mod tests {
             "ghost-browser",
             "ghost_mobile",
             "ghost-mobile",
+            "ghost_game",
+            "ghost-game",
             "ghost_project",
             "ghost-project",
         ] {

@@ -40,6 +40,7 @@ mod conversation;
 pub mod coordinator_service;
 pub mod device;
 pub mod error;
+pub mod game_service;
 pub mod gitworkspaces;
 pub mod ids;
 pub mod launch_cache;

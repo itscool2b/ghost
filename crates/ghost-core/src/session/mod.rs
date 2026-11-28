@@ -382,6 +382,11 @@ pub(crate) struct Shared {
     pub(crate) mobile_tools: Arc<AtomicBool>,
     /// The app's devices, which run the tools (none in tests and the CLI).
     pub(crate) mobile_bridge: Mutex<Option<Arc<dyn crate::mobile_service::MobileBridge>>>,
+    /// The Game universal plugin is on: Chat sessions in game projects start with its tools, and
+    /// every running session's tools read it on each call. On by default, as the preference is.
+    pub(crate) game_tools: Arc<AtomicBool>,
+    /// The app's games, which run the tools (none in tests and the CLI).
+    pub(crate) game_bridge: Mutex<Option<Arc<dyn crate::game_service::GameBridge>>>,
     /// Coordinated projects (an experiment): its switch, and what its engine keeps.
     pub(crate) coordination: coordinator::Coordination,
     /// The model catalog each agent connection last reported, kept across restarts, so a chat
@@ -406,6 +411,10 @@ impl Shared {
 
     pub(crate) fn mobile_bridge(&self) -> Option<Arc<dyn crate::mobile_service::MobileBridge>> {
         lock(&self.mobile_bridge).clone()
+    }
+
+    pub(crate) fn game_bridge(&self) -> Option<Arc<dyn crate::game_service::GameBridge>> {
+        lock(&self.game_bridge).clone()
     }
 
     pub(crate) fn is_shutting_down(&self) -> bool {
@@ -551,6 +560,8 @@ impl SessionManager {
                     browser_bridge: Mutex::new(None),
                     mobile_tools: Arc::new(AtomicBool::new(true)),
                     mobile_bridge: Mutex::new(None),
+                    game_tools: Arc::new(AtomicBool::new(true)),
+                    game_bridge: Mutex::new(None),
                     coordination: coordinator::Coordination::default(),
                     catalogs,
                     #[cfg(test)]
@@ -1479,6 +1490,27 @@ impl SessionManager {
     /// The app's devices, which run the tools Chat sessions get.
     pub fn set_mobile_bridge(&self, bridge: Option<Arc<dyn crate::mobile_service::MobileBridge>>) {
         *lock(&self.shared().mobile_bridge) = bridge;
+    }
+
+    /// The Game plugin's switch. Sessions started in a game project while it is on get the game
+    /// tools; a running session's tools answer that it is off once it is.
+    pub fn set_game_tools(&self, enabled: bool) {
+        self.shared().game_tools.store(enabled, Ordering::Release);
+    }
+
+    pub fn game_tools(&self) -> bool {
+        self.shared().game_tools.load(Ordering::Acquire)
+    }
+
+    /// The app's games, which run the tools Chat sessions in game projects get.
+    pub fn set_game_bridge(&self, bridge: Option<Arc<dyn crate::game_service::GameBridge>>) {
+        *lock(&self.shared().game_bridge) = bridge;
+    }
+
+    /// The folder `chat_id` works in on this device: the one its agent starts in, and so the one
+    /// its game is run from.
+    pub async fn chat_folder(&self, chat_id: &str) -> Result<PathBuf, SessionError> {
+        self.composer_folder(chat_id).await
     }
 
     /// The model choices `agent_id` reported the last time one of its chats ran, on this device:

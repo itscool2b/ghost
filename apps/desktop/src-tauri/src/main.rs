@@ -30,6 +30,14 @@ fn main() {
         ghost_core::mobile_service::run_helper();
         return;
     }
+    // The games' MCP helper (the Game plugin's tools), started by an agent the same way.
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| helper(&arg, "game"))
+    {
+        ghost_core::game_service::run_helper();
+        return;
+    }
     // Ghost's bot tools for an assistant on this computer (Hermes, OpenClaw): through the running
     // app's door on loopback, never the relay (bot_helper.rs).
     if std::env::args_os()

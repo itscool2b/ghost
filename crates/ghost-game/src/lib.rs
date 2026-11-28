@@ -23,8 +23,8 @@ pub mod tools;
 
 pub use detect::{Engine, Project, detect};
 pub use manager::{
-    ChatGame, Config, DEFAULT_RUNNING, Fetch, GameError, GameState, GameStatus, GodotStatus, IDLE,
-    InputEvent, Manager, Summon, TURNED_OFF, ToolReply, Viewer,
+    ChatGame, Config, DEFAULT_RUNNING, Fetch, GameError, GameLog, GameState, GameStatus,
+    GodotStatus, IDLE, InputEvent, Manager, Summon, TURNED_OFF, ToolReply, Viewer,
 };
 
 use std::path::Path;

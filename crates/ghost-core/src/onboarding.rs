@@ -171,6 +171,10 @@ pub struct GeneralPreferences {
     /// get. On unless the person turns it off in Settings > Plugins & MCP; off stops every device
     /// Ghost started (owner, 21 November 2026, docs/superpowers/plans/2026-11-21-mobile.md).
     pub mobile: bool,
+    /// The Game universal plugin: the Game pane beside the chat and, in chats whose folder holds
+    /// a game, the game tools agents get. On unless the person turns it off in Settings >
+    /// Plugins & MCP; off stops every game Ghost started (owner, 27 November 2026, docs/game.md).
+    pub game: bool,
     /// Look for a newer Ghost shortly after start and a few times a day, and show Update when
     /// there is one (owner, 18 November 2026: "an update button pops up for every merge"). It
     /// reads one public file from the project's GitHub releases; downloading and installing still
@@ -206,6 +210,7 @@ impl Default for GeneralPreferences {
             browser: true,
             browser_passwords: true,
             mobile: true,
+            game: true,
             automatic_updates: true,
             coordinated_projects: false,
             speech_voice: None,
@@ -303,6 +308,10 @@ pub enum SetupAction {
     },
     /// Turns the Mobile universal plugin on or off.
     Mobile {
+        enabled: bool,
+    },
+    /// Turns the Game universal plugin on or off.
+    Game {
         enabled: bool,
     },
     /// Turns on or off looking for a newer Ghost by itself.
@@ -570,6 +579,7 @@ impl OnboardingStore {
                 next.preferences.general.browser_passwords = enabled;
             }
             SetupAction::Mobile { enabled } => next.preferences.general.mobile = enabled,
+            SetupAction::Game { enabled } => next.preferences.general.game = enabled,
             SetupAction::AutomaticUpdates { enabled } => {
                 next.preferences.general.automatic_updates = enabled;
             }
@@ -879,6 +889,37 @@ mod tests {
             reopened.preferences().general,
             GeneralPreferences {
                 mobile: false,
+                ..GeneralPreferences::default()
+            }
+        );
+    }
+
+    /// Game is on by default, including for profiles saved before it existed, and stays off
+    /// once turned off.
+    #[test]
+    fn game_is_on_for_legacy_profiles_and_can_be_turned_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut legacy = serde_json::to_value(Record::default()).unwrap();
+        legacy["preferences"]["general"]
+            .as_object_mut()
+            .unwrap()
+            .remove("game");
+        std::fs::write(
+            dir.path().join("onboarding.json"),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+        let store = OnboardingStore::open(dir.path()).unwrap();
+        assert!(store.snapshot().unwrap().notice.is_none());
+        assert!(store.preferences().general.game);
+        store
+            .apply(0, SetupAction::Game { enabled: false })
+            .unwrap();
+        let reopened = OnboardingStore::open(dir.path()).unwrap();
+        assert_eq!(
+            reopened.preferences().general,
+            GeneralPreferences {
+                game: false,
                 ..GeneralPreferences::default()
             }
         );
@@ -1487,6 +1528,7 @@ mod tests {
                 browser: true,
                 browser_passwords: true,
                 mobile: true,
+                game: true,
                 automatic_updates: true,
                 coordinated_projects: false,
                 speech_voice: None,

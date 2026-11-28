@@ -2114,6 +2114,7 @@ dependencies = [
  "ghost-core",
  "ghost-devices",
  "ghost-drivers",
+ "ghost-game",
  "ghost-process",
  "ghost-protocol",
  "ghost-remote",

@@ -283,7 +283,8 @@ fn is_lower_alnum(byte: u8) -> bool {
 }
 
 /// The program an agent starts to run Ghost's own helpers (`--ghost-memory-helper`,
-/// `--ghost-browser-helper`, `--ghost-mobile-helper`): this executable, or inside a Linux AppImage the image's `AppRun`.
+/// `--ghost-browser-helper`, `--ghost-mobile-helper`, `--ghost-game-helper`): this executable, or
+/// inside a Linux AppImage the image's `AppRun`.
 /// Agents get an env without the AppImage's library path (`ghost_process::strip_launch_context`),
 /// and the bundled binary needs it on a system lacking WebKitGTK; `AppRun` sets it again and
 /// executes the binary with the same arguments. `None` when the executable is unknown.

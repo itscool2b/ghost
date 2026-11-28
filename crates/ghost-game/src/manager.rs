@@ -31,8 +31,7 @@ pub const IDLE: Duration = Duration::from_secs(600);
 /// How long a starting game has to connect. A project's first start imports its assets.
 const START_PATIENCE: Duration = Duration::from_secs(120);
 /// What a tool is told when the person has turned Game off.
-pub const TURNED_OFF: &str =
-    "Game is turned off in Ghost (Settings > Game). Ask the person to turn it on.";
+pub const TURNED_OFF: &str = "Game is turned off in Ghost (Settings > Plugins & MCP > Universal plugins > Game). Ask the person to turn it on, or work without it.";
 
 pub struct Config {
     /// Ghost's folder for games: Godot when it is fetched, and Ghost's own scripts.
@@ -118,6 +117,21 @@ pub struct ChatGame {
     pub agent: Option<String>,
     pub sound: bool,
     pub pid: Option<u32>,
+    /// The person asked for the game in a window of its own; its next start shows one.
+    pub windowed: bool,
+    /// The chat's agent has the game tools in the session that runs now. Without them the pane
+    /// offers to restart the session with them.
+    pub tools: bool,
+}
+
+/// A run's errors and what it printed, for the pane's log.
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct GameLog {
+    pub errors: Vec<GameError>,
+    /// The last lines the game printed, oldest first.
+    pub lines: Vec<String>,
+    /// How many older lines are gone.
+    pub dropped: u32,
 }
 
 /// Input from the pane, in the shape the game's bridge takes it.
@@ -236,6 +250,7 @@ struct Chat {
     agent: Option<String>,
     sound: bool,
     viewers: usize,
+    windowed: bool,
     /// The newest frame, kept across runs so a pane that stays open sees the next one.
     frames: watch::Sender<Option<Arc<Frame>>>,
     /// Counts this chat's starts, so what an earlier one left behind cannot touch a later one.
@@ -256,6 +271,7 @@ impl Chat {
             agent: None,
             sound: false,
             viewers: 0,
+            windowed: false,
             frames: watch::channel(None).0,
             generation: 0,
         }
@@ -272,6 +288,9 @@ struct State {
     summons: HashMap<String, u32>,
     summon_seq: u32,
     owner_window: Option<i64>,
+    /// How many live sessions of each chat hold the game tools: counted, because a restarted
+    /// session may be given its tools before the one it replaces lets go of them.
+    tools: HashMap<String, u32>,
 }
 
 struct Inner {
@@ -338,6 +357,7 @@ impl Manager {
                     summons: HashMap::new(),
                     summon_seq: 0,
                     owner_window: None,
+                    tools: HashMap::new(),
                 }),
                 notify: Box::new(notify),
             }),
@@ -368,7 +388,7 @@ impl Manager {
         let mut chats: Vec<ChatGame> = state
             .chats
             .iter()
-            .map(|(chat_id, chat)| chat_status(chat_id, chat))
+            .map(|(chat_id, chat)| chat_status(chat_id, chat, state.tools.contains_key(chat_id)))
             .collect();
         chats.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
         let mut summons: Vec<Summon> = state
@@ -645,6 +665,8 @@ impl Manager {
                 .chats
                 .get_mut(chat_id)
                 .ok_or_else(|| Error::Refused("This chat is gone.".into()))?;
+            // In a window of its own the game has no owner and sits where windows open.
+            let owner_window = owner_window.filter(|_| !chat.windowed);
             if chat.starting {
                 return Err(Error::Refused(
                     "This chat's game is already starting.".into(),
@@ -1059,13 +1081,115 @@ impl Manager {
         }
     }
 
+    /// The run's errors and its last `lines` printed lines, for the pane's log.
+    pub fn pane_log(&self, chat_id: &str, lines: usize) -> GameLog {
+        let (errors, lines, dropped) = self.log(chat_id, lines.min(600));
+        GameLog {
+            errors,
+            lines,
+            dropped,
+        }
+    }
+
+    /// One frame of game time while the game is frozen: the pane's Step.
+    pub async fn step(&self, chat_id: &str) -> Result<(), Error> {
+        self.ask(
+            chat_id,
+            "act",
+            json!({"steps": [{"ms": 16}], "shots": 0, "max": 160}),
+            Duration::from_secs(10),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// The game as it is drawn now, as a JPEG, for the person to keep.
+    pub async fn picture(&self, chat_id: &str) -> Result<Vec<u8>, Error> {
+        let reply = self
+            .ask(
+                chat_id,
+                "shot",
+                json!({"max": 1920}),
+                Duration::from_secs(10),
+            )
+            .await?;
+        reply
+            .pictures
+            .into_iter()
+            .next()
+            .map(|picture| picture.jpeg)
+            .ok_or_else(|| Error::Bridge("The game sent no picture.".into()))
+    }
+
+    /// Whether the chat's game gets a window of its own from its next start on. The person's
+    /// choice, from the pane.
+    pub fn set_windowed(&self, chat_id: &str, windowed: bool) {
+        {
+            let mut state = self.state();
+            let Some(chat) = state.chats.get_mut(chat_id) else {
+                return;
+            };
+            if chat.windowed == windowed {
+                return;
+            }
+            chat.windowed = windowed;
+        }
+        self.changed();
+    }
+
+    /// Opens the chat's project in Godot's own editor, as a program of the person's: it is not
+    /// Ghost's to stop, and it outlives the chat. The person's, from the pane: no tool calls this.
+    pub async fn open_editor(&self, chat_id: &str, folder: &Path) -> Result<(), Error> {
+        let project = self
+            .look(chat_id, folder)
+            .await
+            .filter(|project| project.engine == Engine::Godot)
+            .ok_or_else(|| Error::Refused("This chat's folder holds no Godot project.".into()))?;
+        self.look_once().await;
+        let program = self.godot_for(&project).map_err(Error::Refused)?;
+        let mut command = crate::command(&program);
+        command
+            .arg("--path")
+            .arg(folder)
+            .arg("--editor")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        command
+            .spawn()
+            .map(drop)
+            .map_err(|error| Error::Game(format!("Godot could not be opened: {error}")))
+    }
+
     /// One chat's game as the pane shows it.
     pub fn chat(&self, chat_id: &str) -> Option<ChatGame> {
         let state = self.state();
         state
             .chats
             .get(chat_id)
-            .map(|chat| chat_status(chat_id, chat))
+            .map(|chat| chat_status(chat_id, chat, state.tools.contains_key(chat_id)))
+    }
+
+    /// A session of `chat_id` was given the game tools, or let go of them. Said by the app's
+    /// sessions, never by a tool.
+    pub fn tools_granted(&self, chat_id: &str, granted: bool) {
+        {
+            let mut state = self.state();
+            let held = state.tools.get(chat_id).copied().unwrap_or(0);
+            let now = if granted {
+                held.saturating_add(1)
+            } else {
+                held.saturating_sub(1)
+            };
+            if now == 0 {
+                state.tools.remove(chat_id);
+            } else {
+                state.tools.insert(chat_id.to_owned(), now);
+            }
+            if (held == 0) == (now == 0) {
+                return;
+            }
+        }
+        self.changed();
     }
 
     /// The Godot a project would run on, for a tool to tell an agent where it is.
@@ -1091,7 +1215,7 @@ impl Manager {
     }
 }
 
-fn chat_status(chat_id: &str, chat: &Chat) -> ChatGame {
+fn chat_status(chat_id: &str, chat: &Chat, tools: bool) -> ChatGame {
     let run = chat.run.as_ref();
     ChatGame {
         chat_id: chat_id.to_owned(),
@@ -1118,5 +1242,7 @@ fn chat_status(chat_id: &str, chat: &Chat) -> ChatGame {
         agent: chat.agent.clone(),
         sound: chat.sound,
         pid: run.and_then(|run| run.process.pid()),
+        windowed: chat.windowed,
+        tools,
     }
 }
