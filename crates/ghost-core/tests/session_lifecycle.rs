@@ -1206,16 +1206,25 @@ async fn attach_replaces_same_owner() {
             .await
             .expect("attach");
     }
+    // The chat says who follows it, the one of longest standing first.
+    assert_eq!(h.manager.chat_followers(&chat.id), ["main", "a", "b", "c"]);
     assert!(matches!(
         h.manager.attach(&chat.id, Sink::new("e")).await,
         Err(SessionError::TooManySubscriptions)
     ));
+    assert_eq!(
+        h.manager.chat_followers(&chat.id),
+        ["main", "a", "b", "c"],
+        "one that was refused follows nothing"
+    );
     // A page reload drops the webview's subscriptions.
     h.manager.drop_owner("a");
     h.manager
         .attach(&chat.id, Sink::new("e"))
         .await
         .expect("room after a page reload");
+    assert_eq!(h.manager.chat_followers(&chat.id), ["main", "b", "c", "e"]);
+    assert!(h.manager.chat_followers("another-chat").is_empty());
 }
 
 /// S43: rows written by a newer build load leniently: unknown enum names read as their fallback,

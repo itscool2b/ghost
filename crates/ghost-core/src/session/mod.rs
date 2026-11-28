@@ -1003,6 +1003,20 @@ impl SessionManager {
 
     /// The join protocol: flushes, fixes `next_seq`, reads the newest page behind every earlier
     /// write, and registers `sink` for every frame from `next_seq` on.
+    /// Who follows `chat_id` now, by owner, the one that has followed longest first. For a
+    /// caller that must make room in a chat that takes only a few followers.
+    pub fn chat_followers(&self, chat_id: &str) -> Vec<String> {
+        let subscriptions = lock(&self.shared().subscriptions);
+        // Subscription ids are made in time order, so sorting by them is by age.
+        let mut held: Vec<(&String, &String)> = subscriptions
+            .iter()
+            .filter(|(_, (chat, _))| chat == chat_id)
+            .map(|(id, (_, owner))| (id, owner))
+            .collect();
+        held.sort();
+        held.into_iter().map(|(_, owner)| owner.clone()).collect()
+    }
+
     pub async fn attach(
         &self,
         chat_id: &str,
