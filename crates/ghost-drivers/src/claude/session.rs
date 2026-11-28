@@ -177,11 +177,7 @@ const PLAN_DECLINED: &str = "The person declined this plan.";
 /// gets a revised plan; neither is an approval to start.
 fn plan_note(note: &str) -> String {
     format!(
-        "The person has not approved this plan. They wrote:
-
-{}
-
-Answer or revise the plan as they ask. You are still in plan mode: do not start implementing until a plan is approved.",
+        "The person has not approved this plan. They wrote:\n\n{}\n\nAnswer or revise the plan as they ask. You are still in plan mode: do not start implementing until a plan is approved.",
         note.trim()
     )
 }

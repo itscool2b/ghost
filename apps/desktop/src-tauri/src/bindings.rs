@@ -831,7 +831,7 @@ mod tests {
     }
 
     /// The chat commands of M1a (spec 7.1) exactly as the generated bindings declare them.
-    const CHAT_COMMANDS: [(&str, &str); 28] = [
+    const CHAT_COMMANDS: [(&str, &str); 29] = [
         (
             "agentsList",
             "() => __TAURI_INVOKE<AgentEntry[]>(\"agents_list\")",
