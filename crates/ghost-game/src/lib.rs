@@ -18,7 +18,9 @@ pub mod detect;
 pub mod godot;
 mod manager;
 mod output;
+pub mod probe;
 mod run;
+pub mod starter;
 pub mod tools;
 
 pub use detect::{GameEngine, GameProject, detect};
@@ -27,6 +29,8 @@ pub use manager::{
     GameSummon, GodotFetch, GodotStatus, IDLE, Manager, TURNED_OFF, ToolReply, Viewer, WebFuture,
     WebGames,
 };
+pub use probe::EngineProbe;
+pub use starter::Starter;
 
 use std::path::Path;
 

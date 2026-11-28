@@ -3,8 +3,7 @@
 Ghost runs a chat's game beside the chat. The person plays it in the **Game pane** with the
 keyboard and the mouse; the chat's agent runs, sees and plays the same game through the
 `ghost_game` tools, with time frozen while it thinks. The plan, with the research behind it and
-what is still to come (Start a game, Connect cards for Unity, Unreal and Roblox, point and tell,
-replays, assets, export), is
+what is still to come (point and tell, replays, a controller, tuning, assets, export), is
 [superpowers/plans/2026-11-27-game.md](superpowers/plans/2026-11-27-game.md). This page says how
 what is built works.
 
@@ -14,7 +13,7 @@ what is built works.
 | --- | --- |
 | Godot 4 (GDScript) | Runs it itself, in the pane. Everything on this page. |
 | Web (Three.js, Phaser, Babylon, PlayCanvas, Pixi, plain canvas) | Runs in Ghost's browser beside the chat, and the agent plays it there with the same tools and the same frozen time. See "Web games". |
-| Unity, Unreal Engine, Roblox | Recognised and named. Their own editors run the game, and their makers' agent tools drive them. |
+| Unity, Unreal Engine, Roblox | Connected. Their own editors run the game, their makers' agent tools drive them, and the pane says how to turn those on. See "Other engines". |
 | Bevy, LÖVE, Pygame, GameMaker, Defold, MonoGame | Recognised and named. The agent runs them from its shell. |
 
 A Godot project in C#, and a Godot 3 project, are named and declined in words
@@ -27,9 +26,12 @@ A Godot project in C#, and a Godot 3 project, are named and declined in words
   Game on for the chat. In any other chat it is "Game" in the More menu. The pane shares the
   chat's side with the device, the browser, Changes and the task panel: opening one closes the
   rest. Chat view only.
-- **No game in the folder**: the pane says so, and offers **Turn on Game for this chat**, for a
-  folder a game is about to be made in. That gives the chat's agent the game tools; its idle
-  session starts again to take them.
+- **No game in the folder**: the pane offers to **start one**: Godot 2D or 3D, a plain canvas
+  page, or Three.js. Ghost writes a few small files of its own into the chat's folder (a player
+  that moves and jumps on a floor), writes over nothing, and refuses a folder that already holds
+  a game or a file of the same name. Game is turned on for the chat, and its idle session starts
+  again with the game tools. **Only turn on Game for this chat** does that last part alone, for
+  an agent that will make the game from nothing.
 - **Godot is not on this computer**: the pane says what getting it means (Godot 4.7.2, about
   82 MB on Windows, from Godot's own releases on GitHub, checked against the hash Godot
   publishes, into Ghost's own folder) and fetches nothing until the person presses **Get Godot**.
@@ -111,10 +113,32 @@ browser instead of to Godot (`WebGames` in `ghost-game`, `browser/game.rs` in th
 - What it does not reach: frames and workers of other origins keep real time, and input is the
   page's own events (`isTrusted` is false), which games do not check.
 
+## Other engines
+
+A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of a Play button
+(`components/game/EngineConnect.tsx`). Ghost does not run these editors. Each card holds:
+
+- **The maker's own steps**, as its guide gave them when the card was written (27 November 2026),
+  with a link to that guide, since the steps are the maker's to change. Unity: its CLI
+  (`unity pipeline install`), then its agent plugin for Claude Code or `unity mcp configure` for
+  another agent. Unreal: the Unreal MCP plugin and All Toolsets, whose server starts with the
+  editor at `http://127.0.0.1:8000/mcp`. Roblox: Enable Studio as MCP server, under Assistant.
+- **One live line**: whether the tools are within reach now (`ghost-game`'s `probe.rs`). For
+  Unreal one loopback connection to port 8000, closed at once; for Unity whether its CLI is in a
+  folder of `PATH`; for Roblox whether Studio's launcher file is there. Nothing is run and
+  nothing is sent.
+- **Add to this project**, for Unreal and Roblox: the maker's MCP server becomes one of the MCP
+  servers of the chat's project (Settings > Plugins & MCP shows it, and it can be removed
+  there). The address or program is Ghost's own constant for that engine, the person presses
+  it, and no tool does. Unity has no server for Ghost to add: its CLI configures each agent.
+- What the maker says about reach: Unreal's server has no sign-in, and Roblox's lets a connected
+  agent change what is in an open place.
+
 ## Who may do what
 
-- **Only the person**: get Godot, turn Game on for a chat, give the game a window of its own,
-  open Godot's editor, turn Game off. None of these is a tool, and `helper.rs` tests that no tool
+- **Only the person**: get Godot, start a game from one of Ghost's starters, turn Game on for a
+  chat, add another engine's server to a project, give the game a window of its own, open
+  Godot's editor, turn Game off. None of these is a tool, and `helper.rs` tests that no tool
   name fetches, installs, exports, publishes or uploads, and that none takes a chat or a folder.
 - **An agent**: a native Chat session only (not Terminal chats, not agents on another computer),
   through a loopback listener with a per-session token that goes when the session does
@@ -173,10 +197,12 @@ browser instead of to Godot (`WebGames` in `ghost-game`, `browser/game.rs` in th
 - `node scripts/check-web-game.mjs`: the game clock itself in Chromium and WebKit, on a small
   canvas game: asleep until marked, live, frozen, half a second of a key as exactly thirty frames
   and 100 pixels, timers on the game's clock, clicks, the filmstrip, waits, the outline.
+- `node --test scripts/game-starters.test.mjs`: the canvas starter's own little server answers
+  this computer only (a request under another name is refused), and serves no hidden file and
+  nothing outside its folder. The real-Godot test loads and plays both Godot starters.
 - `vitest`: `lib/game.test.ts`.
 
 ## Still to come
 
-Start a game from New chat, Connect cards for Unity, Unreal and Roblox, pointing at a thing in
-the game to tell the agent about it, sending the last seconds of play as a replay, a controller,
+Pointing at a thing in the game to tell the agent about it, sending the last seconds of play as a replay, a controller,
 live tuning sliders, an assets view, and export. They are in the plan, in that order.

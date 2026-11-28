@@ -12,7 +12,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
-use ghost_game::{Config, DEFAULT_RUNNING, GameInput, GameLog, GameStatus, Manager as Games};
+use ghost_game::{
+    Config, DEFAULT_RUNNING, EngineProbe, GameEngine, GameInput, GameLog, GameStatus,
+    Manager as Games, Starter,
+};
 use serde::Serialize;
 use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse};
 use tauri::{AppHandle, Emitter, Manager as _, State};
@@ -620,6 +623,163 @@ pub async fn game_turn_on(
     } else {
         GameToolsChange::NextStart
     })
+}
+
+/// The person pressed Start a game: one of Ghost's own small projects is written into the
+/// chat's folder, which must hold no game and none of its files yet. Game is turned on for the
+/// chat, and its idle session starts again with the game tools.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_start_project(
+    state: State<'_, AppState>,
+    games: State<'_, Games>,
+    chosen: State<'_, Arc<Chosen>>,
+    chat_id: String,
+    starter: Starter,
+) -> Result<GameToolsChange, AppError> {
+    if !chat_id_like(&chat_id) {
+        return Err(AppError::invalid_argument("That is not a chat."));
+    }
+    let folder = folder_of(&state, &chat_id).await?;
+    games.start_project(&chat_id, &folder, starter).await?;
+    chosen.set(&chat_id, true);
+    let restarted = state
+        .sessions()?
+        .mcp_session_action(
+            &chat_id,
+            ghost_core::game_service::SERVER_NAME.to_owned(),
+            ghost_protocol::mcp::McpSessionAction::Restart,
+        )
+        .await
+        .is_ok();
+    Ok(if restarted {
+        GameToolsChange::Restarting
+    } else {
+        GameToolsChange::NextStart
+    })
+}
+
+/// Whether the agent tools of the engine this chat's project is made with (Unity, Unreal,
+/// Roblox) are within reach on this computer now, for the pane's Connect card.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_probe(
+    state: State<'_, AppState>,
+    games: State<'_, Games>,
+    chat_id: String,
+) -> Result<Option<EngineProbe>, AppError> {
+    let folder = folder_of(&state, &chat_id).await?;
+    let Some(project) = games.look(&chat_id, &folder).await else {
+        return Ok(None);
+    };
+    Ok(Some(ghost_game::probe::probe(project.engine).await))
+}
+
+/// What connecting an engine's own agent tools to a project did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum GameConnected {
+    /// The engine's server is one of this project's MCP servers now.
+    Added,
+    /// It already was.
+    Already,
+}
+
+/// The MCP server an engine's maker gives for it, as its own guide writes it. `None` for
+/// engines that are connected another way (Unity, from its own CLI) or run by Ghost.
+fn vendor_server(engine: GameEngine) -> Option<(&'static str, ghost_protocol::mcp::McpTransport)> {
+    use ghost_protocol::mcp::McpTransport;
+    match engine {
+        GameEngine::Unreal => Some((
+            "unreal-mcp",
+            McpTransport::Http {
+                url: ghost_game::probe::UNREAL_MCP.to_owned(),
+            },
+        )),
+        GameEngine::Roblox if cfg!(windows) => Some((
+            "Roblox_Studio",
+            McpTransport::Stdio {
+                command: "cmd.exe".to_owned(),
+                args: vec![
+                    "/c".to_owned(),
+                    "%LOCALAPPDATA%\\Roblox\\mcp.bat".to_owned(),
+                ],
+            },
+        )),
+        GameEngine::Roblox if cfg!(target_os = "macos") => Some((
+            "Roblox_Studio",
+            McpTransport::Stdio {
+                command: "/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP".to_owned(),
+                args: Vec::new(),
+            },
+        )),
+        _ => None,
+    }
+}
+
+/// The person pressed "Add to this project" on a Connect card: the engine's own MCP server, as
+/// its maker's guide gives it, becomes one of the MCP servers of the chat's project, for the
+/// agents that can take it. The person's, from the pane: no tool calls this, and the address or
+/// program is Ghost's own constant for that engine, never the page's.
+#[tauri::command]
+#[specta::specta]
+pub async fn game_connect(
+    state: State<'_, AppState>,
+    games: State<'_, Games>,
+    chat_id: String,
+) -> Result<GameConnected, AppError> {
+    use ghost_core::mcp::Command;
+    let folder = folder_of(&state, &chat_id).await?;
+    let project = games.look(&chat_id, &folder).await.ok_or_else(|| {
+        AppError::invalid_argument("This chat's folder holds no game Ghost knows.")
+    })?;
+    let (name, transport) = vendor_server(project.engine).ok_or_else(|| {
+        AppError::invalid_argument(format!(
+            "{} is not connected through an MCP server Ghost can add.",
+            project.engine.name()
+        ))
+    })?;
+    let sessions = state.sessions()?;
+    let workspace = sessions
+        .workspace_snapshot(ghost_protocol::workspace::WorkspaceFilter {
+            include_archived: true,
+            project_id: None,
+        })
+        .await?;
+    let project_id = workspace
+        .chats
+        .iter()
+        .find(|entry| entry.chat.id == chat_id)
+        .map(|entry| entry.project_id.clone())
+        .ok_or_else(|| AppError::invalid_argument("That chat is in no project."))?;
+    let snapshot = sessions.shared_mcp(Command::Snapshot).await?;
+    let taken = snapshot.servers.iter().any(|server| {
+        server.definition.name == name
+            && server
+                .definition
+                .project_id
+                .as_deref()
+                .is_none_or(|scope| scope == project_id)
+    });
+    if taken {
+        return Ok(GameConnected::Already);
+    }
+    sessions
+        .shared_mcp(Command::Save {
+            expected: snapshot.revision,
+            definition: ghost_protocol::mcp::McpDefinition {
+                id: uuid::Uuid::now_v7().to_string(),
+                name: name.to_owned(),
+                project_id: Some(project_id),
+                enabled: true,
+                transport,
+                env_keys: Vec::new(),
+                header_keys: Vec::new(),
+                agents: None,
+            },
+        })
+        .await?;
+    Ok(GameConnected::Added)
 }
 
 /// Whether the person turned Game on for this chat themselves.

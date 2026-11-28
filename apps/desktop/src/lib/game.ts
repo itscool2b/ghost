@@ -8,11 +8,14 @@ import { listen } from "@tauri-apps/api/event";
 import {
   type ChatGame,
   commands,
+  type EngineProbe,
+  type GameConnected,
   type GameEngine,
   type GameInput,
   type GameLog,
   type GameStatus,
   type GameToolsChange,
+  type Starter,
 } from "../bindings";
 import { settle } from "./ipc";
 
@@ -43,6 +46,12 @@ export interface GameApi {
   openEditor(chatId: string): Promise<void>;
   /** Saves a picture of the game; answers where it is. */
   picture(chatId: string): Promise<string>;
+  /** Writes one of Ghost's starter projects into the chat's folder, and turns Game on for it. */
+  startProject(chatId: string, starter: Starter): Promise<GameToolsChange>;
+  /** Whether the agent tools of the chat's engine (Unity, Unreal, Roblox) are within reach. */
+  probe(chatId: string): Promise<EngineProbe | null>;
+  /** Adds the engine's own MCP server to the chat's project. */
+  connect(chatId: string): Promise<GameConnected>;
   /** Turns Game on for this chat and gives its agent the tools. */
   turnOn(chatId: string, on: boolean): Promise<GameToolsChange>;
   turnedOn(chatId: string): Promise<boolean>;
@@ -83,6 +92,9 @@ export const tauriGameApi: GameApi = {
   window: (chatId, windowed) => done(settle(commands.gameWindow(chatId, windowed))),
   openEditor: (chatId) => done(settle(commands.gameOpenEditor(chatId))),
   picture: (chatId) => settle(commands.gamePicture(chatId)),
+  startProject: (chatId, starter) => settle(commands.gameStartProject(chatId, starter)),
+  probe: (chatId) => settle(commands.gameProbe(chatId)),
+  connect: (chatId) => settle(commands.gameConnect(chatId)),
   turnOn: (chatId, on) => settle(commands.gameTurnOn(chatId, on)),
   turnedOn: (chatId) => settle(commands.gameTurnedOn(chatId)),
   listen: (listener) => {
@@ -340,6 +352,18 @@ export function megabytes(bytes: number): string {
   if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
   return `${Math.round(mb)} MB`;
 }
+
+/** The projects Ghost can start, as the pane lists them. */
+export const STARTERS: readonly {
+  readonly id: Starter;
+  readonly name: string;
+  readonly what: string;
+}[] = [
+  { id: "godot2d", name: "Godot, 2D", what: "A player that runs and jumps on a floor." },
+  { id: "godot3d", name: "Godot, 3D", what: "A player on a floor, with a camera and a sun." },
+  { id: "web2d", name: "Web, 2D", what: "A plain canvas page with nothing to install." },
+  { id: "web3d", name: "Web, 3D", what: "Three.js, with Vite to serve it." },
+];
 
 /** The speeds the pane offers, slowest first. */
 export const SPEEDS: readonly number[] = [0.25, 0.5, 1, 2];
