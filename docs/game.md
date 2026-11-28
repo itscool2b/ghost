@@ -80,6 +80,34 @@ picture turn that into something the agent can act on. Godot games only, for now
   sends the agent what changed and what it was, to write into the script or the scene, and
   Reset puts them back.
 
+## Assets
+
+The pane's header says **Game** and **Assets** in any chat whose folder holds a game. Assets
+shows the pictures, sounds and 3D models of the chat's folder, the newest first, with a count of
+each kind and a box that finds by name or folder. The game keeps running underneath.
+
+- **A picture** opens large. Pixel art is drawn in whole pixels. A strip of squares is taken for
+  a sprite sheet: its frames play in turn, and the person can say how many go across and down
+  and how fast. With less motion asked of the computer, the frames wait for Play.
+- **A sound** shows its shape and its length, and plays.
+- **A model** (.glb) turns under the pointer. three.js is loaded only when one is opened. A
+  .gltf keeps its parts in files beside it and says so instead of opening; a model packed with
+  Draco, Meshopt or KTX2 says it cannot be shown.
+- **Add to chat** puts the file's path in the message box. **Copy path** copies it.
+- **What a turn left.** When a turn ends, the folder is listed again. Pictures, sounds and
+  models that are new or changed since the list before are named above the message box; a click
+  opens one in Assets. The first list of a chat is what was there, and says nothing.
+- **Where art and sound can come from.** Ghost makes none of it. Under the assets it names three
+  makers that publish tools an agent can use, each with a link to the maker's own guide: Meshy
+  (3D models), PixelLab (pixel art) and ElevenLabs (sound effects, music, voices). The guides
+  were read on 28 November 2026. Each needs an account of the person's own with the maker, so
+  Ghost adds none of them itself.
+
+Listed: .png, .jpg, .jpeg, .webp, .gif, .bmp, .svg; .wav, .ogg, .mp3, .flac; .glb, .gltf. Not
+entered: hidden folders (`.godot`, `.git`), `node_modules`, `target`, `build`, `dist`, `out`. At
+most 1500 assets, ten folders deep. Read to show: a picture up to 12 MiB, a sound up to 24 MiB,
+a model up to 32 MiB; a larger file is listed and says it is too large.
+
 ## The agent plays it
 
 An agent gets the tools only in a chat whose folder holds a game, or one the person turned Game
@@ -196,6 +224,13 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   and only a path inside the project is opened (`run::checked_scene`).
 - A value turned from the pane is one of the node's own, named by a plain name, and a number or
   a switch: `set_value` refuses anything else.
+- **Assets are looked at, by the person.** `game_assets` and `game_asset` are commands of the
+  window; no tool reaches them. Only a file that is a picture, a sound or a model by its name is
+  read, by a plain path inside the chat's own folder (no `..`, no hidden part, no drive or
+  root), through handles that follow no link, up to its kind's size. A link in the folder is
+  neither listed nor read: it may lead anywhere on the computer. An .svg is shown as a picture,
+  never run. The app's content policy is as it was: a sound is played by the window's own audio
+  rather than a player pointed at a file, and a model's pictures load as pictures.
 - **The game is not trusted.** It connects to a loopback listener made for that run and must show
   the run's token before anything else. From then on it can only answer and send pictures: every
   message is bounded, and what it says (node names, text, printed lines, errors) is cut to size
@@ -235,6 +270,11 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
 - **Pointing** asks the bridge what is at a point: the smallest box that holds it among
   controls, sprites, collision shapes, polygons, tile layers and the projected bounds of 3D
   meshes, with whatever fills most of the picture counted only when nothing smaller is there.
+- **Assets** (`crates/ghost-game/src/assets.rs`, `components/game/AssetsView.tsx`,
+  `lib/gameAssets.ts`). The list is a walk of the folder that follows no link. A file's bytes
+  come once, as base64, and are kept as an object URL while something shows them; what nothing
+  shows is let go once more than 48 are kept. Thumbnails are read only when their card comes
+  into sight.
 - **A controller.** The pane reads the browser's standard gamepad and sends what changed in
   Godot's own numbers (the triggers are axes there), sticks in twentieths past a dead zone. A
   game that reads the computer's controllers itself is sent none, or it would hear every press
@@ -266,6 +306,11 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
   nothing outside its folder. The real-Godot test loads and plays both Godot starters.
 - `vitest`: `lib/game.test.ts`, `lib/gameTell.test.ts` (the words of each note, slider ranges, a
   controller's input).
+- Assets: `cargo test -p ghost-game assets` (what is listed and what is not, a path read only
+  as listed, every spelling of a path out of the folder, a link neither listed nor read, a file
+  too large), `lib/gameAssets.test.ts` (sheets, a sound's shape, what a turn left, the bytes
+  kept), and `check-game.mjs` (the grid, kinds and Find, a sheet's frames, a sound drawn and
+  played, a model, a .gltf, a file too large, Esc, the strip above the message box).
 - The real-engine test also points at the fixture's player and its score (the node, its scene
   and line, its script), turns an exported value, keeps a run that an agent set up and played
   and a person played live, and replays it to the same frame, twice, the second time stopped
@@ -273,6 +318,6 @@ A Unity, Unreal or Roblox project gets a **Connect** card in the pane instead of
 
 ## Still to come
 
-An assets view, and export. They are in the plan, in that order. Pointing, replays and tuning
+Export, and a place on the website. They are in the plan. Pointing, replays and tuning
 are for Godot games: a web game is played in the browser with the person's own input, which
 Ghost does not record, and its page is annotated with the browser's own Annotate.
