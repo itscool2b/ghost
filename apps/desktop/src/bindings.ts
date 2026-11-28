@@ -3198,7 +3198,7 @@ export type PermissionDecision = { type: "selected"; option_id: string;
  *  was accepted with edits ([`Capabilities::plan_edits`]). `None` for every other answer,
  *  and absent from what is stored and sent then, so older records read as they did.
  */
-plan?: string | null;
+plan?: string | null; 
 /**
  *  What the person wrote when they sent a plan back: only on a plan approval declined
  *  with words, by an agent that reads them with the refusal

@@ -131,6 +131,7 @@
           "slash_commands": true,
           "add_dirs": true,
           "plan_edits": true,
+          "plan_notes": true,
           "autonomy_levels": [
             "full_auto",
             "auto_edit",
