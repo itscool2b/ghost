@@ -288,6 +288,14 @@ struct Replay {
     ticks: u64,
 }
 
+/// How one start begins: which of the chat's starts it is, the window that owns the game's,
+/// and the seed of the run it repeats, when it repeats one.
+struct Begin {
+    generation: u64,
+    owner_window: Option<i64>,
+    replayed: Option<u32>,
+}
+
 /// How many runs a chat keeps to be played again.
 const REPLAYS_KEPT: usize = 8;
 
@@ -906,9 +914,11 @@ impl Manager {
                 folder,
                 scene,
                 &program,
-                generation,
-                owner_window,
-                replayed,
+                Begin {
+                    generation,
+                    owner_window,
+                    replayed,
+                },
             )
             .await;
         // A start that was overtaken (the chat stopped it, or started again) leaves nothing: its
@@ -945,10 +955,13 @@ impl Manager {
         folder: &Path,
         scene: Option<&str>,
         program: &Path,
-        generation: u64,
-        owner_window: Option<i64>,
-        replayed: Option<u32>,
+        begin: Begin,
     ) -> Result<Run, Error> {
+        let Begin {
+            generation,
+            owner_window,
+            replayed,
+        } = begin;
         let seed = replayed.unwrap_or_else(fresh_seed);
         let root = self.inner.config.root.clone();
         let main_loop = tokio::task::spawn_blocking(move || run::write_scripts(&root))
