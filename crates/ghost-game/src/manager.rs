@@ -528,6 +528,36 @@ impl Manager {
         project
     }
 
+    /// Starts a game from nothing in the chat's folder: one of Ghost's own small projects. The
+    /// person's, from the pane: no tool calls this. A Godot starter is marked as made with the
+    /// Godot that will run it.
+    pub async fn start_project(
+        &self,
+        chat_id: &str,
+        folder: &Path,
+        starter: crate::starter::Starter,
+    ) -> Result<GameProject, Error> {
+        if !self.enabled() {
+            return Err(Error::Refused(TURNED_OFF.into()));
+        }
+        self.look_once().await;
+        let version = {
+            let state = self.state();
+            godot::choose(None, &state.found)
+                .map(|godot| godot.version.clone())
+                .unwrap_or_else(|_| godot::VERSION.to_owned())
+        };
+        // "4.7.2" as "4.7": a project names the release line it was made with.
+        let line = version.split('.').take(2).collect::<Vec<_>>().join(".");
+        let at = folder.to_owned();
+        tokio::task::spawn_blocking(move || crate::starter::write(&at, starter, &line))
+            .await
+            .map_err(|_| Error::Game("The project could not be written.".into()))??;
+        self.look(chat_id, folder).await.ok_or_else(|| {
+            Error::Game("The project was written, and Ghost cannot read it back.".into())
+        })
+    }
+
     /// Forgets a chat that is gone, and stops its game.
     pub fn forget(&self, chat_id: &str) {
         let chat = {

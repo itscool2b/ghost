@@ -4,12 +4,15 @@
  */
 import type {
   ChatGame,
+  EngineProbe,
+  GameConnected,
   GameInput,
   GameLog,
   GameProject,
   GameStatus,
   GameToolsChange,
   GodotStatus,
+  Starter,
 } from "../bindings";
 import type { GameApi } from "../lib/game";
 
@@ -116,6 +119,10 @@ export class FakeGame implements GameApi {
   readonly watching = new Map<string, (packet: Uint8Array) => void>();
   /** Every chat that is looked at holds a game (the tour's fixture, where any chat may open). */
   everyChat = false;
+  /** What a look for another engine's tools finds. */
+  probed: EngineProbe | null = null;
+  /** Whether the engine's server was added to the project already. */
+  #connected = false;
   /** What `turnOn` answers. */
   toolsChange: GameToolsChange = "restarting";
   log_: GameLog = LOG;
@@ -258,6 +265,31 @@ export class FakeGame implements GameApi {
   async picture(): Promise<string> {
     this.calls.push("picture");
     return "C:\\Users\\you\\Pictures\\ghost-game-1764200000.jpg";
+  }
+  async startProject(chatId: string, starter: Starter): Promise<GameToolsChange> {
+    this.calls.push(`startProject:${starter}`);
+    const web = starter === "web2d" || starter === "web3d";
+    this.game(chatId, {
+      tools: true,
+      project: project({
+        engine: web ? "web" : "godot",
+        name: web ? "moon-hop" : "Moon Hop",
+        version: web ? null : "4.7",
+        framework: starter === "web3d" ? "three" : starter === "web2d" ? "canvas" : null,
+      }),
+    });
+    return this.toolsChange;
+  }
+  async probe(chatId: string): Promise<EngineProbe | null> {
+    this.calls.push("probe");
+    const engine = this.#of(chatId)?.project?.engine;
+    return this.probed ?? (engine ? { engine, ready: false, detail: "" } : null);
+  }
+  async connect(): Promise<GameConnected> {
+    this.calls.push("connect");
+    const result = this.#connected ? "already" : "added";
+    this.#connected = true;
+    return result;
   }
   async turnOn(chatId: string, on: boolean): Promise<GameToolsChange> {
     this.calls.push(`turnOn:${on}`);

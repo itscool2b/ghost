@@ -1,0 +1,13 @@
+{
+  "name": "__PACKAGE__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A 2D game on a plain canvas, started in Ghost.",
+  "keywords": [
+    "game"
+  ],
+  "scripts": {
+    "dev": "node serve.mjs"
+  }
+}

@@ -23,7 +23,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { ChatGame, GameInput, GameLog, GodotStatus } from "../../bindings";
+import type { ChatGame, GameInput, GameLog, GodotStatus, Starter } from "../../bindings";
 import { FileLinkContext } from "../../lib/chat/fileLinks";
 import { errorMessage } from "../../lib/errors";
 import {
@@ -34,9 +34,11 @@ import {
   megabytes,
   mouseButton,
   SPEEDS,
+  STARTERS,
 } from "../../lib/game";
 import { ScreenPlayer, type ScreenState, videoPoint } from "../../lib/screen";
 import { commandKey } from "../chat/Keys";
+import { connected, EngineConnect } from "./EngineConnect";
 
 /** How long what the agent did stays in the header after its call, so a run of calls reads as one. */
 export const AGENT_LINGER_MS = 1200;
@@ -123,6 +125,19 @@ export function GamePanel({
           ? `${agentName} is starting again with the game tools.`
           : `${agentName} gets the game tools when its session next starts.`,
       );
+      store.look(chatId);
+    }, fail);
+  };
+  const startProject = (starter: Starter) => {
+    setProblem(null);
+    api.startProject(chatId, starter).then((change) => {
+      if (toolsPossible) {
+        setNotice(
+          change === "restarting"
+            ? `${agentName} is starting again with the game tools.`
+            : `${agentName} gets the game tools when its session next starts.`,
+        );
+      }
       store.look(chatId);
     }, fail);
   };
@@ -223,6 +238,7 @@ export function GamePanel({
             toolsPossible={toolsPossible}
             onPlay={play}
             onGiveTools={giveTools}
+            onStartProject={startProject}
             onOpenBrowser={onOpenBrowser}
             onError={fail}
           />
@@ -278,6 +294,7 @@ function Stage({
   toolsPossible,
   onPlay,
   onGiveTools,
+  onStartProject,
   onOpenBrowser,
   onError,
 }: {
@@ -289,6 +306,7 @@ function Stage({
   readonly toolsPossible: boolean;
   readonly onPlay: (scene?: string | null) => void;
   readonly onGiveTools: () => void;
+  readonly onStartProject: (starter: Starter) => void;
   readonly onOpenBrowser?: () => void;
   readonly onError: (error: unknown) => void;
 }) {
@@ -306,37 +324,51 @@ function Stage({
     return (
       <div className="game-message" data-testid="game-none">
         <h2>No game here yet</h2>
-        {game.tools ? (
-          <p>
-            Game is on for this chat. Ask {agentName} to start a game, a Godot project for example,
-            and it shows up here to play.
-          </p>
-        ) : (
-          <>
-            <p>
-              This chat's folder holds no game Ghost knows. Ghost runs Godot projects in this pane,
-              and recognises web games, Unity, Unreal and Roblox projects.
-            </p>
-            {toolsPossible ? (
-              <>
-                <p className="game-note">
-                  Starting one from nothing? Turn Game on here and {agentName} gets the tools to
-                  run, see and play what it builds. Its session starts again to take them.
-                </p>
-                <button
-                  type="button"
-                  className="g-button g-button-primary g-button-28"
-                  data-testid="game-turn-on"
-                  onClick={onGiveTools}
-                >
-                  Turn on Game for this chat
-                </button>
-              </>
-            ) : null}
-          </>
-        )}
+        <p>
+          {game.tools
+            ? `Game is on for this chat. Ask ${agentName} to make a game, or start from one of these, and it shows up here to play.`
+            : "This chat's folder holds no game Ghost knows. Start one here, and tell the agent what it should become."}
+        </p>
+        <ul className="game-list" aria-label="Start a game">
+          {STARTERS.map((starter) => (
+            <li key={starter.id} className="game-row" data-testid="game-starter">
+              <span className="game-row-text">
+                <span className="game-row-title">{starter.name}</span>
+                <span className="game-row-what">{starter.what}</span>
+              </span>
+              <button
+                type="button"
+                className="g-button g-button-ghost g-button-28"
+                aria-label={`Start a ${starter.name} game`}
+                data-testid={`game-start-${starter.id}`}
+                onClick={() => onStartProject(starter.id)}
+              >
+                Start
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="game-note">
+          Ghost writes a few small files into this chat's folder and writes over nothing.
+          {toolsPossible
+            ? ` ${agentName} gets the tools to run, see and play the game; its session starts again to take them.`
+            : ""}
+        </p>
+        {!game.tools && toolsPossible ? (
+          <button
+            type="button"
+            className="g-button g-button-ghost g-button-28"
+            data-testid="game-turn-on"
+            title={`For a game ${agentName} makes from nothing: it gets the game tools, and its session starts again to take them`}
+            onClick={onGiveTools}
+          >
+            Only turn on Game for this chat
+          </button>
+        ) : null}
       </div>
     );
+  if (connected(project.engine))
+    return <EngineConnect chatId={chatId} api={api} project={project} agentName={agentName} />;
   if (project.engine !== "godot")
     return (
       <div className="game-message" data-testid="game-other-engine">
@@ -362,14 +394,6 @@ function Stage({
               </button>
             ) : null}
           </>
-        ) : project.engine === "unity" ||
-          project.engine === "unreal" ||
-          project.engine === "roblox" ? (
-          <p>
-            Ghost does not run {engineName(project.engine)} itself. Its editor runs the game, and
-            its maker's own agent tools let {agentName} work in it. The game shows in the editor's
-            window, not in this pane.
-          </p>
         ) : (
           <p>
             Ghost has no pane for {engineName(project.engine)} games. {agentName} builds and runs it

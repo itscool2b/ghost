@@ -4,7 +4,7 @@
  * a real Godot are `crates/ghost-game/tests/godot.rs` and the native run recorded in docs/game.md.
  *
  * `?state=` chooses what the pane opens on: `ready` (the default), `none`, `none-on`, `web`,
- * `unity`, `bevy`, `unsupported`, `looking`, `get`, `fetching`, `unpacking`, `fetch-failed`,
+ * `unity`, `unreal`, `roblox`, `bevy`, `unsupported`, `looking`, `get`, `fetching`, `unpacking`, `fetch-failed`,
  * `too-old`, `starting`, `running`, `frozen`, `agent`, `errors`, `ended`, `no-tools`, `remote`
  * or `off`. `&closed` starts with the pane closed. `window.gameFixture` is the stand-in itself:
  * its `calls`, `inputs`, `game(...)`, `summon(...)` and `frame(...)`.
@@ -62,6 +62,20 @@ function statusFor(state: string): GameStatus {
           chatGame(CHAT, {
             project: project({ engine: "unity", name: "Harbor", version: "6000.0.23f1" }),
           }),
+        ],
+      });
+    case "unreal":
+      return gameStatus({
+        chats: [
+          chatGame(CHAT, {
+            project: project({ engine: "unreal", name: "Harbor", version: "5.9" }),
+          }),
+        ],
+      });
+    case "roblox":
+      return gameStatus({
+        chats: [
+          chatGame(CHAT, { project: project({ engine: "roblox", name: "obby", version: null }) }),
         ],
       });
     case "bevy":
@@ -169,6 +183,26 @@ function Preview() {
     const state = params.get("state") ?? "ready";
     shared ??= new FakeGame(statusFor(state));
     const game = shared;
+    // What a look for the engine's own tools finds on the fixture's computer.
+    if (state === "unity") {
+      game.probed = {
+        engine: "unity",
+        ready: false,
+        detail: "The Unity CLI is not on this computer yet.",
+      };
+    } else if (state === "unreal") {
+      game.probed = {
+        engine: "unreal",
+        ready: true,
+        detail: "Something answers on port 8000, where Unreal's MCP server listens.",
+      };
+    } else if (state === "roblox") {
+      game.probed = {
+        engine: "roblox",
+        ready: false,
+        detail: "Roblox Studio's MCP launcher is not here: install or update Roblox Studio.",
+      };
+    }
     window.gameFixture = game;
     const chat = chatSummary(CHAT, {
       status: "ready",

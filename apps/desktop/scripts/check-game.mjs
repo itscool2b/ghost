@@ -92,6 +92,29 @@ export async function checkGame(browser, url, out, engine) {
       );
       assert.equal(await panel.getByTestId("game-turn-on").count(), 0);
 
+      // Start a game: four small projects of Ghost's own, one press each.
+      await open("none");
+      const starters = panel.getByTestId("game-starter");
+      assert.equal(await starters.count(), 4, `${label}: four starters`);
+      assert.match(await starters.nth(0).textContent(), /Godot, 2D\s*A player that runs and jumps/);
+      assert.match(await panel.textContent(), /writes over nothing/);
+      assert.ok(!(await calls(page)).some((call) => call.startsWith("startProject")));
+      await panel.getByRole("button", { name: "Start a Godot, 2D game" }).click();
+      await called(page, "startProject:godot2d", label);
+      await panel.getByTestId("game-ready").waitFor();
+      await panel.getByRole("heading", { name: "Moon Hop" }).waitFor();
+      assert.match(
+        await panel.getByTestId("game-notice").textContent(),
+        /Claude Code is starting again with the game tools/,
+      );
+      await open("none");
+      await panel.getByTestId("game-start-web3d").click();
+      await called(page, "startProject:web3d", label);
+      await until(
+        async () => /moon-hop is made with Web \(three\)/.test(await panel.textContent()),
+        `${label}: a web starter shows where it runs`,
+      );
+
       // Engines Ghost names and does not run: each says where the game does run.
       await open("web");
       assert.match(await panel.textContent(), /orbit-run is made with Web \(three\)/);
@@ -99,12 +122,75 @@ export async function checkGame(browser, url, out, engine) {
       // This fixture has no browser to open, so the pane offers none.
       assert.equal(await panel.getByTestId("game-open-browser").count(), 0);
       await axe(page, `${label} web`);
+      // Engines Ghost connects to: the maker's own steps, a look for its tools, its guide.
       await open("unity");
-      assert.match(await panel.textContent(), /Harbor is made with Unity/);
-      assert.match(await panel.textContent(), /Ghost does not run Unity itself/);
+      const connect = panel.getByTestId("game-connect");
+      await connect.getByRole("heading", { name: "Connect Unity for Harbor" }).waitFor();
+      assert.match(await connect.textContent(), /Ghost does not run Unity itself/);
+      assert.equal(await connect.locator(".game-steps > li").count(), 4, `${label}: Unity's steps`);
+      assert.match(await connect.textContent(), /unity pipeline install/);
+      assert.match(await connect.textContent(), /\/plugin install unity@unity-agent-plugin/);
+      await called(page, "probe", label);
+      await until(
+        async () =>
+          /The Unity CLI is not on this computer yet/.test(
+            await connect.getByTestId("game-probe").textContent(),
+          ),
+        `${label}: what the look found`,
+      );
+      assert.equal(await connect.getByTestId("game-probe").getAttribute("data-ready"), null);
+      // Unity is connected from its own CLI: there is no server for Ghost to add.
+      assert.equal(await connect.getByTestId("game-connect-add").count(), 0);
+      assert.deepEqual(
+        await connect.locator("a").evaluateAll((links) => links.map((link) => link.href)),
+        [
+          "https://docs.unity.com/en-us/ai/unity-plugin/about-unity-plugin",
+          "https://docs.unity.com/en-us/unity-cli/use-unity-cli",
+        ],
+      );
+      const looks = (await calls(page)).filter((call) => call === "probe").length;
+      await connect.getByTestId("game-probe-again").click();
+      await until(
+        async () => (await calls(page)).filter((call) => call === "probe").length > looks,
+        `${label}: Check again looks again`,
+      );
       assert.equal(await panel.getByTestId("game-play").count(), 0);
       await axe(page, `${label} unity`);
       await shot("unity");
+
+      await open("unreal");
+      await connect.getByRole("heading", { name: "Connect Unreal Engine for Harbor" }).waitFor();
+      assert.match(await connect.textContent(), /http:\/\/127\.0\.0\.1:8000\/mcp/);
+      assert.match(await connect.textContent(), /has no sign-in/);
+      await until(
+        async () => (await connect.getByTestId("game-probe").getAttribute("data-ready")) === "",
+        `${label}: Unreal's server answers`,
+      );
+      assert.ok(!(await calls(page)).includes("connect"), `${label}: nothing added unasked`);
+      await connect.getByTestId("game-connect-add").click();
+      await called(page, "connect", label);
+      await until(
+        async () => /^Added\./.test(await connect.getByTestId("game-connected").textContent()),
+        `${label}: added to the project`,
+      );
+      await connect.getByTestId("game-connect-add").click();
+      await until(
+        async () => /already one of this project's MCP servers/.test(await connect.textContent()),
+        `${label}: a second press adds nothing`,
+      );
+      await axe(page, `${label} unreal`);
+      await shot("unreal");
+
+      await open("roblox");
+      await connect.getByRole("heading", { name: "Connect Roblox Studio for obby" }).waitFor();
+      assert.equal(await connect.locator(".game-steps > li").count(), 3);
+      assert.match(await connect.textContent(), /Enable Studio as MCP server/);
+      await connect.getByTestId("game-connect-add").waitFor();
+      assert.equal(
+        await connect.locator("a").getAttribute("href"),
+        "https://create.roblox.com/docs/studio/mcp",
+      );
+      await axe(page, `${label} roblox`);
       await open("bevy");
       assert.match(await panel.textContent(), /Ghost has no pane for Bevy games/);
       await open("unsupported");
