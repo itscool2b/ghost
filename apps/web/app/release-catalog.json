@@ -3,64 +3,64 @@
     "channel": "stable",
     "signed": true,
     "publisher_signed": false,
-    "version": "0.14.0",
-    "pub_date": "2026-11-28T07:16:40-05:00",
-    "notes": "See your game's art without leaving the chat.",
-    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/SHA256SUMS",
+    "version": "0.15.0",
+    "pub_date": "2026-11-28T08:19:53-05:00",
+    "notes": "Put your game on the web.",
+    "checksums_url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/SHA256SUMS",
     "downloads": [
       {
         "kind": "macos_universal_dmg",
         "label": "macOS · Apple silicon and Intel",
         "requirements": "macOS 13.3 or newer",
-        "file": "Ghost_0.14.0_universal.dmg",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/Ghost_0.14.0_universal.dmg",
-        "sha256": "b03b0785b0d68b822f0ccc922ce5cc381667273324b19c067b77deeed8032a2e",
-        "bytes": 236674964
+        "file": "Ghost_0.15.0_universal.dmg",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/Ghost_0.15.0_universal.dmg",
+        "sha256": "b6afa3f22d705947cf1207563f6588457d3e6cf922b5fc61be016e0df77c774a",
+        "bytes": 236803870
       },
       {
         "kind": "windows_x64_nsis",
         "label": "Windows · x64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "Ghost_0.14.0_x64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/Ghost_0.14.0_x64-setup.exe",
-        "sha256": "4743e52e5e2a1569f252d7f86e14e254895aa5dcbdb75352868899d4a5918fb9",
-        "bytes": 192321213
+        "file": "Ghost_0.15.0_x64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/Ghost_0.15.0_x64-setup.exe",
+        "sha256": "cd0037f83b874591dd1d7ead541e8c6f3a67e77fd525ac2a0a902f3c105a5694",
+        "bytes": 192453771
       },
       {
         "kind": "windows_arm64_nsis",
         "label": "Windows · ARM64",
         "requirements": "Windows 10 or newer, with Microsoft Edge WebView2",
-        "file": "Ghost_0.14.0_arm64-setup.exe",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/Ghost_0.14.0_arm64-setup.exe",
-        "sha256": "0164a059c7319d3253d5b0373847f115d0c8f389191609fb1ea1d2ff4314cf47",
-        "bytes": 189713232
+        "file": "Ghost_0.15.0_arm64-setup.exe",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/Ghost_0.15.0_arm64-setup.exe",
+        "sha256": "a8e2eec7f918fe19e4cf86fb5f3dcd0a4bc8c9436460279d882d918ae209c247",
+        "bytes": 189716110
       },
       {
         "kind": "linux_x64_appimage",
         "label": "Linux · AppImage",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "Ghost_0.14.0_amd64.AppImage",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/Ghost_0.14.0_amd64.AppImage",
-        "sha256": "c44f9f40fb5c903a975e5325c29cd7906c29bb68c2387c6fbaa04f5bde7c825c",
-        "bytes": 289053176
+        "file": "Ghost_0.15.0_amd64.AppImage",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/Ghost_0.15.0_amd64.AppImage",
+        "sha256": "b6248e22029efd78104211d2d27534e46c177ae3645370988913ef896c5b92da",
+        "bytes": 289184248
       },
       {
         "kind": "linux_x64_deb",
         "label": "Linux · Debian and Ubuntu",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "Ghost_0.14.0_amd64.deb",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/Ghost_0.14.0_amd64.deb",
-        "sha256": "0495bd6830916c6519adacc7456f964f02b1fa92e8d6cc0f2fd6237a89384b38",
-        "bytes": 207594386
+        "file": "Ghost_0.15.0_amd64.deb",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/Ghost_0.15.0_amd64.deb",
+        "sha256": "d6e44efadc6ca818e89b40d8a1155aafd069fa0045888195d08e5a3284084af4",
+        "bytes": 207702060
       },
       {
         "kind": "linux_x64_rpm",
         "label": "Linux · Fedora and other RPM systems",
         "requirements": "x64 Linux with glibc 2.35 or newer and WebKitGTK 4.1: Ubuntu 22.04, Debian 12, Fedora 36 or newer",
-        "file": "Ghost-0.14.0-1.x86_64.rpm",
-        "url": "https://github.com/itscool2b/auracode/releases/download/v0.14.0/Ghost-0.14.0-1.x86_64.rpm",
-        "sha256": "f289a6894743ef9ca9115d0904c296a819f306a0f8b5f8616c175b32b89a5305",
-        "bytes": 207603703
+        "file": "Ghost-0.15.0-1.x86_64.rpm",
+        "url": "https://github.com/itscool2b/auracode/releases/download/v0.15.0/Ghost-0.15.0-1.x86_64.rpm",
+        "sha256": "6d04612826d22637f4a7e0649a17cbf42af369cc64478273343fca2767e0b221",
+        "bytes": 207713021
       }
     ]
   }
