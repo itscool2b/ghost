@@ -517,7 +517,6 @@ export function Wave({
         aria-label="Microphone level"
         min={0}
         max={1}
-        defaultValue={0}
       />
       {/* No fallback content: the meter above is what assistive technology reads. */}
       <canvas ref={canvas} className="dictation-wave-canvas" />
