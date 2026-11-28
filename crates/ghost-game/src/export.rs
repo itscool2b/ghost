@@ -273,7 +273,7 @@ pub async fn export_godot(
         .chain(String::from_utf8_lossy(&output.stdout).lines())
         .map(str::trim)
         .filter(|line| line.contains("ERROR") || line.contains("rror:"))
-        .last()
+        .next_back()
         .unwrap_or("Godot gave no reason.")
         .chars()
         .filter(|ch| !ch.is_control())
