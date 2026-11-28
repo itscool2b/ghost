@@ -195,9 +195,21 @@ fn web(folder: &Path) -> Option<GameProject> {
             .iter()
             .any(|section| package[*section].get(name).is_some())
     };
-    let (_, framework) = WEB_FRAMEWORKS.iter().find(|(name, _)| depends(name))?;
+    let framework = match WEB_FRAMEWORKS.iter().find(|(name, _)| depends(name)) {
+        Some((_, framework)) => *framework,
+        // No engine at all: a page that calls itself a game and has a page to open.
+        None => {
+            let says_game = package["keywords"]
+                .as_array()
+                .is_some_and(|keywords| keywords.iter().any(|keyword| keyword == "game"));
+            if !says_game || read(&folder.join("index.html")).is_none() {
+                return None;
+            }
+            "canvas"
+        }
+    };
     let mut project = GameProject::of(GameEngine::Web);
-    project.framework = Some((*framework).to_owned());
+    project.framework = Some(framework.to_owned());
     project.name = package["name"]
         .as_str()
         .filter(|name| !name.is_empty())

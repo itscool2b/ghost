@@ -1,0 +1,42 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://player.gd" id="1_player"]
+
+[sub_resource type="BoxMesh" id="mesh_ground"]
+size = Vector3(20, 0.2, 20)
+
+[sub_resource type="BoxShape3D" id="shape_ground"]
+size = Vector3(20, 0.2, 20)
+
+[sub_resource type="CapsuleMesh" id="mesh_player"]
+
+[sub_resource type="CapsuleShape3D" id="shape_player"]
+
+[node name="Main" type="Node3D"]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+position = Vector3(0, 6, 0)
+rotation = Vector3(-0.9, 0.6, 0)
+shadow_enabled = true
+
+[node name="Camera" type="Camera3D" parent="."]
+position = Vector3(0, 5, 8)
+rotation = Vector3(-0.52, 0, 0)
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="Look" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("mesh_ground")
+
+[node name="Shape" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("shape_ground")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+position = Vector3(0, 1.2, 0)
+script = ExtResource("1_player")
+
+[node name="Look" type="MeshInstance3D" parent="Player"]
+mesh = SubResource("mesh_player")
+
+[node name="Shape" type="CollisionShape3D" parent="Player"]
+shape = SubResource("shape_player")
