@@ -16,6 +16,7 @@ pub mod assets;
 pub mod bridge;
 mod check;
 pub mod detect;
+pub mod export;
 pub mod godot;
 mod manager;
 mod output;

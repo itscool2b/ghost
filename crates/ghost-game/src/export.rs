@@ -83,7 +83,11 @@ pub fn file_name(name: &str) -> String {
         }
     }
     let out = out.trim_end_matches('-').to_owned();
-    if out.is_empty() { "game".to_owned() } else { out }
+    if out.is_empty() {
+        "game".to_owned()
+    } else {
+        out
+    }
 }
 
 /// Where the web template is kept once fetched.
@@ -116,6 +120,39 @@ pub async fn web_template(root: &Path) -> Result<PathBuf, Error> {
             ))
         })?;
     Ok(path)
+}
+
+/// Ghost's Godot under a second name in a folder of its own, beside a file (`._sc_`) that
+/// tells Godot to keep its editor's settings and caches in that folder. Exporting runs Godot's
+/// editor without a window, and this way it leaves nothing in the person's own Godot folder, or
+/// makes one for a person who never opened Godot. On a Mac, where Godot is a bundle, and
+/// wherever the second name cannot be made, Godot runs as it is.
+pub async fn exporter(root: &Path, program: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        return program.to_owned();
+    }
+    let Some(name) = program.file_name() else {
+        return program.to_owned();
+    };
+    let folder = root.join("exporter").join(godot::VERSION);
+    let kept = folder.join(name);
+    let made = async {
+        tokio::fs::create_dir_all(&folder).await?;
+        if tokio::fs::metadata(&kept).await.is_err()
+            && tokio::fs::hard_link(program, &kept).await.is_err()
+        {
+            tokio::fs::copy(program, &kept).await?;
+        }
+        let marker = folder.join("._sc_");
+        if tokio::fs::metadata(&marker).await.is_err() {
+            tokio::fs::write(&marker, b"").await?;
+        }
+        std::io::Result::Ok(())
+    };
+    match made.await {
+        Ok(()) => kept,
+        Err(_) => program.to_owned(),
+    }
 }
 
 /// The name of the project's own Web preset, when its `export_presets.cfg` has one.
@@ -242,7 +279,9 @@ pub async fn export_godot(
         .filter(|ch| !ch.is_control())
         .take(300)
         .collect();
-    Err(Error::Game(format!("Godot did not export the game: {said}")))
+    Err(Error::Game(format!(
+        "Godot did not export the game: {said}"
+    )))
 }
 
 /// The folder of a web game that a host serves: its build (`dist`, `build`, `out`, `public`
@@ -281,7 +320,8 @@ pub async fn export(
             })?;
             let template = web_template(root).await?;
             let out = root.join("exports").join(&name);
-            export_godot(program, folder, &template, &out).await?;
+            let program = exporter(root, program).await;
+            export_godot(&program, folder, &template, &out).await?;
             (out, "Godot's web export".to_owned())
         }
         GameEngine::Web => web_folder(folder).ok_or_else(|| {
@@ -309,7 +349,9 @@ pub async fn export(
     .await
     .map_err(|_| Error::Game("The game could not be packed.".into()))?
     .map_err(|error| Error::Game(format!("The game could not be packed: {error}")))?;
-    let bytes = tokio::fs::metadata(&zip).await.map_or(0, |found| found.len());
+    let bytes = tokio::fs::metadata(&zip)
+        .await
+        .map_or(0, |found| found.len());
     Ok(GameExport {
         folder: served.to_string_lossy().into_owned(),
         zip: zip.to_string_lossy().into_owned(),
@@ -327,7 +369,10 @@ mod tests {
     fn a_projects_own_web_preset_is_found_by_its_platform() {
         let presets = "[preset.0]\n\nname=\"Windows Desktop\"\nplatform=\"Windows Desktop\"\n\n[preset.0.options]\n\ncustom_template/release=\"\"\n\n[preset.1]\n\nname=\"itch\"\nplatform=\"Web\"\nrunnable=true\n\n[preset.1.options]\n\nvariant/thread_support=false\n";
         assert_eq!(web_preset(presets), Some("itch".to_owned()));
-        assert_eq!(web_preset("[preset.0]\nname=\"Linux\"\nplatform=\"Linux\"\n"), None);
+        assert_eq!(
+            web_preset("[preset.0]\nname=\"Linux\"\nplatform=\"Linux\"\n"),
+            None
+        );
         assert_eq!(web_preset(""), None);
         // The last preset of the file, and a platform written before its name.
         assert_eq!(
@@ -345,7 +390,8 @@ mod tests {
     fn the_preset_names_the_template_as_godot_reads_a_path() {
         let preset = preset_for(Path::new(r"C:\Users\me\Ghost\templates\4.7.2\web.zip"));
         assert!(
-            preset.contains("custom_template/release=\"C:/Users/me/Ghost/templates/4.7.2/web.zip\""),
+            preset
+                .contains("custom_template/release=\"C:/Users/me/Ghost/templates/4.7.2/web.zip\""),
             "{preset}"
         );
         assert!(preset.contains("variant/thread_support=false"));
@@ -433,7 +479,9 @@ mod tests {
             dir.path(),
         )
         .await;
-        assert!(matches!(unity, Err(Error::Refused(why)) if why.contains("Export from its editor")));
+        assert!(
+            matches!(unity, Err(Error::Refused(why)) if why.contains("Export from its editor"))
+        );
         // A Godot project with no Godot of Ghost's own: said, and nothing fetched.
         let godot = export(
             &project(GameEngine::Godot),
@@ -443,7 +491,9 @@ mod tests {
             dir.path(),
         )
         .await;
-        assert!(matches!(godot, Err(Error::Refused(why)) if why.contains("Get it in the Game pane")));
+        assert!(
+            matches!(godot, Err(Error::Refused(why)) if why.contains("Get it in the Game pane"))
+        );
         assert!(!template_path(dir.path()).exists());
         // A web game with nothing built.
         let web = export(
@@ -462,10 +512,19 @@ mod tests {
         std::fs::write(game.join("dist/index.html"), b"<html>").unwrap();
         std::fs::write(game.join("dist/assets/a.js"), b"js").unwrap();
         let downloads = dir.path().join("Downloads");
-        let done = export(&project(GameEngine::Web), &game, None, dir.path(), &downloads)
-            .await
-            .unwrap();
-        assert_eq!((done.files, done.what.as_str()), (2, "The built folder dist"));
+        let done = export(
+            &project(GameEngine::Web),
+            &game,
+            None,
+            dir.path(),
+            &downloads,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (done.files, done.what.as_str()),
+            (2, "The built folder dist")
+        );
         assert_eq!(done.zip, downloads.join("harbor-web.zip").to_string_lossy());
         assert!(done.bytes > 0);
     }
