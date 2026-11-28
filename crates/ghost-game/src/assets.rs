@@ -246,7 +246,7 @@ mod tests {
             .iter()
             .map(|asset| (asset.path.as_str(), asset.kind))
             .collect();
-        paths.sort();
+        paths.sort_by_key(|(path, _)| *path);
         assert_eq!(
             paths,
             [
