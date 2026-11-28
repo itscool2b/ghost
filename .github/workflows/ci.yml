@@ -220,7 +220,7 @@ jobs:
         timeout-minutes: 15
         run: pnpm --filter @ghost/desktop exec node scripts/check-fixture-suite.mjs --part 1
 
-      - name: Check the browser, the Device pane, opening, the tour, plans and reading aloud
+      - name: Check the browser, the Device and Game panes, opening, the tour, plans and reading aloud
         if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
         timeout-minutes: 15
         run: pnpm --filter @ghost/desktop exec node scripts/check-fixture-suite.mjs --part 2

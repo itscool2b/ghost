@@ -392,7 +392,14 @@ impl Manager {
         let mut chats: Vec<ChatGame> = state
             .chats
             .iter()
-            .map(|(chat_id, chat)| chat_status(chat_id, chat, state.tools.contains_key(chat_id), &state.found))
+            .map(|(chat_id, chat)| {
+                chat_status(
+                    chat_id,
+                    chat,
+                    state.tools.contains_key(chat_id),
+                    &state.found,
+                )
+            })
             .collect();
         chats.sort_by(|a, b| a.chat_id.cmp(&b.chat_id));
         let mut summons: Vec<GameSummon> = state
@@ -1170,10 +1177,14 @@ impl Manager {
     /// One chat's game as the pane shows it.
     pub fn chat(&self, chat_id: &str) -> Option<ChatGame> {
         let state = self.state();
-        state
-            .chats
-            .get(chat_id)
-            .map(|chat| chat_status(chat_id, chat, state.tools.contains_key(chat_id), &state.found))
+        state.chats.get(chat_id).map(|chat| {
+            chat_status(
+                chat_id,
+                chat,
+                state.tools.contains_key(chat_id),
+                &state.found,
+            )
+        })
     }
 
     /// A session of `chat_id` was given the game tools, or let go of them. Said by the app's

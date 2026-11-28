@@ -37,6 +37,9 @@ publishes, `crates/ghost-devices` refuses any other bytes, and its LICENSE is pr
 own computer, after the person has read and accepted Google's SDK licence in the pane. AXe, which
 drives iPhone simulators on a Mac, is not bundled either: Ghost fetches one pinned MIT release from
 its own GitHub release page on an iPhone's first start, checked by size and SHA-256 (`axe.md`).
+Godot, which runs the games of the Game pane, is not bundled either: Ghost fetches one pinned MIT
+release from Godot's own GitHub release page when the person presses Get Godot, checked by size
+and SHA-512 (`godot.md`).
 
 The iPhone app (`apps/ios`) bundles two more things this repository does not build from its own
 code, pinned in `ios.json`. The first is the Geist and Geist Mono variable fonts from vercel/geist-font's

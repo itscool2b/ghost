@@ -29,9 +29,9 @@ for anything a program reads.
   the publisher `Ghost`. Release files are `Ghost_<version>_...`.
 - **The code**: crates `ghost-*` (`ghost_core` in Rust), packages `@ghost/*`, the desktop crate
   `ghost-desktop`, settings `GHOST_*` (`GHOST_DATA_DIR` and the rest), the helper modes
-  `--ghost-memory-helper`, `--ghost-browser-helper`, `--ghost-mobile-helper`,
+  `--ghost-memory-helper`, `--ghost-browser-helper`, `--ghost-mobile-helper`, `--ghost-game-helper`,
   `--ghost-bot-helper` and `--ghost-project-helper`, the tool servers agents see
-  (`ghost_browser`, `ghost_mobile`, `ghost_project_memory`, `ghost_project`) and their tools
+  (`ghost_browser`, `ghost_mobile`, `ghost_game`, `ghost_project_memory`, `ghost_project`) and their tools
   (`ghost_memory_read` and the rest), the protocol's `GhostEvent`.
 - **What other programs are told**: an agent the app starts, and a tool server a person tests from
   Settings, hear the client's name as `ghost` ("Ghost ADE"); a terminal inside the app says

@@ -1,0 +1,51 @@
+name: Godot game
+
+# Started by hand only, like every workflow here. It checks the Game pane's engine side against a
+# real Godot (docs/game.md, "Checking it"): ghost-fetch's and ghost-game's tests, then
+# tests/godot.rs, which fetches the pinned Godot from Godot's own release (checked against its
+# SHA-512), starts a small fixture game under a virtual display and drives it through every agent
+# tool. Its transcript of every call is in the run's log.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  godot:
+    name: Godot game (Linux)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          components: clippy
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: godot
+          cache-on-failure: true
+      - name: Install a virtual display and a software renderer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0 \
+            libxcursor1 libxinerama1 libxrandr2 libxi6 libasound2 libpulse0 libfontconfig1
+      - name: Test ghost-fetch and ghost-game
+        run: cargo test --locked -p ghost-fetch -p ghost-game
+      - name: Lint ghost-fetch and ghost-game
+        run: cargo clippy --locked -p ghost-fetch -p ghost-game --all-targets -- -D warnings
+      - name: Fetch Godot and play the fixture game with every tool
+        env:
+          GHOST_GODOT_E2E: "1"
+          GHOST_GODOT_ROOT: ${{ runner.temp }}/ghost-godot
+        run: xvfb-run -a -s "-screen 0 1280x800x24" cargo test --locked -p ghost-game --test godot -- --nocapture

@@ -17,14 +17,18 @@ import AxeBuilder from "@axe-core/playwright";
 const CHAT = "game-fixture-chat";
 
 async function axe(page, label, scope = "aside[aria-label=Game]") {
-  // Entrances are short and finite: judge the colours once they have ended.
+  // Entrances are short and finite: judge the colours once they have ended. The wait is bounded,
+  // since WebKit keeps some finished-looking animations pending for ever.
   await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
-        .map((animation) => animation.finished.catch(() => {})),
-    ),
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => {})),
+      ),
+      new Promise((done) => setTimeout(done, 1500)),
+    ]),
   );
   const result = await new AxeBuilder({ page }).include(scope).analyze();
   assert.deepEqual(
