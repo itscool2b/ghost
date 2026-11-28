@@ -128,6 +128,23 @@ export const commands = {
 	/**  The person's keys and mouse, at places of the picture they are watching. */
 	gameInput: (chatId: string, events: GameInput[]) => typedError<null, AppError>(__TAURI_INVOKE("game_input", { chatId, events })),
 	/**
+	 *  What is under a point of the game's picture, in the game's own pixels, for the pane's Point:
+	 *  the person freezes the game and clicks what is wrong. Nothing there answers `None`.
+	 */
+	gamePick: (chatId: string, x: number | null, y: number | null) => typedError<GamePicked | null, AppError>(__TAURI_INVOKE("game_pick", { chatId, x, y })),
+	/**  The values of a node the person may turn while the game runs, for the pane's Tune. */
+	gameTunables: (chatId: string, node: string) => typedError<GameTunables, AppError>(__TAURI_INVOKE("game_tunables", { chatId, node })),
+	/**
+	 *  Turns one value of the running game. It changes this run only: the person hands what they
+	 *  keep to the agent, which writes it into the project.
+	 */
+	gameSetValue: (chatId: string, node: string, property: string, kind: string, value: number | null) => typedError<null, AppError>(__TAURI_INVOKE("game_set_value", { chatId, node, property, kind, value })),
+	/**
+	 *  The last seconds of the chat's run as small pictures, and the run kept for the agent to play
+	 *  again (`game_replay`). The person's action: what they just played goes to the agent.
+	 */
+	gameRecent: (chatId: string, seconds: number | null) => typedError<GameRecent, AppError>(__TAURI_INVOKE("game_recent", { chatId, seconds })),
+	/**
 	 *  Streams the chat's game to `channel` until [`game_unwatch`], a new watch for the chat, or the
 	 *  stream's own end. Answers the stream's number, for `game_unwatch`.
 	 */
@@ -1497,6 +1514,11 @@ export type ChatGame = {
 	 *  offers to restart the session with them.
 	 */
 	tools: boolean,
+	/**
+	 *  Controllers the game itself reads on this computer. When it reads one, the pane sends it
+	 *  none of its own.
+	 */
+	joypads: number,
 };
 
 export type ChatImage = {
@@ -2425,7 +2447,11 @@ export type GameInput =
 /**  A key by its browser `code` ("KeyA", "ArrowLeft"). */
 { t: "key"; code: string; down: boolean; text?: string; shift?: boolean; ctrl?: boolean; alt?: boolean } | 
 /**  A mouse button, at a place in the game's own pixels. */
-{ t: "mouse"; x: number | null; y: number | null; button: string; down: boolean } | { t: "move"; x: number | null; y: number | null; dx?: number | null; dy?: number | null } | { t: "wheel"; x: number | null; y: number | null; dy: number | null };
+{ t: "mouse"; x: number | null; y: number | null; button: string; down: boolean } | { t: "move"; x: number | null; y: number | null; dx?: number | null; dy?: number | null } | { t: "wheel"; x: number | null; y: number | null; dy: number | null } | 
+/**  A controller's button, by Godot's number for it (0 is the bottom face button). */
+{ t: "pad"; button: number; down: boolean } | 
+/**  A controller's stick or trigger: Godot's axis number and where it stands, -1 to 1. */
+{ t: "axis"; axis: number; value: number | null };
 
 /**  A run's errors and what it printed, for the pane's log. */
 export type GameLog = {
@@ -2434,6 +2460,31 @@ export type GameLog = {
 	lines: string[],
 	/**  How many older lines are gone. */
 	dropped: number,
+};
+
+/**  What is under a point of the game's picture, for a person who points at what is wrong. */
+export type GamePicked = {
+	/**  The node's path in the running game ("/root/Main/Player/Sprite2D"). */
+	path: string,
+	name: string,
+	class: string,
+	/**  What it says, when it shows text. */
+	text: string,
+	/**
+	 *  The scene file it is defined in ("res://player.tscn"), its path inside that scene, and
+	 *  the line of the file where it begins.
+	 */
+	scene: string,
+	in_scene: string,
+	scene_line: number | null,
+	/**
+	 *  The script that drives it, its own or the nearest above it, and the node that script
+	 *  is on.
+	 */
+	script: string,
+	script_on: string,
+	/**  Where it is in the picture, in the game's own pixels: x, y, width, height. */
+	area: [(number | null), (number | null), (number | null), (number | null)],
 };
 
 /**  What a folder's game is. */
@@ -2450,6 +2501,24 @@ export type GameProject = {
 	 *  when the engine is one Ghost connects to instead.
 	 */
 	unsupported: string | null,
+};
+
+/**  The last seconds of a run, as the person just played them. */
+export type GameRecent = {
+	/**
+	 *  The name an agent gives `game_replay` to play the run again ("r3"). `None` when the
+	 *  run cannot be played again; `unrepeatable` says why.
+	 */
+	replay: string | null,
+	unrepeatable: string | null,
+	/**  Small pictures of the stretch, left to right and top to bottom (JPEG). */
+	picture: number[],
+	pictures: number,
+	/**  How long the stretch is, and how long the whole run is, in seconds of game time. */
+	seconds: number | null,
+	run_seconds: number | null,
+	/**  How many inputs the run was given from its start. */
+	inputs: number,
 };
 
 export type GameState = 
@@ -2487,6 +2556,29 @@ export type GameToolsChange =
 "restarting" | 
 /**  The agent is busy or stopped: it gets the tools the next time its session starts. */
 "next_start";
+
+/**  One value a person may turn while the game runs. */
+export type GameTunable = {
+	name: string,
+	/**  "float", "int" or "bool" (a switch: 0 or 1). */
+	kind: string,
+	value: number | null,
+	/**  What the script starts it at, when it says. */
+	initial: number | null,
+	/**  The range and step its author gave, when they gave one. */
+	min: number | null,
+	max: number | null,
+	step: number | null,
+};
+
+/**  A node's tunable values. */
+export type GameTunables = {
+	path: string,
+	name: string,
+	class: string,
+	script: string,
+	values: GameTunable[],
+};
 
 /**
  *  Settings' General page: what new chats start with, and how Ghost behaves while agents work

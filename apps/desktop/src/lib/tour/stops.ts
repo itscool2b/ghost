@@ -110,7 +110,7 @@ export const TOUR_STOPS: readonly TourStop[] = [
     place: "chat",
     side: "below",
     title: "Your game beside the chat",
-    body: "In a game's chat, the game runs here. You play it with your keyboard and mouse. The agent runs it, sees it and plays it too, with time frozen while it thinks.",
+    body: "In a game's chat, the game runs here. You play it, and so does the agent, with time frozen while it thinks. Point at what is wrong, or send it the last 15 seconds you played.",
   },
   {
     id: "run",

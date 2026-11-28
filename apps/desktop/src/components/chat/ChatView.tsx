@@ -1778,6 +1778,7 @@ export function ChatView({
                 agentName={agentName}
                 toolsPossible={(state.chat.agent_host ?? { type: "native" }).type === "native"}
                 onOpenBrowser={browserUsable ? () => setBrowserOpen(true) : undefined}
+                annotation={annotationTarget}
               />
             ) : deviceOpen && mobileStore ? (
               <DevicePanel

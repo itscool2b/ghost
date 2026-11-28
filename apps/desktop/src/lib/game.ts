@@ -13,8 +13,11 @@ import {
   type GameEngine,
   type GameInput,
   type GameLog,
+  type GamePicked,
+  type GameRecent,
   type GameStatus,
   type GameToolsChange,
+  type GameTunables,
   type Starter,
 } from "../bindings";
 import { settle } from "./ipc";
@@ -38,6 +41,20 @@ export interface GameApi {
   step(chatId: string): Promise<void>;
   sound(chatId: string, on: boolean): Promise<void>;
   input(chatId: string, events: readonly GameInput[]): Promise<void>;
+  /** What is under a point of the picture, in the game's own pixels; nothing there is null. */
+  pick(chatId: string, x: number, y: number): Promise<GamePicked | null>;
+  /** The values of a node a person may turn while the game runs. */
+  tunables(chatId: string, node: string): Promise<GameTunables>;
+  /** Turns one of them, in the running game only. */
+  setValue(
+    chatId: string,
+    node: string,
+    property: string,
+    kind: string,
+    value: number,
+  ): Promise<void>;
+  /** The last seconds of the run as pictures, and the run kept for the agent to play again. */
+  recent(chatId: string, seconds: number): Promise<GameRecent>;
   /** Streams the chat's game to `onPacket`; answers the stop. */
   watch(chatId: string, onPacket: (packet: Uint8Array) => void): Promise<() => void>;
   log(chatId: string): Promise<GameLog>;
@@ -75,6 +92,11 @@ export const tauriGameApi: GameApi = {
   step: (chatId) => done(settle(commands.gameStep(chatId))),
   sound: (chatId, on) => done(settle(commands.gameSound(chatId, on))),
   input: (chatId, events) => done(settle(commands.gameInput(chatId, [...events]))),
+  pick: (chatId, x, y) => settle(commands.gamePick(chatId, x, y)),
+  tunables: (chatId, node) => settle(commands.gameTunables(chatId, node)),
+  setValue: (chatId, node, property, kind, value) =>
+    done(settle(commands.gameSetValue(chatId, node, property, kind, value))),
+  recent: (chatId, seconds) => settle(commands.gameRecent(chatId, seconds)),
   watch: async (chatId, onPacket) => {
     // The packets arrive as raw bytes (an ArrayBuffer), whatever the generated type says.
     const channel = new Channel<number[]>((message) => {
@@ -440,4 +462,93 @@ export class KeyboardSender {
 /** The mouse button a pointer event's button number stands for. */
 export function mouseButton(button: number): "left" | "middle" | "right" | null {
   return button === 0 ? "left" : button === 1 ? "middle" : button === 2 ? "right" : null;
+}
+
+/**
+ * A controller, as the game hears it. The pane reads the standard gamepad the browser gives it
+ * and sends what changed, in Godot's own numbers: its triggers are axes there, and its buttons
+ * are in another order.
+ */
+const PAD_BUTTONS: readonly (number | null)[] = [
+  0, // bottom face button
+  1, // right
+  2, // left
+  3, // top
+  9, // left shoulder
+  10, // right shoulder
+  null, // the triggers are axes 4 and 5
+  null,
+  4, // back
+  6, // start
+  7, // left stick
+  8, // right stick
+  11, // up
+  12, // down
+  13, // left
+  14, // right
+  5, // guide
+];
+const TRIGGERS: readonly (readonly [number, number])[] = [
+  [6, 4],
+  [7, 5],
+];
+
+/** What the game was last told of a controller: buttons by Godot's number, then six axes. */
+export interface PadState {
+  readonly buttons: readonly boolean[];
+  readonly axes: readonly number[];
+}
+
+export const PAD_REST: PadState = {
+  buttons: Array.from({ length: 15 }, () => false),
+  axes: [0, 0, 0, 0, 0, 0],
+};
+
+/**
+ * A stick as the game hears it: nothing inside the dead zone, and in twentieths, so a resting
+ * hand's tremor is not sent sixty times a second.
+ */
+function stick(value: number, dead: number): number {
+  if (!Number.isFinite(value) || Math.abs(value) < dead) return 0;
+  return Math.round(Math.max(-1, Math.min(1, value)) * 20) / 20;
+}
+
+/** What changed on a controller since `before`, as input for the game, and what it is told now. */
+export function padEvents(
+  before: PadState,
+  pad: {
+    readonly buttons: readonly { readonly pressed: boolean; readonly value: number }[];
+    readonly axes: readonly number[];
+  },
+): { readonly events: GameInput[]; readonly state: PadState } {
+  const events: GameInput[] = [];
+  const buttons = [...before.buttons];
+  PAD_BUTTONS.forEach((button, index) => {
+    if (button === null) return;
+    const down = pad.buttons[index]?.pressed === true;
+    if (down === (buttons[button] ?? false)) return;
+    buttons[button] = down;
+    events.push({ t: "pad", button, down });
+  });
+  const axes = [...before.axes];
+  const tell = (axis: number, value: number) => {
+    if (value === (axes[axis] ?? 0)) return;
+    axes[axis] = value;
+    events.push({ t: "axis", axis, value });
+  };
+  for (let axis = 0; axis < 4; axis += 1) tell(axis, stick(pad.axes[axis] ?? 0, 0.12));
+  for (const [button, axis] of TRIGGERS) tell(axis, stick(pad.buttons[button]?.value ?? 0, 0.05));
+  return { events, state: { buttons, axes } };
+}
+
+/** Everything a controller holds let go: the pane lost the keyboard, or the controller left. */
+export function padRelease(state: PadState): GameInput[] {
+  const events: GameInput[] = [];
+  state.buttons.forEach((down, button) => {
+    if (down) events.push({ t: "pad", button, down: false });
+  });
+  state.axes.forEach((value, axis) => {
+    if (value !== 0) events.push({ t: "axis", axis, value: 0 });
+  });
+  return events;
 }

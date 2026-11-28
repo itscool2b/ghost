@@ -8,9 +8,12 @@ import type {
   GameConnected,
   GameInput,
   GameLog,
+  GamePicked,
   GameProject,
+  GameRecent,
   GameStatus,
   GameToolsChange,
+  GameTunables,
   GodotStatus,
   Starter,
 } from "../bindings";
@@ -60,6 +63,7 @@ export function chatGame(chatId: string, change: Partial<ChatGame> = {}): ChatGa
     godot_missing: null,
     windowed: false,
     tools: true,
+    joypads: 0,
     ...change,
   };
 }
@@ -113,6 +117,10 @@ export class FakeGame implements GameApi {
   readonly calls: string[] = [];
   /** Every input event the pane sent, in order. */
   readonly inputs: GameInput[] = [];
+  /** Every message the pane handed the chat (the preview's message box writes them here). */
+  readonly sent: { text: string; attachments: string[] }[] = [];
+  /** Every picture it attached: whether it was a PNG, and its size. */
+  readonly pastes: { name: string | null; bytes: number; png: boolean }[] = [];
   #status: GameStatus;
   readonly #listeners = new Set<(status: GameStatus) => void>();
   /** The pane's frame listeners, by chat: a test may push packets to one. */
@@ -125,6 +133,24 @@ export class FakeGame implements GameApi {
   #connected = false;
   /** What `turnOn` answers. */
   toolsChange: GameToolsChange = "restarting";
+  /** Where the fixture's last frame drew its player, in the picture's pixels. */
+  #player = { x: 200, y: 400, width: 40, height: 60, of: { width: 960, height: 540 } };
+  /** The values the fixture's scene exports, as the pane turned them. */
+  tunables_: GameTunables = {
+    path: "/root/Main",
+    name: "Main",
+    class: "Node2D",
+    script: "res://main.gd",
+    values: [
+      { name: "speed", kind: "float", value: 200, initial: 200, min: null, max: null, step: null },
+      { name: "jump_height", kind: "float", value: 96, initial: 96, min: 0, max: 320, step: 4 },
+      { name: "lives", kind: "int", value: 3, initial: 3, min: 1, max: 9, step: 1 },
+      { name: "double_jump", kind: "bool", value: 0, initial: 0, min: null, max: null, step: null },
+    ],
+  };
+  /** What the last seconds answer; a test may make the run one that cannot be played again. */
+  unrepeatable: string | null = null;
+  #replays = 0;
   log_: GameLog = LOG;
 
   constructor(status: GameStatus = gameStatus()) {
@@ -181,6 +207,7 @@ export class FakeGame implements GameApi {
     context.fillRect(0, height - 80, width, 80);
     context.fillStyle = "#e8eaf0";
     context.fillRect(playerX, height - 140, 40, 60);
+    this.#player = { x: playerX, y: height - 140, width: 40, height: 60, of: { width, height } };
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.8),
     );
@@ -242,6 +269,120 @@ export class FakeGame implements GameApi {
   }
   async input(_chatId: string, events: readonly GameInput[]): Promise<void> {
     this.inputs.push(...events);
+  }
+  /**
+   * What is under a point: the player where the last frame drew it, the ground under the
+   * picture's last 80 lines, and nothing in the sky. The point is in the game's own pixels,
+   * which the frame may be a smaller picture of.
+   */
+  async pick(chatId: string, x: number, y: number): Promise<GamePicked | null> {
+    this.calls.push(`pick:${Math.round(x)},${Math.round(y)}`);
+    const game = this.#status.chats.find((entry) => entry.chat_id === chatId);
+    const drawn = this.#player;
+    const scale = game && game.width > 0 ? game.width / drawn.of.width : 1;
+    const height = drawn.of.height * scale;
+    const player = {
+      x: drawn.x * scale,
+      y: drawn.y * scale,
+      width: drawn.width * scale,
+      height: drawn.height * scale,
+    };
+    const inside =
+      x >= player.x &&
+      x <= player.x + player.width &&
+      y >= player.y &&
+      y <= player.y + player.height;
+    if (inside)
+      return {
+        path: "/root/Main/Player/Sprite2D",
+        name: "Sprite2D",
+        class: "Sprite2D",
+        text: "",
+        scene: "res://player.tscn",
+        in_scene: "Sprite2D",
+        scene_line: 9,
+        script: "res://player.gd",
+        script_on: "/root/Main/Player",
+        area: [player.x, player.y, player.width, player.height],
+      };
+    if (y >= height - 80 * scale)
+      return {
+        path: "/root/Main/Ground",
+        name: "Ground",
+        class: "StaticBody2D",
+        text: "",
+        scene: "res://main.tscn",
+        in_scene: "Ground",
+        scene_line: 14,
+        script: "res://main.gd",
+        script_on: "/root/Main",
+        area: [0, height - 80 * scale, drawn.of.width * scale, 80 * scale],
+      };
+    return null;
+  }
+  async tunables(_chatId: string, node: string): Promise<GameTunables> {
+    this.calls.push(`tunables:${node}`);
+    if (node === "/root/Main/Player")
+      return {
+        path: node,
+        name: "Player",
+        class: "CharacterBody2D",
+        script: "res://player.gd",
+        values: [],
+      };
+    return this.tunables_;
+  }
+  async setValue(
+    _chatId: string,
+    node: string,
+    property: string,
+    _kind: string,
+    value: number,
+  ): Promise<void> {
+    this.calls.push(`set:${node}:${property}=${value}`);
+    this.tunables_ = {
+      ...this.tunables_,
+      values: this.tunables_.values.map((entry) =>
+        entry.name === property ? { ...entry, value } : entry,
+      ),
+    };
+  }
+  /** Twelve small pictures of a run, drawn here, and the run's name for the agent. */
+  async recent(_chatId: string, seconds: number): Promise<GameRecent> {
+    this.calls.push(`recent:${seconds}`);
+    const canvas = document.createElement("canvas");
+    const [cell, gap] = [{ width: 320, height: 180 }, 4];
+    canvas.width = 4 * cell.width + 3 * gap;
+    canvas.height = 3 * cell.height + 2 * gap;
+    const context = canvas.getContext("2d");
+    if (context) {
+      context.fillStyle = "#121212";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      for (let index = 0; index < 12; index += 1) {
+        const left = (index % 4) * (cell.width + gap);
+        const top = Math.floor(index / 4) * (cell.height + gap);
+        context.fillStyle = "#14161c";
+        context.fillRect(left, top, cell.width, cell.height);
+        context.fillStyle = "#3a4152";
+        context.fillRect(left, top + cell.height - 27, cell.width, 27);
+        context.fillStyle = "#e8eaf0";
+        context.fillRect(left + 20 + index * 22, top + cell.height - 47, 13, 20);
+      }
+    }
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.8),
+    );
+    const picture = blob ? [...new Uint8Array(await blob.arrayBuffer())] : [];
+    if (this.unrepeatable === null) this.#replays += 1;
+    return {
+      replay: this.unrepeatable === null ? `r${this.#replays}` : null,
+      unrepeatable: this.unrepeatable,
+      picture,
+      pictures: 12,
+      seconds: Math.min(seconds, 15),
+      run_seconds: 48.5,
+      inputs: 212,
+    };
   }
   async watch(chatId: string, onPacket: (packet: Uint8Array) => void): Promise<() => void> {
     this.calls.push("watch");

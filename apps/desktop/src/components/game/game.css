@@ -704,3 +704,197 @@ button.game-log-where:focus-visible {
   transform: none;
   transition: none;
 }
+
+/* ---------------------------------------------------------- telling the agent */
+
+/* The pointer chooses something in the picture instead of playing. */
+.game-screen[data-pointing] .game-canvas {
+  cursor: crosshair;
+}
+
+/* What is under the pointer, and what a note is being written about: a box over the picture, in
+ * the picture's own shape (the frame is the picture's size), with its name above it. */
+.game-pick {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: var(--g-radius-4);
+  box-shadow:
+    0 0 0 1.5px var(--g-volt),
+    0 0 0 3px rgb(0 0 0 / 0.45);
+  pointer-events: none;
+}
+
+.game-pick[data-kind="hover"] {
+  background-color: color-mix(in srgb, var(--g-volt) 12%, transparent);
+}
+
+.game-pick-label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  max-width: min(60cqw, 320px);
+  padding: 1px var(--g-space-6);
+  overflow: hidden;
+  border-radius: var(--g-radius-pill);
+  background-color: var(--ui-menu-fill);
+  box-shadow:
+    var(--g-shadow-pop),
+    inset 0 0 0 1px var(--g-glass-rim);
+  color: var(--g-fg-1);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A controller is connected: said beside the frame rate, never a control. */
+.game-pad {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--g-fg-3);
+}
+
+/* The values a script exports, turned while the game runs. The sheet is the log's. */
+.game-tune .game-log-head h2 {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--g-space-8);
+}
+
+.game-tune-script {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--g-fg-3);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+  font-weight: var(--g-weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-tune-head-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-2);
+}
+
+.game-tune-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-tune-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 30%) minmax(0, 1fr) minmax(48px, auto);
+  align-items: center;
+  gap: var(--g-space-12);
+  min-height: 28px;
+}
+
+.game-tune-name {
+  overflow: hidden;
+  color: var(--g-fg-2);
+  font-family: var(--g-mono);
+  font-size: var(--g-text-meta);
+  line-height: var(--g-leading-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-tune-value {
+  color: var(--g-fg-3);
+  font-size: var(--g-text-meta);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--g-leading-ui);
+  text-align: right;
+}
+
+.game-tune-row[data-moved] .game-tune-name,
+.game-tune-row[data-moved] .game-tune-value {
+  color: var(--g-fg-1);
+}
+
+.game-tune-row .g-switch {
+  justify-self: start;
+}
+
+.game-tune-slider {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: none;
+  accent-color: var(--g-fg-1);
+  cursor: pointer;
+  appearance: none;
+}
+
+.game-tune-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 1px;
+  background-color: var(--g-line);
+}
+
+.game-tune-slider::-moz-range-track {
+  height: 2px;
+  border-radius: 1px;
+  background-color: var(--g-line);
+}
+
+.game-tune-slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background-color: var(--g-fg-1);
+  appearance: none;
+}
+
+.game-tune-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background-color: var(--g-fg-1);
+}
+
+.game-tune-slider:focus-visible {
+  border-radius: var(--g-radius-4);
+  outline: 2px solid var(--g-focus);
+  outline-offset: 2px;
+}
+
+.game-tune-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--g-space-6);
+  padding: 0 var(--g-space-8) var(--g-space-8) var(--g-space-12);
+}
+
+.game-tune-foot > .game-note {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* A note written about the game sits over the picture as the browser's does over a page. */
+.game-stage > .browser-note {
+  z-index: 6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-pick {
+    transition: none;
+  }
+}
