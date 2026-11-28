@@ -11,6 +11,7 @@ import {
   Search,
   SlidersHorizontal,
   SquarePen,
+  Webhook,
   Workflow,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -185,6 +186,7 @@ export function ChatList({
   onCustomize,
   dashboardOpen = false,
   onDashboard,
+  onAutomations,
   onProjectSettings,
   onChatOptions,
   archived = false,
@@ -220,6 +222,8 @@ export function ChatList({
   readonly onDashboard?: () => void;
   /** The Dashboard is open over the window (its button says so to assistive technology). */
   readonly dashboardOpen?: boolean;
+  /** Opens the automations: tasks a webhook from GitHub, CI or a monitor starts (Settings > Remote). */
+  readonly onAutomations?: () => void;
   readonly onProjectSettings?: (project: ProjectSummary) => void;
   readonly onChatOptions?: (chat: ChatSummary) => void;
   readonly archived?: boolean;
@@ -385,6 +389,19 @@ export function ChatList({
                 {working > 0 ? working : null}
               </span>
             ) : null}
+          </button>
+        ) : null}
+        {onAutomations ? (
+          <button
+            type="button"
+            className="chat-nav-action"
+            onClick={onAutomations}
+            data-testid="automations-button"
+            data-tour="automations"
+            aria-label="Automations"
+          >
+            <Webhook size={16} />
+            <span>Automations</span>
           </button>
         ) : null}
         {searching ? (

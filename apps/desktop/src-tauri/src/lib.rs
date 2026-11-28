@@ -267,7 +267,6 @@ fn setup(app: &mut tauri::App, launch: LaunchOptions) {
     // After the saved preferences: the first check waits a while, and honours the switch.
     if smoke.is_none() {
         updater::start_automatic_checks(app.handle().clone());
-        dictation::commands::start_automatic(app.handle().clone());
     }
     appearance::refresh(app.handle());
     memory_commands::forward_changes(app.handle());

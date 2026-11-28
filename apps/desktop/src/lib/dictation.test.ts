@@ -12,6 +12,7 @@ import {
   offersRetry,
   placeDictation,
   recordingTime,
+  sameDictationView,
   WAVE_SAMPLES,
   waveLevel,
 } from "./dictation";
@@ -29,7 +30,7 @@ function fixture(installed = true, supported = true) {
         state: "absent" as const,
         available: true,
         received: 0,
-        automatic: false,
+        chosen: false,
       },
       supported,
     })),
@@ -250,7 +251,7 @@ describe("local dictation", () => {
         state: "absent",
         available: true,
         received: 0,
-        automatic: false,
+        chosen: false,
       },
     });
     await opening;
@@ -316,7 +317,7 @@ describe("dictation draft insertion", () => {
 describe("the larger model's row", () => {
   const model = (
     state: "absent" | "downloading" | "ready",
-    more: { received?: number; automatic?: boolean } = {},
+    more: { received?: number; chosen?: boolean } = {},
   ) => ({
     installed: true,
     name: state === "ready" ? "Parakeet Ultra" : "Parakeet TDT-CTC 110M",
@@ -328,25 +329,17 @@ describe("the larger model's row", () => {
       state,
       available: true,
       received: 0,
-      automatic: false,
+      chosen: false,
       ...more,
     },
-  });
-
-  it("says that Ghost fetches it by itself, until the person has said no", () => {
-    const coming = largerDetail(model("absent", { automatic: true }), { state: "idle" });
-    expect(coming).toMatch(/^Parakeet Ultra makes about 40% fewer mistakes/);
-    expect(coming).toContain("Ghost downloads it by itself, once: 486 MB from Hugging Face.");
-    // After a no the row offers it and promises nothing.
-    const offer = largerDetail(model("absent"), { state: "idle" });
-    expect(offer).not.toContain("by itself");
-    expect(largerDetail(model("absent"), { state: "idle", kept: true })).not.toContain("by itself");
   });
 
   it("says what it is, what it costs and where it comes from before anything is fetched", () => {
     const offer = largerDetail(model("absent"), { state: "idle" });
     expect(offer).toMatch(/^Parakeet Ultra makes about 40% fewer mistakes/);
     expect(offer).toContain("A one-time 486 MB download from Hugging Face");
+    expect(offer).toContain("slower than the built-in model");
+    expect(offer).not.toContain("by itself");
     expect(offer).not.toContain("kept");
     expect(largerDetail(model("absent"), { state: "idle", kept: true })).toMatch(
       /What arrived so far is kept\.$/,
@@ -373,10 +366,40 @@ describe("the larger model's row", () => {
     );
   });
 
-  it("says it is in use once it is here, and what removing it does", () => {
-    const text = largerDetail(model("ready"), { state: "idle" });
-    expect(text).toMatch(/^Parakeet Ultra is downloaded and in use\./);
+  it("says whether it is in use once it is here, and what removing it does", () => {
+    // Downloaded is not chosen: the built-in model stays the default.
+    const here = largerDetail(model("ready"), { state: "idle" });
+    expect(here).toMatch(/^Parakeet Ultra is downloaded\. Dictation uses the built-in model/);
+    expect(here).toContain("frees 486 MB");
+    const text = largerDetail(model("ready", { chosen: true }), { state: "idle" });
+    expect(text).toMatch(/^Parakeet Ultra is in use\./);
     expect(text).toContain("frees 486 MB");
     expect(largerDetail(model("ready"), { state: "removing" })).toBe("Removing Parakeet Ultra.");
+  });
+});
+
+describe("what the message box draws while dictating", () => {
+  const words = { settled: "Add a", stable: "regression", tentative: "test" };
+  const listening = (seconds: number, text = words) =>
+    ({
+      state: "listening",
+      seconds,
+      speaking: true,
+      text,
+      wave: [{ level: seconds / 10, voiced: true }],
+      tick: seconds,
+    }) as const;
+
+  it("stays the same while only the level, the waveform and the time move", () => {
+    expect(sameDictationView(listening(1), listening(2))).toBe(true);
+    expect(sameDictationView(listening(1), listening(1, { ...words, tentative: "tests" }))).toBe(
+      false,
+    );
+    expect(sameDictationView(listening(1), { ...listening(1), state: "finishing" } as never)).toBe(
+      false,
+    );
+    expect(sameDictationView({ state: "idle" }, { state: "idle" })).toBe(false);
+    const idle = { state: "idle" } as const;
+    expect(sameDictationView(idle, idle)).toBe(true);
   });
 });

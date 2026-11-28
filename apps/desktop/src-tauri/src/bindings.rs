@@ -237,6 +237,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             crate::dictation::commands::dictation_cancel,
             crate::dictation::commands::dictation_larger_download,
             crate::dictation::commands::dictation_larger_cancel,
+            crate::dictation::commands::dictation_larger_use,
             crate::dictation::commands::dictation_larger_remove,
             crate::speech::commands::speech_status,
             crate::speech::commands::speech_speak,

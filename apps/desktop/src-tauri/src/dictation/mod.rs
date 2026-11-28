@@ -109,7 +109,7 @@ pub struct DictationModel {
     /// This processor can run the speech engine.
     pub supported: bool,
     /// The larger speech model a person can fetch (`larger.rs`). `name` above is the model in
-    /// use: this one once it is ready.
+    /// use: this one while it is here and chosen.
     pub larger: LargerModel,
 }
 
@@ -123,8 +123,8 @@ pub struct LargerModel {
     /// Bytes of it here so far, while it downloads: a page that did not start the download
     /// shows how far it has come from this.
     pub received: u32,
-    /// Ghost will fetch it by itself: nobody said no and the disk has the room (`larger::wanted`).
-    pub automatic: bool,
+    /// The person chose it (`larger::chosen`): dictation uses it whenever it is here.
+    pub chosen: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]

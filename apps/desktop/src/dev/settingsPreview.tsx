@@ -234,18 +234,19 @@ function agentsFixture() {
 
 // Voice's microphone test: the words of one sentence, then what finishing heard. No audio.
 let heard: (event: Parameters<Parameters<DictationApi["start"]>[1]>[0]) => void = () => {};
-// The larger model: `?larger=ready` starts with it downloaded, `?larger=none` on a copy with
-// nowhere to keep one, `?larger=coming` on one that fetches it by itself (as a release does) and
-// has not started yet. Its download arrives a quarter at a time and waits at three quarters for
-// the check to finish it, fail it or cancel it.
+// The larger model: `?larger=ready` starts with it downloaded and chosen, `?larger=downloaded`
+// with it downloaded and the built-in model in use (a copy that fetched it by itself before it
+// became the person's choice), `?larger=none` on a copy with nowhere to keep one. Its download
+// arrives a quarter at a time and waits at three quarters for the check to finish it, fail it or
+// cancel it.
 const LARGER_BYTES = 486280096;
 const wantedLarger = new URLSearchParams(location.search).get("larger");
-let largerState: "absent" | "downloading" | "ready" = wantedLarger === "ready" ? "ready" : "absent";
+let largerState: "absent" | "downloading" | "ready" =
+  wantedLarger === "ready" || wantedLarger === "downloaded" ? "ready" : "absent";
 let largerHears: ((event: LargerEvent) => void) | null = null;
 let largerKept = 0;
-// Whether this copy fetches the model by itself, and whether the person has said no to that.
-const largerAutomatic = wantedLarger === "coming";
-let largerDeclined = false;
+// Whether the person chose the larger model.
+let largerChosen = wantedLarger === "ready";
 let largerReceived = 0;
 const largerLog: string[] = [];
 const endLarger = (event: LargerEvent) => {
@@ -257,7 +258,7 @@ const endLarger = (event: LargerEvent) => {
 const dictation: DictationApi = {
   model: async () => ({
     installed: true,
-    name: largerState === "ready" ? "Parakeet Ultra" : "Parakeet TDT-CTC 110M",
+    name: largerState === "ready" && largerChosen ? "Parakeet Ultra" : "Parakeet TDT-CTC 110M",
     bytes: 113552320,
     supported: true,
     larger: {
@@ -266,14 +267,14 @@ const dictation: DictationApi = {
       state: largerState,
       available: wantedLarger !== "none",
       received: largerState === "downloading" ? largerReceived : 0,
-      automatic: largerAutomatic && !largerDeclined && largerState === "absent",
+      chosen: largerChosen,
     },
   }),
   larger: {
     download: async (hears) => {
       if (largerState !== "absent") throw new Error("The larger model is already downloading.");
       largerLog.push(`download from ${largerKept}`);
-      largerDeclined = false;
+      largerChosen = true;
       largerState = "downloading";
       largerHears = hears;
       for (const share of [largerKept, 0.25, 0.5, 0.75]) {
@@ -288,14 +289,17 @@ const dictation: DictationApi = {
     },
     cancel: async () => {
       largerLog.push("cancel");
-      largerDeclined = true;
       if (largerHears) endLarger({ state: "cancelled" });
-      // One Ghost started itself has no page listening: it just stops.
+      // One no page is listening to (the page was reloaded while it ran): it just stops.
       else if (largerState === "downloading") largerState = "absent";
+    },
+    use: async (larger) => {
+      largerLog.push(larger ? "use larger" : "use built-in");
+      largerChosen = larger;
     },
     remove: async () => {
       largerLog.push("remove");
-      largerDeclined = true;
+      largerChosen = false;
       largerState = "absent";
       largerKept = 0;
     },
@@ -323,7 +327,7 @@ Object.assign(window, {
   largerFixture: {
     log: () => [...largerLog],
     state: () => largerState,
-    /** Ghost starts the download itself, as it does a minute after launch, and has this share of it. */
+    /** A download no page is listening to (one started before a reload) has this share of it. */
     begin: (share: number) => {
       largerState = "downloading";
       largerReceived = Math.round(LARGER_BYTES * share);
@@ -369,6 +373,7 @@ function Preview() {
     <SettingsScreen
       profiles={oneProfile}
       initialPage={page}
+      initialSetting={params.get("setting") ?? undefined}
       instructionsTarget={target}
       info={info}
       setup={setup}

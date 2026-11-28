@@ -4,9 +4,10 @@
 //! without the pinned files (apps/desktop/scripts/dictation-models.mjs verifies their SHA-256);
 //! the installer and updater signatures cover them from there, so the app checks only their sizes.
 //!
-//! A larger speech model, Parakeet Ultra, is fetched once into the data folder (`larger.rs`), by
-//! Ghost itself or when the person asks: it is too large to ride in the installer. Where it is
-//! present at its pinned size, dictation uses it in place of the built-in one.
+//! A larger speech model, Parakeet Ultra, is fetched once into the data folder (`larger.rs`) when
+//! the person asks: it is too large to ride in the installer. The built-in model is the default;
+//! dictation uses the larger one in its place only while it is present at its pinned size and the
+//! person has chosen it.
 use super::engine::Engine;
 use super::{DictationModel, Failure, LargerModel, LargerState};
 use std::path::{Path, PathBuf};
@@ -52,6 +53,11 @@ pub const LARGER: Download = Download {
     url: "https://huggingface.co/handy-computer/parakeet-ultra-gguf/resolve/a1539be1b849ea7463b88343e5277b373d0c4ea9/parakeet-ultra-Q4_K_M.gguf",
 };
 
+/// The larger model in `downloads`, when it is there whole and the person chose it.
+pub fn in_use(downloads: Option<&Path>) -> Option<PathBuf> {
+    larger(downloads).filter(|_| downloads.is_some_and(super::larger::chosen))
+}
+
 /// The larger model in `downloads`, when it is there whole. Its SHA-256 was checked before it got
 /// its name (`larger.rs`); from then on its size is the check, as for the bundled files.
 pub fn larger(downloads: Option<&Path>) -> Option<PathBuf> {
@@ -74,7 +80,7 @@ pub fn status(folder: Option<&Path>, downloads: Option<&Path>) -> DictationModel
     let installed = folder.is_some_and(present);
     DictationModel {
         installed,
-        name: if ready {
+        name: if in_use(downloads).is_some() {
             LARGER.name
         } else {
             "Parakeet TDT-CTC 110M"
@@ -96,20 +102,21 @@ pub fn status(folder: Option<&Path>, downloads: Option<&Path>) -> DictationModel
             available: downloads.is_some(),
             received: super::larger::received()
                 .map_or(0, |received| u32::try_from(received).unwrap_or(u32::MAX)),
-            automatic: installed && downloads.is_some_and(super::larger::wanted),
+            chosen: downloads.is_some_and(super::larger::chosen),
         },
     }
 }
 
 /// The engine for the bundled models in `folder`, loaded the first time it is asked for, with
-/// the larger speech model from `downloads` in the built-in one's place when it is there.
+/// the larger speech model from `downloads` in the built-in one's place when it is there and
+/// chosen.
 pub fn engine(folder: &Path, downloads: Option<&Path>) -> Result<Arc<Engine>, Failure> {
     if !present(folder) {
         return Err(Failure::model(
             "This build of Ghost is missing its dictation models. Reinstall Ghost to restore them.",
         ));
     }
-    let speech = larger(downloads).unwrap_or_else(|| folder.join(ASR.file));
+    let speech = in_use(downloads).unwrap_or_else(|| folder.join(ASR.file));
     Engine::shared(&speech, &folder.join(VAD.file))
 }
 
@@ -188,5 +195,36 @@ mod tests {
         .unwrap();
         assert_eq!(larger(Some(downloads.path())), None);
         assert!(!super::super::model::status(None, None).larger.available);
+    }
+
+    #[test]
+    fn the_built_in_model_stays_in_use_until_the_larger_one_is_chosen() {
+        let downloads = tempfile::tempdir().unwrap();
+        let file = std::fs::File::create(downloads.path().join(LARGER.file)).unwrap();
+        file.set_len(LARGER.bytes).unwrap();
+        drop(file);
+        let here = status(None, Some(downloads.path()));
+        assert_eq!(here.larger.state, LargerState::Ready);
+        assert!(!here.larger.chosen);
+        assert_eq!(
+            here.name, "Parakeet TDT-CTC 110M",
+            "downloaded is not chosen"
+        );
+        assert_eq!(in_use(Some(downloads.path())), None);
+        super::super::larger::choose(downloads.path(), true).unwrap();
+        let chosen = status(None, Some(downloads.path()));
+        assert!(chosen.larger.chosen);
+        assert_eq!(chosen.name, LARGER.name);
+        assert_eq!(
+            in_use(Some(downloads.path())),
+            Some(downloads.path().join(LARGER.file))
+        );
+        // Chosen but not here: the built-in model, until it arrives.
+        std::fs::remove_file(downloads.path().join(LARGER.file)).unwrap();
+        assert_eq!(in_use(Some(downloads.path())), None);
+        assert_eq!(
+            status(None, Some(downloads.path())).name,
+            "Parakeet TDT-CTC 110M"
+        );
     }
 }

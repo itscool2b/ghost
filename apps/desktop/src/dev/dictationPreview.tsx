@@ -93,7 +93,7 @@ function fixture() {
         state: "absent",
         available: false,
         received: 0,
-        automatic: false,
+        chosen: false,
       },
       supported: scenario !== "unsupported",
     }),

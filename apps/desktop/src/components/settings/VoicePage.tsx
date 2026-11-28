@@ -8,11 +8,10 @@ import {
   liveTextOf,
   liveWords,
   MISSING_MESSAGE,
-  recordingTime,
   UNSUPPORTED_MESSAGE,
 } from "../../lib/dictation";
 import type { SpeechApi } from "../../lib/speech";
-import { Wave } from "../chat/Dictation";
+import { RecordingTime, Wave } from "../chat/Dictation";
 import "../chat/dictation.css";
 import { LargerModel } from "./LargerModel";
 import type { Preferences } from "./preferences";
@@ -25,7 +24,7 @@ function modelDetail(model: DictationModel | null | "failed"): string {
   if (model === "failed") return "Ghost could not read the speech model's status.";
   if (!model.supported) return UNSUPPORTED_MESSAGE;
   if (!model.installed) return MISSING_MESSAGE;
-  if (model.larger.state === "ready")
+  if (model.larger.state === "ready" && model.larger.chosen)
     return `${model.name}, downloaded and ready: English and 24 other European languages, with punctuation and capitals.`;
   return `${model.name}, built in and ready: English, with punctuation and capitals.`;
 }
@@ -144,7 +143,6 @@ export function MicrophoneTest({ api }: { readonly api: DictationApi }) {
     }
     wasBusy.current = busy;
   }, [busy]);
-  const recording = state.state === "listening" || state.state === "finishing" ? state : null;
   const words = liveWords(liveTextOf(state));
   return (
     <div
@@ -170,12 +168,8 @@ export function MicrophoneTest({ api }: { readonly api: DictationApi }) {
           >
             <X size={16} />
           </button>
-          <Wave
-            wave={recording?.wave ?? []}
-            tick={recording?.tick ?? -1}
-            quiet={state.state !== "listening"}
-          />
-          <span className="dictation-time">{recordingTime(recording?.seconds ?? 0)}</span>
+          <Wave source={controller} quiet={state.state !== "listening"} />
+          <RecordingTime source={controller} live={state.state === "listening"} />
           <button
             ref={finish}
             type="button"

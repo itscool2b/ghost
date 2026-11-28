@@ -156,6 +156,7 @@ export function SettingsScreen({
   profiles = profileApi,
   reveal = revealDataDir,
   initialPage = "general",
+  initialSetting,
   navigationId = "settings",
   backLabel = "Back to chats",
   instructions = instructionsApi,
@@ -188,6 +189,8 @@ export function SettingsScreen({
   readonly profiles?: ProfileApi;
   readonly reveal?: () => Promise<void>;
   readonly initialPage?: Page;
+  /** A row of `initialPage` to show and focus on opening, as a search result does. */
+  readonly initialSetting?: string;
   readonly navigationId?: string;
   readonly backLabel?: string;
   readonly instructions?: InstructionsApi;
@@ -249,7 +252,9 @@ export function SettingsScreen({
     setPage(initialPage);
     setVisited((current) => new Set([...current, initialPage]));
     setTarget(instructionsTarget ?? null);
-  }, [navigationId, initialPage, instructionsTarget]);
+    if (initialSetting)
+      setFound({ entry: { page: initialPage, title: initialSetting }, id: Date.now() });
+  }, [navigationId, initialPage, instructionsTarget, initialSetting]);
   useEffect(() => {
     if (target || (projectId && !organization.data)) return;
     const folder = (projects ?? [])

@@ -6,7 +6,7 @@ use crate::{
 };
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State, Webview, ipc::Channel};
+use tauri::{Manager, State, Webview, ipc::Channel};
 
 fn error(message: String) -> AppError {
     AppError::new(AppErrorCode::InvalidArgument, message)
@@ -58,42 +58,9 @@ pub fn dictation_model(webview: Webview, state: State<'_, AppState>) -> Dictatio
     model::status(models(&webview).as_deref(), downloads(&state).as_deref())
 }
 
-/// Fetches the larger speech model by itself (`larger.rs`): a first look a minute after launch,
-/// then again every quarter of an hour for as long as it is wanted and not here, so a computer
-/// that was offline or short of room gets it once it can. A person's Cancel or Remove ends that.
-pub fn start_automatic(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        let mut wait = larger::FIRST;
-        loop {
-            tokio::time::sleep(wait).await;
-            wait = larger::AGAIN;
-            let folder = {
-                let Some(state) = app.try_state::<AppState>() else {
-                    return;
-                };
-                if state.quit.is_quitting() {
-                    return;
-                }
-                // Dictation that cannot run here has no use for a better model.
-                let bundled = app.path().resource_dir().ok();
-                if !bundled.is_some_and(|resources| model::present(&resources.join("dictation"))) {
-                    return;
-                }
-                let Some(folder) = downloads(&state) else {
-                    return;
-                };
-                folder
-            };
-            if larger::attempt(folder).await == larger::Attempt::Done {
-                return;
-            }
-        }
-    });
-}
-
 /// Fetches the larger speech model, once, from its pinned address (`larger.rs`): the page supplies
-/// nothing but the wish, which also takes back an earlier Cancel or Remove. Progress arrives on
-/// `channel`; the download goes on if the page leaves.
+/// nothing but the wish, which also chooses the model, so dictation uses it once it is here.
+/// Progress arrives on `channel`; the download goes on if the page leaves.
 #[tauri::command]
 #[specta::specta]
 pub fn dictation_larger_download(
@@ -113,15 +80,14 @@ pub fn dictation_larger_download(
     if model::larger(Some(&folder)).is_some() {
         return Err(error("The larger model is already here.".into()));
     }
-    larger::accept(&folder).map_err(error)?;
+    larger::choose(&folder, true).map_err(error)?;
     larger::start(folder, move |event| {
         let _ = channel.send(event);
     })
     .map_err(error)
 }
 
-/// Stops the download, or says no to one Ghost has not started yet. What arrived is kept, and the
-/// next download continues from it; Ghost does not start one by itself again.
+/// Stops the download. What arrived is kept, and the next download continues from it.
 #[tauri::command]
 #[specta::specta]
 pub fn dictation_larger_cancel(
@@ -131,15 +97,34 @@ pub fn dictation_larger_cancel(
     if !state.pages.for_view(webview.label()).is_current() {
         return Err(error("This page is no longer active.".into()));
     }
-    // The no is written before the download hears it, so a page told that it stopped reads the
-    // no with it; the download is stopped whether or not the writing worked.
-    let saved = downloads(&state).map_or(Ok(()), |folder| larger::decline(&folder));
     larger::cancel();
-    saved.map_err(error)
+    Ok(())
 }
 
-/// Deletes the larger model; dictation returns to the built-in one, and Ghost does not fetch the
-/// model by itself again.
+/// Chooses which speech model dictation uses: the larger one (`use_larger`, once it is here) or
+/// the built-in one. The next recording loads it; one in progress keeps the model it started with.
+#[tauri::command]
+#[specta::specta]
+pub fn dictation_larger_use(
+    webview: Webview,
+    state: State<'_, AppState>,
+    use_larger: bool,
+) -> Result<(), AppError> {
+    if !state.pages.for_view(webview.label()).is_current() {
+        return Err(error("This page is no longer active.".into()));
+    }
+    let folder = downloads(&state).ok_or_else(|| {
+        error("This copy of Ghost has nowhere to keep a downloaded model.".into())
+    })?;
+    larger::choose(&folder, use_larger).map_err(error)?;
+    if !use_larger {
+        // The larger model's memory goes back now rather than at the next recording.
+        super::engine::Engine::forget();
+    }
+    Ok(())
+}
+
+/// Deletes the larger model and its choice; dictation returns to the built-in one.
 #[tauri::command]
 #[specta::specta]
 pub fn dictation_larger_remove(
@@ -152,10 +137,8 @@ pub fn dictation_larger_remove(
     let Some(folder) = downloads(&state) else {
         return Ok(());
     };
-    // The no first: a model that is gone and fetched again at the next launch would be worse
-    // than one that is still here.
-    larger::decline(&folder).map_err(error)?;
-    larger::remove(&folder).map_err(error)
+    larger::remove(&folder).map_err(error)?;
+    larger::choose(&folder, false).map_err(error)
 }
 
 /// Opens the microphone at once and streams the live text until `dictation_stop` (finish) or

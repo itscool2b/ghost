@@ -1,5 +1,5 @@
 import { Bell } from "lucide-react";
-import { Fragment, type ReactNode, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { Popover } from "./Popover";
 
 /** One notice in the panel: a list item (a toast's row, an agent's update, the repair notice). */
@@ -23,6 +23,23 @@ export function bellAttention(
   return null;
 }
 
+/**
+ * The number on the bell: the notices that fail or warn while one does, else the ones not yet seen.
+ * Nothing while there is nothing to look at.
+ */
+export function bellCount(
+  items: readonly NoticeItem[],
+  seen: ReadonlySet<string>,
+  attention: BellAttention,
+): string | null {
+  if (attention === null) return null;
+  const count =
+    attention === "new"
+      ? items.filter((item) => !seen.has(item.key)).length
+      : items.filter((item) => item.level === attention).length;
+  return count > 9 ? "9+" : String(count);
+}
+
 const ATTENTION_WORD: Record<Exclude<BellAttention, null>, string> = {
   error: "one needs attention",
   warning: "one needs attention",
@@ -33,8 +50,10 @@ const ATTENTION_WORD: Record<Exclude<BellAttention, null>, string> = {
  * The window's notifications, behind a bell at the foot of the sidebar beside Settings (owner,
  * 7 November 2026, of the toasts that floated over the pane: "the notifications thing still
  * sucks"). Agents' new releases, startup notices, the database repair notice and agents' memory
- * edits wait here with their actions, each until its X or until it no longer applies; a dot on the
- * bell says something is new, amber or red while one needs attention. Only what cannot wait also
+ * edits wait here with their actions, each until its X or until it no longer applies. While
+ * something is new the bell lights up with a count on its shoulder and swings once as each notice
+ * arrives (owner, 27 November 2026: notifications such as agents' updates "should be more
+ * obvious"); the count turns amber or red while one needs attention. Only what cannot wait also
  * shows over the pane (`Banners`). Opening the panel counts its notices as seen.
  */
 export function Notifications({ items }: { readonly items: readonly NoticeItem[] }) {
@@ -52,6 +71,14 @@ export function Notifications({ items }: { readonly items: readonly NoticeItem[]
   }, [open, keys]);
   const attention = bellAttention(items, seen);
   const fresh = items.filter((item) => !seen.has(item.key)).length;
+  const count = bellCount(items, seen, attention);
+  // Each arrival swings the bell once: the icon is drawn anew, which restarts its animation.
+  const [rings, setRings] = useState(0);
+  const before = useRef(fresh);
+  useEffect(() => {
+    if (fresh > before.current && !open) setRings((value) => value + 1);
+    before.current = fresh;
+  }, [fresh, open]);
   const label =
     items.length === 0
       ? "Notifications, none"
@@ -76,7 +103,12 @@ export function Notifications({ items }: { readonly items: readonly NoticeItem[]
           data-tour="notifications"
           data-attention={attention ?? undefined}
         >
-          <Bell size={16} aria-hidden="true" />
+          <Bell key={rings} size={16} aria-hidden="true" data-ring={rings > 0 ? "" : undefined} />
+          {count !== null ? (
+            <span className="chat-inbox-count" aria-hidden="true">
+              {count}
+            </span>
+          ) : null}
         </span>
       }
     >

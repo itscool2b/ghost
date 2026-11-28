@@ -161,6 +161,7 @@ export function ChatsScreen({
   onAgents,
   dashboardOpen = false,
   onDashboard,
+  onAutomations,
   onSettings,
   onCustomize,
   onInstructions,
@@ -188,6 +189,8 @@ export function ChatsScreen({
   /** The Dashboard is open over the chats: its button in the sidebar shows it. */
   readonly dashboardOpen?: boolean;
   readonly onDashboard?: () => void;
+  /** Opens Settings on the automations. */
+  readonly onAutomations?: () => void;
   readonly onSettings?: () => void;
   readonly onCustomize?: (projectId: string | null, activeChatId?: string) => void;
   /** Opens Settings' Instructions on a scope: global, a project folder, or a chat's folder. */
@@ -553,6 +556,7 @@ export function ChatsScreen({
           }
           dashboardOpen={dashboardOpen}
           onDashboard={onDashboard}
+          onAutomations={onAutomations}
           onProjectSettings={workspace ? (project) => setProjectDialog({ project }) : undefined}
           onChatOptions={workspace ? (chat) => setChatOptions(chat.id) : undefined}
           onProjectBoard={

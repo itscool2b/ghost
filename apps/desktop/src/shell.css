@@ -1193,27 +1193,77 @@ details.setup-install-review[open] > summary::before {
 }
 
 /*
- * Something new: a 6px dot on the bell's shoulder, cut out of the window; amber while a notice
- * warns, red while one failed.
+ * Something new: the bell turns to ink and wears a count on its shoulder, cut out of the window,
+ * in ink for news, amber while a notice warns and red while one failed (owner, 27 November 2026:
+ * "should be more obvious"). It swings once as each notice arrives.
  */
-.chat-inbox-bell[data-attention]::after {
-  content: "";
+.chat-popover.chat-inbox > summary:has(.chat-inbox-bell[data-attention]) {
+  color: var(--g-fg-1);
+}
+
+.chat-inbox-count {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 6px;
-  height: 6px;
+  top: -9px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 var(--g-space-4);
   border-radius: var(--g-radius-pill);
   background-color: var(--g-fg-1);
   box-shadow: 0 0 0 2px var(--g-window);
+  color: var(--g-window);
+  font-size: var(--g-text-key);
+  line-height: var(--g-leading-key);
+  font-weight: var(--g-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  animation: chat-inbox-count-in var(--g-dur-panel) var(--g-ease-expo) backwards;
 }
 
-.chat-inbox-bell[data-attention="warning"]::after {
+.chat-inbox-bell[data-attention="warning"] > .chat-inbox-count {
   background-color: var(--g-volt);
 }
 
-.chat-inbox-bell[data-attention="error"]::after {
+.chat-inbox-bell[data-attention="error"] > .chat-inbox-count {
   background-color: var(--g-red);
+  color: var(--g-on-danger);
+}
+
+@keyframes chat-inbox-count-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.chat-inbox-bell > svg[data-ring] {
+  transform-origin: 50% 2px;
+  animation: chat-inbox-ring var(--g-dur-flight) var(--g-ease-out) both;
+}
+
+@keyframes chat-inbox-ring {
+  15% {
+    transform: rotate(14deg);
+  }
+  35% {
+    transform: rotate(-12deg);
+  }
+  55% {
+    transform: rotate(8deg);
+  }
+  75% {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-inbox-count,
+  .chat-inbox-bell > svg[data-ring] {
+    animation: none;
+  }
 }
 
 /* Graphite's tooltip (4.6) in place of the platform's: 500ms of hover, then a 150ms fade. */

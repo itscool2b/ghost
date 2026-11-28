@@ -1468,6 +1468,9 @@ function Preview() {
           onCustomize={() => {
             location.href = "/?preview=customize";
           }}
+          onAutomations={() => {
+            location.href = "/?preview=settings&page=remote";
+          }}
           onProjectNewChat={() => {
             setProjectNew(true);
             setLaunching(false);

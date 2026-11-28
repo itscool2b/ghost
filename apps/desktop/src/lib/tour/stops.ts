@@ -57,6 +57,13 @@ export const TOUR_STOPS: readonly TourStop[] = [
     body: "Every chat by what it needs from you, waiting on you, working or finished, over the window you are in. The number here counts the agents at work.",
   },
   {
+    id: "automations",
+    place: "window",
+    side: "right",
+    title: "Automations",
+    body: "Start a task from outside Ghost: a failed build, a new issue, an alert. A webhook from GitHub, your CI or a monitor hands an agent your instruction.",
+  },
+  {
     id: "new-chat",
     place: "window",
     side: "right",

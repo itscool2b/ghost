@@ -1400,3 +1400,10 @@ h1 + .settings-group {
   font-size: var(--g-text-meta);
   line-height: var(--g-leading-meta);
 }
+
+/* Voice > Larger model once it is here: Remove, then the switch that chooses it. */
+.settings-larger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-8);
+}

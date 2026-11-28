@@ -8,9 +8,9 @@
  * goes on from it. Once it is here dictation names it as the model in use, and Remove returns to
  * the built-in one. A failure says why. A copy with nowhere to keep a model offers nothing.
  *
- * A copy that fetches the model by itself (every release) says so before it starts and offers
- * Cancel, which is a no it keeps; a download Ghost started shows how far it has come, can be
- * cancelled the same way, and ends with the model in use.
+ * The built-in model is the default (owner, 27 November 2026): nothing is fetched unasked, and a
+ * model that is here but not chosen (an earlier copy fetched it by itself) leaves the built-in one
+ * in use until its switch is turned on; turning it off goes back.
  * Usage: node scripts/check-dictation-larger.mjs [--server URL] [--engines chromium,webkit]
  */
 import assert from "node:assert/strict";
@@ -110,8 +110,13 @@ async function inspect(engine, launcher) {
           },
         )
         .waitFor();
-      await row.getByText("Parakeet Ultra is downloaded and in use.", { exact: false }).waitFor();
+      await row.getByText("Parakeet Ultra is in use.", { exact: false }).waitFor();
       assert.equal(await control.getByRole("button", { name: "Remove" }).count(), 1);
+      assert.equal(
+        await control.getByRole("switch", { name: "Use Parakeet Ultra" }).isChecked(),
+        true,
+        what("downloading it chose it"),
+      );
       assert.equal(
         await control.getByRole("button", { name: /Download|Continue|Cancel/ }).count(),
         0,
@@ -147,54 +152,39 @@ async function inspect(engine, launcher) {
         .waitFor();
       await control.getByRole("button", { name: "Download" }).waitFor();
 
-      // A copy that fetches it by itself says so before it starts, and offers the no.
-      await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
+      // Here but not chosen: the built-in model stays in use until the switch is turned on.
+      await page.goto(`${url}/?preview=settings&page=voice&larger=downloaded`);
       await row
-        .getByText("Ghost downloads it by itself, once: 486 MB from Hugging Face.", {
+        .getByText("Parakeet Ultra is downloaded. Dictation uses the built-in model", {
           exact: false,
         })
         .waitFor();
-      assert.equal(await control.getByRole("button", { name: "Cancel" }).count(), 1);
-      assert.equal(await control.getByRole("button", { name: /Download|Continue/ }).count(), 0);
+      await dictation
+        .getByText("Parakeet TDT-CTC 110M, built in and ready", { exact: false })
+        .waitFor();
+      const use = control.getByRole("switch", { name: "Use Parakeet Ultra" });
+      assert.equal(await use.isChecked(), false, what("downloaded is not chosen"));
       assert.deepEqual(await log(), [], what("the page asks for nothing by being open"));
       assert.deepEqual(
         (await new AxeBuilder({ page }).include('[data-setting="Larger model"]').analyze())
           .violations,
         [],
-        what("before Ghost starts it"),
+        what("here but not chosen"),
       );
-      // Ghost starts it: the row shows how far it has come without having asked for it.
-      await page.evaluate(() => window.largerFixture.begin(0.5));
-      await row.getByText("Downloading Parakeet Ultra: 243 of 486 MB.").waitFor();
-      // Cancel stops it and is a no that holds: the row offers it again and promises nothing.
-      await control.getByRole("button", { name: "Cancel" }).click();
-      await control.getByRole("button", { name: "Continue" }).waitFor();
-      await row.getByText("What arrived so far is kept.", { exact: false }).waitFor();
-      assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
-      assert.deepEqual(await log(), ["cancel"]);
-      // A no before it started holds as well.
-      await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
-      await control.getByRole("button", { name: "Cancel" }).click();
-      await control.getByRole("button", { name: "Download" }).waitFor();
-      assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
-      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1500)));
-      assert.equal(await control.getByRole("button", { name: "Download" }).count(), 1);
-      // Left alone, Ghost's own download ends with the model in use.
-      await page.goto(`${url}/?preview=settings&page=voice&larger=coming`);
-      await row.getByText("Ghost downloads it by itself", { exact: false }).waitFor();
-      await page.evaluate(() => window.largerFixture.begin(0.9));
-      await row.getByText("Downloading Parakeet Ultra: 438 of 486 MB.").waitFor();
-      await page.evaluate(() => window.largerFixture.finish());
-      await row.getByText("Parakeet Ultra is downloaded and in use.", { exact: false }).waitFor();
+      await use.click();
       await dictation.getByText("Parakeet Ultra, downloaded and ready", { exact: false }).waitFor();
-      // Remove is a no too: it does not come back by itself.
-      await control.getByRole("button", { name: "Remove" }).click();
-      await control.getByRole("button", { name: "Download" }).waitFor();
+      await row.getByText("Parakeet Ultra is in use.", { exact: false }).waitFor();
+      assert.equal(await use.isChecked(), true);
+      await use.click();
+      await dictation
+        .getByText("Parakeet TDT-CTC 110M, built in and ready", { exact: false })
+        .waitFor();
+      assert.deepEqual(await log(), ["use larger", "use built-in"]);
       assert.equal(await row.getByText("by itself", { exact: false }).count(), 0);
 
       // Already here when the page opens.
       await page.goto(`${url}/?preview=settings&page=voice&larger=ready`);
-      await row.getByText("Parakeet Ultra is downloaded and in use.", { exact: false }).waitFor();
+      await row.getByText("Parakeet Ultra is in use.", { exact: false }).waitFor();
       await control.getByRole("button", { name: "Remove" }).waitFor();
       // A copy with nowhere to keep a model offers nothing.
       await page.goto(`${url}/?preview=settings&page=voice&larger=none`);
@@ -215,7 +205,7 @@ async function inspect(engine, launcher) {
       await context.close();
     }
     console.log(
-      `${engine}: the larger dictation model is offered, downloaded, cancelled and continued, used and removed`,
+      `${engine}: the larger dictation model is offered, downloaded, cancelled and continued, chosen, used and removed`,
     );
   } finally {
     await browser.close();

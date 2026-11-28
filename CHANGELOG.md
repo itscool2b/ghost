@@ -12,6 +12,7 @@ checks the format, and with `--dates` checks each day against the time GitHub sa
 
 ## 2026-11-27
 
+- Notifications are easier to spot: the bell lights up with a count and swings when something new arrives, such as an agent update. The sidebar has an Automations row. Dictation uses the small built-in voice model by default, so it starts fast and keeps up as you talk; the larger model is now a download you choose in Settings > Voice, and Ghost no longer fetches it by itself. ([#229](https://github.com/itscool2b/ghost/pull/229))
 - Ghost opens on its wing instead of a picture of an aircraft, New chat is cleaner, and the Dashboard opens over your chats. The wing draws itself, opens its eyes and watches your pointer, then flies up into New chat, which now has one line of words over the message box and one quiet line under it for the folder, the worktree and the agent's details. The Dashboard is a panel over the window that closes with Escape, a click beside it, or when you open a chat. ([#226](https://github.com/itscool2b/ghost/pull/226))
 
 ## 2026-11-26
