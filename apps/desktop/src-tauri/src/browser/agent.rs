@@ -970,7 +970,7 @@ async fn evaluate(
 
 /// The page's password values, so what agents read can leave them out; `None` when the page
 /// cannot be asked (no page script runs in it).
-async fn page_secrets(browser: &Arc<Browser>, tab: &str) -> Option<Vec<String>> {
+pub(super) async fn page_secrets(browser: &Arc<Browser>, tab: &str) -> Option<Vec<String>> {
     let found = browser.call(tab, "api.secrets()").await.ok()?;
     Some(
         found
@@ -984,7 +984,7 @@ async fn page_secrets(browser: &Arc<Browser>, tab: &str) -> Option<Vec<String>> 
 }
 
 /// `text` with every password value of the page (`secrets`) taken out, and a line saying so.
-fn redact<'a>(mut text: String, secrets: impl Iterator<Item = &'a str>) -> String {
+pub(super) fn redact<'a>(mut text: String, secrets: impl Iterator<Item = &'a str>) -> String {
     let mut hidden = false;
     for secret in secrets {
         if secret.chars().count() >= 4 && text.contains(secret) {

@@ -6,9 +6,13 @@
 //! the page's `requestAnimationFrame`, `performance.now`, `Date` and timers read a clock an agent
 //! can freeze and step.
 //!
-//! Nothing here gives an agent a page it could not already reach: these calls run in the chat's
-//! own tab, as `browser_evaluate` does, through the browser's own checks. What the page answers
-//! is cut to size and is data for the agent, never an instruction.
+//! Nothing here gives an agent more than the browser tools do: these calls run in the chat's own
+//! tab, as `browser_evaluate` does, and what they answer passes the same guard. A page's password
+//! values are taken out of every answer that carries the page's own text, read before the call
+//! and after it, and an answer is withheld when they cannot be read ([`guard`]). The tools that
+//! read a page's insides or run code in it work only in a page the agent marked as a game with
+//! `game_run`. What the page answers is cut to size and is data for the agent, never an
+//! instruction.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -24,6 +28,8 @@ const ACTION: Duration = Duration::from_secs(150);
 /// The longest side of a picture an agent is sent.
 const PICTURE: u32 = 1568;
 
+const WITHHELD: &str =
+    "Ghost could not check this page's password fields, so the answer is withheld. Try again.";
 const NOT_OPEN: &str = "No web game is open in this chat's browser. Start the game's dev server, then call game_run with its address, like http://localhost:5173.";
 const NOT_ARMED: &str = "The page in this chat's browser keeps its own time. Call game_run first: it loads the page again with its clock under your control.";
 
@@ -92,28 +98,65 @@ async fn armed(browser: &Arc<Browser>, tab: &str) -> bool {
     clock(browser, tab, "armed()").await.ok() == Some(Value::Bool(true))
 }
 
+/// The password values in the page in front of the chat's browser: `None` when there is no page,
+/// or it cannot be asked.
+async fn secrets(browser: &Arc<Browser>, chat_id: &str) -> Option<Vec<String>> {
+    let tab = agent::active(browser, chat_id)?;
+    agent::page_secrets(browser, &tab).await
+}
+
+/// What an agent is told: the reply with the page's password values taken out. They are read
+/// before the call (code may empty a field after reading it) and after it (the call may have
+/// opened the page). With a page open and neither reading possible, nothing of the page's is
+/// told at all. Pictures are the game's canvas, or the browser's own picture of the page, which
+/// draws a password as dots.
+fn guard(
+    reply: ToolReply,
+    page_open: bool,
+    before: Option<Vec<String>>,
+    after: Option<Vec<String>>,
+) -> ToolReply {
+    if !page_open {
+        // No page: the words are Ghost's own.
+        return reply;
+    }
+    if before.is_none() && after.is_none() {
+        return failed(WITHHELD);
+    }
+    let known: Vec<String> = before.into_iter().chain(after).flatten().collect();
+    ToolReply {
+        text: agent::redact(reply.text, known.iter().map(String::as_str)),
+        ..reply
+    }
+}
+
 /// Runs one game tool for a web game in `chat_id`'s browser.
 pub async fn call(browser: &Arc<Browser>, chat_id: &str, tool: &str, args: &Value) -> ToolReply {
     if let Err(error) = browser.check() {
         return failed(error.to_string());
     }
+    let before = secrets(browser, chat_id).await;
     // Opening or loading the game goes through the browser's own tool, which shows the pane and
     // says what the agent does; the rest say so here.
-    if matches!(tool, "game_run" | "game_stop") {
-        return match run(browser, chat_id, tool, args).await {
-            Ok(reply) => reply,
-            Err(error) => failed(error.to_string()),
-        };
-    }
-    let label = ghost_game::tools::label(tool, args);
-    let tab = agent::active(browser, chat_id);
-    browser.agent_activity(chat_id, tab.as_deref(), Some(&label), false);
-    let reply = run(browser, chat_id, tool, args).await;
-    browser.agent_activity(chat_id, tab.as_deref(), None, false);
-    match reply {
-        Ok(reply) => reply,
-        Err(error) => failed(error.to_string()),
-    }
+    let reply = if matches!(tool, "game_run" | "game_stop") {
+        run(browser, chat_id, tool, args).await
+    } else {
+        let label = ghost_game::tools::label(tool, args);
+        let tab = agent::active(browser, chat_id);
+        browser.agent_activity(chat_id, tab.as_deref(), Some(&label), false);
+        let reply = run(browser, chat_id, tool, args).await;
+        browser.agent_activity(chat_id, tab.as_deref(), None, false);
+        reply
+    };
+    let reply = reply.unwrap_or_else(|error| failed(error.to_string()));
+    let page_open = agent::active(browser, chat_id).is_some_and(|tab| {
+        crate::sync::lock(&browser.inner)
+            .tabs
+            .get(&tab)
+            .is_some_and(|tab| tab.url.is_some())
+    });
+    let after = secrets(browser, chat_id).await;
+    guard(reply, page_open, before, after)
 }
 
 async fn run(
@@ -161,6 +204,11 @@ async fn run(
             ))
         }
         "game_look" => look(browser, chat_id, &tab).await,
+        // Reading a page's insides and running code in it are for a page the agent marked as a
+        // game, not for whatever page is in front.
+        "game_tree" | "game_inspect" | "game_eval" if !armed(browser, &tab).await => {
+            Ok(failed(NOT_ARMED))
+        }
         "game_tree" => {
             let tree = clock(browser, &tab, "tree()").await?;
             Ok(ToolReply::text(outline(&tree)))
@@ -640,6 +688,69 @@ mod tests {
         assert_eq!(shown(&json!("x".repeat(50)), 4), "xxxx…");
         assert_eq!(shown(&Value::Null, 10), "null");
         assert_eq!(shown(&json!({"a": 1}), 20), "{\"a\":1}");
+    }
+
+    /// The browser tools never tell an agent a password a page holds; the game tools read the
+    /// same pages, so the same holds for them.
+    #[test]
+    fn a_pages_passwords_never_reach_an_agent_through_a_game_tool() {
+        let secret = ["hunter2-", "correct"].concat();
+        let told = |text: &str| ToolReply::text(text.to_owned());
+        // In an answer's value, in an error the page threw, in a console line: taken out.
+        for text in [
+            format!("\"{secret}\""),
+            format!("The condition failed while it ran: {secret} is not defined"),
+            format!("[error] login failed for {secret}\nLast 1 lines the page printed:\n{secret}"),
+        ] {
+            let seen = guard(
+                told(&text),
+                true,
+                Some(vec![secret.clone()]),
+                Some(Vec::new()),
+            );
+            assert!(!seen.text.contains(&secret), "{}", seen.text);
+            assert!(seen.text.contains("hidden from agents"));
+        }
+        // A field the code emptied after reading it is still known from before the call, and one
+        // a page filled during the call from after it.
+        for (before, after) in [
+            (Some(vec![secret.clone()]), Some(Vec::new())),
+            (Some(Vec::new()), Some(vec![secret.clone()])),
+            (None, Some(vec![secret.clone()])),
+            (Some(vec![secret.clone()]), None),
+        ] {
+            let seen = guard(told(&secret), true, before, after);
+            assert!(!seen.text.contains(&secret));
+        }
+        // A failed reply is guarded too, and stays a failure.
+        let refused = guard(
+            failed(format!("ReferenceError near {secret}")),
+            true,
+            Some(vec![secret.clone()]),
+            None,
+        );
+        assert!(refused.error && !refused.text.contains(&secret));
+        // A page whose fields could not be read at all: nothing of the page's is told.
+        let withheld = guard(told("42"), true, None, None);
+        assert!(withheld.error);
+        assert_eq!(withheld.text, WITHHELD);
+        // No page open: the words are Ghost's own, and are told.
+        assert_eq!(guard(failed(NOT_OPEN), false, None, None).text, NOT_OPEN);
+        // Nothing to hide: the answer is as the page gave it, pictures and all.
+        let plain = guard(
+            ToolReply {
+                text: "100".into(),
+                images: vec![vec![0xFF, 0xD8]],
+                error: false,
+            },
+            true,
+            Some(Vec::new()),
+            Some(Vec::new()),
+        );
+        assert_eq!(
+            (plain.text.as_str(), plain.images.len(), plain.error),
+            ("100", 1, false)
+        );
     }
 
     #[test]
