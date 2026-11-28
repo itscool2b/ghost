@@ -98,11 +98,12 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "game_run",
-            "description": "Start this chat's game, or start it again after you changed its files (a running game does not pick up edits). It opens the Game pane beside the chat, plays half a second and freezes: the answer is a picture of the game and any errors from its start. Call it yourself, without being asked, whenever you build or change a game, and check your work in it.",
+            "description": "Start this chat's game, or start it again after you changed its files (a running game does not pick up edits). It opens the Game pane beside the chat, plays half a second and freezes: the answer is a picture of the game and any errors from its start. Call it yourself, without being asked, whenever you build or change a game, and check your work in it. A web game: give its url (start its dev server first) and it opens in Ghost's browser beside the chat instead, with its clock under your control.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "scene": { "type": "string", "description": "A scene to run instead of the project's main one, as a path inside the project like res://levels/two.tscn." }
+                    "scene": { "type": "string", "description": "A scene to run instead of the project's main one, as a path inside the project like res://levels/two.tscn." },
+                    "url": { "type": "string", "description": "A web game only: its address, like http://localhost:5173. Without it the page in front of the chat's browser is taken." }
                 },
                 "additionalProperties": false
             }
@@ -148,7 +149,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "game_act",
-            "description": "Play the game: hold inputs for stretches of game time, one step after another, then freeze again. Time runs in fixed steps of 1/60 s, as fast as the computer can, so the same steps give the same result every time. Answers with a filmstrip of the action (its frames in one picture, left to right and top to bottom), a picture of where it ended, and any new errors. A step holds an input action of the project (ui_right, jump) or a key by its name (ArrowLeft, Space, KeyW) for ms milliseconds; a step with only ms lets time pass.",
+            "description": "Play the game: hold inputs for stretches of game time, one step after another, then freeze again. Time runs in fixed steps of 1/60 s, as fast as the computer can, so the same steps give the same result every time. Answers with a filmstrip of the action (its frames in one picture, left to right and top to bottom), a picture of where it ended, and any new errors. A step holds an input action of the project (ui_right, jump) or a key by its name (ArrowLeft, Space, KeyW) for ms milliseconds; a step with only ms lets time pass. A web game takes keys by name and clicks.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -178,11 +179,11 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "game_wait_for",
-            "description": "Let the game run, with no input, until an expression becomes true or the time is up, then freeze again. Answers whether it became true, after how much game time, with a picture. The expression is GDScript with tree, scene and root to use, like scene.get_node(\"Player\").is_on_floor().",
+            "description": "Let the game run, with no input, until an expression becomes true or the time is up, then freeze again. Answers whether it became true, after how much game time, with a picture. The expression is GDScript with tree, scene and root to use, like scene.get_node(\"Player\").is_on_floor(); in a web game it is JavaScript, like player.onGround.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "until": { "type": "string", "description": "A GDScript expression that becomes true." },
+                    "until": { "type": "string", "description": "An expression that becomes true: GDScript, or JavaScript in a web game." },
                     "timeout_ms": { "type": "number", "description": "The most game time to wait (5000 by default, at most 120000)." }
                 },
                 "required": ["until"],
@@ -202,7 +203,7 @@ pub(crate) fn tools() -> Value {
         },
         {
             "name": "game_eval",
-            "description": "Run GDScript inside the running game and read what it returns: one expression, or several lines as the body of a function that may return a value. tree (the SceneTree), scene (the running scene's top node) and root are there to use. For questions the outline cannot answer and for setting a test up (put the player at the door, give 99 coins). It changes this run only.",
+            "description": "Run GDScript inside the running game and read what it returns: one expression, or several lines as the body of a function that may return a value. tree (the SceneTree), scene (the running scene's top node) and root are there to use. For questions the outline cannot answer and for setting a test up (put the player at the door, give 99 coins). It changes this run only. In a web game the code is JavaScript, run in the page.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

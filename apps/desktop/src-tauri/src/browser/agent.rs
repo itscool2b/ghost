@@ -64,7 +64,7 @@ pub async fn call(browser: &Arc<Browser>, chat_id: &str, tool: &str, args: &Valu
     }
 }
 
-fn active(browser: &Browser, chat_id: &str) -> Option<String> {
+pub(super) fn active(browser: &Browser, chat_id: &str) -> Option<String> {
     lock(&browser.inner)
         .chats
         .get(chat_id)
@@ -107,7 +107,7 @@ fn label(tool: &str, args: &Value) -> String {
 }
 
 /// The chat's tab in front, built and drawing; a new one when the chat has none and `open`.
-async fn tab_for(browser: &Arc<Browser>, chat_id: &str) -> Result<String, BrowserError> {
+pub(super) async fn tab_for(browser: &Arc<Browser>, chat_id: &str) -> Result<String, BrowserError> {
     let tab = active(browser, chat_id).ok_or_else(|| {
         BrowserError::Invalid(
             "No page is open in this chat's browser. Call browser_navigate first.".into(),

@@ -347,8 +347,9 @@ function Stage({
         {project.engine === "web" ? (
           <>
             <p>
-              A web game is a page, so it runs in Ghost's browser beside the chat: {agentName}{" "}
-              starts its dev server and opens it there, and you play it in the same place.
+              A web game is a page, so it runs in Ghost's browser beside the chat. {agentName}{" "}
+              starts its dev server and opens it there, plays it with time frozen while it thinks,
+              and you play it in the same place.
             </p>
             {onOpenBrowser ? (
               <button

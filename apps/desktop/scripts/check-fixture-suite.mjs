@@ -59,6 +59,7 @@ try {
     "check-browser.mjs",
     "check-device.mjs",
     "check-game.mjs",
+    "check-web-game.mjs",
     "check-opening.mjs",
     "check-tour.mjs",
     "check-plan.mjs",

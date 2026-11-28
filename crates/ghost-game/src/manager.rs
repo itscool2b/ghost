@@ -222,6 +222,15 @@ impl ToolReply {
     }
 }
 
+/// A tool call that goes to a web game.
+pub type WebFuture = std::pin::Pin<Box<dyn std::future::Future<Output = ToolReply> + Send>>;
+
+/// Web games, as the tools reach them: the app's browser, where a game that is a page runs. The
+/// chat is the caller's own; the browser acts in that chat's tab and no other.
+pub trait WebGames: Send + Sync {
+    fn call(&self, chat_id: String, tool: String, arguments: Value) -> WebFuture;
+}
+
 /// A running game.
 struct Run {
     bridge: Arc<Bridge>,
@@ -299,6 +308,7 @@ struct State {
 
 struct Inner {
     config: Config,
+    web: Mutex<Option<Arc<dyn WebGames>>>,
     state: Mutex<State>,
     notify: Box<dyn Fn() + Send + Sync>,
 }
@@ -351,6 +361,7 @@ impl Manager {
         Self {
             inner: Arc::new(Inner {
                 config,
+                web: Mutex::new(None),
                 state: Mutex::new(State {
                     enabled: true,
                     found: Vec::new(),
@@ -382,6 +393,16 @@ impl Manager {
     }
 
     /// Ghost's own window, which a game's window is owned by to stay out of sight.
+    /// Where web games run: the app's browser. Without one (tests, a build with no browser) a
+    /// web game's tools say where it does run.
+    pub fn set_web(&self, web: Option<Arc<dyn WebGames>>) {
+        *lock(&self.inner.web) = web;
+    }
+
+    pub(crate) fn web(&self) -> Option<Arc<dyn WebGames>> {
+        lock(&self.inner.web).clone()
+    }
+
     pub fn set_owner_window(&self, window: Option<i64>) {
         self.state().owner_window = window;
     }
